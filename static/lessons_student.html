@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Video Lessons — Student</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+  video { width: 100%; border-radius: 4px; border: 1px solid var(--border); background: #000; display: block; }
+  .lesson-list-item {
+    display: block; text-decoration: none; color: var(--ink);
+    padding: 14px 0; border-top: 1px dashed var(--paper-line); cursor: pointer;
+  }
+  .lesson-list-item:first-child { border-top: none; }
+  .lesson-list-item:hover .lesson-list-title { color: var(--pen-red); }
+  .lesson-list-title { font-weight: 600; }
+  .comment {
+    padding: 10px 0; border-top: 1px dashed var(--paper-line);
+  }
+  .comment:first-child { border-top: none; }
+  .comment .comment-meta {
+    font-family: var(--font-mono); font-size: 0.72rem; color: var(--ink-soft);
+    text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px;
+  }
+  .comment .comment-meta .lecturer-tag { color: var(--pen-red); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Quiz<span>Mark</span></div><div class="brand-tagline">Bioscientist</div></div></div>
+    <nav><a href="/static/index.html">Home</a><a href="/static/student.html">Quizzes</a><a href="/static/lessons_lecturer.html">Lecturer</a></nav>
+  </header>
+
+  <h1>Video lessons</h1>
+  <p class="lede">Choose your module, watch a video, then answer the questions below it to check your understanding. Your answers are private — only you and the lecturer can see them. Comments are public.</p>
+
+  <!-- Module selection -->
+  <div class="card" id="moduleCard">
+    <h2>Choose a module</h2>
+    <div id="moduleList">Loading modules…</div>
+  </div>
+
+  <!-- Lesson list (filtered to the chosen module) -->
+  <div class="card hidden" id="listCard">
+    <button class="btn secondary" id="backToModulesBtn">&larr; Back to modules</button>
+    <h2 id="listCardTitle">Choose a lesson</h2>
+    <div id="lessonList">Loading lessons…</div>
+  </div>
+
+  <!-- Selected lesson -->
+  <div class="card hidden" id="lessonCard">
+    <button class="btn secondary" id="backToListBtn">&larr; Back to lessons</button>
+    <h2 id="lessonTitle"></h2>
+    <p class="muted" id="lessonDescription"></p>
+    <video id="lessonVideo" controls></video>
+  </div>
+
+  <!-- Questions -->
+  <div class="card hidden" id="questionsCard">
+    <h2>Check your understanding</h2>
+    <label for="studentName">Your name</label>
+    <input type="text" id="studentName" placeholder="Full name">
+    <label for="studentId">Your student ID</label>
+    <input type="text" id="studentId" placeholder="e.g. ST12345">
+    <p class="muted">Enter your ID above, then click "Load my previous answers" if you've already answered this lesson before — otherwise just answer below and submit.</p>
+    <button class="btn secondary" id="loadMineBtn">Load my previous answers</button>
+    <div id="questionsBox"></div>
+    <button class="btn" id="submitAnswersBtn">Submit answers</button>
+    <div id="submitMsg"></div>
+  </div>
+
+  <!-- Private result -->
+  <div class="card hidden" id="myResultCard">
+    <h2>Your result (private — only you and the lecturer can see this)</h2>
+    <div id="myResultBox"></div>
+  </div>
+
+  <!-- Comments -->
+  <div class="card hidden" id="commentsCard">
+    <h2>Discussion (visible to everyone)</h2>
+    <div id="commentsList" class="muted">No comments yet.</div>
+    <label for="commentName">Your name</label>
+    <input type="text" id="commentName" placeholder="How you'll appear in the discussion">
+    <label for="commentText">Add a comment</label>
+    <textarea id="commentText" placeholder="Ask a question or share a thought about this video…"></textarea>
+    <button class="btn secondary" id="postCommentBtn">Post comment</button>
+    <div id="commentMsg"></div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let currentLesson = null;
+
+function formatSAST(isoString) {
+  const d = isoString ? new Date(isoString) : new Date();
+  return d.toLocaleString('en-ZA', {
+    timeZone: 'Africa/Johannesburg',
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }) + ' SAST';
+}
+
+async function api(path, options) {
+  const res = await fetch(path, options);
+  let data = null;
+  try { data = await res.json(); } catch (e) { /* no body */ }
+  if (!res.ok) {
+    const detail = (data && data.detail) ? data.detail : res.statusText;
+    throw new Error(detail);
+  }
+  return data;
+}
+
+function showMsg(el, text, kind) {
+  el.innerHTML = `<div class="msg ${kind}">${text}</div>`;
+}
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ---- Module selection ---------------------------------------------------
+let currentModule = null;
+
+async function loadModuleList() {
+  const box = $('moduleList');
+  try {
+    const modules = await api('/modules');
+    if (!modules.length) {
+      box.innerHTML = '<p class="muted">No lessons have been uploaded yet — check back soon.</p>';
+      return;
+    }
+    box.innerHTML = modules.map(m => `
+      <a class="lesson-list-item" data-code="${escapeHtml(m.module_code)}">
+        <div class="lesson-list-title">${escapeHtml(m.module_code)}</div>
+        <p class="muted">${m.lesson_count} lesson${m.lesson_count === 1 ? '' : 's'}</p>
+      </a>
+    `).join('');
+    box.querySelectorAll('.lesson-list-item').forEach(el => {
+      el.addEventListener('click', () => openModule(el.dataset.code));
+    });
+  } catch (err) {
+    box.innerHTML = `<div class="msg error">Could not load modules: ${err.message}</div>`;
+  }
+}
+
+function openModule(moduleCode) {
+  currentModule = moduleCode;
+  $('moduleCard').classList.add('hidden');
+  $('listCard').classList.remove('hidden');
+  $('listCardTitle').textContent = `${moduleCode} — lessons`;
+  loadLessonList(moduleCode);
+  history.replaceState(null, '', `?module=${encodeURIComponent(moduleCode)}`);
+}
+
+$('backToModulesBtn').addEventListener('click', () => {
+  currentModule = null;
+  $('listCard').classList.add('hidden');
+  $('moduleCard').classList.remove('hidden');
+  history.replaceState(null, '', window.location.pathname);
+});
+
+// ---- Lesson list (scoped to the selected module) ------------------------
+async function loadLessonList(moduleCode) {
+  const box = $('lessonList');
+  try {
+    const path = moduleCode ? `/lessons?module_code=${encodeURIComponent(moduleCode)}` : '/lessons';
+    const lessons = await api(path);
+    if (!lessons.length) {
+      box.innerHTML = '<p class="muted">No lessons in this module yet — check back soon.</p>';
+      return;
+    }
+    box.innerHTML = lessons.map(l => `
+      <a class="lesson-list-item" data-id="${l.id}">
+        <div class="lesson-list-title">${escapeHtml(l.title)}</div>
+        <p class="muted">${escapeHtml(l.description || '')}</p>
+      </a>
+    `).join('');
+    box.querySelectorAll('.lesson-list-item').forEach(el => {
+      el.addEventListener('click', () => openLesson(el.dataset.id));
+    });
+  } catch (err) {
+    box.innerHTML = `<div class="msg error">Could not load lessons: ${err.message}</div>`;
+  }
+}
+
+// ---- Open a lesson -----------------------------------------------------
+async function openLesson(lessonId) {
+  try {
+    const lesson = await api(`/lesson/${lessonId}`);
+    currentLesson = lesson;
+    currentModule = lesson.module_code;
+
+    $('moduleCard').classList.add('hidden');
+    $('listCard').classList.add('hidden');
+    $('lessonCard').classList.remove('hidden');
+    $('questionsCard').classList.remove('hidden');
+    $('commentsCard').classList.remove('hidden');
+    $('myResultCard').classList.add('hidden');
+
+    $('lessonTitle').textContent = lesson.title;
+    $('lessonDescription').textContent = `${lesson.module_code}${lesson.description ? ' — ' + lesson.description : ''}`;
+    const videoEl = $('lessonVideo');
+    videoEl.src = lesson.video_url;
+    videoEl.load();
+
+    $('questionsBox').innerHTML = lesson.questions.map((q, i) => renderQuestion(q, i + 1)).join('');
+    $('submitMsg').innerHTML = '';
+
+    await loadComments(lessonId);
+    // Auto re-check window title so back-button behaviour makes sense
+    history.replaceState(null, '', `?lesson=${lessonId}`);
+  } catch (err) {
+    showMsg($('lessonList'), `Could not load lesson: ${err.message}`, 'error');
+  }
+}
+
+$('backToListBtn').addEventListener('click', () => {
+  currentLesson = null;
+  $('lessonCard').classList.add('hidden');
+  $('questionsCard').classList.add('hidden');
+  $('commentsCard').classList.add('hidden');
+  $('myResultCard').classList.add('hidden');
+  if (currentModule) {
+    $('listCard').classList.remove('hidden');
+    $('listCardTitle').textContent = `${currentModule} — lessons`;
+    loadLessonList(currentModule);
+    history.replaceState(null, '', `?module=${encodeURIComponent(currentModule)}`);
+  } else {
+    $('moduleCard').classList.remove('hidden');
+    history.replaceState(null, '', window.location.pathname);
+  }
+});
+
+function renderQuestion(q, num) {
+  let body = '';
+  if (q.type === 'mcq') {
+    body = q.options.map((opt, idx) => `
+      <div class="option-row">
+        <input type="radio" name="q_${q.question_id}" id="q_${q.question_id}_${idx}" value="${escapeHtml(opt)}">
+        <label for="q_${q.question_id}_${idx}">${escapeHtml(opt)}</label>
+      </div>`).join('');
+  } else if (q.type === 'short') {
+    body = `<input type="text" id="q_${q.question_id}" placeholder="Your answer">`;
+  } else {
+    body = `<textarea id="q_${q.question_id}" placeholder="Write your answer here"></textarea>`;
+  }
+  const imgHtml = q.image_url
+    ? `<img src="${q.image_url}" alt="Question image" style="max-width:100%;border:1px solid var(--border);border-radius:4px;margin:10px 0;">`
+    : '';
+  return `
+    <div class="q">
+      <span class="qmarks">${q.marks} mark${q.marks == 1 ? '' : 's'}</span>
+      <div class="qtext"><span class="qnum">Q${num}.</span>${escapeHtml(q.question)}</div>
+      ${imgHtml}
+      ${body}
+    </div>`;
+}
+
+// ---- Load my previous answers (private, by student ID) -----------------
+$('loadMineBtn').addEventListener('click', async () => {
+  if (!currentLesson) return;
+  const studentId = $('studentId').value.trim();
+  if (!studentId) {
+    showMsg($('submitMsg'), 'Enter your student ID first.', 'error');
+    return;
+  }
+  try {
+    const mine = await api(`/lesson/${currentLesson.lesson_id}/my-submission?student_id=${encodeURIComponent(studentId)}`);
+    if (!mine.submitted) {
+      showMsg($('submitMsg'), "No previous answers found for that student ID — answer below and submit.", 'ok');
+      return;
+    }
+    // Pre-fill the form with previous answers
+    mine.answers.forEach(a => {
+      const q = currentLesson.questions.find(q => q.question_id === a.question_id);
+      if (!q) return;
+      if (q.type === 'mcq') {
+        const radio = document.querySelector(`input[name="q_${a.question_id}"][value="${CSS.escape(a.answer_text || '')}"]`);
+        if (radio) radio.checked = true;
+      } else {
+        const el = $(`q_${a.question_id}`);
+        if (el) el.value = a.answer_text || '';
+      }
+    });
+    renderMyResult(mine);
+  } catch (err) {
+    showMsg($('submitMsg'), `Could not load your previous answers: ${err.message}`, 'error');
+  }
+});
+
+function renderMyResult(mine) {
+  $('myResultCard').classList.remove('hidden');
+  const statusText = mine.fully_marked ? 'Final — fully marked' : 'Some questions still pending lecturer marking';
+  $('myResultBox').innerHTML = `
+    <div class="score-stamp">${mine.total_score} / ${mine.max_score}</div>
+    <p class="muted" style="margin-top:10px;">${statusText} &nbsp;•&nbsp; submitted ${formatSAST(mine.submitted_at)}</p>
+  `;
+}
+
+// ---- Submit answers ------------------------------------------------------
+$('submitAnswersBtn').addEventListener('click', async () => {
+  if (!currentLesson) return;
+  const msgBox = $('submitMsg');
+  const name = $('studentName').value.trim();
+  const studentId = $('studentId').value.trim();
+  if (!name || !studentId) {
+    showMsg(msgBox, 'Enter your name and student ID before submitting.', 'error');
+    return;
+  }
+
+  const answers = currentLesson.questions.map(q => {
+    let value = '';
+    if (q.type === 'mcq') {
+      const checked = document.querySelector(`input[name="q_${q.question_id}"]:checked`);
+      value = checked ? checked.value : '';
+    } else {
+      const el = $(`q_${q.question_id}`);
+      value = el ? el.value.trim() : '';
+    }
+    return { question_id: q.question_id, answer: value };
+  });
+
+  $('submitAnswersBtn').disabled = true;
+  try {
+    const result = await api(`/lesson/${currentLesson.lesson_id}/submit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ student_id: studentId, student_name: name, answers }),
+    });
+    showMsg(msgBox, 'Answers submitted.', 'ok');
+    renderMyResult({
+      total_score: result.auto_marked_score,
+      max_score: result.max_score,
+      fully_marked: result.fully_marked,
+      submitted_at: new Date().toISOString(),
+    });
+  } catch (err) {
+    showMsg(msgBox, `Could not submit: ${err.message}`, 'error');
+  } finally {
+    $('submitAnswersBtn').disabled = false;
+  }
+});
+
+// ---- Comments (public) ---------------------------------------------------
+async function loadComments(lessonId) {
+  const list = $('commentsList');
+  try {
+    const comments = await api(`/lesson/${lessonId}/comments`);
+    if (!comments.length) {
+      list.innerHTML = '<p class="muted">No comments yet — be the first to ask a question.</p>';
+      return;
+    }
+    list.innerHTML = comments.map(c => `
+      <div class="comment">
+        <div class="comment-meta">${escapeHtml(c.author_name)}${c.is_lecturer ? ' <span class="lecturer-tag">(Lecturer)</span>' : ''} &middot; ${formatSAST(c.created_at)}</div>
+        <div>${escapeHtml(c.comment_text)}</div>
+      </div>
+    `).join('');
+  } catch (err) {
+    list.innerHTML = `<div class="msg error">Could not load comments: ${err.message}</div>`;
+  }
+}
+
+$('postCommentBtn').addEventListener('click', async () => {
+  if (!currentLesson) return;
+  const msgBox = $('commentMsg');
+  const name = $('commentName').value.trim();
+  const text = $('commentText').value.trim();
+  if (!name || !text) {
+    showMsg(msgBox, 'Enter your name and a comment first.', 'error');
+    return;
+  }
+  $('postCommentBtn').disabled = true;
+  try {
+    await api(`/lesson/${currentLesson.lesson_id}/comments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ author_name: name, comment_text: text, is_lecturer: false }),
+    });
+    $('commentText').value = '';
+    msgBox.innerHTML = '';
+    await loadComments(currentLesson.lesson_id);
+  } catch (err) {
+    showMsg(msgBox, `Could not post comment: ${err.message}`, 'error');
+  } finally {
+    $('postCommentBtn').disabled = false;
+  }
+});
+
+// ---- Init: auto-open a module or lesson if present in the URL -----------
+loadModuleList();
+const params = new URLSearchParams(window.location.search);
+if (params.get('lesson')) {
+  openLesson(params.get('lesson'));
+} else if (params.get('module')) {
+  openModule(params.get('module'));
+}
+</script>
+</body>
+</html>

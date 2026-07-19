@@ -1,0 +1,300 @@
+{
+  "title": "SBTA032 - Innate Immunity and Complement System Quiz",
+  "questions": [
+    {
+      "type": "mcq",
+      "question": "Which characteristic is TRUE of innate immunity?",
+      "options": [
+        "Has immunological memory",
+        "Antigen specific",
+        "Rapid response within minutes",
+        "Requires clonal expansion"
+      ],
+      "answer": "Rapid response within minutes",
+      "marks": 1
+    },
+    {
+      "type": "mcq",
+      "question": "Innate immunity is primarily based on:",
+      "options": [
+        "Previous infections",
+        "Vaccination",
+        "Genetic makeup",
+        "Antibody diversity"
+      ],
+      "answer": "Genetic makeup",
+      "marks": 1
+    },
+    {
+      "type": "mcq",
+      "question": "Which cells are specialized for phagocytosis?",
+      "options": [
+        "B lymphocytes",
+        "Macrophages",
+        "Plasma cells",
+        "T helper cells"
+      ],
+      "answer": "Macrophages",
+      "marks": 1
+    },
+    {
+      "type": "mcq",
+      "question": "PAMP stands for:",
+      "options": [
+        "Pathogen-Activated Molecular Protein",
+        "Pattern-Associated Membrane Protein",
+        "Pathogen-Associated Molecular Pattern",
+        "Protein-Associated Membrane Pattern"
+      ],
+      "answer": "Pathogen-Associated Molecular Pattern",
+      "marks": 2
+    },
+    {
+      "type": "mcq",
+      "question": "Pattern Recognition Receptors (PRRs) recognize:",
+      "options": [
+        "Antibodies",
+        "PAMPs",
+        "T-cell receptors",
+        "Immunoglobulins"
+      ],
+      "answer": "PAMPs",
+      "marks": 2
+    },
+    {
+      "type": "mcq",
+      "question": "Which of the following is NOT a mechanism of innate immunity?",
+      "options": [
+        "Mechanical barriers",
+        "Humoral mechanisms",
+        "Clonal expansion",
+        "Cellular defense"
+      ],
+      "answer": "Clonal expansion",
+      "marks": 2
+    },
+    {
+      "type": "mcq",
+      "question": "The principal phagocytic cell of innate immunity is:",
+      "options": [
+        "Basophil",
+        "Eosinophil",
+        "Neutrophil",
+        "B lymphocyte"
+      ],
+      "answer": "Neutrophil",
+      "marks": 2
+    },
+    {
+      "type": "mcq",
+      "question": "Which innate immune cell is the principal defender against parasites?",
+      "options": [
+        "Neutrophil",
+        "Basophil",
+        "Eosinophil",
+        "Monocyte"
+      ],
+      "answer": "Eosinophil",
+      "marks": 2
+    },
+    {
+      "type": "mcq",
+      "question": "Mast cells release which inflammatory mediator during degranulation?",
+      "options": [
+        "Insulin",
+        "Histamine",
+        "Interferon",
+        "Complement C3"
+      ],
+      "answer": "Histamine",
+      "marks": 2
+    },
+    {
+      "type": "mcq",
+      "question": "Which of the following is a chemical barrier of innate immunity?",
+      "options": [
+        "Peristalsis",
+        "Normal flora",
+        "Lysozyme",
+        "Skin epithelium"
+      ],
+      "answer": "Lysozyme",
+      "marks": 2
+    },
+    {
+      "type": "mcq",
+      "question": "The complement system consists of more than how many proteins?",
+      "options": [
+        "10",
+        "20",
+        "30",
+        "50"
+      ],
+      "answer": "30",
+      "marks": 1
+    },
+    {
+      "type": "mcq",
+      "question": "Which organ produces most complement proteins?",
+      "options": [
+        "Kidney",
+        "Liver",
+        "Spleen",
+        "Bone marrow"
+      ],
+      "answer": "Liver",
+      "marks": 1
+    },
+    {
+      "type": "mcq",
+      "question": "Which complement pathway requires antibodies?",
+      "options": [
+        "Alternative pathway",
+        "Lectin pathway",
+        "Classical pathway",
+        "Terminal pathway"
+      ],
+      "answer": "Classical pathway",
+      "marks": 2
+    },
+    {
+      "type": "mcq",
+      "question": "Which complement pathway is activated by Mannose-Binding Lectin (MBL)?",
+      "options": [
+        "Alternative pathway",
+        "Lectin pathway",
+        "Classical pathway",
+        "Terminal pathway"
+      ],
+      "answer": "Lectin pathway",
+      "marks": 2
+    },
+    {
+      "type": "mcq",
+      "question": "Which complement pathway does NOT require antibodies?",
+      "options": [
+        "Classical pathway",
+        "Alternative pathway",
+        "Classical and Lectin",
+        "None"
+      ],
+      "answer": "Alternative pathway",
+      "marks": 2
+    },
+    {
+      "type": "mcq",
+      "question": "C3b primarily functions as:",
+      "options": [
+        "Anaphylatoxin",
+        "Chemotactic factor",
+        "Opsonin",
+        "Antibody"
+      ],
+      "answer": "Opsonin",
+      "marks": 2
+    },
+    {
+      "type": "mcq",
+      "question": "Which complement component is the most powerful chemotactic factor?",
+      "options": [
+        "C2b",
+        "C3a",
+        "C4b",
+        "C5a"
+      ],
+      "answer": "C5a",
+      "marks": 2
+    },
+    {
+      "type": "mcq",
+      "question": "The Membrane Attack Complex (MAC) is composed of:",
+      "options": [
+        "C1-C4",
+        "C3b only",
+        "C5b, C6, C7, C8 and C9",
+        "C2 and C4"
+      ],
+      "answer": "C5b, C6, C7, C8 and C9",
+      "marks": 2
+    },
+    {
+      "type": "mcq",
+      "question": "The final effect of the Membrane Attack Complex is:",
+      "options": [
+        "Opsonization",
+        "Chemotaxis",
+        "Cell lysis",
+        "Antibody production"
+      ],
+      "answer": "Cell lysis",
+      "marks": 2
+    },
+    {
+      "type": "mcq",
+      "question": "Properdin (Factor P) stabilizes:",
+      "options": [
+        "C1",
+        "C3bBb complex",
+        "MAC",
+        "C5a"
+      ],
+      "answer": "C3bBb complex",
+      "marks": 2
+    },
+    {
+      "type": "short",
+      "question": "Define innate immunity.",
+      "answer": "Innate immunity is a non-specific, rapid immune response present from birth that does not develop immunological memory.",
+      "marks": 3
+    },
+    {
+      "type": "short",
+      "question": "What is phagocytosis?",
+      "answer": "The process by which phagocytic cells capture, engulf and destroy pathogens.",
+      "marks": 3
+    },
+    {
+      "type": "short",
+      "question": "Name the three complement activation pathways.",
+      "answer": "Classical pathway, Alternative pathway, Lectin pathway.",
+      "marks": 3
+    },
+    {
+      "type": "short",
+      "question": "What is the role of C3b?",
+      "answer": "C3b acts as an opsonin, coating pathogens and enhancing phagocytosis.",
+      "marks": 3
+    },
+    {
+      "type": "short",
+      "question": "What is the function of Natural Killer (NK) cells?",
+      "answer": "They kill virus-infected cells and abnormal (tumor) cells.",
+      "marks": 3
+    },
+    {
+      "type": "long",
+      "question": "Compare innate immunity and adaptive immunity, highlighting at least six differences.",
+      "marks": 10
+    },
+    {
+      "type": "long",
+      "question": "Describe the sequence of events during phagocytosis and intracellular killing by neutrophils or macrophages.",
+      "marks": 10
+    },
+    {
+      "type": "long",
+      "question": "Explain the classical complement pathway from activation to formation of the Membrane Attack Complex (MAC).",
+      "marks": 15
+    },
+    {
+      "type": "long",
+      "question": "Describe the alternative complement pathway, including the roles of Factor B, Factor D and Properdin.",
+      "marks": 15
+    },
+    {
+      "type": "long",
+      "question": "Discuss the biological functions of complement, including opsonization, inflammation, chemotaxis and cell lysis.",
+      "marks": 15
+    }
+  ]
+}

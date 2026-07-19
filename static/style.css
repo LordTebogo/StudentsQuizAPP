@@ -1,0 +1,360 @@
+/* ==========================================================================
+   Local Quiz App — shared styles
+   Theme: exam paper + red marking pen. Cool paper background, navy ink,
+   red-pen accent used specifically for marks/scores (the one bold element).
+   ========================================================================== */
+
+:root {
+  --paper: #EEF1F0;
+  --paper-line: #C9D3D6;
+  --ink: #1C2541;
+  --ink-soft: #4A5568;
+  --pen-red: #B5322A;
+  --pen-red-dark: #8F241E;
+  --pass-green: #2F6D4F;
+  --card: #FFFFFF;
+  --border: #D7DCDC;
+  --focus: #1C2541;
+
+  --font-display: Georgia, "Times New Roman", serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+/* faint ruled-paper texture behind everything */
+body {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent,
+    transparent 35px,
+    var(--paper-line) 35px,
+    var(--paper-line) 36px
+  );
+  background-attachment: local;
+  min-height: 100vh;
+}
+
+.wrap {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 40px 24px 80px;
+}
+
+header.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 32px;
+  border-bottom: 3px solid var(--ink);
+  padding-bottom: 14px;
+}
+
+header.top .brand-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+header.top .brand-logo {
+  height: 34px;
+  width: 34px;
+  max-width: 34px;
+  object-fit: contain;
+  display: block;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+header.top .brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+header.top .brand {
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+header.top .brand span {
+  color: var(--pen-red);
+}
+
+header.top .brand-tagline {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--ink-soft);
+  margin-top: 2px;
+}
+
+header.top nav a {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+  text-decoration: none;
+  margin-left: 18px;
+}
+header.top nav a:hover, header.top nav a:focus-visible { color: var(--pen-red); }
+
+h1 {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  margin: 0 0 6px;
+}
+h2 {
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  margin: 0 0 14px;
+}
+p.lede {
+  color: var(--ink-soft);
+  margin-top: 0;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 1px 0 rgba(28, 37, 65, 0.04);
+}
+
+.role-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-top: 32px;
+}
+@media (max-width: 560px) {
+  .role-grid { grid-template-columns: 1fr; }
+  header.top {
+    flex-wrap: wrap;
+    row-gap: 10px;
+  }
+  header.top nav a {
+    margin-left: 0;
+    margin-right: 14px;
+  }
+}
+
+.role-card {
+  display: block;
+  text-decoration: none;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--ink);
+  border-radius: 4px;
+  padding: 24px;
+  transition: border-left-color 0.15s ease, transform 0.1s ease;
+}
+.role-card:hover, .role-card:focus-visible {
+  border-left-color: var(--pen-red);
+  transform: translateX(2px);
+}
+.role-card .kicker {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--pen-red);
+  display: block;
+  margin-bottom: 8px;
+}
+.role-card h2 { margin-bottom: 6px; }
+.role-card p { color: var(--ink-soft); margin: 0; font-size: 0.92rem; }
+
+label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
+  margin: 16px 0 6px;
+}
+label:first-child { margin-top: 0; }
+
+input[type="text"],
+input[type="number"],
+input[type="file"],
+textarea,
+select {
+  width: 100%;
+  padding: 10px 12px;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+input:focus-visible, textarea:focus-visible, select:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+textarea { resize: vertical; min-height: 90px; }
+
+.btn {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: var(--ink);
+  color: #fff;
+  border: none;
+  padding: 11px 20px;
+  border-radius: 3px;
+  cursor: pointer;
+  margin-top: 18px;
+}
+.btn:hover, .btn:focus-visible { background: var(--pen-red); }
+.btn:disabled { background: #A9AFC0; cursor: not-allowed; }
+.btn.secondary {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--ink);
+}
+.btn.secondary:hover { border-color: var(--pen-red); color: var(--pen-red); background: transparent; }
+
+.q {
+  border-top: 1px dashed var(--paper-line);
+  padding: 18px 0;
+}
+.q:first-child { border-top: none; padding-top: 0; }
+.q .qnum {
+  font-family: var(--font-mono);
+  color: var(--pen-red);
+  font-size: 0.85rem;
+  margin-right: 6px;
+}
+.q .qmarks {
+  float: right;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+}
+.q .qtext { font-weight: 600; margin-bottom: 10px; }
+.option-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+}
+.option-row input { width: auto; }
+.option-row label {
+  margin: 0;
+  text-transform: none;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  letter-spacing: 0;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.badge {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 3px 8px;
+  border-radius: 3px;
+  border: 1px solid currentColor;
+}
+.badge.pending { color: var(--pen-red); }
+.badge.done { color: var(--pass-green); }
+
+.score-stamp {
+  font-family: var(--font-mono);
+  font-size: 2.2rem;
+  color: var(--pen-red);
+  border: 3px solid var(--pen-red);
+  display: inline-block;
+  padding: 6px 18px;
+  border-radius: 4px;
+  transform: rotate(-2deg);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+th, td {
+  text-align: left;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--border);
+}
+th {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
+}
+tr.clickable { cursor: pointer; }
+tr.clickable:hover { background: var(--paper); }
+
+.row-download-btn {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 4px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.row-download-btn:hover, .row-download-btn:focus-visible {
+  color: var(--pen-red);
+  border-color: var(--pen-red);
+}
+
+.msg {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  padding: 10px 12px;
+  border-radius: 3px;
+  margin-top: 14px;
+}
+.msg.error { background: #FBEAE8; color: var(--pen-red-dark); border: 1px solid var(--pen-red); }
+.msg.ok { background: #E8F3EC; color: var(--pass-green); border: 1px solid var(--pass-green); }
+
+.muted { color: var(--ink-soft); font-size: 0.88rem; }
+.hidden { display: none !important; }
+
+code.share-link {
+  display: block;
+  font-family: var(--font-mono);
+  background: var(--paper);
+  border: 1px solid var(--border);
+  padding: 10px 12px;
+  border-radius: 3px;
+  word-break: break-all;
+  font-size: 0.85rem;
+  margin-top: 8px;
+}

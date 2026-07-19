@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lecturer — Quiz App</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<!-- PIN gate -->
+<div class="wrap" id="gateWrap">
+  <header class="top">
+    <div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Quiz<span>Mark</span></div><div class="brand-tagline">Bioscientist</div></div></div>
+    <nav><a href="/static/index.html">Home</a><a href="/static/student.html">Student view</a><a href="/static/lessons_lecturer.html">Video lessons</a></nav>
+  </header>
+  <h1>Lecturer sign-in</h1>
+  <p class="lede">Enter the lecturer PIN to upload quizzes and mark submissions.</p>
+  <div class="card">
+    <label for="pinInput">PIN</label>
+    <input type="text" id="pinInput" inputmode="numeric" autocomplete="off" placeholder="Enter PIN">
+    <button class="btn" id="unlockBtn">Unlock</button>
+    <div id="pinMsg"></div>
+  </div>
+</div>
+
+<!-- Main lecturer app, hidden until the PIN is verified -->
+<div class="wrap hidden" id="appWrap">
+  <header class="top">
+    <div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Quiz<span>Mark</span></div><div class="brand-tagline">Bioscientist</div></div></div>
+    <nav><a href="/static/index.html">Home</a><a href="/static/student.html">Student view</a><a href="/static/lessons_lecturer.html">Video lessons</a><a href="#" id="lockBtn">Lock</a></nav>
+  </header>
+
+  <h1>Lecturer</h1>
+  <p class="lede">Upload a quiz, share the quiz ID with your class, then mark long answers as submissions come in.</p>
+
+  <!-- Upload -->
+  <div class="card">
+    <h2>1. Upload a quiz</h2>
+    <label for="quizFile">Quiz JSON file</label>
+    <input type="file" id="quizFile" accept="application/json">
+    <label for="quizImages">Question images (optional)</label>
+    <input type="file" id="quizImages" accept="image/*" multiple>
+    <p class="muted">If any question in the JSON has an <code>"image"</code> field (e.g. <code>"image": "diagram1.png"</code>), select that image file here too — filenames must match exactly. You can select multiple images at once.</p>
+    <button class="btn" id="uploadBtn">Upload quiz</button>
+    <div id="uploadMsg"></div>
+    <div id="shareBox" class="hidden">
+      <label>Share this with students</label>
+      <code class="share-link" id="shareLink"></code>
+    </div>
+  </div>
+
+  <!-- Existing quizzes -->
+  <div class="card">
+    <h2>2. Choose a quiz to review</h2>
+    <label for="quizSelect">Quiz</label>
+    <select id="quizSelect"><option value="">Loading quizzes…</option></select>
+    <button class="btn secondary" id="refreshQuizzesBtn">Refresh list</button>
+  </div>
+
+  <!-- Submissions -->
+  <div class="card hidden" id="submissionsCard">
+    <h2>3. Submissions <span class="muted" id="submissionsCount" style="font-family: var(--font-mono); font-size: 0.8rem; font-weight: normal;"></span></h2>
+    <p class="muted">Click a row to open it and mark long-answer questions or override short-answer marks. This list checks for new submissions automatically every few seconds.</p>
+    <button class="btn secondary" id="refreshSubmissionsBtn">Refresh submissions now</button>
+    <button class="btn secondary" id="downloadAllPdfBtn">Download all as PDF</button>
+    <span class="muted" id="lastCheckedText"></span>
+
+    <label for="studentSearchInput">Search by student name or ID</label>
+    <input type="text" id="studentSearchInput" placeholder="Type a name or ID to filter…">
+
+    <label for="statusFilterSelect">Show</label>
+    <select id="statusFilterSelect">
+      <option value="all">All students</option>
+      <option value="marked">Fully marked only</option>
+      <option value="unmarked">Needs marking only</option>
+    </select>
+
+    <table id="submissionsTable">
+      <thead>
+        <tr><th>#</th><th>Student</th><th>ID</th><th>Score</th><th>Status</th><th>PDF</th></tr>
+      </thead>
+      <tbody id="submissionsBody"></tbody>
+    </table>
+    <p class="muted" id="noSubmissionsMsg">No submissions yet.</p>
+    <div id="downloadAllMsg"></div>
+  </div>
+
+  <!-- Grading panel -->
+  <div class="card hidden" id="gradingCard">
+    <h2>Grade submission</h2>
+    <div id="gradingMeta" class="muted"></div>
+    <div id="gradingQuestions"></div>
+    <button class="btn" id="saveMarksBtn">Save marks</button>
+    <button class="btn secondary" id="downloadOnePdfBtn">Download this student's answers (PDF)</button>
+    <div id="gradingMsg"></div>
+  </div>
+</div><!-- /appWrap -->
+
+<script>
+const $ = (id) => document.getElementById(id);
+let currentQuizId = null;
+let currentSubmissionId = null;
+let LECTURER_PIN = sessionStorage.getItem('lecturerPin') || null;
+
+// Always display times in South African time (SAST, UTC+2), regardless of
+// the viewing device's own timezone/locale settings.
+function formatSAST(isoString) {
+  const d = isoString ? new Date(isoString) : new Date();
+  return d.toLocaleString('en-ZA', {
+    timeZone: 'Africa/Johannesburg',
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }) + ' SAST';
+}
+
+async function api(path, options = {}, needsPin = false) {
+  if (needsPin) {
+    options.headers = Object.assign({}, options.headers, { 'X-Lecturer-Pin': LECTURER_PIN });
+  }
+  const res = await fetch(path, options);
+  let data = null;
+  try { data = await res.json(); } catch (e) { /* no body */ }
+  if (!res.ok) {
+    const detail = (data && data.detail) ? data.detail : res.statusText;
+    throw new Error(detail);
+  }
+  return data;
+}
+
+function showMsg(el, text, kind) {
+  el.innerHTML = `<div class="msg ${kind}">${text}</div>`;
+}
+
+// Fetches a PDF from a lecturer-only endpoint (with the PIN header) and
+// triggers a normal browser "Save file" download for it.
+async function downloadPdf(path, fallbackFilename, msgEl) {
+  try {
+    const res = await fetch(path, { headers: { 'X-Lecturer-Pin': LECTURER_PIN } });
+    if (!res.ok) {
+      let detail = res.statusText;
+      try { const data = await res.json(); if (data && data.detail) detail = data.detail; } catch (e) {}
+      throw new Error(detail);
+    }
+    const blob = await res.blob();
+    let filename = fallbackFilename;
+    const disposition = res.headers.get('Content-Disposition');
+    if (disposition) {
+      const match = disposition.match(/filename="?([^"]+)"?/);
+      if (match) filename = match[1];
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    if (msgEl) msgEl.innerHTML = '';
+  } catch (err) {
+    if (msgEl) showMsg(msgEl, `Could not download PDF: ${err.message}`, 'error');
+  }
+}
+
+// ---- PIN gate --------------------------------------------------------
+async function tryUnlock(pin) {
+  const msgBox = $('pinMsg');
+  $('unlockBtn').disabled = true;
+  try {
+    await api('/lecturer/verify-pin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin }),
+    });
+    LECTURER_PIN = pin;
+    sessionStorage.setItem('lecturerPin', pin);
+    $('gateWrap').classList.add('hidden');
+    $('appWrap').classList.remove('hidden');
+    loadQuizzes();
+  } catch (err) {
+    sessionStorage.removeItem('lecturerPin');
+    showMsg(msgBox, 'Incorrect PIN.', 'error');
+  } finally {
+    $('unlockBtn').disabled = false;
+  }
+}
+
+$('unlockBtn').addEventListener('click', () => {
+  const pin = $('pinInput').value.trim();
+  if (!pin) {
+    showMsg($('pinMsg'), 'Enter the PIN.', 'error');
+    return;
+  }
+  tryUnlock(pin);
+});
+$('pinInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') $('unlockBtn').click();
+});
+$('lockBtn').addEventListener('click', (e) => {
+  e.preventDefault();
+  sessionStorage.removeItem('lecturerPin');
+  LECTURER_PIN = null;
+  $('appWrap').classList.add('hidden');
+  $('gateWrap').classList.remove('hidden');
+  $('pinInput').value = '';
+});
+
+// If a PIN was already verified this session, skip straight to the app.
+if (LECTURER_PIN) {
+  tryUnlock(LECTURER_PIN);
+}
+
+// ---- Upload quiz -----------------------------------------------------
+$('uploadBtn').addEventListener('click', async () => {
+  const fileInput = $('quizFile');
+  const imagesInput = $('quizImages');
+  const msgBox = $('uploadMsg');
+  if (!fileInput.files.length) {
+    showMsg(msgBox, 'Choose a JSON file first.', 'error');
+    return;
+  }
+  const formData = new FormData();
+  formData.append('file', fileInput.files[0]);
+  for (const img of imagesInput.files) {
+    formData.append('images', img);
+  }
+
+  $('uploadBtn').disabled = true;
+  try {
+    const result = await api('/quiz/upload', { method: 'POST', body: formData }, true);
+    const imgNote = result.images_uploaded ? ` (${result.images_uploaded} image${result.images_uploaded === 1 ? '' : 's'} attached)` : '';
+    showMsg(msgBox, `Uploaded "${result.title}" (${result.num_questions} questions) — quiz ID ${result.quiz_id}.${imgNote}`, 'ok');
+    const link = `${window.location.origin}/static/student.html?quiz=${result.quiz_id}`;
+    $('shareLink').textContent = link;
+    $('shareBox').classList.remove('hidden');
+    fileInput.value = '';
+    imagesInput.value = '';
+    await loadQuizzes();
+    $('quizSelect').value = result.quiz_id;
+    await loadSubmissions(result.quiz_id);
+  } catch (err) {
+    showMsg(msgBox, `Upload failed: ${err.message}`, 'error');
+  } finally {
+    $('uploadBtn').disabled = false;
+  }
+});
+
+// ---- Load quiz list ----------------------------------------------------
+async function loadQuizzes() {
+  const select = $('quizSelect');
+  try {
+    const quizzes = await api('/quizzes', {}, true);
+    if (!quizzes.length) {
+      select.innerHTML = '<option value="">No quizzes uploaded yet</option>';
+      return;
+    }
+    select.innerHTML = quizzes.map(q => `<option value="${q.id}">#${q.id} — ${q.title}</option>`).join('');
+  } catch (err) {
+    select.innerHTML = '<option value="">Could not load quizzes</option>';
+  }
+}
+$('refreshQuizzesBtn').addEventListener('click', loadQuizzes);
+$('refreshSubmissionsBtn').addEventListener('click', () => {
+  if (currentQuizId) loadSubmissions(currentQuizId);
+});
+$('downloadAllPdfBtn').addEventListener('click', () => {
+  if (!currentQuizId) return;
+  downloadPdf(`/lecturer/quiz/${currentQuizId}/pdf`, `quiz_${currentQuizId}_all_answers.pdf`, $('downloadAllMsg'));
+});
+$('quizSelect').addEventListener('change', (e) => {
+  if (e.target.value) {
+    $('gradingCard').classList.add('hidden');
+    $('studentSearchInput').value = '';
+    $('statusFilterSelect').value = 'all';
+    loadSubmissions(e.target.value);
+  }
+});
+
+// Auto-poll for new submissions every 8 seconds while a quiz is selected,
+// so the lecturer doesn't have to keep manually refreshing.
+setInterval(() => {
+  if (currentQuizId) loadSubmissions(currentQuizId, { silent: true });
+}, 8000);
+
+// ---- Load submissions for a quiz ---------------------------------------
+let allSubmissions = [];  // cached raw list for the currently selected quiz, used for client-side search/filter
+
+async function loadSubmissions(quizId, opts = {}) {
+  currentQuizId = quizId;
+  $('submissionsCard').classList.remove('hidden');
+  const emptyMsg = $('noSubmissionsMsg');
+
+  try {
+    const subs = await api(`/lecturer/quiz/${quizId}/submissions`, {}, true);
+    $('lastCheckedText').textContent = `Last checked: ${formatSAST()}`;
+    allSubmissions = subs;
+    renderSubmissionsTable();
+  } catch (err) {
+    if (!opts.silent) {
+      emptyMsg.textContent = `Could not load submissions: ${err.message}`;
+      emptyMsg.classList.remove('hidden');
+    }
+  }
+}
+
+// Applies the search box + status filter to the cached list and re-renders
+// the table, with numbering based on the filtered/visible order.
+function renderSubmissionsTable() {
+  const body = $('submissionsBody');
+  const emptyMsg = $('noSubmissionsMsg');
+  const countEl = $('submissionsCount');
+  const searchTerm = $('studentSearchInput').value.trim().toLowerCase();
+  const statusFilter = $('statusFilterSelect').value;
+
+  countEl.textContent = allSubmissions.length
+    ? `(${allSubmissions.length} student${allSubmissions.length === 1 ? '' : 's'} took this quiz)`
+    : '';
+
+  let filtered = allSubmissions;
+  if (searchTerm) {
+    filtered = filtered.filter(s =>
+      s.student_name.toLowerCase().includes(searchTerm) ||
+      s.student_id.toLowerCase().includes(searchTerm)
+    );
+  }
+  if (statusFilter === 'marked') {
+    filtered = filtered.filter(s => s.fully_marked);
+  } else if (statusFilter === 'unmarked') {
+    filtered = filtered.filter(s => !s.fully_marked);
+  }
+
+  if (!allSubmissions.length) {
+    body.innerHTML = '';
+    emptyMsg.textContent = 'No submissions yet.';
+    emptyMsg.classList.remove('hidden');
+    return;
+  }
+  if (!filtered.length) {
+    body.innerHTML = '';
+    emptyMsg.textContent = 'No students match your search/filter.';
+    emptyMsg.classList.remove('hidden');
+    return;
+  }
+
+  emptyMsg.classList.add('hidden');
+  body.innerHTML = filtered.map((s, idx) => `
+    <tr class="clickable" data-id="${s.id}">
+      <td>${idx + 1}</td>
+      <td>${escapeHtml(s.student_name)}</td>
+      <td>${escapeHtml(s.student_id)}</td>
+      <td>${s.total_score} / ${s.max_score}</td>
+      <td><span class="badge ${s.fully_marked ? 'done' : 'pending'}">${s.fully_marked ? 'Fully marked' : 'Needs marking'}</span></td>
+      <td><button class="row-download-btn" data-download-id="${s.id}" data-download-name="${escapeHtml(s.student_name)}" title="Download marked script as PDF">&#8681; PDF</button></td>
+    </tr>
+  `).join('');
+  body.querySelectorAll('tr.clickable').forEach(row => {
+    row.addEventListener('click', () => openGrading(row.dataset.id));
+  });
+  body.querySelectorAll('.row-download-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation(); // don't also open the grading panel
+      const id = btn.dataset.downloadId;
+      const name = (btn.dataset.downloadName || 'student').replace(/\s+/g, '_');
+      downloadPdf(`/lecturer/submission/${id}/pdf`, `${name}_answers.pdf`, $('downloadAllMsg'));
+    });
+  });
+}
+
+$('studentSearchInput').addEventListener('input', renderSubmissionsTable);
+$('statusFilterSelect').addEventListener('change', renderSubmissionsTable);
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ---- Grading panel -------------------------------------------------------
+async function openGrading(submissionId) {
+  currentSubmissionId = submissionId;
+  const card = $('gradingCard');
+  const meta = $('gradingMeta');
+  const qBox = $('gradingQuestions');
+  $('gradingMsg').innerHTML = '';
+  card.classList.remove('hidden');
+  qBox.innerHTML = 'Loading…';
+
+  try {
+    const detail = await api(`/lecturer/submission/${submissionId}`, {}, true);
+    const s = detail.submission;
+    meta.textContent = `${s.student_name} (${s.student_id}) — submitted ${formatSAST(s.submitted_at)}`;
+
+    qBox.innerHTML = detail.answers.map(a => {
+      const imgHtml = a.image_url ? `<img src="${a.image_url}" alt="Question image" style="max-width:100%;border:1px solid var(--border);border-radius:4px;margin:10px 0;">` : '';
+
+      if (a.type === 'long') {
+        return `
+          <div class="q">
+            <span class="qmarks">${a.awarded_marks ?? '—'} / ${a.max_marks}</span>
+            <div class="qtext">${escapeHtml(a.question)}</div>
+            ${imgHtml}
+            <p class="muted">Student's answer:</p>
+            <p>${escapeHtml(a.answer_text || '(no answer given)')}</p>
+            <label for="mark_${a.question_id}">Award marks (out of ${a.max_marks})</label>
+            <input type="number" id="mark_${a.question_id}" min="0" max="${a.max_marks}" step="0.5"
+                   value="${a.awarded_marks ?? ''}" data-question-id="${a.question_id}" data-max="${a.max_marks}">
+          </div>`;
+      }
+
+      if (a.type === 'short') {
+        const correct = a.awarded_marks === a.max_marks;
+        return `
+          <div class="q">
+            <span class="qmarks">${a.awarded_marks} / ${a.max_marks}</span>
+            <div class="qtext">${escapeHtml(a.question)} <span class="badge ${correct ? 'done' : 'pending'}">${correct ? 'Auto-marked correct' : 'Auto-marked incorrect'}</span></div>
+            ${imgHtml}
+            <p class="muted">Student's answer: ${escapeHtml(a.answer_text || '(no answer given)')}</p>
+            <p class="muted">Expected answer: ${escapeHtml(a.correct_answer || '')}</p>
+            <label for="mark_${a.question_id}">Override marks (out of ${a.max_marks})</label>
+            <input type="number" id="mark_${a.question_id}" min="0" max="${a.max_marks}" step="0.5"
+                   value="${a.awarded_marks ?? ''}" data-question-id="${a.question_id}" data-max="${a.max_marks}">
+          </div>`;
+      }
+
+      // mcq: read-only, can't be overridden
+      const correct = a.awarded_marks === a.max_marks;
+      return `
+        <div class="q">
+          <span class="qmarks">${a.awarded_marks} / ${a.max_marks}</span>
+          <div class="qtext">${escapeHtml(a.question)} <span class="badge ${correct ? 'done' : 'pending'}">${correct ? 'Correct' : 'Incorrect'}</span></div>
+          ${imgHtml}
+          <p class="muted">Student's answer: ${escapeHtml(a.answer_text || '(no answer given)')}</p>
+        </div>`;
+    }).join('');
+  } catch (err) {
+    qBox.innerHTML = `<div class="msg error">Could not load submission: ${err.message}</div>`;
+  }
+}
+
+$('saveMarksBtn').addEventListener('click', async () => {
+  const inputs = document.querySelectorAll('#gradingQuestions input[type="number"]');
+  const marks = [];
+  for (const input of inputs) {
+    if (input.value === '') continue;
+    let val = parseFloat(input.value);
+    const max = parseFloat(input.dataset.max);
+    if (isNaN(val)) continue;
+    if (val > max) val = max;
+    if (val < 0) val = 0;
+    marks.push({ question_id: parseInt(input.dataset.questionId, 10), awarded_marks: val });
+  }
+
+  const msgBox = $('gradingMsg');
+  if (!marks.length) {
+    showMsg(msgBox, 'Enter at least one mark before saving.', 'error');
+    return;
+  }
+
+  try {
+    const result = await api(`/lecturer/submission/${currentSubmissionId}/mark`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ marks }),
+    }, true);
+    showMsg(msgBox, `Saved. Total score: ${result.total_score}. ${result.fully_marked ? 'Fully marked — student can now see their final result.' : 'Some questions still need marking.'}`, 'ok');
+    await loadSubmissions(currentQuizId);
+  } catch (err) {
+    showMsg(msgBox, `Could not save marks: ${err.message}`, 'error');
+  }
+});
+
+$('downloadOnePdfBtn').addEventListener('click', () => {
+  if (!currentSubmissionId) return;
+  downloadPdf(`/lecturer/submission/${currentSubmissionId}/pdf`, `submission_${currentSubmissionId}_answers.pdf`, $('gradingMsg'));
+});
+</script>
+</body>
+</html>

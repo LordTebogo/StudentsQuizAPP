@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+
+quiz_images/
+lesson_videos/
+
+*.log

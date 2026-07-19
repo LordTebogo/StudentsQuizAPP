@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Video Lessons — Lecturer</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+  video { width: 100%; border-radius: 4px; border: 1px solid var(--border); background: #000; display: block; margin-bottom: 14px; }
+  .comment { padding: 10px 0; border-top: 1px dashed var(--paper-line); }
+  .comment:first-child { border-top: none; }
+  .comment .comment-meta {
+    font-family: var(--font-mono); font-size: 0.72rem; color: var(--ink-soft);
+    text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px;
+  }
+  .comment .comment-meta .lecturer-tag { color: var(--pen-red); }
+</style>
+</head>
+<body>
+
+<!-- PIN gate -->
+<div class="wrap" id="gateWrap">
+  <header class="top">
+    <div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Quiz<span>Mark</span></div><div class="brand-tagline">Bioscientist</div></div></div>
+    <nav><a href="/static/index.html">Home</a><a href="/static/lessons_student.html">Student view</a></nav>
+  </header>
+  <h1>Lecturer sign-in</h1>
+  <p class="lede">Enter the lecturer PIN to upload video lessons and mark student answers.</p>
+  <div class="card">
+    <label for="pinInput">PIN</label>
+    <input type="text" id="pinInput" inputmode="numeric" autocomplete="off" placeholder="Enter PIN">
+    <button class="btn" id="unlockBtn">Unlock</button>
+    <div id="pinMsg"></div>
+  </div>
+</div>
+
+<!-- Main lecturer app -->
+<div class="wrap hidden" id="appWrap">
+  <header class="top">
+    <div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Quiz<span>Mark</span></div><div class="brand-tagline">Bioscientist</div></div></div>
+    <nav><a href="/static/index.html">Home</a><a href="/static/lessons_student.html">Student view</a><a href="/static/lecturer.html">Quizzes</a><a href="#" id="lockBtn">Lock</a></nav>
+  </header>
+
+  <h1>Video lessons</h1>
+  <p class="lede">Upload a video with comprehension questions, then review and mark student answers as they come in.</p>
+
+  <!-- Upload -->
+  <div class="card">
+    <h2>1. Upload a video lesson</h2>
+    <label for="moduleCodeInput">Module code</label>
+    <input type="text" id="moduleCodeInput" list="moduleCodeOptions" placeholder="e.g. BIO101" autocapitalize="characters">
+    <datalist id="moduleCodeOptions"></datalist>
+    <p class="muted">Students pick this module code on the lessons page to see only videos from it. Use the same code across lessons in the same module (not case-sensitive — stored as UPPERCASE).</p>
+    <label for="lessonFile">Lesson JSON file (title, description, questions)</label>
+    <input type="file" id="lessonFile" accept="application/json">
+    <label for="lessonVideo">Video file</label>
+    <input type="file" id="lessonVideo" accept="video/*">
+    <label for="lessonImages">Question images (optional)</label>
+    <input type="file" id="lessonImages" accept="image/*" multiple>
+    <p class="muted">The JSON should look like: <code>{"title": "...", "description": "...", "questions": [...]}</code> — same question format as quizzes (mcq / short / long), each optionally with an <code>"image"</code> field.</p>
+    <button class="btn" id="uploadLessonBtn">Upload lesson</button>
+    <div id="uploadMsg"></div>
+    <div id="shareBox" class="hidden">
+      <label>Share this with students</label>
+      <code class="share-link" id="shareLink"></code>
+    </div>
+  </div>
+
+  <!-- Choose lesson -->
+  <div class="card">
+    <h2>2. Choose a lesson to review</h2>
+    <label for="moduleFilterSelect">Filter by module</label>
+    <select id="moduleFilterSelect"><option value="">All modules</option></select>
+    <label for="lessonSelect">Lesson</label>
+    <select id="lessonSelect"><option value="">Loading lessons…</option></select>
+    <button class="btn secondary" id="refreshLessonsBtn">Refresh list</button>
+  </div>
+
+  <!-- Selected lesson preview + comments -->
+  <div class="card hidden" id="previewCard">
+    <h2 id="previewTitle"></h2>
+    <p class="muted" id="previewDescription"></p>
+    <video id="previewVideo" controls></video>
+
+    <h2>Discussion (visible to everyone)</h2>
+    <div id="commentsList" class="muted">No comments yet.</div>
+    <label for="commentText">Post as lecturer</label>
+    <textarea id="commentText" placeholder="Reply to students or add a note under this video…"></textarea>
+    <button class="btn secondary" id="postCommentBtn">Post comment</button>
+    <div id="commentMsg"></div>
+  </div>
+
+  <!-- Submissions -->
+  <div class="card hidden" id="submissionsCard">
+    <h2>3. Student answers</h2>
+    <p class="muted">Click a row to mark long-answer questions or override short-answer marks. Only you and the relevant student can see these.</p>
+    <button class="btn secondary" id="refreshSubmissionsBtn">Refresh now</button>
+    <span class="muted" id="lastCheckedText"></span>
+    <table id="submissionsTable">
+      <thead>
+        <tr><th>Student</th><th>ID</th><th>Score</th><th>Status</th></tr>
+      </thead>
+      <tbody id="submissionsBody"></tbody>
+    </table>
+    <p class="muted" id="noSubmissionsMsg">No answers submitted yet.</p>
+  </div>
+
+  <!-- Grading panel -->
+  <div class="card hidden" id="gradingCard">
+    <h2>Grade submission</h2>
+    <div id="gradingMeta" class="muted"></div>
+    <div id="gradingQuestions"></div>
+    <button class="btn" id="saveMarksBtn">Save marks</button>
+    <div id="gradingMsg"></div>
+  </div>
+</div><!-- /appWrap -->
+
+<script>
+const $ = (id) => document.getElementById(id);
+let currentLessonId = null;
+let currentSubmissionId = null;
+let LECTURER_PIN = sessionStorage.getItem('lecturerPin') || null;
+
+function formatSAST(isoString) {
+  const d = isoString ? new Date(isoString) : new Date();
+  return d.toLocaleString('en-ZA', {
+    timeZone: 'Africa/Johannesburg',
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }) + ' SAST';
+}
+
+async function api(path, options = {}, needsPin = false) {
+  if (needsPin) {
+    options.headers = Object.assign({}, options.headers, { 'X-Lecturer-Pin': LECTURER_PIN });
+  }
+  const res = await fetch(path, options);
+  let data = null;
+  try { data = await res.json(); } catch (e) { /* no body */ }
+  if (!res.ok) {
+    const detail = (data && data.detail) ? data.detail : res.statusText;
+    throw new Error(detail);
+  }
+  return data;
+}
+
+function showMsg(el, text, kind) {
+  el.innerHTML = `<div class="msg ${kind}">${text}</div>`;
+}
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ---- PIN gate --------------------------------------------------------
+async function tryUnlock(pin) {
+  const msgBox = $('pinMsg');
+  $('unlockBtn').disabled = true;
+  try {
+    await api('/lecturer/verify-pin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin }),
+    });
+    LECTURER_PIN = pin;
+    sessionStorage.setItem('lecturerPin', pin);
+    $('gateWrap').classList.add('hidden');
+    $('appWrap').classList.remove('hidden');
+    loadModules();
+    loadLessons();
+  } catch (err) {
+    sessionStorage.removeItem('lecturerPin');
+    showMsg(msgBox, 'Incorrect PIN.', 'error');
+  } finally {
+    $('unlockBtn').disabled = false;
+  }
+}
+$('unlockBtn').addEventListener('click', () => {
+  const pin = $('pinInput').value.trim();
+  if (!pin) { showMsg($('pinMsg'), 'Enter the PIN.', 'error'); return; }
+  tryUnlock(pin);
+});
+$('pinInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('unlockBtn').click(); });
+$('lockBtn').addEventListener('click', (e) => {
+  e.preventDefault();
+  sessionStorage.removeItem('lecturerPin');
+  LECTURER_PIN = null;
+  $('appWrap').classList.add('hidden');
+  $('gateWrap').classList.remove('hidden');
+  $('pinInput').value = '';
+});
+if (LECTURER_PIN) tryUnlock(LECTURER_PIN);
+
+// ---- Upload lesson -----------------------------------------------------
+$('uploadLessonBtn').addEventListener('click', async () => {
+  const fileInput = $('lessonFile');
+  const videoInput = $('lessonVideo');
+  const imagesInput = $('lessonImages');
+  const moduleInput = $('moduleCodeInput');
+  const msgBox = $('uploadMsg');
+  const moduleCode = moduleInput.value.trim();
+  if (!moduleCode) { showMsg(msgBox, 'Enter a module code first.', 'error'); return; }
+  if (!fileInput.files.length) { showMsg(msgBox, 'Choose a lesson JSON file first.', 'error'); return; }
+  if (!videoInput.files.length) { showMsg(msgBox, 'Choose a video file first.', 'error'); return; }
+
+  const formData = new FormData();
+  formData.append('file', fileInput.files[0]);
+  formData.append('video', videoInput.files[0]);
+  formData.append('module_code', moduleCode);
+  for (const img of imagesInput.files) formData.append('images', img);
+
+  $('uploadLessonBtn').disabled = true;
+  showMsg(msgBox, 'Uploading — this may take a while for large videos…', 'ok');
+  try {
+    const result = await api('/lecturer/lesson/upload', { method: 'POST', body: formData }, true);
+    showMsg(msgBox, `Uploaded "${result.title}" under module ${result.module_code} (${result.num_questions} questions) — lesson ID ${result.lesson_id}.`, 'ok');
+    const link = `${window.location.origin}/static/lessons_student.html?lesson=${result.lesson_id}`;
+    $('shareLink').textContent = link;
+    $('shareBox').classList.remove('hidden');
+    fileInput.value = ''; videoInput.value = ''; imagesInput.value = '';
+    // Keep the module code filled in — the lecturer is likely to upload
+    // another lesson for the same module next.
+    await loadModules();
+    await loadLessons();
+    $('lessonSelect').value = result.lesson_id;
+    await selectLesson(result.lesson_id);
+  } catch (err) {
+    showMsg(msgBox, `Upload failed: ${err.message}`, 'error');
+  } finally {
+    $('uploadLessonBtn').disabled = false;
+  }
+});
+
+// ---- Modules (for the datalist suggestions + filter dropdown) -----------
+async function loadModules() {
+  try {
+    const modules = await api('/modules');
+    $('moduleCodeOptions').innerHTML = modules.map(m => `<option value="${escapeHtml(m.module_code)}">`).join('');
+    const filterSelect = $('moduleFilterSelect');
+    const previousValue = filterSelect.value;
+    filterSelect.innerHTML = '<option value="">All modules</option>' +
+      modules.map(m => `<option value="${escapeHtml(m.module_code)}">${escapeHtml(m.module_code)} (${m.lesson_count})</option>`).join('');
+    filterSelect.value = previousValue; // preserve selection across refreshes if still valid
+  } catch (err) {
+    // non-critical — just leave the datalist/filter empty
+  }
+}
+$('moduleFilterSelect').addEventListener('change', loadLessons);
+
+// ---- Lesson list ---------------------------------------------------------
+async function loadLessons() {
+  const select = $('lessonSelect');
+  const moduleFilter = $('moduleFilterSelect').value;
+  try {
+    const path = moduleFilter ? `/lessons?module_code=${encodeURIComponent(moduleFilter)}` : '/lessons';
+    const lessons = await api(path);
+    if (!lessons.length) {
+      select.innerHTML = '<option value="">No lessons in this module yet</option>';
+      return;
+    }
+    select.innerHTML = lessons.map(l => `<option value="${l.id}">[${escapeHtml(l.module_code)}] #${l.id} — ${escapeHtml(l.title)}</option>`).join('');
+  } catch (err) {
+    select.innerHTML = '<option value="">Could not load lessons</option>';
+  }
+}
+$('refreshLessonsBtn').addEventListener('click', () => { loadModules(); loadLessons(); });
+$('lessonSelect').addEventListener('change', (e) => {
+  if (e.target.value) selectLesson(e.target.value);
+});
+
+async function selectLesson(lessonId) {
+  currentLessonId = lessonId;
+  $('gradingCard').classList.add('hidden');
+  try {
+    const lesson = await api(`/lesson/${lessonId}`);
+    $('previewCard').classList.remove('hidden');
+    $('previewTitle').textContent = lesson.title;
+    $('previewDescription').textContent = lesson.description || '';
+    const videoEl = $('previewVideo');
+    videoEl.src = lesson.video_url;
+    videoEl.load();
+    await loadComments(lessonId);
+    await loadSubmissions(lessonId);
+  } catch (err) {
+    showMsg($('uploadMsg'), `Could not load lesson: ${err.message}`, 'error');
+  }
+}
+
+// ---- Comments (public read, lecturer-flagged post) -----------------------
+async function loadComments(lessonId) {
+  const list = $('commentsList');
+  try {
+    const comments = await api(`/lesson/${lessonId}/comments`);
+    if (!comments.length) {
+      list.innerHTML = '<p class="muted">No comments yet.</p>';
+      return;
+    }
+    list.innerHTML = comments.map(c => `
+      <div class="comment">
+        <div class="comment-meta">${escapeHtml(c.author_name)}${c.is_lecturer ? ' <span class="lecturer-tag">(Lecturer)</span>' : ''} &middot; ${formatSAST(c.created_at)}</div>
+        <div>${escapeHtml(c.comment_text)}</div>
+      </div>
+    `).join('');
+  } catch (err) {
+    list.innerHTML = `<div class="msg error">Could not load comments: ${err.message}</div>`;
+  }
+}
+
+$('postCommentBtn').addEventListener('click', async () => {
+  if (!currentLessonId) return;
+  const msgBox = $('commentMsg');
+  const text = $('commentText').value.trim();
+  if (!text) { showMsg(msgBox, 'Write a comment first.', 'error'); return; }
+  $('postCommentBtn').disabled = true;
+  try {
+    await api(`/lesson/${currentLessonId}/comments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ author_name: 'Lecturer', comment_text: text, is_lecturer: true }),
+    }, true);
+    $('commentText').value = '';
+    msgBox.innerHTML = '';
+    await loadComments(currentLessonId);
+  } catch (err) {
+    showMsg(msgBox, `Could not post comment: ${err.message}`, 'error');
+  } finally {
+    $('postCommentBtn').disabled = false;
+  }
+});
+
+// ---- Submissions -----------------------------------------------------
+async function loadSubmissions(lessonId, opts = {}) {
+  currentLessonId = lessonId;
+  $('submissionsCard').classList.remove('hidden');
+  const body = $('submissionsBody');
+  const emptyMsg = $('noSubmissionsMsg');
+
+  try {
+    const subs = await api(`/lecturer/lesson/${lessonId}/submissions`, {}, true);
+    $('lastCheckedText').textContent = `Last checked: ${formatSAST()}`;
+    if (!subs.length) {
+      body.innerHTML = '';
+      emptyMsg.classList.remove('hidden');
+      return;
+    }
+    emptyMsg.classList.add('hidden');
+    body.innerHTML = subs.map(s => `
+      <tr class="clickable" data-id="${s.id}">
+        <td>${escapeHtml(s.student_name)}</td>
+        <td>${escapeHtml(s.student_id)}</td>
+        <td>${s.total_score} / ${s.max_score}</td>
+        <td><span class="badge ${s.fully_marked ? 'done' : 'pending'}">${s.fully_marked ? 'Fully marked' : 'Needs marking'}</span></td>
+      </tr>
+    `).join('');
+    body.querySelectorAll('tr.clickable').forEach(row => {
+      row.addEventListener('click', () => openGrading(row.dataset.id));
+    });
+  } catch (err) {
+    if (!opts.silent) {
+      emptyMsg.textContent = `Could not load answers: ${err.message}`;
+      emptyMsg.classList.remove('hidden');
+    }
+  }
+}
+$('refreshSubmissionsBtn').addEventListener('click', () => {
+  if (currentLessonId) loadSubmissions(currentLessonId);
+});
+setInterval(() => {
+  if (currentLessonId) loadSubmissions(currentLessonId, { silent: true });
+}, 8000);
+
+// ---- Grading panel -------------------------------------------------------
+async function openGrading(submissionId) {
+  currentSubmissionId = submissionId;
+  const card = $('gradingCard');
+  const meta = $('gradingMeta');
+  const qBox = $('gradingQuestions');
+  $('gradingMsg').innerHTML = '';
+  card.classList.remove('hidden');
+  qBox.innerHTML = 'Loading…';
+
+  try {
+    const detail = await api(`/lecturer/lesson/submission/${submissionId}`, {}, true);
+    const s = detail.submission;
+    meta.textContent = `${s.student_name} (${s.student_id}) — submitted ${formatSAST(s.submitted_at)}`;
+
+    qBox.innerHTML = detail.answers.map(a => {
+      const imgHtml = a.image_url ? `<img src="${a.image_url}" alt="Question image" style="max-width:100%;border:1px solid var(--border);border-radius:4px;margin:10px 0;">` : '';
+
+      if (a.type === 'long') {
+        return `
+          <div class="q">
+            <span class="qmarks">${a.awarded_marks ?? '—'} / ${a.max_marks}</span>
+            <div class="qtext">${escapeHtml(a.question)}</div>
+            ${imgHtml}
+            <p class="muted">Student's answer:</p>
+            <p>${escapeHtml(a.answer_text || '(no answer given)')}</p>
+            <label for="mark_${a.question_id}">Award marks (out of ${a.max_marks})</label>
+            <input type="number" id="mark_${a.question_id}" min="0" max="${a.max_marks}" step="0.5"
+                   value="${a.awarded_marks ?? ''}" data-question-id="${a.question_id}" data-max="${a.max_marks}">
+          </div>`;
+      }
+      if (a.type === 'short') {
+        const correct = a.awarded_marks === a.max_marks;
+        return `
+          <div class="q">
+            <span class="qmarks">${a.awarded_marks} / ${a.max_marks}</span>
+            <div class="qtext">${escapeHtml(a.question)} <span class="badge ${correct ? 'done' : 'pending'}">${correct ? 'Auto-marked correct' : 'Auto-marked incorrect'}</span></div>
+            ${imgHtml}
+            <p class="muted">Student's answer: ${escapeHtml(a.answer_text || '(no answer given)')}</p>
+            <p class="muted">Expected answer: ${escapeHtml(a.correct_answer || '')}</p>
+            <label for="mark_${a.question_id}">Override marks (out of ${a.max_marks})</label>
+            <input type="number" id="mark_${a.question_id}" min="0" max="${a.max_marks}" step="0.5"
+                   value="${a.awarded_marks ?? ''}" data-question-id="${a.question_id}" data-max="${a.max_marks}">
+          </div>`;
+      }
+      const correct = a.awarded_marks === a.max_marks;
+      return `
+        <div class="q">
+          <span class="qmarks">${a.awarded_marks} / ${a.max_marks}</span>
+          <div class="qtext">${escapeHtml(a.question)} <span class="badge ${correct ? 'done' : 'pending'}">${correct ? 'Correct' : 'Incorrect'}</span></div>
+          ${imgHtml}
+          <p class="muted">Student's answer: ${escapeHtml(a.answer_text || '(no answer given)')}</p>
+        </div>`;
+    }).join('');
+  } catch (err) {
+    qBox.innerHTML = `<div class="msg error">Could not load submission: ${err.message}</div>`;
+  }
+}
+
+$('saveMarksBtn').addEventListener('click', async () => {
+  const inputs = document.querySelectorAll('#gradingQuestions input[type="number"]');
+  const marks = [];
+  for (const input of inputs) {
+    if (input.value === '') continue;
+    let val = parseFloat(input.value);
+    const max = parseFloat(input.dataset.max);
+    if (isNaN(val)) continue;
+    if (val > max) val = max;
+    if (val < 0) val = 0;
+    marks.push({ question_id: parseInt(input.dataset.questionId, 10), awarded_marks: val });
+  }
+
+  const msgBox = $('gradingMsg');
+  if (!marks.length) { showMsg(msgBox, 'Enter at least one mark before saving.', 'error'); return; }
+
+  try {
+    const result = await api(`/lecturer/lesson/submission/${currentSubmissionId}/mark`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ marks }),
+    }, true);
+    showMsg(msgBox, `Saved. Total score: ${result.total_score}. ${result.fully_marked ? 'Fully marked.' : 'Some questions still need marking.'}`, 'ok');
+    await loadSubmissions(currentLessonId);
+  } catch (err) {
+    showMsg(msgBox, `Could not save marks: ${err.message}`, 'error');
+  }
+});
+</script>
+</body>
+</html>

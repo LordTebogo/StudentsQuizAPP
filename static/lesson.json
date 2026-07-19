@@ -1,0 +1,36 @@
+{
+  "title": "Introduction to Mitosis",
+  "description": "Watch the short video on mitosis, then answer the comprehension questions below to check your understanding.",
+  "questions": [
+    {
+      "type": "mcq",
+      "question": "What is the main purpose of mitosis?",
+      "options": [
+        "Producing genetically identical daughter cells for growth and repair",
+        "Producing genetically varied sex cells",
+        "Breaking down damaged proteins",
+        "Copying RNA from DNA"
+      ],
+      "answer": "Producing genetically identical daughter cells for growth and repair",
+      "marks": 1
+    },
+    {
+      "type": "mcq",
+      "question": "During which phase do chromosomes line up along the middle of the cell?",
+      "options": ["Prophase", "Metaphase", "Anaphase", "Telophase"],
+      "answer": "Metaphase",
+      "marks": 1
+    },
+    {
+      "type": "short",
+      "question": "Name the phase of mitosis where sister chromatids are pulled apart to opposite poles of the cell.",
+      "answer": "Anaphase",
+      "marks": 2
+    },
+    {
+      "type": "long",
+      "question": "Based on the video, describe what happens during each of the four main phases of mitosis, in order.",
+      "marks": 10
+    }
+  ]
+}
