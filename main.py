@@ -29,8 +29,11 @@ Deploy on Render with:
 import io
 import json
 import os
+import re
 import urllib.request
 from datetime import datetime, timedelta, timezone
+from difflib import SequenceMatcher
+from itertools import permutations
 from typing import List, Optional
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
@@ -214,6 +217,40 @@ def normalize(text: Optional[str]) -> str:
     return (text or "").strip().lower()
 
 
+def short_answer_words(text: Optional[str]) -> list[str]:
+    """Return a punctuation-insensitive list of words for a short answer."""
+    return re.findall(r"[\w]+", normalize(text), flags=re.UNICODE)
+
+
+def _small_spelling_variation(expected: str, actual: str) -> bool:
+    """Accept a small typo while keeping short-answer marking conservative."""
+    if expected == actual:
+        return True
+    if len(expected) < 3 or len(actual) < 3:
+        return False
+    return SequenceMatcher(None, expected, actual).ratio() >= 0.80
+
+
+def short_answer_matches(expected_answer: Optional[str], student_answer: Optional[str]) -> bool:
+    """Case-insensitive, order-independent matching for one- or two-word
+    short answers, with support for small spelling variations."""
+    expected_words = short_answer_words(expected_answer)
+    student_words = short_answer_words(student_answer)
+    if not expected_words or len(expected_words) > 2 or len(student_words) > 2:
+        return False
+    if len(expected_words) != len(student_words):
+        return False
+    return any(
+        all(_small_spelling_variation(expected, actual) for expected, actual in zip(expected_words, candidate))
+        for candidate in permutations(student_words)
+    )
+
+
+def validate_short_answer_length(answer: Optional[str], question_label: str):
+    if len(short_answer_words(answer)) > 2:
+        raise HTTPException(status_code=422, detail=f"{question_label} accepts a maximum of two words")
+
+
 def _pdf_escape(text: Optional[str]) -> str:
     """Escape text for safe use inside a reportlab Paragraph (which parses
     a small XML-like markup)."""
@@ -376,8 +413,13 @@ def build_submission_pdf(db: Session, submission_id: int, styles, include_expect
         if include_expected_answers and q.type in ("mcq", "short") and q.correct_answer:
             flow.append(Paragraph(f"<b>Expected answer:</b> {_pdf_escape(q.correct_answer)}", styles["Expected"]))
 
-        marks_text = "—" if a.awarded_marks is None else a.awarded_marks
-        flow.append(Paragraph(f"<b>Marks awarded:</b> {marks_text} / {q.marks}", styles["Marks"]))
+        if a.awarded_marks is None:
+            flow.append(Paragraph(
+                f"<b>Marks awarded:</b> <font color='#C81E3A'><b>Needs marking</b></font> / {q.marks}",
+                styles["Marks"],
+            ))
+        else:
+            flow.append(Paragraph(f"<b>Marks awarded:</b> {a.awarded_marks} / {q.marks}", styles["Marks"]))
         flow.append(Spacer(1, 0.35 * cm))
 
     return flow
@@ -471,6 +513,8 @@ async def upload_quiz(
             raise HTTPException(status_code=400, detail="MCQ questions must include 'options'")
         if q_type in ("mcq", "short") and answer is None:
             raise HTTPException(status_code=400, detail=f"{q_type} questions must include an 'answer'")
+        if q_type == "short" and len(short_answer_words(answer)) > 2:
+            raise HTTPException(status_code=400, detail=f"Question {order + 1}: short-answer keys can contain a maximum of two words")
 
         image_url = resolve_question_image(
             q.get("image"), uploaded_bytes_by_name, resolved_cache,
@@ -575,7 +619,16 @@ def submit_quiz(quiz_id: int, submission: QuizSubmission, db: Session = Depends(
         max_score += q.marks
         student_answer = next((a.answer for a in submission.answers if a.question_id == q.id), "")
 
-        if q.type in ("mcq", "short"):
+        if q.type == "short":
+            validate_short_answer_length(student_answer, f"Question {q.q_order + 1}")
+            correct = short_answer_matches(q.correct_answer, student_answer)
+            awarded = q.marks if correct else 0.0
+            auto_score += awarded
+            db.add(Answer(
+                submission_id=new_submission.id, question_id=q.id,
+                answer_text=student_answer, awarded_marks=awarded, marked=True,
+            ))
+        elif q.type == "mcq":
             correct = normalize(q.correct_answer) == normalize(student_answer)
             awarded = q.marks if correct else 0.0
             auto_score += awarded
@@ -883,6 +936,8 @@ async def upload_lesson(
             raise HTTPException(status_code=400, detail="MCQ questions must include 'options'")
         if q_type in ("mcq", "short") and answer is None:
             raise HTTPException(status_code=400, detail=f"{q_type} questions must include an 'answer'")
+        if q_type == "short" and len(short_answer_words(answer)) > 2:
+            raise HTTPException(status_code=400, detail=f"Question {order + 1}: short-answer keys can contain a maximum of two words")
 
         image_url = resolve_question_image(
             q.get("image"), uploaded_bytes_by_name, resolved_cache,
@@ -991,7 +1046,16 @@ def submit_lesson(lesson_id: int, submission: QuizSubmission, db: Session = Depe
         max_score += q.marks
         student_answer = next((a.answer for a in submission.answers if a.question_id == q.id), "")
 
-        if q.type in ("mcq", "short"):
+        if q.type == "short":
+            validate_short_answer_length(student_answer, f"Question {q.q_order + 1}")
+            correct = short_answer_matches(q.correct_answer, student_answer)
+            awarded = q.marks if correct else 0.0
+            auto_score += awarded
+            db.add(LessonAnswer(
+                submission_id=new_submission.id, question_id=q.id,
+                answer_text=student_answer, awarded_marks=awarded, marked=True,
+            ))
+        elif q.type == "mcq":
             correct = normalize(q.correct_answer) == normalize(student_answer)
             awarded = q.marks if correct else 0.0
             auto_score += awarded
@@ -1223,6 +1287,8 @@ def _validate_admin_questions(questions: List[AdminQuestionInput]):
             raise HTTPException(status_code=400, detail=f"Question {index}: an MCQ needs at least two options")
         if question.type in ("mcq", "short") and not (question.correct_answer or "").strip():
             raise HTTPException(status_code=400, detail=f"Question {index}: a correct answer is required")
+        if question.type == "short" and len(short_answer_words(question.correct_answer)) > 2:
+            raise HTTPException(status_code=400, detail=f"Question {index}: a short-answer key can contain a maximum of two words")
 
 
 def _admin_question_dict(question):

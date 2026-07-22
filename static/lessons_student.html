@@ -122,6 +122,11 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+function limitShortAnswer(input) {
+  const words = input.value.trim().split(/\s+/).filter(Boolean);
+  if (words.length > 2) input.value = words.slice(0, 2).join(' ');
+}
+
 // ---- Module selection ---------------------------------------------------
 let currentModule = null;
 
@@ -244,7 +249,7 @@ function renderQuestion(q, num) {
         <label for="q_${q.question_id}_${idx}">${escapeHtml(opt)}</label>
       </div>`).join('');
   } else if (q.type === 'short') {
-    body = `<input type="text" id="q_${q.question_id}" placeholder="Your answer">`;
+    body = `<input type="text" id="q_${q.question_id}" placeholder="Maximum 2 words" oninput="limitShortAnswer(this)">`;
   } else {
     body = `<textarea id="q_${q.question_id}" placeholder="Write your answer here"></textarea>`;
   }

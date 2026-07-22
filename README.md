@@ -135,7 +135,25 @@ whatever you set `LECTURER_PIN` to).
 - The lecturer stays signed in for the browser session (via `sessionStorage`); there's a "Lock" link in the top nav to sign out manually.
 - This is a simple shared PIN, not per-user accounts — fine for a trusted classroom setting, not for anything sensitive.
 
-## 6. Adding images to questions
+## 6. Quiz modules and admin content management
+
+Quizzes are now organised by a **module code**, just like video lessons. When
+a lecturer uploads a quiz, they enter a code such as `BIO101`. Students open
+`/static/student.html`, choose their module, and see all quizzes for that
+module — no quiz ID is needed. A link such as
+`/static/student.html?module=BIO101` opens a module directly.
+
+Existing quizzes are automatically assigned to the `GENERAL` module when the
+app next starts. The required database column and index are added on startup
+without deleting existing quiz data.
+
+The protected admin workspace is at `/static/admin.html`. It uses the same
+lecturer PIN and can create, view, edit, and delete quizzes and video lessons.
+Content with student submissions cannot be edited; create a new version
+instead. Deleting content also deletes its related submissions (and, for
+lessons, public comments), so use it carefully.
+
+## 7. Adding images to questions
 
 Any question (mcq, short, or long) can show an image — a diagram, a photo, a graph, etc.
 In the quiz JSON, add an `"image"` field to the question:
@@ -165,11 +183,11 @@ A ready-to-try example is included: `sample_with_image/quiz_with_image.json` + `
 
 Supported: any common image format a browser can display (png, jpg, gif, svg, webp, etc.).
 
-## 7. App logo
+## 8. App logo
 
 Drop a file named **`image.png`** into the same folder as `main.py` (the app's working directory) **and commit it to your repo** — since Render redeploys pull from git each time, a committed file survives redeploys just fine (unlike a runtime upload). It'll automatically appear in the header of every page, shown small (34×34px, scaled to fit) next to "QuizMark / Bioscientist". No configuration needed — the app checks for it on every page load and just hides the logo slot if it isn't there. To change the "Bioscientist" tagline text, edit the `.brand-tagline` text in each page's `<header>` (`static/index.html`, `static/lecturer.html`, `static/student.html`).
 
-## 8. Downloading marked answers as a PDF
+## 9. Downloading marked answers as a PDF
 
 On the Lecturer page, once you've opened a quiz's submissions:
 
@@ -181,7 +199,12 @@ Each PDF includes: the quiz title, student name/ID/submission time, the total sc
 
 Question images are fetched from Cloudinary at PDF-generation time (a quick network request per image), so PDF generation is slightly slower than the old local-disk version, but requires no other changes.
 
-## 9. Quiz JSON format
+Students can also download **their own script** from the Student page
+immediately after submitting or from **My results & scripts** later. Their PDF
+contains their responses, marks, score, and question images, but deliberately
+does **not** include expected answers.
+
+## 10. Quiz JSON format
 
 Upload a file shaped like `sample_quiz.json` from the Lecturer page:
 
@@ -199,7 +222,11 @@ Upload a file shaped like `sample_quiz.json` from the Lecturer page:
 - `mcq` and `short` need an `answer` field (used for auto-marking, exact match, case-insensitive).
 - `long` has no answer — it's graded manually by the lecturer.
 
-## 10. Video lessons
+Short-answer responses are limited to **two words**. Marking is
+case-insensitive, accepts either word order (for example, `DNA replication`
+and `replication DNA`), and accepts small spelling variations.
+
+## 11. Video lessons
 
 A second, separate feature alongside quizzes: the lecturer uploads a video
 with comprehension questions attached, and students watch + answer them.
@@ -254,14 +281,15 @@ listed publicly at `GET /lessons`, so the student lessons page shows a
 browsable list — no link required, though sharing a direct link
 (`lessons_student.html?lesson=ID`) still works and jumps straight to that lesson.
 
-## 11. Typical flow (using the frontend)
+## 12. Typical flow (using the frontend)
 
 1. **Lecturer** opens `http://<ip>:8000/static/lecturer.html`, enters the PIN
-   (90435), and uploads the quiz JSON file. The page shows a shareable link
-   like `http://<ip>:8000/static/student.html?quiz=1`.
-2. **Lecturer** shares that link (or just the quiz ID) with the class.
-3. **Students** open the link on any device on the same WiFi, enter their
-   name and student ID, answer the questions, and submit. MCQ/short answers
+   (90435), enters a module code, and uploads the quiz JSON file. The page
+   shows a shareable link like
+   `http://<ip>:8000/static/student.html?module=BIO101`.
+2. **Lecturer** shares that module link with the class.
+3. **Students** open the link (or choose a module on the Student page), select
+   a quiz, enter their name and student ID, answer the questions, and submit. MCQ/short answers
    are marked instantly and shown on screen; a note appears if long answers
    are still pending.
 4. **Lecturer** selects the quiz on their page, sees the list of submissions
@@ -273,8 +301,8 @@ browsable list — no link required, though sharing a direct link
    override the mark (e.g. give partial credit for a near-miss spelling or
    synonym) — then saves.
 5. **Students** return to the student page any time, enter their student ID
-   under "Check your results", and see the final mark once the lecturer has
-   finished marking.
+   under "My results & scripts", see their marks, and download their own
+   submitted script. Long-answer marks appear once the lecturer has finished marking.
 
 ### Using the raw API directly (optional)
 
@@ -292,6 +320,15 @@ below) need an `X-Lecturer-Pin: 90435` header.
 - `GET /lecturer/submission/{submission_id}/pdf` — download one student's marked answers as a PDF — **lecturer PIN required**
 - `GET /lecturer/quiz/{quiz_id}/pdf` — download every submission for a quiz as one combined PDF — **lecturer PIN required**
 - `GET /results/{student_id}?quiz_id=...` — student checks their result(s)
+
+**Quiz module and student-script API additions:**
+- `GET /quiz-modules` — public list of quiz module codes with quiz counts
+- `GET /quizzes/by-module/{module_code}` — public list of quizzes in one module
+- `GET /student/submission/{submission_id}/pdf?student_id=...` — student downloads their own script, without expected answers
+
+**Admin content management:**
+- `GET` / `POST /admin/quizzes` and `GET` / `PUT` / `DELETE /admin/quizzes/{quiz_id}` — quiz CRUD — **lecturer PIN required**
+- `GET` / `POST /admin/lessons` and `GET` / `PUT` / `DELETE /admin/lessons/{lesson_id}` — lesson CRUD — **lecturer PIN required**
 
 **Video lessons:**
 - `POST /lecturer/lesson/upload` — upload a lesson (JSON file + video file + `module_code` form field + optional images) — **lecturer PIN required**
