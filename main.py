@@ -38,7 +38,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from sqlalchemy import func
+from sqlalchemy import func, inspect, text
 from sqlalchemy.orm import Session
 
 from reportlab.lib import colors
@@ -95,6 +95,20 @@ LOGO_PATH = "image.png"
 # init_db()). For schema changes after the first deploy, prefer a proper
 # migration tool (e.g. Alembic) over relying on this.
 Base.metadata.create_all(bind=engine)
+
+# Lightweight backward-compatible migration for installations created before
+# quizzes had module codes. New databases get the column from models.py;
+# existing databases are upgraded in place without deleting quiz data.
+def ensure_quiz_module_code():
+    if "module_code" not in {column["name"] for column in inspect(engine).get_columns("quizzes")}:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE quizzes ADD COLUMN module_code VARCHAR(64) DEFAULT 'GENERAL'"))
+            conn.execute(text("UPDATE quizzes SET module_code = 'GENERAL' WHERE module_code IS NULL OR module_code = ''"))
+    with engine.begin() as conn:
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_quizzes_module_code ON quizzes (module_code)"))
+
+
+ensure_quiz_module_code()
 
 app = FastAPI(title="Quiz + Video Lessons App")
 
@@ -153,6 +167,7 @@ class AdminQuestionInput(BaseModel):
 
 class AdminQuizInput(BaseModel):
     title: str
+    module_code: str = "GENERAL"
     questions: List[AdminQuestionInput]
 
 
@@ -297,7 +312,7 @@ def image_reference_resolvable(raw_image: Optional[str], uploaded_names: set) ->
     return False
 
 
-def build_submission_pdf(db: Session, submission_id: int, styles) -> list:
+def build_submission_pdf(db: Session, submission_id: int, styles, include_expected_answers: bool = True) -> list:
     """Return a list of reportlab flowables for one student's marked quiz
     submission: header info, each question with its image (if any), the
     student's answer, marks awarded, and a final total."""
@@ -358,7 +373,7 @@ def build_submission_pdf(db: Session, submission_id: int, styles) -> list:
         answer_text = a.answer_text or "(no answer given)"
         flow.append(Paragraph(f"<b>Student's answer:</b> {_pdf_escape(answer_text)}", styles["Answer"]))
 
-        if q.type in ("mcq", "short") and q.correct_answer:
+        if include_expected_answers and q.type in ("mcq", "short") and q.correct_answer:
             flow.append(Paragraph(f"<b>Expected answer:</b> {_pdf_escape(q.correct_answer)}", styles["Expected"]))
 
         marks_text = "—" if a.awarded_marks is None else a.awarded_marks
@@ -410,6 +425,7 @@ def build_pdf_stylesheet():
 @app.post("/quiz/upload")
 async def upload_quiz(
     file: UploadFile = File(...),
+    module_code: str = Form("GENERAL"),
     images: List[UploadFile] = File(default=[]),
     _pin_ok: bool = Depends(require_lecturer_pin),
     db: Session = Depends(get_db),
@@ -425,7 +441,8 @@ async def upload_quiz(
     if not questions:
         raise HTTPException(status_code=400, detail="Quiz JSON must include a 'questions' list")
 
-    quiz = Quiz(title=title, created_at=datetime.utcnow().isoformat() + "Z")
+    module_code = (module_code or "").strip().upper() or "GENERAL"
+    quiz = Quiz(title=title, module_code=module_code, created_at=datetime.utcnow().isoformat() + "Z")
     db.add(quiz)
     db.flush()  # assigns quiz.id without committing yet
 
@@ -475,6 +492,7 @@ async def upload_quiz(
     return {
         "quiz_id": quiz.id,
         "title": title,
+        "module_code": module_code,
         "num_questions": len(questions),
         "images_uploaded": len(resolved_cache),
     }
@@ -483,7 +501,22 @@ async def upload_quiz(
 @app.get("/quizzes")
 def list_quizzes(_pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
     rows = db.query(Quiz).order_by(Quiz.id.desc()).all()
-    return [{"id": r.id, "title": r.title, "created_at": r.created_at} for r in rows]
+    return [{"id": r.id, "title": r.title, "module_code": r.module_code, "created_at": r.created_at} for r in rows]
+
+
+@app.get("/quiz-modules")
+def list_quiz_modules(db: Session = Depends(get_db)):
+    rows = (
+        db.query(Quiz.module_code, func.count(Quiz.id).label("quiz_count"))
+        .group_by(Quiz.module_code).order_by(Quiz.module_code.asc()).all()
+    )
+    return [{"module_code": code, "quiz_count": count} for code, count in rows]
+
+
+@app.get("/quizzes/by-module/{module_code}")
+def list_quizzes_by_module(module_code: str, db: Session = Depends(get_db)):
+    rows = (db.query(Quiz).filter(Quiz.module_code == module_code.strip().upper()).order_by(Quiz.id.desc()).all())
+    return [{"id": q.id, "title": q.title, "module_code": q.module_code, "created_at": q.created_at} for q in rows]
 
 
 # ---------------------------------------------------------------------------
@@ -509,7 +542,7 @@ def get_quiz(quiz_id: int, db: Session = Depends(get_db)):
             item["options"] = json.loads(q.options_json)
         out_questions.append(item)
 
-    return {"quiz_id": quiz.id, "title": quiz.title, "questions": out_questions}
+    return {"quiz_id": quiz.id, "title": quiz.title, "module_code": quiz.module_code, "questions": out_questions}
 
 
 # ---------------------------------------------------------------------------
@@ -694,6 +727,22 @@ def download_submission_pdf(submission_id: int, _pin_ok: bool = Depends(require_
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@app.get("/student/submission/{submission_id}/pdf")
+def download_student_submission_pdf(submission_id: int, student_id: str, db: Session = Depends(get_db)):
+    """Download a student's own marked script. Expected answers remain private
+    to the lecturer; the student sees their responses, awarded marks and score."""
+    submission = db.query(Submission).filter(Submission.id == submission_id).first()
+    if not submission or submission.student_id != student_id.strip():
+        raise HTTPException(status_code=404, detail="Submission not found")
+    quiz = db.query(Quiz).filter(Quiz.id == submission.quiz_id).first()
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=2 * cm, bottomMargin=2 * cm, leftMargin=2 * cm, rightMargin=2 * cm)
+    doc.build(build_submission_pdf(db, submission_id, build_pdf_stylesheet(), include_expected_answers=False))
+    buffer.seek(0)
+    safe_title = "".join(c for c in quiz.title if c.isalnum() or c in (" ", "_", "-")).strip() or "quiz"
+    return StreamingResponse(buffer, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="{safe_title}_my_script.pdf"'})
 
 
 @app.get("/lecturer/quiz/{quiz_id}/pdf")
@@ -1213,7 +1262,7 @@ def _add_lesson_questions(db: Session, lesson_id: int, questions: List[AdminQues
 @app.get("/admin/quizzes")
 def admin_list_quizzes(_pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
     rows = db.query(Quiz).order_by(Quiz.id.desc()).all()
-    return [{"id": q.id, "title": q.title, "created_at": q.created_at, "question_count": len(q.questions), "submission_count": len(q.submissions)} for q in rows]
+    return [{"id": q.id, "title": q.title, "module_code": q.module_code, "created_at": q.created_at, "question_count": len(q.questions), "submission_count": len(q.submissions)} for q in rows]
 
 
 @app.get("/admin/quizzes/{quiz_id}")
@@ -1221,7 +1270,7 @@ def admin_get_quiz(quiz_id: int, _pin_ok: bool = Depends(require_lecturer_pin), 
     quiz = db.query(Quiz).filter(Quiz.id == quiz_id).first()
     if not quiz:
         raise HTTPException(status_code=404, detail="Quiz not found")
-    return {"id": quiz.id, "title": quiz.title, "created_at": quiz.created_at, "questions": [_admin_question_dict(q) for q in quiz.questions], "submission_count": len(quiz.submissions)}
+    return {"id": quiz.id, "title": quiz.title, "module_code": quiz.module_code, "created_at": quiz.created_at, "questions": [_admin_question_dict(q) for q in quiz.questions], "submission_count": len(quiz.submissions)}
 
 
 @app.post("/admin/quizzes")
@@ -1229,7 +1278,7 @@ def admin_create_quiz(payload: AdminQuizInput, _pin_ok: bool = Depends(require_l
     _validate_admin_questions(payload.questions)
     if not payload.title.strip():
         raise HTTPException(status_code=400, detail="Quiz title is required")
-    quiz = Quiz(title=payload.title.strip(), created_at=datetime.utcnow().isoformat() + "Z")
+    quiz = Quiz(title=payload.title.strip(), module_code=payload.module_code.strip().upper() or "GENERAL", created_at=datetime.utcnow().isoformat() + "Z")
     db.add(quiz)
     db.flush()
     _add_quiz_questions(db, quiz.id, payload.questions)
@@ -1248,6 +1297,7 @@ def admin_update_quiz(quiz_id: int, payload: AdminQuizInput, _pin_ok: bool = Dep
     if not payload.title.strip():
         raise HTTPException(status_code=400, detail="Quiz title is required")
     quiz.title = payload.title.strip()
+    quiz.module_code = payload.module_code.strip().upper() or "GENERAL"
     for question in list(quiz.questions):
         db.delete(question)
     db.flush()
@@ -1342,6 +1392,8 @@ def get_results(student_id: str, quiz_id: Optional[int] = None, db: Session = De
         results.append({
             "submission_id": s.id,
             "quiz_id": s.quiz_id,
+            "quiz_title": s.quiz.title,
+            "module_code": s.quiz.module_code,
             "submitted_at": s.submitted_at,
             "total_score": s.total_score,
             "max_score": s.max_score,

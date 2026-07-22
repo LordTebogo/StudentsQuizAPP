@@ -39,6 +39,7 @@ class Quiz(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, nullable=False)
+    module_code = Column(String, nullable=False, default="GENERAL", index=True)
     created_at = Column(String, nullable=False)  # ISO-8601 UTC string, e.g. "...Z"
 
     questions = relationship(

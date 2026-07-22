@@ -28,6 +28,7 @@
     <div class="admin-editor-heading"><div><span class="kicker" id="editorKicker">Create</span><h2 id="editorTitle">New content</h2></div><button class="btn secondary" id="closeEditorBtn">Close</button></div>
     <div id="quizFields">
       <label for="contentTitle">Quiz title</label><input id="contentTitle" type="text" placeholder="e.g. Cell Biology: Week 1">
+      <label for="quizModuleCode">Module code</label><input id="quizModuleCode" type="text" placeholder="e.g. BIO101">
     </div>
     <div id="lessonFields" class="hidden">
       <label for="lessonDescription">Lesson description</label><textarea id="lessonDescription" placeholder="A short introduction for students"></textarea>
@@ -73,6 +74,7 @@ function openEditor(kind, item = null) {
   $('editorTitle').textContent = item ? item.title : `Create ${kind === 'quiz' ? 'a quiz' : 'a video lesson'}`;
   $('deleteBtn').classList.toggle('hidden', !item);
   $('contentTitle').value = item ? item.title : '';
+  $('quizModuleCode').value = item ? item.module_code || '' : '';
   $('lessonDescription').value = item ? item.description || '' : '';
   $('moduleCode').value = item ? item.module_code || '' : '';
   $('videoUrl').value = item ? item.video_url || '' : '';
@@ -82,7 +84,7 @@ function openEditor(kind, item = null) {
 async function edit(kind, id) { try { openEditor(kind, await api(`/admin/${kind === 'quiz' ? 'quizzes' : 'lessons'}/${id}`)); } catch (err) { alert(`Could not open content: ${err.message}`); } }
 function renderList(target, items, kind) {
   const noun = kind === 'quiz' ? 'quiz' : 'lesson';
-  $(target).innerHTML = items.length ? items.map(item => `<button class="admin-list-item" data-id="${item.id}"><span><strong>${escapeHtml(item.title)}</strong><small>#${item.id} · ${item.question_count} question${item.question_count === 1 ? '' : 's'}${kind === 'lesson' ? ` · ${escapeHtml(item.module_code)}` : ''}</small></span><span class="badge ${item.submission_count ? 'pending' : 'done'}">${item.submission_count ? item.submission_count + ' submissions' : 'Editable'}</span></button>`).join('') : `<p class="muted">No ${noun} content yet.</p>`;
+  $(target).innerHTML = items.length ? items.map(item => `<button class="admin-list-item" data-id="${item.id}"><span><strong>${escapeHtml(item.title)}</strong><small>#${item.id} · ${item.question_count} question${item.question_count === 1 ? '' : 's'} · ${escapeHtml(item.module_code)}</small></span><span class="badge ${item.submission_count ? 'pending' : 'done'}">${item.submission_count ? item.submission_count + ' submissions' : 'Editable'}</span></button>`).join('') : `<p class="muted">No ${noun} content yet.</p>`;
   $(target).querySelectorAll('[data-id]').forEach(button => button.addEventListener('click', () => edit(kind, button.dataset.id)));
 }
 async function loadLists() {
@@ -94,6 +96,7 @@ function buildPayload() {
   try { questions = JSON.parse($('questionsJson').value); } catch (_) { throw new Error('Questions must be valid JSON.'); }
   if (!Array.isArray(questions)) throw new Error('Questions must be a JSON array.');
   const payload = { title: $('contentTitle').value.trim(), questions };
+  if (editor.kind === 'quiz') Object.assign(payload, { module_code: $('quizModuleCode').value.trim() });
   if (editor.kind === 'lesson') Object.assign(payload, { description: $('lessonDescription').value.trim(), module_code: $('moduleCode').value.trim(), video_url: $('videoUrl').value.trim() });
   return payload;
 }

@@ -32,11 +32,13 @@
   </header>
 
   <h1>Lecturer</h1>
-  <p class="lede">Upload a quiz, share the quiz ID with your class, then mark long answers as submissions come in.</p>
+  <p class="lede">Upload a quiz to a module, share the module link with your class, then mark long answers as submissions come in.</p>
 
   <!-- Upload -->
   <div class="card">
     <h2>1. Upload a quiz</h2>
+    <label for="moduleCode">Module code</label>
+    <input type="text" id="moduleCode" placeholder="e.g. BIO101" autocomplete="off">
     <label for="quizFile">Quiz JSON file</label>
     <input type="file" id="quizFile" accept="application/json">
     <label for="quizImages">Question images (optional)</label>
@@ -220,8 +222,14 @@ $('uploadBtn').addEventListener('click', async () => {
     showMsg(msgBox, 'Choose a JSON file first.', 'error');
     return;
   }
+  const moduleCode = $('moduleCode').value.trim();
+  if (!moduleCode) {
+    showMsg(msgBox, 'Enter a module code first.', 'error');
+    return;
+  }
   const formData = new FormData();
   formData.append('file', fileInput.files[0]);
+  formData.append('module_code', moduleCode);
   for (const img of imagesInput.files) {
     formData.append('images', img);
   }
@@ -230,8 +238,8 @@ $('uploadBtn').addEventListener('click', async () => {
   try {
     const result = await api('/quiz/upload', { method: 'POST', body: formData }, true);
     const imgNote = result.images_uploaded ? ` (${result.images_uploaded} image${result.images_uploaded === 1 ? '' : 's'} attached)` : '';
-    showMsg(msgBox, `Uploaded "${result.title}" (${result.num_questions} questions) — quiz ID ${result.quiz_id}.${imgNote}`, 'ok');
-    const link = `${window.location.origin}/static/student.html?quiz=${result.quiz_id}`;
+    showMsg(msgBox, `Uploaded "${result.title}" to ${result.module_code} (${result.num_questions} questions).${imgNote}`, 'ok');
+    const link = `${window.location.origin}/static/student.html?module=${encodeURIComponent(result.module_code)}`;
     $('shareLink').textContent = link;
     $('shareBox').classList.remove('hidden');
     fileInput.value = '';
@@ -255,7 +263,7 @@ async function loadQuizzes() {
       select.innerHTML = '<option value="">No quizzes uploaded yet</option>';
       return;
     }
-    select.innerHTML = quizzes.map(q => `<option value="${q.id}">#${q.id} — ${q.title}</option>`).join('');
+    select.innerHTML = quizzes.map(q => `<option value="${q.id}">${q.module_code} — ${q.title}</option>`).join('');
   } catch (err) {
     select.innerHTML = '<option value="">Could not load quizzes</option>';
   }
