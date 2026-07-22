@@ -43,9 +43,9 @@
         <label for="lecturerLimit">Module limit</label><input id="lecturerLimit" type="number" min="0" value="1">
         <label class="check-label"><input id="lecturerApproved" type="checkbox"> Approved</label>
         <label class="check-label"><input id="lecturerActive" type="checkbox" checked> Active</label>
-        <button class="btn" id="saveLecturerBtn">Save lecturer</button><button class="btn secondary hidden" id="deleteLecturerBtn">Remove lecturer</button><div id="lecturerMsg"></div>
+        <button class="btn" id="saveLecturerBtn">Save lecturer</button><button class="btn secondary hidden" id="approveLecturerBtn">Approve &amp; activate</button><button class="btn secondary hidden" id="deleteLecturerBtn">Remove lecturer</button><div id="lecturerMsg"></div>
       </div>
-      <div><h3>Lecturer profiles</h3><div id="lecturerList" class="admin-list"></div></div>
+      <div><div class="admin-editor-heading"><h3>Lecturer profiles</h3><button class="btn secondary" id="refreshLecturersBtn">Refresh</button></div><div id="lecturerList" class="admin-list"></div></div>
     </div>
   </section>
 
@@ -119,14 +119,16 @@ async function loadLists() {
 }
 function lecturerFormPayload(includePassword) {
   const modules = $('lecturerModules').value.split(',').map(code => code.trim()).filter(Boolean);
-  const payload = { full_name: $('lecturerName').value.trim(), phone: $('lecturerPhone').value.trim(), institution: $('lecturerInstitution').value.trim(), bio: $('lecturerBio').value.trim(), approved: $('lecturerApproved').checked, active: $('lecturerActive').checked, module_limit: Number($('lecturerLimit').value), module_codes: modules };
+  const moduleLimit = Math.max(Number($('lecturerLimit').value) || 0, modules.length);
+  $('lecturerLimit').value = moduleLimit;
+  const payload = { full_name: $('lecturerName').value.trim(), phone: $('lecturerPhone').value.trim(), institution: $('lecturerInstitution').value.trim(), bio: $('lecturerBio').value.trim(), approved: $('lecturerApproved').checked, active: $('lecturerActive').checked, module_limit: moduleLimit, module_codes: modules };
   if (includePassword) { payload.email = $('lecturerEmail').value.trim(); payload.password = $('lecturerPassword').value; }
   return payload;
 }
 function clearLecturerForm() {
   selectedLecturerId = null;
   ['lecturerName','lecturerEmail','lecturerPassword','lecturerPhone','lecturerInstitution','lecturerBio','lecturerModules'].forEach(id => $(id).value = '');
-  $('lecturerLimit').value = 1; $('lecturerApproved').checked = false; $('lecturerActive').checked = true; $('lecturerEmail').disabled = false; $('lecturerPassword').classList.remove('hidden'); $('deleteLecturerBtn').classList.add('hidden'); $('lecturerMsg').innerHTML = '';
+  $('lecturerLimit').value = 1; $('lecturerApproved').checked = false; $('lecturerActive').checked = true; $('lecturerEmail').disabled = false; $('lecturerPassword').classList.remove('hidden'); $('approveLecturerBtn').classList.add('hidden'); $('deleteLecturerBtn').classList.add('hidden'); $('lecturerMsg').innerHTML = '';
 }
 function loadLecturers() {
   api('/admin/lecturers').then(lecturers => {
@@ -136,7 +138,7 @@ function loadLecturers() {
 }
 function editLecturer(id, lecturers) {
   const item = lecturers.find(lecturer => lecturer.id === Number(id)); if (!item) return;
-  selectedLecturerId = item.id; $('lecturerName').value = item.full_name; $('lecturerEmail').value = item.email; $('lecturerEmail').disabled = true; $('lecturerPassword').value = ''; $('lecturerPhone').value = item.phone || ''; $('lecturerInstitution').value = item.institution || ''; $('lecturerBio').value = item.bio || ''; $('lecturerModules').value = item.module_codes.join(', '); $('lecturerLimit').value = item.module_limit; $('lecturerApproved').checked = item.approved; $('lecturerActive').checked = item.active; $('deleteLecturerBtn').classList.remove('hidden'); $('lecturerMsg').innerHTML = '';
+  selectedLecturerId = item.id; $('lecturerName').value = item.full_name; $('lecturerEmail').value = item.email; $('lecturerEmail').disabled = true; $('lecturerPassword').value = ''; $('lecturerPhone').value = item.phone || ''; $('lecturerInstitution').value = item.institution || ''; $('lecturerBio').value = item.bio || ''; $('lecturerModules').value = item.module_codes.join(', '); $('lecturerLimit').value = Math.max(item.module_limit, item.module_codes.length, 1); $('lecturerApproved').checked = item.approved; $('lecturerActive').checked = item.active; $('approveLecturerBtn').classList.toggle('hidden', item.approved && item.active); $('deleteLecturerBtn').classList.remove('hidden'); $('lecturerMsg').innerHTML = '';
 }
 async function saveLecturer() {
   const creating = !selectedLecturerId; const payload = lecturerFormPayload(creating);
@@ -144,6 +146,7 @@ async function saveLecturer() {
   catch (err) { showMsg($('lecturerMsg'), err.message, 'error'); }
 }
 async function deleteLecturer() { if (!selectedLecturerId || !confirm('Remove this lecturer profile? Profiles with owned quizzes or lessons cannot be removed.')) return; try { await api(`/admin/lecturers/${selectedLecturerId}`, {method:'DELETE'}); clearLecturerForm(); loadLecturers(); } catch (err) { showMsg($('lecturerMsg'), err.message, 'error'); } }
+async function approveLecturer() { if (!selectedLecturerId) return; $('lecturerApproved').checked = true; $('lecturerActive').checked = true; await saveLecturer(); }
 function buildPayload() {
   let questions;
   try { questions = JSON.parse($('questionsJson').value); } catch (_) { throw new Error('Questions must be valid JSON.'); }
@@ -172,7 +175,9 @@ $('newQuizBtn').addEventListener('click', () => openEditor('quiz'));
 $('newLessonBtn').addEventListener('click', () => openEditor('lesson'));
 $('newLecturerBtn').addEventListener('click', clearLecturerForm);
 $('saveLecturerBtn').addEventListener('click', saveLecturer);
+$('approveLecturerBtn').addEventListener('click', approveLecturer);
 $('deleteLecturerBtn').addEventListener('click', deleteLecturer);
+$('refreshLecturersBtn').addEventListener('click', loadLecturers);
 $('saveBtn').addEventListener('click', save); $('deleteBtn').addEventListener('click', remove);
 $('closeEditorBtn').addEventListener('click', () => $('editorCard').classList.add('hidden'));
 $('lockBtn').addEventListener('click', event => { event.preventDefault(); sessionStorage.removeItem('lecturerPin'); pin = null; $('appWrap').classList.add('hidden'); $('gateWrap').classList.remove('hidden'); });

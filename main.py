@@ -360,7 +360,7 @@ async def register_lecturer(
     lecturer = Lecturer(
         full_name=full_name.strip(), email=email, password_hash=_password_hash(password),
         phone=phone.strip(), institution=institution.strip(), bio=bio.strip(),
-        profile_image_url=image_url, approved=False, active=True, module_limit=0,
+        profile_image_url=image_url, approved=False, active=True, module_limit=1,
         created_at=datetime.utcnow().isoformat() + "Z",
     )
     db.add(lecturer)
