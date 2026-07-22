@@ -3,6 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#070a14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="icon" type="image/png" href="/branding/logo">
+<link rel="apple-touch-icon" href="/branding/logo">
+<link rel="manifest" href="/static/manifest.webmanifest">
 <title>Video Lessons — Student</title>
 <link rel="stylesheet" href="/static/style.css">
 <style>
@@ -405,5 +410,6 @@ if (params.get('lesson')) {
   openModule(params.get('module'));
 }
 </script>
+<script src="/static/pwa.js"></script>
 </body>
 </html>

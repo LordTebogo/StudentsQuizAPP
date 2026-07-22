@@ -784,15 +784,14 @@ def download_submission_pdf(submission_id: int, _pin_ok: bool = Depends(require_
 
 @app.get("/student/submission/{submission_id}/pdf")
 def download_student_submission_pdf(submission_id: int, student_id: str, db: Session = Depends(get_db)):
-    """Download a student's own marked script. Expected answers remain private
-    to the lecturer; the student sees their responses, awarded marks and score."""
+    """Download a student's own script with responses, expected answers, and marks."""
     submission = db.query(Submission).filter(Submission.id == submission_id).first()
     if not submission or submission.student_id != student_id.strip():
         raise HTTPException(status_code=404, detail="Submission not found")
     quiz = db.query(Quiz).filter(Quiz.id == submission.quiz_id).first()
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=2 * cm, bottomMargin=2 * cm, leftMargin=2 * cm, rightMargin=2 * cm)
-    doc.build(build_submission_pdf(db, submission_id, build_pdf_stylesheet(), include_expected_answers=False))
+    doc.build(build_submission_pdf(db, submission_id, build_pdf_stylesheet(), include_expected_answers=True))
     buffer.seek(0)
     safe_title = "".join(c for c in quiz.title if c.isalnum() or c in (" ", "_", "-")).strip() or "quiz"
     return StreamingResponse(buffer, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="{safe_title}_my_script.pdf"'})

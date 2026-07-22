@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Student — QuizMark</title><link rel="stylesheet" href="/static/style.css"></head>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="theme-color" content="#070a14"><meta name="apple-mobile-web-app-capable" content="yes"><link rel="icon" type="image/png" href="/branding/logo"><link rel="apple-touch-icon" href="/branding/logo"><link rel="manifest" href="/static/manifest.webmanifest"><title>Student — QuizMark</title><link rel="stylesheet" href="/static/style.css"></head>
 <body><div class="wrap">
   <header class="top"><div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Quiz<span>Mark</span></div><div class="brand-tagline">Student workspace</div></div></div><nav><a href="/static/index.html">Home</a><a href="/static/lecturer.html">Lecturer</a></nav></header>
   <h1>Find your quizzes</h1><p class="lede">Choose your module to see every quiz assigned to it. No quiz ID needed.</p>
@@ -27,4 +27,4 @@ $('downloadNewBtn').addEventListener('click',()=>downloadScript(currentSubmissio
 $('checkBtn').addEventListener('click',async()=>{const studentId=$('checkStudentId').value.trim();if(!studentId){showMsg($('resultsBox'),'Enter your student ID.','error');return}try{const results=await api(`/results/${encodeURIComponent(studentId)}`);$('resultsBox').innerHTML=results.map(r=>`<div class="q"><span class="qmarks">${r.total_score} / ${r.max_score}</span><div class="qtext">${escapeHtml(r.quiz_title)} <span class="badge ${r.fully_marked?'done':'pending'}">${r.fully_marked?'Final':'Pending'}</span></div><p class="muted">${escapeHtml(r.module_code)} · ${escapeHtml(r.status)} · submitted ${formatSAST(r.submitted_at)}</p><button class="row-download-btn" data-script="${r.submission_id}">Download script</button></div>`).join('');document.querySelectorAll('[data-script]').forEach(b=>b.addEventListener('click',()=>downloadScript(b.dataset.script,studentId)))}catch(err){showMsg($('resultsBox'),`Could not find results: ${err.message}`,'error')}});
 $('backToModulesBtn').addEventListener('click',()=>{$('quizListCard').classList.add('hidden');$('moduleCard').classList.remove('hidden')});
 const params=new URLSearchParams(location.search);if(params.get('module'))loadModule(params.get('module'));else if(params.get('quiz'))loadQuiz(params.get('quiz'));else loadModules();
-</script></body></html>
+</script><script src="/static/pwa.js"></script></body></html>

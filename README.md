@@ -201,8 +201,8 @@ Question images are fetched from Cloudinary at PDF-generation time (a quick netw
 
 Students can also download **their own script** from the Student page
 immediately after submitting or from **My results & scripts** later. Their PDF
-contains their responses, marks, score, and question images, but deliberately
-does **not** include expected answers.
+contains their responses, marks, score, question images, and expected answers
+for MCQ and short-answer questions.
 
 ## 10. Quiz JSON format
 
@@ -324,7 +324,7 @@ below) need an `X-Lecturer-Pin: 90435` header.
 **Quiz module and student-script API additions:**
 - `GET /quiz-modules` — public list of quiz module codes with quiz counts
 - `GET /quizzes/by-module/{module_code}` — public list of quizzes in one module
-- `GET /student/submission/{submission_id}/pdf?student_id=...` — student downloads their own script, without expected answers
+- `GET /student/submission/{submission_id}/pdf?student_id=...` — student downloads their own script with expected answers
 
 **Admin content management:**
 - `GET` / `POST /admin/quizzes` and `GET` / `PUT` / `DELETE /admin/quizzes/{quiz_id}` — quiz CRUD — **lecturer PIN required**

@@ -3,6 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#070a14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="icon" type="image/png" href="/branding/logo">
+<link rel="apple-touch-icon" href="/branding/logo">
+<link rel="manifest" href="/static/manifest.webmanifest">
 <title>Local Quiz App</title>
 <link rel="stylesheet" href="/static/style.css">
 </head>
@@ -10,6 +15,7 @@
 <div class="wrap">
   <header class="top">
     <div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Quiz<span>Mark</span></div><div class="brand-tagline">Bioscientist</div></div></div>
+    <nav><button class="install-app-btn" id="installAppBtn" type="button">Install app</button></nav>
   </header>
 
   <h1>A quiz &amp; video-lesson app that lives on your local network.</h1>
@@ -51,5 +57,7 @@
     </a>
   </div>
 </div>
+<p class="install-hint" id="installHint" aria-live="polite"></p>
+<script src="/static/pwa.js"></script>
 </body>
 </html>

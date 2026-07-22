@@ -87,6 +87,9 @@ header.top .brand-tagline { margin-top: 5px; color: var(--text-muted); font-fami
 header.top nav { display: flex; flex-wrap: wrap; gap: 4px; }
 header.top nav a { padding: 7px 9px; color: var(--text-muted); font-family: var(--font-mono); font-size: .72rem; letter-spacing: .05em; text-decoration: none; text-transform: uppercase; border-radius: 8px; transition: color .2s ease, background .2s ease; }
 header.top nav a:hover, header.top nav a:focus-visible { color: var(--cyan); background: rgba(103, 232, 249, .09); }
+.install-app-btn { padding: 8px 11px; color: #06121d; font-family: var(--font-mono); font-size: .68rem; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; border: 0; border-radius: 8px; background: var(--cyan); cursor: pointer; }
+.install-app-btn:hover, .install-app-btn:focus-visible { filter: brightness(1.08); }
+.install-hint { max-width: 980px; padding: 0 24px; margin: -20px auto 24px; color: var(--text-muted); font-size: .78rem; text-align: right; }
 
 h1, h2, h3 { font-family: var(--font-display); line-height: 1.13; letter-spacing: -.045em; }
 h1 { max-width: 15ch; margin: 0 0 11px; font-size: clamp(2.25rem, 6vw, 4.25rem); font-weight: 700; }
