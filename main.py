@@ -294,9 +294,15 @@ def _set_lecturer_modules(db: Session, lecturer: Lecturer, module_codes: List[st
     normalized = sorted({code.strip().upper() for code in module_codes if code and code.strip()})
     if module_limit < 0 or len(normalized) > module_limit:
         raise HTTPException(status_code=400, detail="The module assignments exceed this lecturer's module limit")
-    for item in list(lecturer.modules):
-        db.delete(item)
-    for code in normalized:
+    # Reconcile assignments instead of deleting and recreating all of them.
+    # This avoids temporarily inserting a duplicate `(lecturer_id, module_code)`
+    # when an administrator approves an already-assigned lecturer.
+    existing = {item.module_code: item for item in lecturer.modules}
+    wanted = set(normalized)
+    for code, item in existing.items():
+        if code not in wanted:
+            db.delete(item)
+    for code in wanted - set(existing):
         db.add(LecturerModule(lecturer_id=lecturer.id, module_code=code))
 
 
