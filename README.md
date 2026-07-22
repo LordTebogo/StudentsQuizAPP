@@ -149,6 +149,13 @@ assigned to one module, but every quiz and lesson is owned by the account that
 uploaded it. A lecturer can only view, mark, or download student scripts for
 their own uploaded work.
 
+Students likewise create a profile at `/static/student.html` with a student
+number, password confirmation, profile image, and contact details. An
+administrator approves/activates the student profile in the Student management
+panel before the student can sign in, take quizzes or lessons, view results, or
+download their own scripts. The password chosen at registration remains their
+password unless the administrator resets it.
+
 Quizzes are now organised by a **module code**, just like video lessons. When
 a lecturer uploads a quiz, they enter a code such as `BIO101`. Students open
 `/static/student.html`, choose their module, and see all quizzes for that

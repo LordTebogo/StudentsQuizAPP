@@ -67,6 +67,23 @@ class LecturerModule(Base):
     lecturer = relationship("Lecturer", back_populates="modules")
 
 
+class Student(Base):
+    __tablename__ = "students"
+
+    id = Column(Integer, primary_key=True, index=True)
+    student_number = Column(String, nullable=False, unique=True, index=True)
+    full_name = Column(String, nullable=False)
+    email = Column(String, nullable=False, unique=True, index=True)
+    phone = Column(String)
+    institution = Column(String)
+    bio = Column(Text)
+    profile_image_url = Column(Text)
+    password_hash = Column(String, nullable=False)
+    approved = Column(Boolean, nullable=False, default=False)
+    active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(String, nullable=False)
+
+
 # ---------------------------------------------------------------------------
 # Quizzes
 # ---------------------------------------------------------------------------

@@ -98,6 +98,7 @@
 <script>
 const $ = (id) => document.getElementById(id);
 let currentLesson = null;
+let STUDENT_TOKEN = sessionStorage.getItem('studentToken') || null;
 
 function formatSAST(isoString) {
   const d = isoString ? new Date(isoString) : new Date();
@@ -108,7 +109,8 @@ function formatSAST(isoString) {
   }) + ' SAST';
 }
 
-async function api(path, options) {
+async function api(path, options = {}) {
+  options.headers = Object.assign({}, options.headers, STUDENT_TOKEN ? { 'X-Student-Token': STUDENT_TOKEN } : {});
   const res = await fetch(path, options);
   let data = null;
   try { data = await res.json(); } catch (e) { /* no body */ }
@@ -121,6 +123,22 @@ async function api(path, options) {
 
 function showMsg(el, text, kind) {
   el.innerHTML = `<div class="msg ${kind}">${text}</div>`;
+}
+
+async function restoreStudentSession() {
+  if (!STUDENT_TOKEN) { window.location.href = '/static/student.html'; return false; }
+  try {
+    const student = await api('/student/me');
+    $('studentName').value = student.full_name;
+    $('studentId').value = student.student_number;
+    $('studentName').readOnly = true;
+    $('studentId').readOnly = true;
+    return true;
+  } catch (_) {
+    sessionStorage.removeItem('studentToken');
+    window.location.href = '/static/student.html';
+    return false;
+  }
 }
 function escapeHtml(str) {
   const div = document.createElement('div');
@@ -403,13 +421,13 @@ $('postCommentBtn').addEventListener('click', async () => {
 });
 
 // ---- Init: auto-open a module or lesson if present in the URL -----------
-loadModuleList();
 const params = new URLSearchParams(window.location.search);
-if (params.get('lesson')) {
-  openLesson(params.get('lesson'));
-} else if (params.get('module')) {
-  openModule(params.get('module'));
-}
+restoreStudentSession().then(ready => {
+  if (!ready) return;
+  loadModuleList();
+  if (params.get('lesson')) openLesson(params.get('lesson'));
+  else if (params.get('module')) openModule(params.get('module'));
+});
 </script>
 <script src="/static/pwa.js"></script>
 </body>

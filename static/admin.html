@@ -51,6 +51,13 @@
     </div>
   </section>
 
+  <section class="card">
+    <div class="admin-editor-heading"><div><span class="kicker">Student access</span><h2>Student management</h2></div><button class="btn secondary" id="refreshStudentsBtn">Refresh</button></div>
+    <p class="muted">Select a student profile to approve, activate, deactivate, reset their password, or remove it.</p>
+    <div id="studentList" class="admin-list"></div>
+    <div id="studentAdminCard" class="hidden"><label class="check-label"><input id="studentApproved" type="checkbox"> Approved</label><label class="check-label"><input id="studentActive" type="checkbox"> Active</label><label for="studentResetPassword">New password</label><input id="studentResetPassword" type="password" placeholder="At least 8 characters"><button class="btn" id="saveStudentBtn">Save student access</button><button class="btn secondary" id="resetStudentPasswordBtn">Reset password</button><button class="btn secondary" id="deleteStudentBtn">Remove student</button><div id="studentMsg"></div></div>
+  </section>
+
   <section class="card hidden" id="editorCard">
     <div class="admin-editor-heading"><div><span class="kicker" id="editorKicker">Create</span><h2 id="editorTitle">New content</h2></div><button class="btn secondary" id="closeEditorBtn">Close</button></div>
     <div id="quizFields">
@@ -74,6 +81,7 @@ const $ = id => document.getElementById(id);
 let pin = sessionStorage.getItem('lecturerPin') || null;
 let editor = { kind: null, id: null };
 let selectedLecturerId = null;
+let selectedStudentId = null;
 const quizTemplate = [{ type: 'mcq', question: 'Question text', options: ['Option A', 'Option B'], correct_answer: 'Option A', marks: 1, image_url: '' }];
 const lessonTemplate = [{ type: 'short', question: 'Question text', correct_answer: 'Expected answer', marks: 1, image_url: '' }];
 
@@ -116,7 +124,7 @@ function renderList(target, items, kind) {
   $(target).querySelectorAll('[data-id]').forEach(button => button.addEventListener('click', () => edit(kind, button.dataset.id)));
 }
 async function loadLists() {
-  try { const [quizzes, lessons] = await Promise.all([api('/admin/quizzes'), api('/admin/lessons')]); renderList('quizList', quizzes, 'quiz'); renderList('lessonList', lessons, 'lesson'); loadLecturers(); }
+  try { const [quizzes, lessons] = await Promise.all([api('/admin/quizzes'), api('/admin/lessons')]); renderList('quizList', quizzes, 'quiz'); renderList('lessonList', lessons, 'lesson'); loadLecturers(); loadStudents(); }
   catch (err) { showMsg($('editorMsg'), `Could not load content: ${err.message}`, 'error'); }
 }
 function lecturerFormPayload(includePassword) {
@@ -148,6 +156,11 @@ async function saveLecturer() {
   catch (err) { showMsg($('lecturerMsg'), err.message, 'error'); }
 }
 async function deleteLecturer() { if (!selectedLecturerId || !confirm('Remove this lecturer profile? Profiles with owned quizzes or lessons cannot be removed.')) return; try { await api(`/admin/lecturers/${selectedLecturerId}`, {method:'DELETE'}); clearLecturerForm(); loadLecturers(); } catch (err) { showMsg($('lecturerMsg'), err.message, 'error'); } }
+function loadStudents() { api('/admin/students').then(students => { $('studentList').innerHTML = students.length ? students.map(item => `<button class="admin-list-item" data-student="${item.id}"><span><strong>${escapeHtml(item.full_name)}</strong><small>${escapeHtml(item.student_number)} · ${escapeHtml(item.email)}</small></span><span class="badge ${item.approved && item.active ? 'done' : 'pending'}">${item.active ? (item.approved ? 'Active' : 'Awaiting approval') : 'Inactive'}</span></button>`).join('') : '<p class="muted">No student profiles yet.</p>'; $('studentList').querySelectorAll('[data-student]').forEach(button => button.addEventListener('click', () => selectStudent(button.dataset.student, students))); }).catch(err => showMsg($('studentMsg'), err.message, 'error')); }
+function selectStudent(id, students) { const student = students.find(item => item.id === Number(id)); if (!student) return; selectedStudentId = student.id; $('studentApproved').checked = student.approved; $('studentActive').checked = student.active; $('studentResetPassword').value = ''; $('studentAdminCard').classList.remove('hidden'); $('studentMsg').innerHTML = ''; }
+async function saveStudent() { if (!selectedStudentId) return; try { await api(`/admin/students/${selectedStudentId}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({approved:$('studentApproved').checked, active:$('studentActive').checked})}); showMsg($('studentMsg'), 'Student access saved.', 'ok'); loadStudents(); } catch (err) { showMsg($('studentMsg'), err.message, 'error'); } }
+async function resetStudentPassword() { const password = $('studentResetPassword').value; if (!selectedStudentId || password.length < 8) { showMsg($('studentMsg'), 'Enter a new password with at least 8 characters.', 'error'); return; } try { await api(`/admin/students/${selectedStudentId}/reset-password`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({password})}); $('studentResetPassword').value = ''; showMsg($('studentMsg'), 'Student password reset.', 'ok'); } catch (err) { showMsg($('studentMsg'), err.message, 'error'); } }
+async function deleteStudent() { if (!selectedStudentId || !confirm('Remove this student profile? Existing submission records will remain.')) return; try { await api(`/admin/students/${selectedStudentId}`, {method:'DELETE'}); selectedStudentId = null; $('studentAdminCard').classList.add('hidden'); loadStudents(); } catch (err) { showMsg($('studentMsg'), err.message, 'error'); } }
 async function approveLecturer() { if (!selectedLecturerId) return; $('lecturerApproved').checked = true; $('lecturerActive').checked = true; await saveLecturer(); }
 async function resetLecturerPassword() { const password = $('resetPassword').value; if (!selectedLecturerId || password.length < 8) { showMsg($('lecturerMsg'), 'Enter a new password with at least 8 characters.', 'error'); return; } try { await api(`/admin/lecturers/${selectedLecturerId}/reset-password`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({password})}); $('resetPassword').value = ''; showMsg($('lecturerMsg'), 'Password reset. Share the new password securely with the lecturer.', 'ok'); } catch (err) { showMsg($('lecturerMsg'), err.message, 'error'); } }
 function buildPayload() {
@@ -180,6 +193,10 @@ $('newLecturerBtn').addEventListener('click', clearLecturerForm);
 $('saveLecturerBtn').addEventListener('click', saveLecturer);
 $('approveLecturerBtn').addEventListener('click', approveLecturer);
 $('resetPasswordBtn').addEventListener('click', resetLecturerPassword);
+$('refreshStudentsBtn').addEventListener('click', loadStudents);
+$('saveStudentBtn').addEventListener('click', saveStudent);
+$('resetStudentPasswordBtn').addEventListener('click', resetStudentPassword);
+$('deleteStudentBtn').addEventListener('click', deleteStudent);
 $('deleteLecturerBtn').addEventListener('click', deleteLecturer);
 $('refreshLecturersBtn').addEventListener('click', loadLecturers);
 $('saveBtn').addEventListener('click', save); $('deleteBtn').addEventListener('click', remove);

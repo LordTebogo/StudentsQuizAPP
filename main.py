@@ -74,6 +74,7 @@ from models import (
     Question,
     Quiz,
     Submission,
+    Student,
 )
 from cloudinary_utils import upload_image_bytes, upload_video_bytes
 
@@ -85,6 +86,7 @@ from cloudinary_utils import upload_image_bytes, upload_video_bytes
 # the deployed code.
 LECTURER_PIN = os.getenv("LECTURER_PIN", "90435")
 LECTURER_SESSION_SECRET = os.getenv("LECTURER_SESSION_SECRET", LECTURER_PIN)
+STUDENT_SESSION_SECRET = os.getenv("STUDENT_SESSION_SECRET", LECTURER_SESSION_SECRET)
 
 # Optional convenience folder: images committed into the repo ahead of time
 # (e.g. shipped alongside the code) can be referenced by filename in a quiz
@@ -235,6 +237,25 @@ class PasswordReset(BaseModel):
     password: str
 
 
+class StudentLogin(BaseModel):
+    identifier: str
+    password: str
+
+
+class AdminStudentUpdate(BaseModel):
+    approved: Optional[bool] = None
+    active: Optional[bool] = None
+
+
+class AdminStudentCreate(BaseModel):
+    student_number: str
+    full_name: str
+    email: str
+    password: str
+    approved: bool = False
+    active: bool = True
+
+
 def _password_hash(password: str, salt: Optional[str] = None) -> str:
     salt = salt or secrets.token_hex(16)
     digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 210_000).hex()
@@ -256,6 +277,13 @@ def _issue_lecturer_token(lecturer_id: int) -> str:
     return f"{base64.urlsafe_b64encode(payload).decode().rstrip('=')}.{base64.urlsafe_b64encode(signature).decode().rstrip('=')}"
 
 
+def _issue_student_token(student_id: int) -> str:
+    expires = int((datetime.now(timezone.utc) + timedelta(hours=12)).timestamp())
+    payload = f"{student_id}:{expires}".encode("utf-8")
+    signature = hmac.new(STUDENT_SESSION_SECRET.encode("utf-8"), payload, hashlib.sha256).digest()
+    return f"{base64.urlsafe_b64encode(payload).decode().rstrip('=')}.{base64.urlsafe_b64encode(signature).decode().rstrip('=')}"
+
+
 def _lecturer_id_from_token(token: Optional[str]) -> int:
     if not token or "." not in token:
         raise HTTPException(status_code=401, detail="Sign in as a lecturer first")
@@ -272,6 +300,22 @@ def _lecturer_id_from_token(token: Optional[str]) -> int:
         raise HTTPException(status_code=401, detail="Your lecturer session has expired. Sign in again.")
 
 
+def _student_id_from_token(token: Optional[str]) -> int:
+    if not token or "." not in token:
+        raise HTTPException(status_code=401, detail="Sign in as a student first")
+    encoded_payload, encoded_signature = token.split(".", 1)
+    try:
+        payload = base64.urlsafe_b64decode(encoded_payload + "=" * (-len(encoded_payload) % 4))
+        signature = base64.urlsafe_b64decode(encoded_signature + "=" * (-len(encoded_signature) % 4))
+        expected = hmac.new(STUDENT_SESSION_SECRET.encode("utf-8"), payload, hashlib.sha256).digest()
+        student_id_text, expires_text = payload.decode("utf-8").split(":", 1)
+        if not hmac.compare_digest(signature, expected) or int(expires_text) < int(datetime.now(timezone.utc).timestamp()):
+            raise ValueError
+        return int(student_id_text)
+    except (ValueError, UnicodeDecodeError):
+        raise HTTPException(status_code=401, detail="Your student session has expired. Sign in again.")
+
+
 def require_lecturer_account(
     x_lecturer_token: Optional[str] = Header(None, alias="X-Lecturer-Token"),
     db: Session = Depends(get_db),
@@ -280,6 +324,23 @@ def require_lecturer_account(
     if not lecturer or not lecturer.active or not lecturer.approved:
         raise HTTPException(status_code=403, detail="Your lecturer account is not active and approved")
     return lecturer
+
+
+def require_student_account(
+    x_student_token: Optional[str] = Header(None, alias="X-Student-Token"),
+    db: Session = Depends(get_db),
+) -> Student:
+    student = db.query(Student).filter(Student.id == _student_id_from_token(x_student_token)).first()
+    if not student or not student.active or not student.approved:
+        raise HTTPException(status_code=403, detail="Your student profile is not active and approved")
+    return student
+
+
+def _student_profile(student: Student) -> dict:
+    return {"id": student.id, "student_number": student.student_number, "full_name": student.full_name,
+            "email": student.email, "phone": student.phone or "", "institution": student.institution or "",
+            "bio": student.bio or "", "profile_image_url": student.profile_image_url,
+            "approved": student.approved, "active": student.active, "created_at": student.created_at}
 
 
 def _lecturer_profile(lecturer: Lecturer) -> dict:
@@ -413,6 +474,49 @@ async def update_lecturer_me(
         lecturer.profile_image_url = upload_image_bytes(await profile_image.read(), folder="lecturer_profiles")
     db.commit()
     return _lecturer_profile(lecturer)
+
+
+@app.post("/students/register")
+async def register_student(
+    student_number: str = Form(...), full_name: str = Form(...), email: str = Form(...),
+    password: str = Form(...), confirm_password: str = Form(...), phone: str = Form(""),
+    institution: str = Form(""), bio: str = Form(""), profile_image: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db),
+):
+    student_number, email = student_number.strip().upper(), email.strip().lower()
+    if not student_number or not full_name.strip() or "@" not in email or len(password) < 8:
+        raise HTTPException(status_code=400, detail="Provide a student number, full name, valid email, and a password of at least 8 characters")
+    if password != confirm_password:
+        raise HTTPException(status_code=400, detail="The password confirmation does not match")
+    if db.query(Student).filter((Student.student_number == student_number) | (Student.email == email)).first():
+        raise HTTPException(status_code=409, detail="A student profile already uses this student number or email")
+    image_url = upload_image_bytes(await profile_image.read(), folder="student_profiles") if profile_image and profile_image.filename else None
+    student = Student(student_number=student_number, full_name=full_name.strip(), email=email,
+                      phone=phone.strip(), institution=institution.strip(), bio=bio.strip(), profile_image_url=image_url,
+                      password_hash=_password_hash(password), approved=False, active=True,
+                      created_at=datetime.utcnow().isoformat() + "Z")
+    db.add(student); db.commit()
+    return {"ok": True, "message": "Profile created. An administrator must approve it before you can sign in."}
+
+
+@app.post("/students/login")
+def student_login(payload: StudentLogin, db: Session = Depends(get_db)):
+    identifier = payload.identifier.strip()
+    student = db.query(Student).filter((Student.student_number == identifier.upper()) | (Student.email == identifier.lower())).first()
+    if not student:
+        raise HTTPException(status_code=401, detail="No student profile was found for this student number or email")
+    if not _password_matches(payload.password, student.password_hash):
+        raise HTTPException(status_code=401, detail="Password does not match this student profile. Ask the administrator to reset it.")
+    if not student.active:
+        raise HTTPException(status_code=403, detail="This student profile is inactive")
+    if not student.approved:
+        raise HTTPException(status_code=403, detail="Your profile is waiting for administrator approval")
+    return {"token": _issue_student_token(student.id), "student": _student_profile(student)}
+
+
+@app.get("/student/me")
+def student_me(student: Student = Depends(require_student_account)):
+    return _student_profile(student)
 
 
 # ---------------------------------------------------------------------------
@@ -811,15 +915,15 @@ def get_quiz(quiz_id: int, db: Session = Depends(get_db)):
 # ---------------------------------------------------------------------------
 
 @app.post("/quiz/{quiz_id}/submit")
-def submit_quiz(quiz_id: int, submission: QuizSubmission, db: Session = Depends(get_db)):
+def submit_quiz(quiz_id: int, submission: QuizSubmission, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
     questions = db.query(Question).filter(Question.quiz_id == quiz_id).all()
     if not questions:
         raise HTTPException(status_code=404, detail="Quiz not found")
 
     new_submission = Submission(
         quiz_id=quiz_id,
-        student_id=submission.student_id,
-        student_name=submission.student_name,
+        student_id=student.student_number,
+        student_name=student.full_name,
         submitted_at=datetime.utcnow().isoformat() + "Z",
         total_score=0,
         max_score=0,
@@ -1007,10 +1111,10 @@ def download_submission_pdf(submission_id: int, lecturer: Lecturer = Depends(req
 
 
 @app.get("/student/submission/{submission_id}/pdf")
-def download_student_submission_pdf(submission_id: int, student_id: str, db: Session = Depends(get_db)):
+def download_student_submission_pdf(submission_id: int, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
     """Download a student's own script with responses, expected answers, and marks."""
     submission = db.query(Submission).filter(Submission.id == submission_id).first()
-    if not submission or submission.student_id != student_id.strip():
+    if not submission or submission.student_id != student.student_number:
         raise HTTPException(status_code=404, detail="Submission not found")
     quiz = db.query(Quiz).filter(Quiz.id == submission.quiz_id).first()
     buffer = io.BytesIO()
@@ -1251,15 +1355,15 @@ def get_lesson(lesson_id: int, db: Session = Depends(get_db)):
 # ---------------------------------------------------------------------------
 
 @app.post("/lesson/{lesson_id}/submit")
-def submit_lesson(lesson_id: int, submission: QuizSubmission, db: Session = Depends(get_db)):
+def submit_lesson(lesson_id: int, submission: QuizSubmission, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
     questions = db.query(LessonQuestion).filter(LessonQuestion.lesson_id == lesson_id).all()
     if not questions:
         raise HTTPException(status_code=404, detail="Lesson not found")
 
     new_submission = LessonSubmission(
         lesson_id=lesson_id,
-        student_id=submission.student_id,
-        student_name=submission.student_name,
+        student_id=student.student_number,
+        student_name=student.full_name,
         submitted_at=datetime.utcnow().isoformat() + "Z",
         total_score=0,
         max_score=0,
@@ -1318,7 +1422,9 @@ def submit_lesson(lesson_id: int, submission: QuizSubmission, db: Session = Depe
 # ---------------------------------------------------------------------------
 
 @app.get("/lesson/{lesson_id}/my-submission")
-def get_my_lesson_submission(lesson_id: int, student_id: str, db: Session = Depends(get_db)):
+def get_my_lesson_submission(lesson_id: int, student_id: str, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+    if student_id.strip().upper() != student.student_number:
+        raise HTTPException(status_code=403, detail="You can only view your own submission")
     submission = (
         db.query(LessonSubmission)
         .filter(LessonSubmission.lesson_id == lesson_id, LessonSubmission.student_id == student_id)
@@ -1743,12 +1849,61 @@ def admin_reset_lecturer_password(lecturer_id: int, payload: PasswordReset, _pin
     return {"ok": True}
 
 
+@app.get("/admin/students")
+def admin_list_students(_pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    return [_student_profile(item) for item in db.query(Student).order_by(Student.created_at.desc()).all()]
+
+
+@app.post("/admin/students")
+def admin_create_student(payload: AdminStudentCreate, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    number, email = payload.student_number.strip().upper(), payload.email.strip().lower()
+    if not number or not payload.full_name.strip() or "@" not in email or len(payload.password) < 8:
+        raise HTTPException(status_code=400, detail="Provide a student number, full name, valid email, and a password of at least 8 characters")
+    if db.query(Student).filter((Student.student_number == number) | (Student.email == email)).first():
+        raise HTTPException(status_code=409, detail="A student profile already uses this student number or email")
+    student = Student(student_number=number, full_name=payload.full_name.strip(), email=email,
+                      password_hash=_password_hash(payload.password), approved=payload.approved,
+                      active=payload.active, created_at=datetime.utcnow().isoformat() + "Z")
+    db.add(student); db.commit()
+    return _student_profile(student)
+
+
+@app.put("/admin/students/{student_id}")
+def admin_update_student(student_id: int, payload: AdminStudentUpdate, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    student = db.query(Student).filter(Student.id == student_id).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    if payload.approved is not None: student.approved = payload.approved
+    if payload.active is not None: student.active = payload.active
+    db.commit()
+    return _student_profile(student)
+
+
+@app.post("/admin/students/{student_id}/reset-password")
+def admin_reset_student_password(student_id: int, payload: PasswordReset, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    student = db.query(Student).filter(Student.id == student_id).first()
+    if not student: raise HTTPException(status_code=404, detail="Student not found")
+    if len(payload.password) < 8: raise HTTPException(status_code=400, detail="The new password must be at least 8 characters")
+    student.password_hash = _password_hash(payload.password); db.commit()
+    return {"ok": True}
+
+
+@app.delete("/admin/students/{student_id}")
+def admin_delete_student(student_id: int, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    student = db.query(Student).filter(Student.id == student_id).first()
+    if not student: raise HTTPException(status_code=404, detail="Student not found")
+    db.delete(student); db.commit()
+    return {"ok": True}
+
+
 # ---------------------------------------------------------------------------
 # Student: check results (quizzes)
 # ---------------------------------------------------------------------------
 
 @app.get("/results/{student_id}")
-def get_results(student_id: str, quiz_id: Optional[int] = None, db: Session = Depends(get_db)):
+def get_results(student_id: str, quiz_id: Optional[int] = None, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+    if student_id.strip().upper() != student.student_number:
+        raise HTTPException(status_code=403, detail="You can only view your own results")
     query = db.query(Submission).filter(Submission.student_id == student_id)
     if quiz_id is not None:
         query = query.filter(Submission.quiz_id == quiz_id)
