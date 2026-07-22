@@ -142,6 +142,28 @@ class CommentCreate(BaseModel):
     is_lecturer: bool = False
 
 
+class AdminQuestionInput(BaseModel):
+    type: str
+    question: str
+    options: Optional[List[str]] = None
+    correct_answer: Optional[str] = None
+    marks: float = 1
+    image_url: Optional[str] = None
+
+
+class AdminQuizInput(BaseModel):
+    title: str
+    questions: List[AdminQuestionInput]
+
+
+class AdminLessonInput(BaseModel):
+    title: str
+    description: str = ""
+    module_code: str
+    video_url: str
+    questions: List[AdminQuestionInput]
+
+
 def require_lecturer_pin(x_lecturer_pin: Optional[str] = Header(None, alias="X-Lecturer-Pin")):
     """Dependency guarding lecturer-only routes. Send the PIN as the
     'X-Lecturer-Pin' header. Raises 401 if it's missing or wrong."""
@@ -1130,6 +1152,175 @@ def post_lesson_comment(
     db.add(comment)
     db.commit()
     return {"id": comment.id, "ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Admin content management — protected by the same lecturer PIN.
+# These routes intentionally expose answers and video URLs, so they must
+# never be used without the PIN dependency.
+# ---------------------------------------------------------------------------
+
+def _validate_admin_questions(questions: List[AdminQuestionInput]):
+    if not questions:
+        raise HTTPException(status_code=400, detail="Add at least one question")
+    for index, question in enumerate(questions, start=1):
+        if question.type not in ("mcq", "short", "long"):
+            raise HTTPException(status_code=400, detail=f"Question {index}: type must be mcq, short, or long")
+        if not question.question.strip():
+            raise HTTPException(status_code=400, detail=f"Question {index}: question text is required")
+        if question.marks <= 0:
+            raise HTTPException(status_code=400, detail=f"Question {index}: marks must be greater than zero")
+        if question.type == "mcq" and (not question.options or len(question.options) < 2):
+            raise HTTPException(status_code=400, detail=f"Question {index}: an MCQ needs at least two options")
+        if question.type in ("mcq", "short") and not (question.correct_answer or "").strip():
+            raise HTTPException(status_code=400, detail=f"Question {index}: a correct answer is required")
+
+
+def _admin_question_dict(question):
+    return {
+        "id": question.id,
+        "type": question.type,
+        "question": question.question,
+        "options": json.loads(question.options_json) if question.options_json else [],
+        "correct_answer": question.correct_answer or "",
+        "marks": question.marks,
+        "image_url": question.image_url or "",
+    }
+
+
+def _add_quiz_questions(db: Session, quiz_id: int, questions: List[AdminQuestionInput]):
+    for order, question in enumerate(questions):
+        db.add(Question(
+            quiz_id=quiz_id, q_order=order, type=question.type,
+            question=question.question.strip(),
+            options_json=json.dumps(question.options) if question.type == "mcq" else None,
+            correct_answer=question.correct_answer.strip() if question.type in ("mcq", "short") else None,
+            marks=question.marks, image_url=(question.image_url or "").strip() or None,
+        ))
+
+
+def _add_lesson_questions(db: Session, lesson_id: int, questions: List[AdminQuestionInput]):
+    for order, question in enumerate(questions):
+        db.add(LessonQuestion(
+            lesson_id=lesson_id, q_order=order, type=question.type,
+            question=question.question.strip(),
+            options_json=json.dumps(question.options) if question.type == "mcq" else None,
+            correct_answer=question.correct_answer.strip() if question.type in ("mcq", "short") else None,
+            marks=question.marks, image_url=(question.image_url or "").strip() or None,
+        ))
+
+
+@app.get("/admin/quizzes")
+def admin_list_quizzes(_pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    rows = db.query(Quiz).order_by(Quiz.id.desc()).all()
+    return [{"id": q.id, "title": q.title, "created_at": q.created_at, "question_count": len(q.questions), "submission_count": len(q.submissions)} for q in rows]
+
+
+@app.get("/admin/quizzes/{quiz_id}")
+def admin_get_quiz(quiz_id: int, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    quiz = db.query(Quiz).filter(Quiz.id == quiz_id).first()
+    if not quiz:
+        raise HTTPException(status_code=404, detail="Quiz not found")
+    return {"id": quiz.id, "title": quiz.title, "created_at": quiz.created_at, "questions": [_admin_question_dict(q) for q in quiz.questions], "submission_count": len(quiz.submissions)}
+
+
+@app.post("/admin/quizzes")
+def admin_create_quiz(payload: AdminQuizInput, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    _validate_admin_questions(payload.questions)
+    if not payload.title.strip():
+        raise HTTPException(status_code=400, detail="Quiz title is required")
+    quiz = Quiz(title=payload.title.strip(), created_at=datetime.utcnow().isoformat() + "Z")
+    db.add(quiz)
+    db.flush()
+    _add_quiz_questions(db, quiz.id, payload.questions)
+    db.commit()
+    return {"id": quiz.id, "title": quiz.title}
+
+
+@app.put("/admin/quizzes/{quiz_id}")
+def admin_update_quiz(quiz_id: int, payload: AdminQuizInput, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    quiz = db.query(Quiz).filter(Quiz.id == quiz_id).first()
+    if not quiz:
+        raise HTTPException(status_code=404, detail="Quiz not found")
+    if quiz.submissions:
+        raise HTTPException(status_code=409, detail="This quiz has submissions and cannot be changed. Create a new version instead.")
+    _validate_admin_questions(payload.questions)
+    if not payload.title.strip():
+        raise HTTPException(status_code=400, detail="Quiz title is required")
+    quiz.title = payload.title.strip()
+    for question in list(quiz.questions):
+        db.delete(question)
+    db.flush()
+    _add_quiz_questions(db, quiz.id, payload.questions)
+    db.commit()
+    return {"id": quiz.id, "title": quiz.title}
+
+
+@app.delete("/admin/quizzes/{quiz_id}")
+def admin_delete_quiz(quiz_id: int, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    quiz = db.query(Quiz).filter(Quiz.id == quiz_id).first()
+    if not quiz:
+        raise HTTPException(status_code=404, detail="Quiz not found")
+    db.delete(quiz)
+    db.commit()
+    return {"ok": True}
+
+
+@app.get("/admin/lessons")
+def admin_list_lessons(_pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    rows = db.query(Lesson).order_by(Lesson.id.desc()).all()
+    return [{"id": l.id, "title": l.title, "module_code": l.module_code, "created_at": l.created_at, "question_count": len(l.questions), "submission_count": len(l.submissions), "comment_count": len(l.comments)} for l in rows]
+
+
+@app.get("/admin/lessons/{lesson_id}")
+def admin_get_lesson(lesson_id: int, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    lesson = db.query(Lesson).filter(Lesson.id == lesson_id).first()
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    return {"id": lesson.id, "title": lesson.title, "description": lesson.description or "", "module_code": lesson.module_code, "video_url": lesson.video_url, "questions": [_admin_question_dict(q) for q in lesson.questions], "submission_count": len(lesson.submissions)}
+
+
+@app.post("/admin/lessons")
+def admin_create_lesson(payload: AdminLessonInput, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    _validate_admin_questions(payload.questions)
+    if not payload.title.strip() or not payload.module_code.strip() or not payload.video_url.strip():
+        raise HTTPException(status_code=400, detail="Title, module code, and video URL are required")
+    lesson = Lesson(title=payload.title.strip(), description=payload.description.strip(), module_code=payload.module_code.strip().upper(), video_url=payload.video_url.strip(), created_at=datetime.utcnow().isoformat() + "Z")
+    db.add(lesson)
+    db.flush()
+    _add_lesson_questions(db, lesson.id, payload.questions)
+    db.commit()
+    return {"id": lesson.id, "title": lesson.title}
+
+
+@app.put("/admin/lessons/{lesson_id}")
+def admin_update_lesson(lesson_id: int, payload: AdminLessonInput, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    lesson = db.query(Lesson).filter(Lesson.id == lesson_id).first()
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    if lesson.submissions:
+        raise HTTPException(status_code=409, detail="This lesson has submissions and cannot be changed. Create a new version instead.")
+    _validate_admin_questions(payload.questions)
+    if not payload.title.strip() or not payload.module_code.strip() or not payload.video_url.strip():
+        raise HTTPException(status_code=400, detail="Title, module code, and video URL are required")
+    lesson.title, lesson.description = payload.title.strip(), payload.description.strip()
+    lesson.module_code, lesson.video_url = payload.module_code.strip().upper(), payload.video_url.strip()
+    for question in list(lesson.questions):
+        db.delete(question)
+    db.flush()
+    _add_lesson_questions(db, lesson.id, payload.questions)
+    db.commit()
+    return {"id": lesson.id, "title": lesson.title}
+
+
+@app.delete("/admin/lessons/{lesson_id}")
+def admin_delete_lesson(lesson_id: int, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    lesson = db.query(Lesson).filter(Lesson.id == lesson_id).first()
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    db.delete(lesson)
+    db.commit()
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------------------

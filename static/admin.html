@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — QuizMark</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="wrap" id="gateWrap">
+  <header class="top"><div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Quiz<span>Mark</span></div><div class="brand-tagline">Administration</div></div></div><nav><a href="/static/index.html">Home</a><a href="/static/lecturer.html">Lecturer</a></nav></header>
+  <h1>Admin sign-in</h1>
+  <p class="lede">Manage quizzes and video lessons from one protected workspace.</p>
+  <div class="card"><label for="pinInput">Lecturer PIN</label><input id="pinInput" type="text" inputmode="numeric" autocomplete="off" placeholder="Enter PIN"><button class="btn" id="unlockBtn">Open admin</button><div id="pinMsg"></div></div>
+</div>
+
+<main class="wrap hidden" id="appWrap">
+  <header class="top"><div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Quiz<span>Mark</span></div><div class="brand-tagline">Content control</div></div></div><nav><a href="/static/index.html">Home</a><a href="/static/lecturer.html">Lecturer</a><a href="#" id="lockBtn">Lock</a></nav></header>
+  <h1>Content studio</h1>
+  <p class="lede">Create, edit, or remove quizzes and video lessons. Editing is deliberately locked after students have submitted work, preserving their results.</p>
+
+  <div class="admin-grid">
+    <section class="card"><h2>Quizzes</h2><button class="btn" id="newQuizBtn">New quiz</button><div id="quizList" class="admin-list"></div></section>
+    <section class="card"><h2>Video lessons</h2><button class="btn" id="newLessonBtn">New lesson</button><div id="lessonList" class="admin-list"></div></section>
+  </div>
+
+  <section class="card hidden" id="editorCard">
+    <div class="admin-editor-heading"><div><span class="kicker" id="editorKicker">Create</span><h2 id="editorTitle">New content</h2></div><button class="btn secondary" id="closeEditorBtn">Close</button></div>
+    <div id="quizFields">
+      <label for="contentTitle">Quiz title</label><input id="contentTitle" type="text" placeholder="e.g. Cell Biology: Week 1">
+    </div>
+    <div id="lessonFields" class="hidden">
+      <label for="lessonDescription">Lesson description</label><textarea id="lessonDescription" placeholder="A short introduction for students"></textarea>
+      <label for="moduleCode">Module code</label><input id="moduleCode" type="text" placeholder="e.g. BIO101">
+      <label for="videoUrl">Video URL</label><input id="videoUrl" type="text" placeholder="https://...">
+    </div>
+    <label for="questionsJson">Questions</label>
+    <textarea id="questionsJson" class="json-editor" spellcheck="false"></textarea>
+    <p class="muted">Each question needs <code>type</code>, <code>question</code>, and <code>marks</code>. MCQs also need <code>options</code> and <code>correct_answer</code>; short answers need <code>correct_answer</code>. Optional: <code>image_url</code>.</p>
+    <button class="btn" id="saveBtn">Save</button><button class="btn secondary hidden" id="deleteBtn">Delete permanently</button><div id="editorMsg"></div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+let pin = sessionStorage.getItem('lecturerPin') || null;
+let editor = { kind: null, id: null };
+const quizTemplate = [{ type: 'mcq', question: 'Question text', options: ['Option A', 'Option B'], correct_answer: 'Option A', marks: 1, image_url: '' }];
+const lessonTemplate = [{ type: 'short', question: 'Question text', correct_answer: 'Expected answer', marks: 1, image_url: '' }];
+
+function escapeHtml(value) { const el = document.createElement('div'); el.textContent = value ?? ''; return el.innerHTML; }
+function showMsg(el, text, kind) { el.innerHTML = `<div class="msg ${kind}">${escapeHtml(text)}</div>`; }
+async function api(path, options = {}) {
+  options.headers = Object.assign({}, options.headers, { 'X-Lecturer-Pin': pin });
+  const res = await fetch(path, options); let data = null;
+  try { data = await res.json(); } catch (_) {}
+  if (!res.ok) throw new Error((data && data.detail) || res.statusText);
+  return data;
+}
+async function unlock(value) {
+  try {
+    const res = await fetch('/lecturer/verify-pin', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({pin:value}) });
+    if (!res.ok) throw new Error();
+    pin = value; sessionStorage.setItem('lecturerPin', pin);
+    $('gateWrap').classList.add('hidden'); $('appWrap').classList.remove('hidden'); loadLists();
+  } catch (_) { showMsg($('pinMsg'), 'Incorrect PIN.', 'error'); }
+}
+function openEditor(kind, item = null) {
+  editor = { kind, id: item ? item.id : null };
+  $('editorCard').classList.remove('hidden'); $('editorMsg').innerHTML = '';
+  $('quizFields').classList.toggle('hidden', kind !== 'quiz'); $('lessonFields').classList.toggle('hidden', kind !== 'lesson');
+  $('editorKicker').textContent = item ? `Editing ${kind}` : `New ${kind}`;
+  $('editorTitle').textContent = item ? item.title : `Create ${kind === 'quiz' ? 'a quiz' : 'a video lesson'}`;
+  $('deleteBtn').classList.toggle('hidden', !item);
+  $('contentTitle').value = item ? item.title : '';
+  $('lessonDescription').value = item ? item.description || '' : '';
+  $('moduleCode').value = item ? item.module_code || '' : '';
+  $('videoUrl').value = item ? item.video_url || '' : '';
+  $('questionsJson').value = JSON.stringify(item ? item.questions : (kind === 'quiz' ? quizTemplate : lessonTemplate), null, 2);
+  $('editorCard').scrollIntoView({behavior:'smooth', block:'start'});
+}
+async function edit(kind, id) { try { openEditor(kind, await api(`/admin/${kind === 'quiz' ? 'quizzes' : 'lessons'}/${id}`)); } catch (err) { alert(`Could not open content: ${err.message}`); } }
+function renderList(target, items, kind) {
+  const noun = kind === 'quiz' ? 'quiz' : 'lesson';
+  $(target).innerHTML = items.length ? items.map(item => `<button class="admin-list-item" data-id="${item.id}"><span><strong>${escapeHtml(item.title)}</strong><small>#${item.id} · ${item.question_count} question${item.question_count === 1 ? '' : 's'}${kind === 'lesson' ? ` · ${escapeHtml(item.module_code)}` : ''}</small></span><span class="badge ${item.submission_count ? 'pending' : 'done'}">${item.submission_count ? item.submission_count + ' submissions' : 'Editable'}</span></button>`).join('') : `<p class="muted">No ${noun} content yet.</p>`;
+  $(target).querySelectorAll('[data-id]').forEach(button => button.addEventListener('click', () => edit(kind, button.dataset.id)));
+}
+async function loadLists() {
+  try { const [quizzes, lessons] = await Promise.all([api('/admin/quizzes'), api('/admin/lessons')]); renderList('quizList', quizzes, 'quiz'); renderList('lessonList', lessons, 'lesson'); }
+  catch (err) { showMsg($('editorMsg'), `Could not load content: ${err.message}`, 'error'); }
+}
+function buildPayload() {
+  let questions;
+  try { questions = JSON.parse($('questionsJson').value); } catch (_) { throw new Error('Questions must be valid JSON.'); }
+  if (!Array.isArray(questions)) throw new Error('Questions must be a JSON array.');
+  const payload = { title: $('contentTitle').value.trim(), questions };
+  if (editor.kind === 'lesson') Object.assign(payload, { description: $('lessonDescription').value.trim(), module_code: $('moduleCode').value.trim(), video_url: $('videoUrl').value.trim() });
+  return payload;
+}
+async function save() {
+  let payload; try { payload = buildPayload(); } catch (err) { showMsg($('editorMsg'), err.message, 'error'); return; }
+  const plural = editor.kind === 'quiz' ? 'quizzes' : 'lessons'; const url = editor.id ? `/admin/${plural}/${editor.id}` : `/admin/${plural}`;
+  $('saveBtn').disabled = true;
+  try { const result = await api(url, {method: editor.id ? 'PUT' : 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)}); showMsg($('editorMsg'), `Saved “${result.title}”.`, 'ok'); editor.id = result.id; $('deleteBtn').classList.remove('hidden'); await loadLists(); }
+  catch (err) { showMsg($('editorMsg'), err.message, 'error'); } finally { $('saveBtn').disabled = false; }
+}
+async function remove() {
+  if (!editor.id || !confirm('Delete this item and all of its student submissions/comments permanently? This cannot be undone.')) return;
+  const plural = editor.kind === 'quiz' ? 'quizzes' : 'lessons';
+  try { await api(`/admin/${plural}/${editor.id}`, {method:'DELETE'}); $('editorCard').classList.add('hidden'); await loadLists(); }
+  catch (err) { showMsg($('editorMsg'), err.message, 'error'); }
+}
+$('unlockBtn').addEventListener('click', () => unlock($('pinInput').value.trim()));
+$('pinInput').addEventListener('keydown', event => { if (event.key === 'Enter') $('unlockBtn').click(); });
+$('newQuizBtn').addEventListener('click', () => openEditor('quiz'));
+$('newLessonBtn').addEventListener('click', () => openEditor('lesson'));
+$('saveBtn').addEventListener('click', save); $('deleteBtn').addEventListener('click', remove);
+$('closeEditorBtn').addEventListener('click', () => $('editorCard').classList.add('hidden'));
+$('lockBtn').addEventListener('click', event => { event.preventDefault(); sessionStorage.removeItem('lecturerPin'); pin = null; $('appWrap').classList.add('hidden'); $('gateWrap').classList.remove('hidden'); });
+if (pin) unlock(pin);
+</script>
+</body>
+</html>

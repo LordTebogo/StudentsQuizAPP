@@ -67,7 +67,9 @@ class Question(Base):
     image_url = Column(Text)             # Cloudinary (or other) URL, optional
 
     quiz = relationship("Quiz", back_populates="questions")
-    answers = relationship("Answer", back_populates="question")
+    answers = relationship(
+        "Answer", back_populates="question", cascade="all, delete-orphan",
+    )
 
 
 class Submission(Base):
@@ -145,7 +147,9 @@ class LessonQuestion(Base):
     image_url = Column(Text)
 
     lesson = relationship("Lesson", back_populates="questions")
-    answers = relationship("LessonAnswer", back_populates="question")
+    answers = relationship(
+        "LessonAnswer", back_populates="question", cascade="all, delete-orphan",
+    )
 
 
 class LessonSubmission(Base):
