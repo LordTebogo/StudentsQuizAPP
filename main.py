@@ -30,6 +30,10 @@ import io
 import json
 import os
 import re
+import base64
+import hashlib
+import hmac
+import secrets
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
@@ -65,6 +69,8 @@ from models import (
     LessonComment,
     LessonQuestion,
     LessonSubmission,
+    Lecturer,
+    LecturerModule,
     Question,
     Quiz,
     Submission,
@@ -78,6 +84,7 @@ from cloudinary_utils import upload_image_bytes, upload_video_bytes
 # variable too (os.getenv("LECTURER_PIN", "90435")) so it isn't baked into
 # the deployed code.
 LECTURER_PIN = os.getenv("LECTURER_PIN", "90435")
+LECTURER_SESSION_SECRET = os.getenv("LECTURER_SESSION_SECRET", LECTURER_PIN)
 
 # Optional convenience folder: images committed into the repo ahead of time
 # (e.g. shipped alongside the code) can be referenced by filename in a quiz
@@ -112,6 +119,19 @@ def ensure_quiz_module_code():
 
 
 ensure_quiz_module_code()
+
+
+def ensure_lecturer_ownership_schema():
+    """Add ownership columns to installations created before lecturer accounts."""
+    for table in ("quizzes", "lessons"):
+        if "lecturer_id" not in {column["name"] for column in inspect(engine).get_columns(table)}:
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN lecturer_id INTEGER"))
+        with engine.begin() as conn:
+            conn.execute(text(f"CREATE INDEX IF NOT EXISTS ix_{table}_lecturer_id ON {table} (lecturer_id)"))
+
+
+ensure_lecturer_ownership_schema()
 
 app = FastAPI(title="Quiz + Video Lessons App")
 
@@ -182,6 +202,126 @@ class AdminLessonInput(BaseModel):
     questions: List[AdminQuestionInput]
 
 
+class LecturerLogin(BaseModel):
+    email: str
+    password: str
+
+
+class AdminLecturerInput(BaseModel):
+    full_name: str
+    email: str
+    password: str
+    phone: str = ""
+    institution: str = ""
+    bio: str = ""
+    approved: bool = False
+    active: bool = True
+    module_limit: int = 1
+    module_codes: List[str] = []
+
+
+class AdminLecturerUpdate(BaseModel):
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    institution: Optional[str] = None
+    bio: Optional[str] = None
+    approved: Optional[bool] = None
+    active: Optional[bool] = None
+    module_limit: Optional[int] = None
+    module_codes: Optional[List[str]] = None
+
+
+def _password_hash(password: str, salt: Optional[str] = None) -> str:
+    salt = salt or secrets.token_hex(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 210_000).hex()
+    return f"{salt}${digest}"
+
+
+def _password_matches(password: str, stored: str) -> bool:
+    try:
+        salt, _ = stored.split("$", 1)
+    except ValueError:
+        return False
+    return hmac.compare_digest(_password_hash(password, salt), stored)
+
+
+def _issue_lecturer_token(lecturer_id: int) -> str:
+    expires = int((datetime.now(timezone.utc) + timedelta(hours=12)).timestamp())
+    payload = f"{lecturer_id}:{expires}".encode("utf-8")
+    signature = hmac.new(LECTURER_SESSION_SECRET.encode("utf-8"), payload, hashlib.sha256).digest()
+    return f"{base64.urlsafe_b64encode(payload).decode().rstrip('=')}.{base64.urlsafe_b64encode(signature).decode().rstrip('=')}"
+
+
+def _lecturer_id_from_token(token: Optional[str]) -> int:
+    if not token or "." not in token:
+        raise HTTPException(status_code=401, detail="Sign in as a lecturer first")
+    encoded_payload, encoded_signature = token.split(".", 1)
+    try:
+        payload = base64.urlsafe_b64decode(encoded_payload + "=" * (-len(encoded_payload) % 4))
+        signature = base64.urlsafe_b64decode(encoded_signature + "=" * (-len(encoded_signature) % 4))
+        expected = hmac.new(LECTURER_SESSION_SECRET.encode("utf-8"), payload, hashlib.sha256).digest()
+        lecturer_id_text, expires_text = payload.decode("utf-8").split(":", 1)
+        if not hmac.compare_digest(signature, expected) or int(expires_text) < int(datetime.now(timezone.utc).timestamp()):
+            raise ValueError
+        return int(lecturer_id_text)
+    except (ValueError, UnicodeDecodeError):
+        raise HTTPException(status_code=401, detail="Your lecturer session has expired. Sign in again.")
+
+
+def require_lecturer_account(
+    x_lecturer_token: Optional[str] = Header(None, alias="X-Lecturer-Token"),
+    db: Session = Depends(get_db),
+) -> Lecturer:
+    lecturer = db.query(Lecturer).filter(Lecturer.id == _lecturer_id_from_token(x_lecturer_token)).first()
+    if not lecturer or not lecturer.active or not lecturer.approved:
+        raise HTTPException(status_code=403, detail="Your lecturer account is not active and approved")
+    return lecturer
+
+
+def _lecturer_profile(lecturer: Lecturer) -> dict:
+    return {
+        "id": lecturer.id, "full_name": lecturer.full_name, "email": lecturer.email,
+        "phone": lecturer.phone or "", "institution": lecturer.institution or "",
+        "bio": lecturer.bio or "", "profile_image_url": lecturer.profile_image_url,
+        "approved": lecturer.approved, "active": lecturer.active,
+        "module_limit": lecturer.module_limit,
+        "module_codes": [item.module_code for item in lecturer.modules],
+        "created_at": lecturer.created_at,
+    }
+
+
+def _set_lecturer_modules(db: Session, lecturer: Lecturer, module_codes: List[str], module_limit: int):
+    normalized = sorted({code.strip().upper() for code in module_codes if code and code.strip()})
+    if module_limit < 0 or len(normalized) > module_limit:
+        raise HTTPException(status_code=400, detail="The module assignments exceed this lecturer's module limit")
+    for item in list(lecturer.modules):
+        db.delete(item)
+    for code in normalized:
+        db.add(LecturerModule(lecturer_id=lecturer.id, module_code=code))
+
+
+def _require_module_access(db: Session, lecturer: Lecturer, module_code: str):
+    code = (module_code or "").strip().upper()
+    allowed = db.query(LecturerModule).filter(LecturerModule.lecturer_id == lecturer.id, LecturerModule.module_code == code).first()
+    if not allowed:
+        raise HTTPException(status_code=403, detail=f"You are not assigned to the {code} module")
+    return code
+
+
+def _require_owned_quiz(db: Session, quiz_id: int, lecturer: Lecturer) -> Quiz:
+    quiz = db.query(Quiz).filter(Quiz.id == quiz_id, Quiz.lecturer_id == lecturer.id).first()
+    if not quiz:
+        raise HTTPException(status_code=404, detail="Quiz not found in your lecturer workspace")
+    return quiz
+
+
+def _require_owned_lesson(db: Session, lesson_id: int, lecturer: Lecturer) -> Lesson:
+    lesson = db.query(Lesson).filter(Lesson.id == lesson_id, Lesson.lecturer_id == lecturer.id).first()
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found in your lecturer workspace")
+    return lesson
+
+
 def require_lecturer_pin(x_lecturer_pin: Optional[str] = Header(None, alias="X-Lecturer-Pin")):
     """Dependency guarding lecturer-only routes. Send the PIN as the
     'X-Lecturer-Pin' header. Raises 401 if it's missing or wrong."""
@@ -196,6 +336,71 @@ def verify_pin(payload: PinCheck):
     if payload.pin != LECTURER_PIN:
         raise HTTPException(status_code=401, detail="Incorrect PIN")
     return {"ok": True}
+
+
+@app.post("/lecturers/register")
+async def register_lecturer(
+    full_name: str = Form(...),
+    email: str = Form(...),
+    password: str = Form(...),
+    phone: str = Form(""),
+    institution: str = Form(""),
+    bio: str = Form(""),
+    profile_image: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db),
+):
+    email = email.strip().lower()
+    if not full_name.strip() or "@" not in email or len(password) < 8:
+        raise HTTPException(status_code=400, detail="Provide a full name, valid email, and a password of at least 8 characters")
+    if db.query(Lecturer).filter(Lecturer.email == email).first():
+        raise HTTPException(status_code=409, detail="A lecturer profile already uses this email")
+    image_url = None
+    if profile_image and profile_image.filename:
+        image_url = upload_image_bytes(await profile_image.read(), folder="lecturer_profiles")
+    lecturer = Lecturer(
+        full_name=full_name.strip(), email=email, password_hash=_password_hash(password),
+        phone=phone.strip(), institution=institution.strip(), bio=bio.strip(),
+        profile_image_url=image_url, approved=False, active=True, module_limit=0,
+        created_at=datetime.utcnow().isoformat() + "Z",
+    )
+    db.add(lecturer)
+    db.commit()
+    return {"ok": True, "message": "Profile created. An administrator must approve it and assign modules before you can sign in."}
+
+
+@app.post("/lecturers/login")
+def lecturer_login(payload: LecturerLogin, db: Session = Depends(get_db)):
+    lecturer = db.query(Lecturer).filter(Lecturer.email == payload.email.strip().lower()).first()
+    if not lecturer or not _password_matches(payload.password, lecturer.password_hash):
+        raise HTTPException(status_code=401, detail="Incorrect email or password")
+    if not lecturer.active:
+        raise HTTPException(status_code=403, detail="This lecturer profile is inactive")
+    if not lecturer.approved:
+        raise HTTPException(status_code=403, detail="Your profile is waiting for administrator approval")
+    return {"token": _issue_lecturer_token(lecturer.id), "lecturer": _lecturer_profile(lecturer)}
+
+
+@app.get("/lecturer/me")
+def lecturer_me(lecturer: Lecturer = Depends(require_lecturer_account)):
+    return _lecturer_profile(lecturer)
+
+
+@app.put("/lecturer/me")
+async def update_lecturer_me(
+    full_name: str = Form(...),
+    phone: str = Form(""),
+    institution: str = Form(""),
+    bio: str = Form(""),
+    profile_image: Optional[UploadFile] = File(None),
+    lecturer: Lecturer = Depends(require_lecturer_account),
+    db: Session = Depends(get_db),
+):
+    lecturer.full_name, lecturer.phone = full_name.strip(), phone.strip()
+    lecturer.institution, lecturer.bio = institution.strip(), bio.strip()
+    if profile_image and profile_image.filename:
+        lecturer.profile_image_url = upload_image_bytes(await profile_image.read(), folder="lecturer_profiles")
+    db.commit()
+    return _lecturer_profile(lecturer)
 
 
 # ---------------------------------------------------------------------------
@@ -469,7 +674,7 @@ async def upload_quiz(
     file: UploadFile = File(...),
     module_code: str = Form("GENERAL"),
     images: List[UploadFile] = File(default=[]),
-    _pin_ok: bool = Depends(require_lecturer_pin),
+    lecturer: Lecturer = Depends(require_lecturer_account),
     db: Session = Depends(get_db),
 ):
     content = await file.read()
@@ -483,8 +688,8 @@ async def upload_quiz(
     if not questions:
         raise HTTPException(status_code=400, detail="Quiz JSON must include a 'questions' list")
 
-    module_code = (module_code or "").strip().upper() or "GENERAL"
-    quiz = Quiz(title=title, module_code=module_code, created_at=datetime.utcnow().isoformat() + "Z")
+    module_code = _require_module_access(db, lecturer, module_code)
+    quiz = Quiz(title=title, module_code=module_code, lecturer_id=lecturer.id, created_at=datetime.utcnow().isoformat() + "Z")
     db.add(quiz)
     db.flush()  # assigns quiz.id without committing yet
 
@@ -543,8 +748,8 @@ async def upload_quiz(
 
 
 @app.get("/quizzes")
-def list_quizzes(_pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
-    rows = db.query(Quiz).order_by(Quiz.id.desc()).all()
+def list_quizzes(lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db)):
+    rows = db.query(Quiz).filter(Quiz.lecturer_id == lecturer.id).order_by(Quiz.id.desc()).all()
     return [{"id": r.id, "title": r.title, "module_code": r.module_code, "created_at": r.created_at} for r in rows]
 
 
@@ -662,7 +867,8 @@ def submit_quiz(quiz_id: int, submission: QuizSubmission, db: Session = Depends(
 # ---------------------------------------------------------------------------
 
 @app.get("/lecturer/quiz/{quiz_id}/submissions")
-def list_submissions(quiz_id: int, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+def list_submissions(quiz_id: int, lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db)):
+    _require_owned_quiz(db, quiz_id, lecturer)
     rows = (
         db.query(Submission)
         .filter(Submission.quiz_id == quiz_id)
@@ -680,10 +886,11 @@ def list_submissions(quiz_id: int, _pin_ok: bool = Depends(require_lecturer_pin)
 
 
 @app.get("/lecturer/submission/{submission_id}")
-def get_submission_detail(submission_id: int, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+def get_submission_detail(submission_id: int, lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db)):
     submission = db.query(Submission).filter(Submission.id == submission_id).first()
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
+    _require_owned_quiz(db, submission.quiz_id, lecturer)
 
     answers = (
         db.query(Answer)
@@ -720,10 +927,11 @@ def get_submission_detail(submission_id: int, _pin_ok: bool = Depends(require_le
 # ---------------------------------------------------------------------------
 
 @app.post("/lecturer/submission/{submission_id}/mark")
-def mark_answers(submission_id: int, payload: MarkSubmissionRequest, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+def mark_answers(submission_id: int, payload: MarkSubmissionRequest, lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db)):
     submission = db.query(Submission).filter(Submission.id == submission_id).first()
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
+    _require_owned_quiz(db, submission.quiz_id, lecturer)
 
     for m in payload.marks:
         answer = (
@@ -763,7 +971,11 @@ def mark_answers(submission_id: int, payload: MarkSubmissionRequest, _pin_ok: bo
 # ---------------------------------------------------------------------------
 
 @app.get("/lecturer/submission/{submission_id}/pdf")
-def download_submission_pdf(submission_id: int, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+def download_submission_pdf(submission_id: int, lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db)):
+    submission = db.query(Submission).filter(Submission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    _require_owned_quiz(db, submission.quiz_id, lecturer)
     styles = build_pdf_stylesheet()
     flow = build_submission_pdf(db, submission_id, styles)
     submission = db.query(Submission).filter(Submission.id == submission_id).first()
@@ -798,12 +1010,14 @@ def download_student_submission_pdf(submission_id: int, student_id: str, db: Ses
 
 
 @app.get("/lecturer/quiz/{quiz_id}/pdf")
-def download_quiz_pdf(quiz_id: int, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+def download_quiz_pdf(quiz_id: int, lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db)):
     """Download every submission for a quiz as one combined PDF, one
     student's marked answers per section (page break between students)."""
     quiz = db.query(Quiz).filter(Quiz.id == quiz_id).first()
     if not quiz:
         raise HTTPException(status_code=404, detail="Quiz not found")
+    if quiz.lecturer_id != lecturer.id:
+        raise HTTPException(status_code=404, detail="Quiz not found in your lecturer workspace")
 
     submission_ids = [
         s.id for s in db.query(Submission)
@@ -851,7 +1065,7 @@ async def upload_lesson(
     video: UploadFile = File(...),
     module_code: str = Form(...),
     images: List[UploadFile] = File(default=[]),
-    _pin_ok: bool = Depends(require_lecturer_pin),
+    lecturer: Lecturer = Depends(require_lecturer_account),
     db: Session = Depends(get_db),
 ):
     content = await file.read()
@@ -869,9 +1083,7 @@ async def upload_lesson(
     if not video.filename:
         raise HTTPException(status_code=400, detail="A video file is required")
 
-    module_code = (module_code or "").strip().upper()
-    if not module_code:
-        raise HTTPException(status_code=400, detail="A module code is required")
+    module_code = _require_module_access(db, lecturer, module_code)
 
     # Validate question structure up front (type, options, answer, and that
     # any referenced image can actually be found) before uploading the
@@ -912,6 +1124,7 @@ async def upload_lesson(
         title=title,
         description=description,
         module_code=module_code,
+        lecturer_id=lecturer.id,
         video_url=video_url,
         created_at=datetime.utcnow().isoformat() + "Z",
     )
@@ -974,6 +1187,12 @@ def list_lessons(module_code: Optional[str] = None, db: Session = Depends(get_db
          "module_code": l.module_code, "created_at": l.created_at}
         for l in rows
     ]
+
+
+@app.get("/lecturer/lessons")
+def list_my_lessons(lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db)):
+    rows = db.query(Lesson).filter(Lesson.lecturer_id == lecturer.id).order_by(Lesson.id.desc()).all()
+    return [{"id": l.id, "title": l.title, "description": l.description, "module_code": l.module_code, "created_at": l.created_at} for l in rows]
 
 
 @app.get("/modules")
@@ -1129,7 +1348,8 @@ def get_my_lesson_submission(lesson_id: int, student_id: str, db: Session = Depe
 # ---------------------------------------------------------------------------
 
 @app.get("/lecturer/lesson/{lesson_id}/submissions")
-def list_lesson_submissions(lesson_id: int, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+def list_lesson_submissions(lesson_id: int, lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db)):
+    _require_owned_lesson(db, lesson_id, lecturer)
     rows = (
         db.query(LessonSubmission)
         .filter(LessonSubmission.lesson_id == lesson_id)
@@ -1147,10 +1367,11 @@ def list_lesson_submissions(lesson_id: int, _pin_ok: bool = Depends(require_lect
 
 
 @app.get("/lecturer/lesson/submission/{submission_id}")
-def get_lesson_submission_detail(submission_id: int, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+def get_lesson_submission_detail(submission_id: int, lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db)):
     submission = db.query(LessonSubmission).filter(LessonSubmission.id == submission_id).first()
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
+    _require_owned_lesson(db, submission.lesson_id, lecturer)
 
     answers = (
         db.query(LessonAnswer)
@@ -1182,10 +1403,11 @@ def get_lesson_submission_detail(submission_id: int, _pin_ok: bool = Depends(req
 
 
 @app.post("/lecturer/lesson/submission/{submission_id}/mark")
-def mark_lesson_answers(submission_id: int, payload: MarkSubmissionRequest, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+def mark_lesson_answers(submission_id: int, payload: MarkSubmissionRequest, lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db)):
     submission = db.query(LessonSubmission).filter(LessonSubmission.id == submission_id).first()
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
+    _require_owned_lesson(db, submission.lesson_id, lecturer)
 
     for m in payload.marks:
         answer = (
@@ -1242,13 +1464,16 @@ def get_lesson_comments(lesson_id: int, db: Session = Depends(get_db)):
 def post_lesson_comment(
     lesson_id: int,
     payload: CommentCreate,
-    x_lecturer_pin: Optional[str] = Header(None, alias="X-Lecturer-Pin"),
+    x_lecturer_token: Optional[str] = Header(None, alias="X-Lecturer-Token"),
     db: Session = Depends(get_db),
 ):
     if not payload.comment_text.strip():
         raise HTTPException(status_code=400, detail="Comment can't be empty")
-    if payload.is_lecturer and x_lecturer_pin != LECTURER_PIN:
-        raise HTTPException(status_code=401, detail="Lecturer PIN required to post as the lecturer")
+    lecturer = None
+    if payload.is_lecturer:
+        lecturer = db.query(Lecturer).filter(Lecturer.id == _lecturer_id_from_token(x_lecturer_token)).first()
+        if not lecturer or not lecturer.active or not lecturer.approved:
+            raise HTTPException(status_code=401, detail="An approved lecturer account is required to post as a lecturer")
 
     lesson = db.query(Lesson).filter(Lesson.id == lesson_id).first()
     if not lesson:
@@ -1256,7 +1481,7 @@ def post_lesson_comment(
 
     comment = LessonComment(
         lesson_id=lesson_id,
-        author_name=payload.author_name.strip() or "Anonymous",
+        author_name=lecturer.full_name if lecturer else (payload.author_name.strip() or "Anonymous"),
         is_lecturer=payload.is_lecturer,
         comment_text=payload.comment_text.strip(),
         created_at=datetime.utcnow().isoformat() + "Z",
@@ -1434,6 +1659,62 @@ def admin_delete_lesson(lesson_id: int, _pin_ok: bool = Depends(require_lecturer
     if not lesson:
         raise HTTPException(status_code=404, detail="Lesson not found")
     db.delete(lesson)
+    db.commit()
+    return {"ok": True}
+
+
+@app.get("/admin/lecturers")
+def admin_list_lecturers(_pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    return [_lecturer_profile(item) for item in db.query(Lecturer).order_by(Lecturer.created_at.desc()).all()]
+
+
+@app.post("/admin/lecturers")
+def admin_create_lecturer(payload: AdminLecturerInput, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    email = payload.email.strip().lower()
+    if not payload.full_name.strip() or "@" not in email or len(payload.password) < 8:
+        raise HTTPException(status_code=400, detail="Provide a full name, valid email, and a password of at least 8 characters")
+    if db.query(Lecturer).filter(Lecturer.email == email).first():
+        raise HTTPException(status_code=409, detail="A lecturer profile already uses this email")
+    lecturer = Lecturer(
+        full_name=payload.full_name.strip(), email=email, password_hash=_password_hash(payload.password),
+        phone=payload.phone.strip(), institution=payload.institution.strip(), bio=payload.bio.strip(),
+        approved=payload.approved, active=payload.active, module_limit=payload.module_limit,
+        created_at=datetime.utcnow().isoformat() + "Z",
+    )
+    db.add(lecturer)
+    db.flush()
+    _set_lecturer_modules(db, lecturer, payload.module_codes, payload.module_limit)
+    db.commit()
+    return _lecturer_profile(lecturer)
+
+
+@app.put("/admin/lecturers/{lecturer_id}")
+def admin_update_lecturer(lecturer_id: int, payload: AdminLecturerUpdate, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    lecturer = db.query(Lecturer).filter(Lecturer.id == lecturer_id).first()
+    if not lecturer:
+        raise HTTPException(status_code=404, detail="Lecturer not found")
+    for field in ("full_name", "phone", "institution", "bio", "approved", "active", "module_limit"):
+        value = getattr(payload, field)
+        if value is not None:
+            setattr(lecturer, field, value.strip() if isinstance(value, str) else value)
+    if lecturer.module_limit < 0:
+        raise HTTPException(status_code=400, detail="Module limit cannot be negative")
+    if payload.module_codes is not None:
+        _set_lecturer_modules(db, lecturer, payload.module_codes, lecturer.module_limit)
+    elif len(lecturer.modules) > lecturer.module_limit:
+        raise HTTPException(status_code=400, detail="Increase the module limit before keeping these assignments")
+    db.commit()
+    return _lecturer_profile(lecturer)
+
+
+@app.delete("/admin/lecturers/{lecturer_id}")
+def admin_delete_lecturer(lecturer_id: int, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    lecturer = db.query(Lecturer).filter(Lecturer.id == lecturer_id).first()
+    if not lecturer:
+        raise HTTPException(status_code=404, detail="Lecturer not found")
+    if lecturer.quizzes or lecturer.lessons:
+        raise HTTPException(status_code=409, detail="This lecturer owns content. Reassign or delete that content before removing the profile.")
+    db.delete(lecturer)
     db.commit()
     return {"ok": True}
 

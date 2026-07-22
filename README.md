@@ -123,7 +123,7 @@ A couple of Render-specific things worth knowing:
   connection errors — if you still see connection drops, check whether your
   provider recommends a different pool mode/port for app servers.
 
-## 5. Lecturer PIN
+## 5. Administrator PIN
 
 The Lecturer page is protected by a shared PIN, **90435** by default (or
 whatever you set `LECTURER_PIN` to).
@@ -135,7 +135,19 @@ whatever you set `LECTURER_PIN` to).
 - The lecturer stays signed in for the browser session (via `sessionStorage`); there's a "Lock" link in the top nav to sign out manually.
 - This is a simple shared PIN, not per-user accounts — fine for a trusted classroom setting, not for anything sensitive.
 
-## 6. Quiz modules and admin content management
+## 6. Lecturer accounts, modules, and admin management
+
+The shared lecturer PIN is now used for the **admin workspace** only. Lecturers
+and tutors create their own profile at `/static/lecturer.html`, including a
+profile image, contact details, institution, and professional bio. New profiles
+are pending until an administrator approves and activates them.
+
+Administrators use `/static/admin.html` to create or remove lecturer profiles,
+approve or deactivate them, assign their permitted module codes, and set the
+maximum number of modules each lecturer may teach. Multiple lecturers may be
+assigned to one module, but every quiz and lesson is owned by the account that
+uploaded it. A lecturer can only view, mark, or download student scripts for
+their own uploaded work.
 
 Quizzes are now organised by a **module code**, just like video lessons. When
 a lecturer uploads a quiz, they enter a code such as `BIO101`. Students open
@@ -147,8 +159,8 @@ Existing quizzes are automatically assigned to the `GENERAL` module when the
 app next starts. The required database column and index are added on startup
 without deleting existing quiz data.
 
-The protected admin workspace is at `/static/admin.html`. It uses the same
-lecturer PIN and can create, view, edit, and delete quizzes and video lessons.
+The protected admin workspace is at `/static/admin.html`. It uses the admin
+PIN and can create, view, edit, and delete quizzes and video lessons.
 Content with student submissions cannot be edited; create a new version
 instead. Deleting content also deletes its related submissions (and, for
 lessons, public comments), so use it carefully.

@@ -13,19 +13,33 @@
 </head>
 <body>
 
-<!-- PIN gate -->
+<!-- Lecturer account gate -->
 <div class="wrap" id="gateWrap">
   <header class="top">
     <div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Quiz<span>Mark</span></div><div class="brand-tagline">Bioscientist</div></div></div>
     <nav><a href="/static/index.html">Home</a><a href="/static/student.html">Student view</a><a href="/static/lessons_lecturer.html">Video lessons</a></nav>
   </header>
   <h1>Lecturer sign-in</h1>
-  <p class="lede">Enter the lecturer PIN to upload quizzes and mark submissions.</p>
+  <p class="lede">Sign in to manage only your own quizzes, modules, and student scripts.</p>
   <div class="card">
-    <label for="pinInput">PIN</label>
-    <input type="text" id="pinInput" inputmode="numeric" autocomplete="off" placeholder="Enter PIN">
-    <button class="btn" id="unlockBtn">Unlock</button>
+    <label for="emailInput">Email</label>
+    <input type="text" id="emailInput" autocomplete="email" placeholder="you@example.com">
+    <label for="passwordInput">Password</label>
+    <input type="password" id="passwordInput" autocomplete="current-password" placeholder="Your password">
+    <button class="btn" id="unlockBtn">Sign in</button>
     <div id="pinMsg"></div>
+  </div>
+  <div class="card">
+    <h2>Create lecturer profile</h2>
+    <p class="muted">New profiles need administrator approval and module assignment before they can sign in.</p>
+    <label for="registerName">Full name</label><input id="registerName" type="text" placeholder="Full name">
+    <label for="registerEmail">Email</label><input id="registerEmail" type="text" placeholder="you@example.com">
+    <label for="registerPassword">Password</label><input id="registerPassword" type="password" placeholder="At least 8 characters">
+    <label for="registerPhone">Phone</label><input id="registerPhone" type="text" placeholder="Optional">
+    <label for="registerInstitution">Institution</label><input id="registerInstitution" type="text" placeholder="School or university">
+    <label for="registerBio">Professional bio</label><textarea id="registerBio" placeholder="Your tutoring background and subjects"></textarea>
+    <label for="registerImage">Profile image</label><input id="registerImage" type="file" accept="image/*">
+    <button class="btn secondary" id="registerBtn">Submit profile for approval</button><div id="registerMsg"></div>
   </div>
 </div>
 
@@ -38,6 +52,8 @@
 
   <h1>Lecturer</h1>
   <p class="lede">Upload a quiz to a module, share the module link with your class, then mark long answers as submissions come in.</p>
+  <div class="card"><div class="profile-strip"><img id="profileImage" class="profile-avatar hidden" alt="Lecturer profile image"><div id="profileSummary" class="muted"></div><button class="btn secondary" id="editProfileBtn">Edit profile</button></div></div>
+  <div class="card hidden" id="profileCard"><h2>My lecturer profile</h2><label for="profileName">Full name</label><input id="profileName" type="text"><label for="profilePhone">Phone</label><input id="profilePhone" type="text"><label for="profileInstitution">Institution</label><input id="profileInstitution" type="text"><label for="profileBio">Professional bio</label><textarea id="profileBio"></textarea><label for="profileUpload">Profile image</label><input id="profileUpload" type="file" accept="image/*"><button class="btn" id="saveProfileBtn">Save profile</button><div id="profileMsg"></div></div>
 
   <!-- Upload -->
   <div class="card">
@@ -108,7 +124,7 @@
 const $ = (id) => document.getElementById(id);
 let currentQuizId = null;
 let currentSubmissionId = null;
-let LECTURER_PIN = sessionStorage.getItem('lecturerPin') || null;
+let LECTURER_TOKEN = sessionStorage.getItem('lecturerToken') || null;
 
 // Always display times in South African time (SAST, UTC+2), regardless of
 // the viewing device's own timezone/locale settings.
@@ -121,9 +137,9 @@ function formatSAST(isoString) {
   }) + ' SAST';
 }
 
-async function api(path, options = {}, needsPin = false) {
-  if (needsPin) {
-    options.headers = Object.assign({}, options.headers, { 'X-Lecturer-Pin': LECTURER_PIN });
+async function api(path, options = {}, needsAuth = false) {
+  if (needsAuth) {
+    options.headers = Object.assign({}, options.headers, { 'X-Lecturer-Token': LECTURER_TOKEN });
   }
   const res = await fetch(path, options);
   let data = null;
@@ -139,11 +155,17 @@ function showMsg(el, text, kind) {
   el.innerHTML = `<div class="msg ${kind}">${text}</div>`;
 }
 
-// Fetches a PDF from a lecturer-only endpoint (with the PIN header) and
+function applyProfile(profile) {
+  $('profileSummary').textContent = `${profile.full_name} · ${profile.institution || 'Lecturer'} · Assigned modules: ${profile.module_codes.join(', ') || 'None yet'}`;
+  $('profileName').value = profile.full_name || ''; $('profilePhone').value = profile.phone || ''; $('profileInstitution').value = profile.institution || ''; $('profileBio').value = profile.bio || '';
+  if (profile.profile_image_url) { $('profileImage').src = profile.profile_image_url; $('profileImage').classList.remove('hidden'); }
+}
+
+// Fetches a PDF from a lecturer-only endpoint and
 // triggers a normal browser "Save file" download for it.
 async function downloadPdf(path, fallbackFilename, msgEl) {
   try {
-    const res = await fetch(path, { headers: { 'X-Lecturer-Pin': LECTURER_PIN } });
+    const res = await fetch(path, { headers: { 'X-Lecturer-Token': LECTURER_TOKEN } });
     if (!res.ok) {
       let detail = res.statusText;
       try { const data = await res.json(); if (data && data.detail) detail = data.detail; } catch (e) {}
@@ -170,53 +192,81 @@ async function downloadPdf(path, fallbackFilename, msgEl) {
   }
 }
 
-// ---- PIN gate --------------------------------------------------------
-async function tryUnlock(pin) {
+// ---- Lecturer account gate ------------------------------------------
+async function tryUnlock(email, password) {
   const msgBox = $('pinMsg');
   $('unlockBtn').disabled = true;
   try {
-    await api('/lecturer/verify-pin', {
+    const result = await api('/lecturers/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pin }),
+      body: JSON.stringify({ email, password }),
     });
-    LECTURER_PIN = pin;
-    sessionStorage.setItem('lecturerPin', pin);
+    LECTURER_TOKEN = result.token;
+    sessionStorage.setItem('lecturerToken', result.token);
     $('gateWrap').classList.add('hidden');
     $('appWrap').classList.remove('hidden');
+    applyProfile(result.lecturer);
     loadQuizzes();
   } catch (err) {
-    sessionStorage.removeItem('lecturerPin');
-    showMsg(msgBox, 'Incorrect PIN.', 'error');
+    sessionStorage.removeItem('lecturerToken');
+    showMsg(msgBox, err.message, 'error');
   } finally {
     $('unlockBtn').disabled = false;
   }
 }
 
 $('unlockBtn').addEventListener('click', () => {
-  const pin = $('pinInput').value.trim();
-  if (!pin) {
-    showMsg($('pinMsg'), 'Enter the PIN.', 'error');
+  const email = $('emailInput').value.trim();
+  const password = $('passwordInput').value;
+  if (!email || !password) {
+    showMsg($('pinMsg'), 'Enter your email and password.', 'error');
     return;
   }
-  tryUnlock(pin);
+  tryUnlock(email, password);
 });
-$('pinInput').addEventListener('keydown', (e) => {
+$('passwordInput').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') $('unlockBtn').click();
 });
 $('lockBtn').addEventListener('click', (e) => {
   e.preventDefault();
-  sessionStorage.removeItem('lecturerPin');
-  LECTURER_PIN = null;
+  sessionStorage.removeItem('lecturerToken');
+  LECTURER_TOKEN = null;
   $('appWrap').classList.add('hidden');
   $('gateWrap').classList.remove('hidden');
-  $('pinInput').value = '';
+  $('passwordInput').value = '';
 });
 
-// If a PIN was already verified this session, skip straight to the app.
-if (LECTURER_PIN) {
-  tryUnlock(LECTURER_PIN);
+// If a lecturer session exists, restore the workspace.
+if (LECTURER_TOKEN) {
+  api('/lecturer/me', {}, true).then(profile => {
+    $('gateWrap').classList.add('hidden'); $('appWrap').classList.remove('hidden');
+    applyProfile(profile);
+    loadQuizzes();
+  }).catch(() => { sessionStorage.removeItem('lecturerToken'); LECTURER_TOKEN = null; });
 }
+
+$('registerBtn').addEventListener('click', async () => {
+  const fullName = $('registerName').value.trim();
+  const email = $('registerEmail').value.trim();
+  const password = $('registerPassword').value;
+  if (!fullName || !email || !password) { showMsg($('registerMsg'), 'Full name, email, and password are required.', 'error'); return; }
+  const data = new FormData();
+  data.append('full_name', fullName); data.append('email', email); data.append('password', password);
+  data.append('phone', $('registerPhone').value.trim()); data.append('institution', $('registerInstitution').value.trim()); data.append('bio', $('registerBio').value.trim());
+  if ($('registerImage').files.length) data.append('profile_image', $('registerImage').files[0]);
+  $('registerBtn').disabled = true;
+  try { const result = await api('/lecturers/register', { method: 'POST', body: data }); showMsg($('registerMsg'), result.message, 'ok'); }
+  catch (err) { showMsg($('registerMsg'), err.message, 'error'); }
+  finally { $('registerBtn').disabled = false; }
+});
+
+$('editProfileBtn').addEventListener('click', () => $('profileCard').classList.toggle('hidden'));
+$('saveProfileBtn').addEventListener('click', async () => {
+  const data = new FormData(); data.append('full_name', $('profileName').value.trim()); data.append('phone', $('profilePhone').value.trim()); data.append('institution', $('profileInstitution').value.trim()); data.append('bio', $('profileBio').value.trim());
+  if ($('profileUpload').files.length) data.append('profile_image', $('profileUpload').files[0]);
+  try { const profile = await api('/lecturer/me', {method:'PUT', body:data}, true); applyProfile(profile); showMsg($('profileMsg'), 'Profile saved.', 'ok'); } catch (err) { showMsg($('profileMsg'), err.message, 'error'); }
+});
 
 // ---- Upload quiz -----------------------------------------------------
 $('uploadBtn').addEventListener('click', async () => {

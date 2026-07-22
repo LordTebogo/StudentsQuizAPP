@@ -29,6 +29,26 @@
     <section class="card"><h2>Video lessons</h2><button class="btn" id="newLessonBtn">New lesson</button><div id="lessonList" class="admin-list"></div></section>
   </div>
 
+  <section class="card">
+    <div class="admin-editor-heading"><div><span class="kicker">People & permissions</span><h2>Lecturer management</h2></div><button class="btn secondary" id="newLecturerBtn">New lecturer</button></div>
+    <div class="admin-grid">
+      <div>
+        <label for="lecturerName">Full name</label><input id="lecturerName" type="text" placeholder="Full name">
+        <label for="lecturerEmail">Email</label><input id="lecturerEmail" type="text" placeholder="you@example.com">
+        <label for="lecturerPassword">Temporary password</label><input id="lecturerPassword" type="password" placeholder="At least 8 characters">
+        <label for="lecturerPhone">Phone</label><input id="lecturerPhone" type="text" placeholder="Optional">
+        <label for="lecturerInstitution">Institution</label><input id="lecturerInstitution" type="text" placeholder="School or university">
+        <label for="lecturerBio">Professional bio</label><textarea id="lecturerBio" placeholder="Tutoring background"></textarea>
+        <label for="lecturerModules">Assigned module codes</label><input id="lecturerModules" type="text" placeholder="e.g. BIO101, BIO102">
+        <label for="lecturerLimit">Module limit</label><input id="lecturerLimit" type="number" min="0" value="1">
+        <label class="check-label"><input id="lecturerApproved" type="checkbox"> Approved</label>
+        <label class="check-label"><input id="lecturerActive" type="checkbox" checked> Active</label>
+        <button class="btn" id="saveLecturerBtn">Save lecturer</button><button class="btn secondary hidden" id="deleteLecturerBtn">Remove lecturer</button><div id="lecturerMsg"></div>
+      </div>
+      <div><h3>Lecturer profiles</h3><div id="lecturerList" class="admin-list"></div></div>
+    </div>
+  </section>
+
   <section class="card hidden" id="editorCard">
     <div class="admin-editor-heading"><div><span class="kicker" id="editorKicker">Create</span><h2 id="editorTitle">New content</h2></div><button class="btn secondary" id="closeEditorBtn">Close</button></div>
     <div id="quizFields">
@@ -51,6 +71,7 @@
 const $ = id => document.getElementById(id);
 let pin = sessionStorage.getItem('lecturerPin') || null;
 let editor = { kind: null, id: null };
+let selectedLecturerId = null;
 const quizTemplate = [{ type: 'mcq', question: 'Question text', options: ['Option A', 'Option B'], correct_answer: 'Option A', marks: 1, image_url: '' }];
 const lessonTemplate = [{ type: 'short', question: 'Question text', correct_answer: 'Expected answer', marks: 1, image_url: '' }];
 
@@ -93,9 +114,36 @@ function renderList(target, items, kind) {
   $(target).querySelectorAll('[data-id]').forEach(button => button.addEventListener('click', () => edit(kind, button.dataset.id)));
 }
 async function loadLists() {
-  try { const [quizzes, lessons] = await Promise.all([api('/admin/quizzes'), api('/admin/lessons')]); renderList('quizList', quizzes, 'quiz'); renderList('lessonList', lessons, 'lesson'); }
+  try { const [quizzes, lessons] = await Promise.all([api('/admin/quizzes'), api('/admin/lessons')]); renderList('quizList', quizzes, 'quiz'); renderList('lessonList', lessons, 'lesson'); loadLecturers(); }
   catch (err) { showMsg($('editorMsg'), `Could not load content: ${err.message}`, 'error'); }
 }
+function lecturerFormPayload(includePassword) {
+  const modules = $('lecturerModules').value.split(',').map(code => code.trim()).filter(Boolean);
+  const payload = { full_name: $('lecturerName').value.trim(), phone: $('lecturerPhone').value.trim(), institution: $('lecturerInstitution').value.trim(), bio: $('lecturerBio').value.trim(), approved: $('lecturerApproved').checked, active: $('lecturerActive').checked, module_limit: Number($('lecturerLimit').value), module_codes: modules };
+  if (includePassword) { payload.email = $('lecturerEmail').value.trim(); payload.password = $('lecturerPassword').value; }
+  return payload;
+}
+function clearLecturerForm() {
+  selectedLecturerId = null;
+  ['lecturerName','lecturerEmail','lecturerPassword','lecturerPhone','lecturerInstitution','lecturerBio','lecturerModules'].forEach(id => $(id).value = '');
+  $('lecturerLimit').value = 1; $('lecturerApproved').checked = false; $('lecturerActive').checked = true; $('lecturerEmail').disabled = false; $('lecturerPassword').classList.remove('hidden'); $('deleteLecturerBtn').classList.add('hidden'); $('lecturerMsg').innerHTML = '';
+}
+function loadLecturers() {
+  api('/admin/lecturers').then(lecturers => {
+    $('lecturerList').innerHTML = lecturers.length ? lecturers.map(item => `<button class="admin-list-item" data-lecturer="${item.id}"><span><strong>${escapeHtml(item.full_name)}</strong><small>${escapeHtml(item.email)} · ${escapeHtml(item.module_codes.join(', ') || 'No modules')}</small></span><span class="badge ${item.active && item.approved ? 'done' : 'pending'}">${item.active ? (item.approved ? 'Active' : 'Awaiting approval') : 'Inactive'}</span></button>`).join('') : '<p class="muted">No lecturer profiles yet.</p>';
+    $('lecturerList').querySelectorAll('[data-lecturer]').forEach(button => button.addEventListener('click', () => editLecturer(button.dataset.lecturer, lecturers)));
+  }).catch(err => showMsg($('lecturerMsg'), err.message, 'error'));
+}
+function editLecturer(id, lecturers) {
+  const item = lecturers.find(lecturer => lecturer.id === Number(id)); if (!item) return;
+  selectedLecturerId = item.id; $('lecturerName').value = item.full_name; $('lecturerEmail').value = item.email; $('lecturerEmail').disabled = true; $('lecturerPassword').value = ''; $('lecturerPhone').value = item.phone || ''; $('lecturerInstitution').value = item.institution || ''; $('lecturerBio').value = item.bio || ''; $('lecturerModules').value = item.module_codes.join(', '); $('lecturerLimit').value = item.module_limit; $('lecturerApproved').checked = item.approved; $('lecturerActive').checked = item.active; $('deleteLecturerBtn').classList.remove('hidden'); $('lecturerMsg').innerHTML = '';
+}
+async function saveLecturer() {
+  const creating = !selectedLecturerId; const payload = lecturerFormPayload(creating);
+  try { const result = await api(creating ? '/admin/lecturers' : `/admin/lecturers/${selectedLecturerId}`, { method: creating ? 'POST' : 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) }); selectedLecturerId = result.id; showMsg($('lecturerMsg'), `Saved ${result.full_name}.`, 'ok'); loadLecturers(); }
+  catch (err) { showMsg($('lecturerMsg'), err.message, 'error'); }
+}
+async function deleteLecturer() { if (!selectedLecturerId || !confirm('Remove this lecturer profile? Profiles with owned quizzes or lessons cannot be removed.')) return; try { await api(`/admin/lecturers/${selectedLecturerId}`, {method:'DELETE'}); clearLecturerForm(); loadLecturers(); } catch (err) { showMsg($('lecturerMsg'), err.message, 'error'); } }
 function buildPayload() {
   let questions;
   try { questions = JSON.parse($('questionsJson').value); } catch (_) { throw new Error('Questions must be valid JSON.'); }
@@ -122,6 +170,9 @@ $('unlockBtn').addEventListener('click', () => unlock($('pinInput').value.trim()
 $('pinInput').addEventListener('keydown', event => { if (event.key === 'Enter') $('unlockBtn').click(); });
 $('newQuizBtn').addEventListener('click', () => openEditor('quiz'));
 $('newLessonBtn').addEventListener('click', () => openEditor('lesson'));
+$('newLecturerBtn').addEventListener('click', clearLecturerForm);
+$('saveLecturerBtn').addEventListener('click', saveLecturer);
+$('deleteLecturerBtn').addEventListener('click', deleteLecturer);
 $('saveBtn').addEventListener('click', save); $('deleteBtn').addEventListener('click', remove);
 $('closeEditorBtn').addEventListener('click', () => $('editorCard').classList.add('hidden'));
 $('lockBtn').addEventListener('click', event => { event.preventDefault(); sessionStorage.removeItem('lecturerPin'); pin = null; $('appWrap').classList.add('hidden'); $('gateWrap').classList.remove('hidden'); });

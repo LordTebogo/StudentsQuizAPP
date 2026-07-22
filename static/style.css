@@ -202,6 +202,11 @@ video { width: 100%; display: block; margin: 15px 0; border: 1px solid var(--lin
 .admin-list-item small { margin-top: 3px; color: var(--text-muted); font-family: var(--font-mono); font-size: .66rem; }
 .admin-editor-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
 .admin-editor-heading .btn { flex: 0 0 auto; margin-top: 0; }
+.profile-strip { display: flex; align-items: center; gap: 14px; }
+.profile-strip .btn { margin: 0 0 0 auto; }
+.profile-avatar { width: 54px; height: 54px; flex: 0 0 auto; object-fit: cover; border: 1px solid var(--cyan); border-radius: 50%; box-shadow: 0 0 18px rgba(34,211,238,.18); }
+.check-label { display: flex; align-items: center; gap: 9px; margin: 14px 0 0; font-family: var(--font-body); font-size: .86rem; letter-spacing: 0; text-transform: none; }
+.check-label input { width: auto; min-height: auto; accent-color: var(--cyan); }
 .json-editor { min-height: 360px; font-family: var(--font-mono); font-size: .78rem; line-height: 1.55; }
 #deleteBtn { color: #ffd6de; border-color: rgba(251,113,133,.48); background: rgba(190,24,93,.16); }
 #deleteBtn:hover { color: #fff; border-color: var(--danger); background: rgba(190,24,93,.28); }
@@ -213,6 +218,8 @@ video { width: 100%; display: block; margin: 15px 0; border: 1px solid var(--lin
   h1 { font-size: clamp(2.05rem, 12vw, 3.2rem); }
   .role-grid { grid-template-columns: 1fr; }
   .admin-grid { grid-template-columns: 1fr; }
+  .profile-strip { align-items: flex-start; flex-wrap: wrap; }
+  .profile-strip .btn { margin-left: 0; }
   .role-card { min-height: 176px; }
   .card { border-radius: 15px; }
   table { display: block; overflow-x: auto; white-space: nowrap; }

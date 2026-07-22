@@ -30,11 +30,12 @@
     <nav><a href="/static/index.html">Home</a><a href="/static/lessons_student.html">Student view</a></nav>
   </header>
   <h1>Lecturer sign-in</h1>
-  <p class="lede">Enter the lecturer PIN to upload video lessons and mark student answers.</p>
+  <p class="lede">Sign in to access only your own lessons and student scripts.</p>
   <div class="card">
-    <label for="pinInput">PIN</label>
-    <input type="text" id="pinInput" inputmode="numeric" autocomplete="off" placeholder="Enter PIN">
-    <button class="btn" id="unlockBtn">Unlock</button>
+    <label for="emailInput">Email</label><input type="text" id="emailInput" autocomplete="email" placeholder="you@example.com">
+    <label for="passwordInput">Password</label><input type="password" id="passwordInput" autocomplete="current-password" placeholder="Your password">
+    <button class="btn" id="unlockBtn">Sign in</button>
+    <p class="muted">Need a profile? <a href="/static/lecturer.html">Create one in the quiz workspace</a>.</p>
     <div id="pinMsg"></div>
   </div>
 </div>
@@ -124,7 +125,7 @@
 const $ = (id) => document.getElementById(id);
 let currentLessonId = null;
 let currentSubmissionId = null;
-let LECTURER_PIN = sessionStorage.getItem('lecturerPin') || null;
+let LECTURER_TOKEN = sessionStorage.getItem('lecturerToken') || null;
 
 function formatSAST(isoString) {
   const d = isoString ? new Date(isoString) : new Date();
@@ -135,9 +136,9 @@ function formatSAST(isoString) {
   }) + ' SAST';
 }
 
-async function api(path, options = {}, needsPin = false) {
-  if (needsPin) {
-    options.headers = Object.assign({}, options.headers, { 'X-Lecturer-Pin': LECTURER_PIN });
+async function api(path, options = {}, needsAuth = false) {
+  if (needsAuth) {
+    options.headers = Object.assign({}, options.headers, { 'X-Lecturer-Token': LECTURER_TOKEN });
   }
   const res = await fetch(path, options);
   let data = null;
@@ -158,44 +159,42 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-// ---- PIN gate --------------------------------------------------------
-async function tryUnlock(pin) {
+// ---- Lecturer account gate ------------------------------------------
+async function tryUnlock(email, password) {
   const msgBox = $('pinMsg');
   $('unlockBtn').disabled = true;
   try {
-    await api('/lecturer/verify-pin', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pin }),
-    });
-    LECTURER_PIN = pin;
-    sessionStorage.setItem('lecturerPin', pin);
+    const login = await api('/lecturers/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
+    LECTURER_TOKEN = login.token;
+    sessionStorage.setItem('lecturerToken', login.token);
     $('gateWrap').classList.add('hidden');
     $('appWrap').classList.remove('hidden');
     loadModules();
     loadLessons();
   } catch (err) {
-    sessionStorage.removeItem('lecturerPin');
-    showMsg(msgBox, 'Incorrect PIN.', 'error');
+    sessionStorage.removeItem('lecturerToken');
+    showMsg(msgBox, err.message, 'error');
   } finally {
     $('unlockBtn').disabled = false;
   }
 }
 $('unlockBtn').addEventListener('click', () => {
-  const pin = $('pinInput').value.trim();
-  if (!pin) { showMsg($('pinMsg'), 'Enter the PIN.', 'error'); return; }
-  tryUnlock(pin);
+  const email = $('emailInput').value.trim(), password = $('passwordInput').value;
+  if (!email || !password) { showMsg($('pinMsg'), 'Enter your email and password.', 'error'); return; }
+  tryUnlock(email, password);
 });
-$('pinInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('unlockBtn').click(); });
+$('passwordInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('unlockBtn').click(); });
 $('lockBtn').addEventListener('click', (e) => {
   e.preventDefault();
-  sessionStorage.removeItem('lecturerPin');
-  LECTURER_PIN = null;
+  sessionStorage.removeItem('lecturerToken');
+  LECTURER_TOKEN = null;
   $('appWrap').classList.add('hidden');
   $('gateWrap').classList.remove('hidden');
   $('pinInput').value = '';
 });
-if (LECTURER_PIN) tryUnlock(LECTURER_PIN);
+if (LECTURER_TOKEN) {
+  api('/lecturer/me', {}, true).then(() => { $('gateWrap').classList.add('hidden'); $('appWrap').classList.remove('hidden'); loadModules(); loadLessons(); }).catch(() => { sessionStorage.removeItem('lecturerToken'); LECTURER_TOKEN = null; });
+}
 
 // ---- Upload lesson -----------------------------------------------------
 $('uploadLessonBtn').addEventListener('click', async () => {
@@ -240,12 +239,13 @@ $('uploadLessonBtn').addEventListener('click', async () => {
 // ---- Modules (for the datalist suggestions + filter dropdown) -----------
 async function loadModules() {
   try {
-    const modules = await api('/modules');
-    $('moduleCodeOptions').innerHTML = modules.map(m => `<option value="${escapeHtml(m.module_code)}">`).join('');
+    const profile = await api('/lecturer/me', {}, true);
+    const modules = profile.module_codes || [];
+    $('moduleCodeOptions').innerHTML = modules.map(code => `<option value="${escapeHtml(code)}">`).join('');
     const filterSelect = $('moduleFilterSelect');
     const previousValue = filterSelect.value;
     filterSelect.innerHTML = '<option value="">All modules</option>' +
-      modules.map(m => `<option value="${escapeHtml(m.module_code)}">${escapeHtml(m.module_code)} (${m.lesson_count})</option>`).join('');
+      modules.map(code => `<option value="${escapeHtml(code)}">${escapeHtml(code)}</option>`).join('');
     filterSelect.value = previousValue; // preserve selection across refreshes if still valid
   } catch (err) {
     // non-critical — just leave the datalist/filter empty
@@ -258,9 +258,9 @@ async function loadLessons() {
   const select = $('lessonSelect');
   const moduleFilter = $('moduleFilterSelect').value;
   try {
-    const path = moduleFilter ? `/lessons?module_code=${encodeURIComponent(moduleFilter)}` : '/lessons';
-    const lessons = await api(path);
-    if (!lessons.length) {
+    const lessons = await api('/lecturer/lessons', {}, true);
+    const filteredLessons = moduleFilter ? lessons.filter(lesson => lesson.module_code === moduleFilter) : lessons;
+    if (!filteredLessons.length) {
       select.innerHTML = '<option value="">No lessons in this module yet</option>';
       return;
     }

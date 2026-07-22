@@ -24,10 +24,47 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 
 from database import Base
+
+
+# ---------------------------------------------------------------------------
+# Lecturer accounts and module permissions
+# ---------------------------------------------------------------------------
+
+class Lecturer(Base):
+    __tablename__ = "lecturers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    full_name = Column(String, nullable=False)
+    email = Column(String, nullable=False, unique=True, index=True)
+    phone = Column(String)
+    institution = Column(String)
+    bio = Column(Text)
+    profile_image_url = Column(Text)
+    password_hash = Column(String, nullable=False)
+    approved = Column(Boolean, nullable=False, default=False)
+    active = Column(Boolean, nullable=False, default=True)
+    module_limit = Column(Integer, nullable=False, default=1)
+    created_at = Column(String, nullable=False)
+
+    modules = relationship("LecturerModule", back_populates="lecturer", cascade="all, delete-orphan")
+    quizzes = relationship("Quiz", back_populates="lecturer")
+    lessons = relationship("Lesson", back_populates="lecturer")
+
+
+class LecturerModule(Base):
+    __tablename__ = "lecturer_modules"
+    __table_args__ = (UniqueConstraint("lecturer_id", "module_code", name="lecturer_module_unique"),)
+
+    id = Column(Integer, primary_key=True)
+    lecturer_id = Column(Integer, ForeignKey("lecturers.id"), nullable=False, index=True)
+    module_code = Column(String, nullable=False, index=True)
+
+    lecturer = relationship("Lecturer", back_populates="modules")
 
 
 # ---------------------------------------------------------------------------
@@ -40,6 +77,7 @@ class Quiz(Base):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, nullable=False)
     module_code = Column(String, nullable=False, default="GENERAL", index=True)
+    lecturer_id = Column(Integer, ForeignKey("lecturers.id"), index=True)
     created_at = Column(String, nullable=False)  # ISO-8601 UTC string, e.g. "...Z"
 
     questions = relationship(
@@ -49,6 +87,7 @@ class Quiz(Base):
     submissions = relationship(
         "Submission", back_populates="quiz", cascade="all, delete-orphan",
     )
+    lecturer = relationship("Lecturer", back_populates="quizzes")
 
 
 class Question(Base):
@@ -116,6 +155,7 @@ class Lesson(Base):
     title = Column(String, nullable=False)
     description = Column(Text)
     module_code = Column(String, nullable=False, default="GENERAL", index=True)
+    lecturer_id = Column(Integer, ForeignKey("lecturers.id"), index=True)
     video_url = Column(Text, nullable=False)  # Cloudinary secure video URL
     created_at = Column(String, nullable=False)
 
@@ -129,6 +169,7 @@ class Lesson(Base):
     comments = relationship(
         "LessonComment", back_populates="lesson", cascade="all, delete-orphan",
     )
+    lecturer = relationship("Lecturer", back_populates="lessons")
 
 
 class LessonQuestion(Base):
