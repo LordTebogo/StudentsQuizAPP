@@ -37,6 +37,7 @@
         <label for="lecturerName">Full name</label><input id="lecturerName" type="text" placeholder="Full name">
         <label for="lecturerEmail">Email</label><input id="lecturerEmail" type="text" placeholder="you@example.com">
         <label for="lecturerPassword">Temporary password</label><input id="lecturerPassword" type="password" placeholder="At least 8 characters">
+        <div id="passwordResetFields" class="hidden"><label for="resetPassword">New password</label><input id="resetPassword" type="password" placeholder="At least 8 characters"><button class="btn secondary" id="resetPasswordBtn">Reset password</button></div>
         <label for="lecturerPhone">Phone</label><input id="lecturerPhone" type="text" placeholder="Optional">
         <label for="lecturerInstitution">Institution</label><input id="lecturerInstitution" type="text" placeholder="School or university">
         <label for="lecturerBio">Professional bio</label><textarea id="lecturerBio" placeholder="Tutoring background"></textarea>
@@ -129,7 +130,7 @@ function lecturerFormPayload(includePassword) {
 function clearLecturerForm() {
   selectedLecturerId = null;
   ['lecturerName','lecturerEmail','lecturerPassword','lecturerPhone','lecturerInstitution','lecturerBio','lecturerModules'].forEach(id => $(id).value = '');
-  $('lecturerLimit').value = 1; $('lecturerApproved').checked = false; $('lecturerActive').checked = true; $('lecturerEmail').disabled = false; $('lecturerPassword').classList.remove('hidden'); $('approveLecturerBtn').classList.add('hidden'); $('deleteLecturerBtn').classList.add('hidden'); $('lecturerMsg').innerHTML = '';
+  $('lecturerLimit').value = 1; $('lecturerApproved').checked = false; $('lecturerActive').checked = true; $('lecturerEmail').disabled = false; $('lecturerPassword').classList.remove('hidden'); $('passwordResetFields').classList.add('hidden'); $('approveLecturerBtn').classList.add('hidden'); $('deleteLecturerBtn').classList.add('hidden'); $('lecturerMsg').innerHTML = '';
 }
 function loadLecturers() {
   api('/admin/lecturers').then(lecturers => {
@@ -139,7 +140,7 @@ function loadLecturers() {
 }
 function editLecturer(id, lecturers) {
   const item = lecturers.find(lecturer => lecturer.id === Number(id)); if (!item) return;
-  selectedLecturerId = item.id; $('lecturerName').value = item.full_name; $('lecturerEmail').value = item.email; $('lecturerEmail').disabled = true; $('lecturerPassword').value = ''; $('lecturerPhone').value = item.phone || ''; $('lecturerInstitution').value = item.institution || ''; $('lecturerBio').value = item.bio || ''; $('lecturerModules').value = item.module_codes.join(', '); $('lecturerLimit').value = Math.max(item.module_limit, item.module_codes.length, 1); $('lecturerApproved').checked = item.approved; $('lecturerActive').checked = item.active; $('approveLecturerBtn').classList.toggle('hidden', item.approved && item.active); $('deleteLecturerBtn').classList.remove('hidden'); $('lecturerMsg').innerHTML = '';
+  selectedLecturerId = item.id; $('lecturerName').value = item.full_name; $('lecturerEmail').value = item.email; $('lecturerEmail').disabled = true; $('lecturerPassword').value = ''; $('lecturerPhone').value = item.phone || ''; $('lecturerInstitution').value = item.institution || ''; $('lecturerBio').value = item.bio || ''; $('lecturerModules').value = item.module_codes.join(', '); $('lecturerLimit').value = Math.max(item.module_limit, item.module_codes.length, 1); $('lecturerApproved').checked = item.approved; $('lecturerActive').checked = item.active; $('lecturerPassword').classList.add('hidden'); $('passwordResetFields').classList.remove('hidden'); $('approveLecturerBtn').classList.toggle('hidden', item.approved && item.active); $('deleteLecturerBtn').classList.remove('hidden'); $('lecturerMsg').innerHTML = '';
 }
 async function saveLecturer() {
   const creating = !selectedLecturerId; const payload = lecturerFormPayload(creating);
@@ -148,6 +149,7 @@ async function saveLecturer() {
 }
 async function deleteLecturer() { if (!selectedLecturerId || !confirm('Remove this lecturer profile? Profiles with owned quizzes or lessons cannot be removed.')) return; try { await api(`/admin/lecturers/${selectedLecturerId}`, {method:'DELETE'}); clearLecturerForm(); loadLecturers(); } catch (err) { showMsg($('lecturerMsg'), err.message, 'error'); } }
 async function approveLecturer() { if (!selectedLecturerId) return; $('lecturerApproved').checked = true; $('lecturerActive').checked = true; await saveLecturer(); }
+async function resetLecturerPassword() { const password = $('resetPassword').value; if (!selectedLecturerId || password.length < 8) { showMsg($('lecturerMsg'), 'Enter a new password with at least 8 characters.', 'error'); return; } try { await api(`/admin/lecturers/${selectedLecturerId}/reset-password`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({password})}); $('resetPassword').value = ''; showMsg($('lecturerMsg'), 'Password reset. Share the new password securely with the lecturer.', 'ok'); } catch (err) { showMsg($('lecturerMsg'), err.message, 'error'); } }
 function buildPayload() {
   let questions;
   try { questions = JSON.parse($('questionsJson').value); } catch (_) { throw new Error('Questions must be valid JSON.'); }
@@ -177,6 +179,7 @@ $('newLessonBtn').addEventListener('click', () => openEditor('lesson'));
 $('newLecturerBtn').addEventListener('click', clearLecturerForm);
 $('saveLecturerBtn').addEventListener('click', saveLecturer);
 $('approveLecturerBtn').addEventListener('click', approveLecturer);
+$('resetPasswordBtn').addEventListener('click', resetLecturerPassword);
 $('deleteLecturerBtn').addEventListener('click', deleteLecturer);
 $('refreshLecturersBtn').addEventListener('click', loadLecturers);
 $('saveBtn').addEventListener('click', save); $('deleteBtn').addEventListener('click', remove);

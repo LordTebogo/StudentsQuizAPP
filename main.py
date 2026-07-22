@@ -231,6 +231,10 @@ class AdminLecturerUpdate(BaseModel):
     module_codes: Optional[List[str]] = None
 
 
+class PasswordReset(BaseModel):
+    password: str
+
+
 def _password_hash(password: str, salt: Optional[str] = None) -> str:
     salt = salt or secrets.token_hex(16)
     digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 210_000).hex()
@@ -377,8 +381,10 @@ async def register_lecturer(
 @app.post("/lecturers/login")
 def lecturer_login(payload: LecturerLogin, db: Session = Depends(get_db)):
     lecturer = db.query(Lecturer).filter(Lecturer.email == payload.email.strip().lower()).first()
-    if not lecturer or not _password_matches(payload.password, lecturer.password_hash):
-        raise HTTPException(status_code=401, detail="Incorrect email or password")
+    if not lecturer:
+        raise HTTPException(status_code=401, detail="No lecturer profile was found for this email")
+    if not _password_matches(payload.password, lecturer.password_hash):
+        raise HTTPException(status_code=401, detail="Password does not match this lecturer profile. Ask the administrator to reset it.")
     if not lecturer.active:
         raise HTTPException(status_code=403, detail="This lecturer profile is inactive")
     if not lecturer.approved:
@@ -1721,6 +1727,18 @@ def admin_delete_lecturer(lecturer_id: int, _pin_ok: bool = Depends(require_lect
     if lecturer.quizzes or lecturer.lessons:
         raise HTTPException(status_code=409, detail="This lecturer owns content. Reassign or delete that content before removing the profile.")
     db.delete(lecturer)
+    db.commit()
+    return {"ok": True}
+
+
+@app.post("/admin/lecturers/{lecturer_id}/reset-password")
+def admin_reset_lecturer_password(lecturer_id: int, payload: PasswordReset, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    lecturer = db.query(Lecturer).filter(Lecturer.id == lecturer_id).first()
+    if not lecturer:
+        raise HTTPException(status_code=404, detail="Lecturer not found")
+    if len(payload.password) < 8:
+        raise HTTPException(status_code=400, detail="The new password must be at least 8 characters")
+    lecturer.password_hash = _password_hash(payload.password)
     db.commit()
     return {"ok": True}
 
