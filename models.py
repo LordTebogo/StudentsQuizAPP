@@ -109,6 +109,17 @@ class DirectMessage(Base):
     created_at = Column(String, nullable=False)
 
 
+class PushSubscription(Base):
+    """A browser/device push subscription belonging to one student account."""
+    __tablename__ = "push_subscriptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(Integer, ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True)
+    endpoint = Column(Text, nullable=False, unique=True)
+    subscription_json = Column(Text, nullable=False)
+    created_at = Column(String, nullable=False)
+
+
 # ---------------------------------------------------------------------------
 # Student community
 # ---------------------------------------------------------------------------

@@ -60,6 +60,11 @@ from reportlab.platypus import (
     Spacer,
 )
 from PIL import Image as PILImage
+try:
+    from pywebpush import WebPushException, webpush
+except ImportError:  # The app stays usable while push dependencies are being installed.
+    WebPushException = Exception
+    webpush = None
 
 from database import Base, engine, get_db
 from models import (
@@ -78,6 +83,7 @@ from models import (
     Quiz,
     Submission,
     Student,
+    PushSubscription,
     StudentModule,
     SrcPresident,
     ComradePost, ComradeReply, ComradeSrcReply,
@@ -94,6 +100,9 @@ LECTURER_PIN = os.getenv("LECTURER_PIN", "90435")
 LECTURER_SESSION_SECRET = os.getenv("LECTURER_SESSION_SECRET", LECTURER_PIN)
 STUDENT_SESSION_SECRET = os.getenv("STUDENT_SESSION_SECRET", LECTURER_SESSION_SECRET)
 SRC_SESSION_SECRET = os.getenv("SRC_SESSION_SECRET", STUDENT_SESSION_SECRET)
+VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "").strip()
+VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "").strip()
+VAPID_SUBJECT = os.getenv("VAPID_SUBJECT", "mailto:admin@example.com").strip()
 
 # Optional convenience folder: images committed into the repo ahead of time
 # (e.g. shipped alongside the code) can be referenced by filename in a quiz
@@ -238,6 +247,15 @@ class DirectMessageCreate(BaseModel):
     recipient_type: str
     recipient_id: int
     content: str
+
+
+class PushSubscriptionCreate(BaseModel):
+    endpoint: str
+    keys: dict[str, str]
+
+
+class PushSubscriptionDelete(BaseModel):
+    endpoint: str
 
 
 class AdminBroadcastMessage(BaseModel):
@@ -1068,6 +1086,19 @@ async def upload_quiz(
         ))
 
     db.commit()
+    assigned_students = db.query(Student.id).join(StudentModule).filter(
+        Student.approved.is_(True),
+        Student.active.is_(True),
+        StudentModule.module_code == module_code,
+    ).all()
+    _notify_students_by_push(
+        db,
+        [student_id for (student_id,) in assigned_students],
+        "New quiz available",
+        f"A new {module_code} quiz is ready: {title}",
+        f"/static/student.html?module={module_code}",
+        f"quiz-{quiz.id}",
+    )
     return {
         "quiz_id": quiz.id,
         "title": title,
@@ -2184,6 +2215,44 @@ def _message_dict(db: Session, message: DirectMessage):
             "content": message.content, "read_at": message.read_at, "created_at": message.created_at}
 
 
+def _push_enabled() -> bool:
+    return bool(webpush and VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY and VAPID_SUBJECT)
+
+
+def _notify_students_by_push(db: Session, student_ids: List[int], title: str, body: str, url: str, tag: str):
+    """Deliver a best-effort browser push notification to every opted-in device.
+
+    Notifications are intentionally generic: message text stays inside the
+    authenticated app instead of appearing on a locked phone screen.
+    """
+    if not _push_enabled() or not student_ids:
+        return
+    subscriptions = db.query(PushSubscription).filter(
+        PushSubscription.student_id.in_(set(student_ids))
+    ).all()
+    payload = json.dumps({"title": title[:90], "body": body[:180], "url": url, "tag": tag[:80]})
+    removed = False
+    for subscription in subscriptions:
+        try:
+            webpush(
+                subscription_info=json.loads(subscription.subscription_json),
+                data=payload,
+                vapid_private_key=VAPID_PRIVATE_KEY,
+                vapid_claims={"sub": VAPID_SUBJECT},
+                ttl=60 * 60 * 24,
+            )
+        except WebPushException as error:
+            status = getattr(getattr(error, "response", None), "status_code", None)
+            if status in (404, 410):
+                db.delete(subscription)
+                removed = True
+        except (TypeError, ValueError, json.JSONDecodeError):
+            db.delete(subscription)
+            removed = True
+    if removed:
+        db.commit()
+
+
 def _create_direct_message(db: Session, sender_type: str, sender_id: Optional[int], payload: DirectMessageCreate):
     recipient_type = payload.recipient_type.strip().lower()
     content = payload.content.strip()
@@ -2197,6 +2266,15 @@ def _create_direct_message(db: Session, sender_type: str, sender_id: Optional[in
                             recipient_id=recipient.id, content=content,
                             created_at=datetime.now(timezone.utc).isoformat())
     db.add(message); db.commit(); db.refresh(message)
+    if recipient_type == "student":
+        _notify_students_by_push(
+            db,
+            [recipient.id],
+            "New QuizMark message",
+            f"You have a new message from {_message_person(db, sender_type, sender_id)}.",
+            "/static/student.html",
+            f"message-{message.id}",
+        )
     return _message_dict(db, message)
 
 
@@ -2213,6 +2291,55 @@ def _inbox(db: Session, kind: str, person_id: int):
         ((DirectMessage.sender_type == kind) & (DirectMessage.sender_id == person_id))
     ).order_by(DirectMessage.created_at.desc()).all()
     return [_message_dict(db, row) for row in rows]
+
+
+@app.get("/notifications/config")
+def notification_config():
+    """Public VAPID key for browsers; the private key never leaves the server."""
+    return {"enabled": _push_enabled(), "public_key": VAPID_PUBLIC_KEY if _push_enabled() else ""}
+
+
+@app.post("/student/notifications/subscribe")
+def subscribe_student_notifications(
+    payload: PushSubscriptionCreate,
+    student: Student = Depends(require_student_account),
+    db: Session = Depends(get_db),
+):
+    if not _push_enabled():
+        raise HTTPException(status_code=503, detail="Push notifications have not been configured yet")
+    endpoint = payload.endpoint.strip()
+    if not endpoint.startswith("https://") or not payload.keys.get("p256dh") or not payload.keys.get("auth"):
+        raise HTTPException(status_code=422, detail="That device notification subscription is invalid")
+    saved = db.query(PushSubscription).filter(PushSubscription.endpoint == endpoint).first()
+    if saved:
+        saved.student_id = student.id
+        saved.subscription_json = json.dumps({"endpoint": endpoint, "keys": payload.keys})
+        saved.created_at = datetime.now(timezone.utc).isoformat()
+    else:
+        db.add(PushSubscription(
+            student_id=student.id,
+            endpoint=endpoint,
+            subscription_json=json.dumps({"endpoint": endpoint, "keys": payload.keys}),
+            created_at=datetime.now(timezone.utc).isoformat(),
+        ))
+    db.commit()
+    return {"ok": True}
+
+
+@app.delete("/student/notifications/subscribe")
+def unsubscribe_student_notifications(
+    payload: PushSubscriptionDelete,
+    student: Student = Depends(require_student_account),
+    db: Session = Depends(get_db),
+):
+    subscription = db.query(PushSubscription).filter(
+        PushSubscription.endpoint == payload.endpoint.strip(),
+        PushSubscription.student_id == student.id,
+    ).first()
+    if subscription:
+        db.delete(subscription)
+        db.commit()
+    return {"ok": True}
 
 
 @app.get("/student/message-lecturers")
@@ -2293,6 +2420,14 @@ def admin_broadcast_message(payload: AdminBroadcastMessage, _pin_ok: bool = Depe
     for student in recipients:
         db.add(DirectMessage(sender_type="admin", sender_id=None, recipient_type="student", recipient_id=student.id, content=content, created_at=now))
     db.commit()
+    _notify_students_by_push(
+        db,
+        [student.id for student in recipients],
+        "New QuizMark message",
+        "QuizMark Admin sent you a new message.",
+        "/static/student.html",
+        f"admin-broadcast-{now}",
+    )
     return {"ok": True, "recipient_count": len(recipients)}
 
 
