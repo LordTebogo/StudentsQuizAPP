@@ -138,7 +138,7 @@ ensure_lecturer_ownership_schema()
 
 
 def ensure_fun_post_media_schema():
-    """Add attachment fields for Fun Page installations created before media posts."""
+    """Add attachment and sticker fields for existing Fun Page installations."""
     if "fun_posts" not in inspect(engine).get_table_names():
         return
     columns = {column["name"] for column in inspect(engine).get_columns("fun_posts")}
@@ -147,6 +147,8 @@ def ensure_fun_post_media_schema():
             conn.execute(text("ALTER TABLE fun_posts ADD COLUMN image_url TEXT"))
         if "video_url" not in columns:
             conn.execute(text("ALTER TABLE fun_posts ADD COLUMN video_url TEXT"))
+        if "sticker_code" not in columns:
+            conn.execute(text("ALTER TABLE fun_posts ADD COLUMN sticker_code VARCHAR(32)"))
 
 
 ensure_fun_post_media_schema()
@@ -1983,6 +1985,17 @@ def get_results(student_id: str, quiz_id: Optional[int] = None, student: Student
 # Student community / Fun Page
 # ---------------------------------------------------------------------------
 
+FUN_STICKERS = {
+    "spark": "✨",
+    "celebrate": "🎉",
+    "study": "📚",
+    "rocket": "🚀",
+    "heart": "💜",
+    "science": "🧬",
+    "laugh": "😂",
+    "thinking": "🤔",
+}
+
 def _fun_post_payload(post: FunPost, students_by_id: dict, current_student_id: int, replies: list) -> dict:
     author = students_by_id.get(post.author_student_id)
     return {
@@ -1991,6 +2004,7 @@ def _fun_post_payload(post: FunPost, students_by_id: dict, current_student_id: i
         "content": post.content,
         "image_url": post.image_url,
         "video_url": post.video_url,
+        "sticker_code": post.sticker_code,
         "is_anonymous": post.is_anonymous,
         "author_name": "Anonymous student" if post.is_anonymous else (author.full_name if author else "Former student"),
         "author_image_url": None if post.is_anonymous or not author else author.profile_image_url,
@@ -2042,16 +2056,20 @@ async def create_fun_post(
     content: str = Form(""),
     is_anonymous: bool = Form(False),
     parent_id: Optional[int] = Form(None),
+    sticker: str = Form(""),
     image: Optional[UploadFile] = File(None),
     video: Optional[UploadFile] = File(None),
     student: Student = Depends(require_student_account),
     db: Session = Depends(get_db),
 ):
     content = content.strip()
+    sticker = sticker.strip().lower()
     has_image = bool(image and image.filename)
     has_video = bool(video and video.filename)
-    if not content and not has_image and not has_video:
-        raise HTTPException(status_code=400, detail="Write something or attach an image or video before posting")
+    if sticker and sticker not in FUN_STICKERS:
+        raise HTTPException(status_code=400, detail="That sticker is not available")
+    if not content and not has_image and not has_video and not sticker:
+        raise HTTPException(status_code=400, detail="Write something, attach media, or choose a sticker before posting")
     if len(content) > 1500:
         raise HTTPException(status_code=400, detail="Posts can be up to 1,500 characters")
     if parent_id is not None and not db.query(FunPost).filter(FunPost.id == parent_id).first():
@@ -2081,6 +2099,7 @@ async def create_fun_post(
         content=content,
         image_url=image_url,
         video_url=video_url,
+        sticker_code=sticker or None,
         is_anonymous=is_anonymous,
         created_at=datetime.utcnow().isoformat() + "Z",
     )

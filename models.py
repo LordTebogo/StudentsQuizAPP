@@ -98,6 +98,7 @@ class FunPost(Base):
     content = Column(Text, nullable=False)
     image_url = Column(Text)
     video_url = Column(Text)
+    sticker_code = Column(String)
     is_anonymous = Column(Boolean, nullable=False, default=False)
     created_at = Column(String, nullable=False)
 

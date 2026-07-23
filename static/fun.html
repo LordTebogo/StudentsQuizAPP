@@ -36,6 +36,11 @@
     .media-tools { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 13px; }
     .media-tools label { flex: 1 1 210px; margin: 0; }
     .media-tools input[type="file"] { margin-top: 7px; }
+    .sticker-tray { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 13px; }
+    .sticker-choice { display: inline-grid; place-items: center; width: 36px; height: 36px; font-size: 1.2rem; border: 1px solid var(--line); border-radius: 10px; background: rgba(103,232,249,.045); cursor: pointer; transition: transform .18s ease, border-color .18s ease, background .18s ease, box-shadow .18s ease; }
+    .sticker-choice:hover, .sticker-choice:focus-visible { border-color: rgba(103,232,249,.74); background: rgba(103,232,249,.13); transform: translateY(-2px) rotate(-4deg); outline: none; }
+    .sticker-choice[aria-pressed="true"] { border-color: var(--violet); background: rgba(167,139,250,.18); box-shadow: 0 0 16px rgba(167,139,250,.26); transform: translateY(-2px) scale(1.08); }
+    .sticker-pop { display: inline-grid; place-items: center; width: 47px; height: 47px; margin: -2px 0 9px; font-size: 1.8rem; border: 1px solid rgba(167,139,250,.4); border-radius: 14px; background: radial-gradient(circle at 30% 25%, rgba(103,232,249,.22), rgba(167,139,250,.12) 50%, rgba(3,7,18,.4)); box-shadow: inset 0 0 16px rgba(103,232,249,.08), 0 0 16px rgba(167,139,250,.13); }
     .mention { color: var(--cyan); font-weight: 700; }
     .post-actions { flex-wrap: wrap; }
     .text-btn { padding: 5px 0; color: var(--cyan); font-family: var(--font-mono); font-size: .69rem; letter-spacing: .05em; text-transform: uppercase; border: 0; background: transparent; cursor: pointer; }
@@ -71,6 +76,7 @@
       <h2>Start a conversation</h2>
       <textarea id="postContent" maxlength="1500" placeholder="What’s on your mind?"></textarea>
       <div class="media-tools"><label for="postImage">Add image<input id="postImage" type="file" accept="image/*"></label><label for="postVideo">Add video<input id="postVideo" type="file" accept="video/*"></label></div>
+      <div class="sticker-tray" id="postStickerPicker" aria-label="Choose a sticker"></div>
       <div class="composer-tools">
         <div class="tag-tools"><input id="tagPicker" list="memberNames" placeholder="Tag a student by name"><datalist id="memberNames"></datalist><button class="btn secondary" id="addTagBtn" type="button">Add @tag</button></div>
         <label class="check-label"><input id="anonymousPost" type="checkbox"> Post anonymously</label>
@@ -89,6 +95,8 @@
     const $ = id => document.getElementById(id);
     const token = sessionStorage.getItem('studentToken');
     let members = [];
+    const selectedStickers = new Map();
+    const STICKERS = [{code: 'spark', emoji: '✨', label: 'Spark'}, {code: 'celebrate', emoji: '🎉', label: 'Celebrate'}, {code: 'study', emoji: '📚', label: 'Study'}, {code: 'rocket', emoji: '🚀', label: 'Rocket'}, {code: 'heart', emoji: '💜', label: 'Love'}, {code: 'science', emoji: '🧬', label: 'Science'}, {code: 'laugh', emoji: '😂', label: 'Laugh'}, {code: 'thinking', emoji: '🤔', label: 'Thinking'}];
 
     function escapeHtml(value) { const node = document.createElement('div'); node.textContent = value ?? ''; return node.innerHTML; }
     function showMsg(el, text, kind) { el.innerHTML = `<div class="msg ${kind}">${escapeHtml(text)}</div>`; }
@@ -112,6 +120,13 @@
       if (post.author_image_url) return `<img class="avatar" src="${escapeHtml(post.author_image_url)}" alt="">`;
       return `<span class="avatar-fallback">${post.is_anonymous ? '?' : escapeHtml(post.author_name.slice(0, 1).toUpperCase())}</span>`;
     }
+    function stickerPickerHtml(owner) { return STICKERS.map(sticker => `<button class="sticker-choice" type="button" data-sticker-owner="${owner}" data-sticker-code="${sticker.code}" aria-label="${sticker.label}" aria-pressed="false">${sticker.emoji}</button>`).join(''); }
+    function stickerEmoji(code) { const sticker = STICKERS.find(item => item.code === code); return sticker ? sticker.emoji : ''; }
+    function selectSticker(owner, code) {
+      selectedStickers.set(owner, code);
+      document.querySelectorAll(`[data-sticker-owner="${owner}"]`).forEach(button => button.setAttribute('aria-pressed', String(button.dataset.stickerCode === code)));
+    }
+    function clearSticker(owner) { selectedStickers.delete(owner); document.querySelectorAll(`[data-sticker-owner="${owner}"]`).forEach(button => button.setAttribute('aria-pressed', 'false')); }
     function mediaHtml(post) {
       const image = post.image_url ? `<img src="${escapeHtml(post.image_url)}" alt="Post attachment">` : '';
       const video = post.video_url ? `<video controls preload="metadata" src="${escapeHtml(post.video_url)}">Your browser cannot play this video.</video>` : '';
@@ -123,10 +138,10 @@
       const replies = post.replies.map(postHtml).join('');
       return `<article class="fun-post${post.parent_id ? ' reply' : ''}" id="post-${post.id}">
         <div class="post-meta"><div class="identity">${avatar(post)}<div><div class="post-author">${escapeHtml(post.author_name)} ${post.is_anonymous ? '<span class="anonymous-tag">Anonymous</span>' : ''}</div><div class="post-time">${escapeHtml(formatDate(post.created_at))}</div></div></div></div>
-        <div class="post-content">${formatContent(post.content)}</div>
+        <div class="post-content">${formatContent(post.content)}</div>${post.sticker_code ? `<div class="sticker-pop" title="Sticker">${stickerEmoji(post.sticker_code)}</div>` : ''}
         ${mediaHtml(post)}
         <div class="post-actions"><button class="text-btn reply-btn" data-reply="${post.id}">Reply</button>${replyCount ? `<button class="thread-toggle toggle-replies-btn" data-toggle-replies="${post.id}" data-reply-count="${replyCount}" data-expanded="false" aria-expanded="false" aria-label="Show ${replyCount} repl${replyCount === 1 ? 'y' : 'ies'}">${replyToggleContent(replyCount, false)}</button>` : ''}${post.is_author ? `<button class="text-btn danger delete-btn" data-delete="${post.id}">Delete</button>` : ''}</div>
-        <div class="reply-composer hidden" id="replyBox-${post.id}"><textarea id="replyText-${post.id}" maxlength="1500" placeholder="Write a reply…"></textarea><div class="media-tools"><label for="replyImage-${post.id}">Add image<input id="replyImage-${post.id}" type="file" accept="image/*"></label><label for="replyVideo-${post.id}">Add video<input id="replyVideo-${post.id}" type="file" accept="video/*"></label></div><label class="check-label"><input id="replyAnonymous-${post.id}" type="checkbox"> Reply anonymously</label><button class="btn secondary send-reply-btn" data-send-reply="${post.id}">Post reply</button><div id="replyMsg-${post.id}"></div></div>
+        <div class="reply-composer hidden" id="replyBox-${post.id}"><textarea id="replyText-${post.id}" maxlength="1500" placeholder="Write a reply…"></textarea><div class="media-tools"><label for="replyImage-${post.id}">Add image<input id="replyImage-${post.id}" type="file" accept="image/*"></label><label for="replyVideo-${post.id}">Add video<input id="replyVideo-${post.id}" type="file" accept="video/*"></label></div><div class="sticker-tray" aria-label="Choose a reply sticker">${stickerPickerHtml('reply-' + post.id)}</div><label class="check-label"><input id="replyAnonymous-${post.id}" type="checkbox"> Reply anonymously</label><button class="btn secondary send-reply-btn" data-send-reply="${post.id}">Post reply</button><div id="replyMsg-${post.id}"></div></div>
         ${replyCount ? `<div class="replies hidden" id="replies-${post.id}">${replies}</div>` : ''}
       </article>`;
     }
@@ -160,16 +175,20 @@
       const content = contentInput.value.trim();
       const imageInput = parentId ? $('replyImage-' + parentId) : $('postImage');
       const videoInput = parentId ? $('replyVideo-' + parentId) : $('postVideo');
-      if (!content && !imageInput.files.length && !videoInput.files.length) { showMsg(messageBox, 'Write something or attach media before posting.', 'error'); return; }
+      const stickerOwner = parentId ? 'reply-' + parentId : 'post';
+      const sticker = selectedStickers.get(stickerOwner) || '';
+      if (!content && !imageInput.files.length && !videoInput.files.length && !sticker) { showMsg(messageBox, 'Write something, attach media, or choose a sticker before posting.', 'error'); return; }
       try {
         const form = new FormData();
         form.append('content', content); form.append('is_anonymous', String(anonymous));
+        form.append('sticker', sticker);
         if (parentId) form.append('parent_id', String(parentId));
         if (imageInput.files.length) form.append('image', imageInput.files[0]);
         if (videoInput.files.length) form.append('video', videoInput.files[0]);
         await api('/fun/posts', {method: 'POST', body: form});
         contentInput.value = ''; messageBox.innerHTML = '';
         imageInput.value = ''; videoInput.value = '';
+        clearSticker(stickerOwner);
         if (!parentId) $('anonymousPost').checked = false;
         await loadFeed();
       } catch (error) { showMsg(messageBox, error.message, 'error'); }
@@ -190,8 +209,14 @@
       const member = members.find(item => item.full_name.toLowerCase() === name.toLowerCase());
       const input = $('postContent'); input.value += `${input.value && !input.value.endsWith(' ') ? ' ' : ''}@${member.full_name} `; input.focus(); $('tagPicker').value = '';
     });
+    document.addEventListener('click', event => {
+      const button = event.target.closest('.sticker-choice');
+      if (!button) return;
+      selectSticker(button.dataset.stickerOwner, button.dataset.stickerCode);
+    });
     $('publishBtn').addEventListener('click', () => submitPost());
     $('refreshBtn').addEventListener('click', loadFeed);
+    $('postStickerPicker').innerHTML = stickerPickerHtml('post');
     (async () => { if (!token) { window.location.href = '/static/student.html'; return; } try { await api('/student/me'); await loadMembers(); await loadFeed(); } catch (_) { sessionStorage.removeItem('studentToken'); window.location.href = '/static/student.html'; } })();
   </script>
   <script src="/static/pwa.js"></script>
