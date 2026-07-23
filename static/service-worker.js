@@ -1,4 +1,4 @@
-const CACHE_NAME = "quizmark-static-v1";
+const CACHE_NAME = "quizmark-static-v2";
 const APP_SHELL = [
   "/static/index.html",
   "/static/student.html",
@@ -6,6 +6,7 @@ const APP_SHELL = [
   "/static/lessons_student.html",
   "/static/lessons_lecturer.html",
   "/static/admin.html",
+  "/static/comrade.html",
   "/static/style.css",
   "/static/pwa.js",
   "/static/manifest.webmanifest",
