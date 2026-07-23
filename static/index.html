@@ -11,12 +11,23 @@
 <link rel="manifest" href="/static/manifest.webmanifest">
 <title>Welcome — QuizMark</title>
 <link rel="stylesheet" href="/static/style.css">
+<style>
+  .student-home-actions { display:none; align-items:center; gap:10px; }
+  .student-home-actions.active { display:flex; }
+  .home-message-button { position:relative; width:42px; height:42px; border:1px solid rgba(103,232,249,.42); border-radius:14px; background:rgba(7,16,35,.72); color:#67e8f9; cursor:pointer; font-size:1.15rem; }
+  .home-message-count { position:absolute; top:-7px; right:-6px; min-width:18px; height:18px; padding:0 4px; border-radius:99px; background:#f472b6; color:#08111f; font:700 .65rem/18px var(--font-mono,monospace); }
+  .home-profile-avatar { width:42px; height:42px; border:2px solid rgba(103,232,249,.7); border-radius:50%; object-fit:cover; background:#15223c; }
+  .home-profile-name { max-width:130px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); font-size:.86rem; }
+  .home-inbox { position:absolute; z-index:20; top:82px; right:0; width:min(390px,calc(100vw - 32px)); max-height:440px; overflow:auto; padding:16px; border:1px solid rgba(103,232,249,.35); border-radius:18px; background:rgba(7,14,31,.98); box-shadow:0 24px 60px rgba(0,0,0,.42); }
+  .home-inbox h3 { margin:0 0 12px; } .home-inbox .q { margin:9px 0; padding:12px; } .home-inbox small { display:block; color:var(--muted); margin:3px 0 6px; }
+  @media(max-width:620px){.home-profile-name{display:none}.student-home-actions{gap:7px}.home-inbox{right:8px;top:74px}}
+</style>
 </head>
 <body>
 <div class="wrap" id="welcome">
   <header class="top">
     <div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Quiz<span>Mark</span></div><div class="brand-tagline">Bioscientist</div></div></div>
-    <nav><button class="install-app-btn" id="installAppBtn" type="button">Install app</button></nav>
+    <nav><div class="student-home-actions" id="studentHomeActions"><button class="home-message-button" id="homeMessagesBtn" type="button" aria-label="Open messages">✉<span class="home-message-count hidden" id="homeMessageCount">0</span></button><span class="home-profile-name" id="homeStudentName"></span><img class="home-profile-avatar" id="homeStudentAvatar" src="/branding/logo" alt="Student profile picture"></div><button class="install-app-btn" id="installAppBtn" type="button">Install app</button></nav>
   </header>
 
   <span class="kicker">Your learning space</span>
@@ -26,7 +37,8 @@
     <section class="role-card"><span class="kicker">Student</span><h2>Learn, submit &amp; connect</h2><p>Quizzes, video lessons, scripts and the student community — all in one private workspace.</p><a class="btn" href="/static/student.html">Student sign in</a><a class="btn secondary" href="/static/student.html#register">Create student account</a></section>
     <section class="role-card"><span class="kicker">Lecturer / tutor</span><h2>Teach, assess &amp; guide</h2><p>Create module content, review only your students’ scripts, and communicate with your class.</p><a class="btn" href="/static/lecturer.html">Lecturer sign in</a><a class="btn secondary" href="/static/lecturer.html#register">Create lecturer account</a></section>
   </div>
-  <section class="card hidden" id="studentPortal"><span class="kicker">Student account active</span><h2>Your student workspace</h2><p class="muted">Only student tools are shown here.</p><div class="role-grid"><a class="role-card" href="/static/student.html"><h3>Quizzes &amp; scripts</h3></a><a class="role-card" href="/static/lessons_student.html"><h3>Video lessons</h3></a><a class="role-card" href="/static/fun.html"><h3>Fun Page</h3></a></div><button class="btn secondary" id="studentSignOut">Sign out</button></section>
+  <section class="card hidden" id="studentPortal"><span class="kicker">Student account active</span><h2>Your student workspace</h2><p class="muted">Your quizzes, lessons, community, and private notifications in one place.</p><div class="role-grid"><a class="role-card" href="/static/student.html"><h3>Quizzes &amp; scripts</h3><p>Take assessments and download your work.</p></a><a class="role-card" href="/static/lessons_student.html"><h3>Video lessons</h3><p>Learn at your pace and answer lesson questions.</p></a><a class="role-card" href="/static/fun.html"><h3>Fun Page</h3><p>Join the campus conversation and view tags.</p></a></div><button class="btn secondary" id="studentSignOut">Sign out</button></section>
+  <aside class="home-inbox hidden" id="homeInbox"><h3>Messages &amp; mentions</h3><div id="homeInboxList"></div></aside>
   <section class="card hidden" id="lecturerPortal"><span class="kicker">Lecturer account active</span><h2>Your lecturer workspace</h2><p class="muted">Only lecturer tools are shown here.</p><div class="role-grid"><a class="role-card" href="/static/lecturer.html"><h3>Quizzes &amp; marking</h3></a><a class="role-card" href="/static/lessons_lecturer.html"><h3>Video lessons</h3></a></div><button class="btn secondary" id="lecturerSignOut">Sign out</button></section>
   <p class="muted" style="margin-top:28px">Administrator? <a href="/static/admin.html">Open the protected admin workspace</a>.</p>
 </div>
@@ -36,7 +48,10 @@
   const studentToken = sessionStorage.getItem('studentToken');
   const lecturerToken = sessionStorage.getItem('lecturerToken');
   const guest = document.getElementById('guestChoices');
-  if (studentToken) { guest.classList.add('hidden'); document.getElementById('studentPortal').classList.remove('hidden'); }
+  const escapeHome = value => { const element=document.createElement('div'); element.textContent=value ?? ''; return element.innerHTML; };
+  async function studentApi(path) { const response=await fetch(path,{headers:{'X-Student-Token':studentToken}}); const data=await response.json().catch(()=>null); if(!response.ok) throw new Error(data?.detail || 'Could not load messages'); return data; }
+  async function loadHomeInbox() { try { const messages=await studentApi('/student/messages'); document.getElementById('homeInboxList').innerHTML=messages.length ? messages.map(message=>`<div class="q"><strong>${escapeHome(message.sender_name)}</strong><small>${escapeHome(message.created_at)}</small><div>${escapeHome(message.content)}</div></div>`).join('') : '<p class="muted">No messages or mentions yet.</p>'; document.getElementById('homeMessageCount').classList.add('hidden'); } catch(error) { document.getElementById('homeInboxList').innerHTML=`<p class="muted">${escapeHome(error.message)}</p>`; } }
+  if (studentToken) { guest.classList.add('hidden'); document.getElementById('studentPortal').classList.remove('hidden'); document.getElementById('studentHomeActions').classList.add('active'); studentApi('/student/me').then(profile=>{document.getElementById('homeStudentName').textContent=profile.full_name; if(profile.profile_image_url) document.getElementById('homeStudentAvatar').src=profile.profile_image_url;}); studentApi('/student/messages/unread').then(result=>{const badge=document.getElementById('homeMessageCount'); badge.textContent=result.count || 0; badge.classList.toggle('hidden',!result.count);}).catch(()=>{}); document.getElementById('homeMessagesBtn').addEventListener('click',()=>{const inbox=document.getElementById('homeInbox'); inbox.classList.toggle('hidden'); if(!inbox.classList.contains('hidden')) loadHomeInbox();}); }
   else if (lecturerToken) { guest.classList.add('hidden'); document.getElementById('lecturerPortal').classList.remove('hidden'); }
   document.getElementById('studentSignOut').addEventListener('click', () => { sessionStorage.removeItem('studentToken'); location.reload(); });
   document.getElementById('lecturerSignOut').addEventListener('click', () => { sessionStorage.removeItem('lecturerToken'); location.reload(); });
