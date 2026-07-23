@@ -139,6 +139,22 @@ class FunOfficialPost(Base):
     created_at = Column(String, nullable=False)
 
 
+class SrcPresident(Base):
+    """A verified SRC president profile that owns the official announcement desk."""
+    __tablename__ = "src_presidents"
+
+    id = Column(Integer, primary_key=True, index=True)
+    full_name = Column(String, nullable=False)
+    party_name = Column(String, nullable=False)
+    email = Column(String, nullable=False, unique=True, index=True)
+    phone = Column(String)
+    profile_image_url = Column(Text)
+    password_hash = Column(String, nullable=False)
+    approved = Column(Boolean, nullable=False, default=False)
+    active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(String, nullable=False)
+
+
 class ComradePost(Base):
     __tablename__ = "comrade_posts"
     id = Column(Integer, primary_key=True, index=True)

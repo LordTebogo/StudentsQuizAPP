@@ -71,6 +71,13 @@
   </section>
 
   <section class="card">
+    <div class="admin-editor-heading"><div><span class="kicker">Official SRC access</span><h2>SRC president management</h2></div><button class="btn secondary" id="refreshSrcPresidentsBtn">Refresh</button></div>
+    <p class="muted">Approve pending SRC president profiles, suspend access when a term ends, or remove a profile. SRC presidents create and control their own passwords.</p>
+    <div id="srcPresidentList" class="admin-list"></div>
+    <div id="srcPresidentAdminCard" class="hidden"><label class="check-label"><input id="srcPresidentApproved" type="checkbox"> Approved</label><label class="check-label"><input id="srcPresidentActive" type="checkbox"> Active</label><button class="btn" id="saveSrcPresidentBtn">Save SRC access</button><button class="btn secondary" id="deleteSrcPresidentBtn">Remove SRC profile</button><div id="srcPresidentMsg"></div></div>
+  </section>
+
+  <section class="card">
     <div class="admin-editor-heading"><div><span class="kicker">Assessment archive</span><h2>All student scripts</h2></div><button class="btn secondary" id="refreshScriptsBtn">Refresh scripts</button></div>
     <p class="muted">Every quiz script submitted across every module. Download a complete PDF including answers, marks, and expected answers.</p>
     <div id="adminScriptsList" class="admin-list"></div><div id="adminScriptsMsg"></div>
@@ -125,6 +132,7 @@ let pin = sessionStorage.getItem('lecturerPin') || null;
 let editor = { kind: null, id: null };
 let selectedLecturerId = null;
 let selectedStudentId = null;
+let selectedSrcPresidentId = null;
 const quizTemplate = [{ type: 'mcq', question: 'Question text', options: ['Option A', 'Option B'], correct_answer: 'Option A', marks: 1, image_url: '' }];
 const lessonTemplate = [{ type: 'short', question: 'Question text', correct_answer: 'Expected answer', marks: 1, image_url: '' }];
 
@@ -167,7 +175,7 @@ function renderList(target, items, kind) {
   $(target).querySelectorAll('[data-id]').forEach(button => button.addEventListener('click', () => edit(kind, button.dataset.id)));
 }
 async function loadLists() {
-  try { const [quizzes, lessons] = await Promise.all([api('/admin/quizzes'), api('/admin/lessons')]); renderList('quizList', quizzes, 'quiz'); renderList('lessonList', lessons, 'lesson'); loadLecturers(); loadStudents(); loadAdminScripts(); loadCommunityModeration(lessons); }
+  try { const [quizzes, lessons] = await Promise.all([api('/admin/quizzes'), api('/admin/lessons')]); renderList('quizList', quizzes, 'quiz'); renderList('lessonList', lessons, 'lesson'); loadLecturers(); loadStudents(); loadSrcPresidents(); loadAdminScripts(); loadCommunityModeration(lessons); }
   catch (err) { showMsg($('editorMsg'), `Could not load content: ${err.message}`, 'error'); }
 }
 async function loadAdminScripts() {
@@ -231,6 +239,28 @@ async function saveLecturer() {
 async function deleteLecturer() { if (!selectedLecturerId || !confirm('Remove this lecturer profile? Profiles with owned quizzes or lessons cannot be removed.')) return; try { await api(`/admin/lecturers/${selectedLecturerId}`, {method:'DELETE'}); clearLecturerForm(); loadLecturers(); } catch (err) { showMsg($('lecturerMsg'), err.message, 'error'); } }
 function loadStudents() { api('/admin/students').then(students => { $('studentList').innerHTML = students.length ? students.map(item => `<button class="admin-list-item" data-student="${item.id}"><span><strong>${escapeHtml(item.full_name)}</strong><small>${escapeHtml(item.student_number)} · ${escapeHtml(item.email)}</small></span><span class="badge ${item.approved && item.active ? 'done' : 'pending'}">${item.active ? (item.approved ? 'Active' : 'Awaiting approval') : 'Inactive'}</span></button>`).join('') : '<p class="muted">No student profiles yet.</p>'; $('studentList').querySelectorAll('[data-student]').forEach(button => button.addEventListener('click', () => selectStudent(button.dataset.student, students))); }).catch(err => showMsg($('studentMsg'), err.message, 'error')); }
 function loadStudents() { api('/admin/students').then(students => { $('studentList').innerHTML = students.length ? students.map(item => `<button class="admin-list-item" data-student="${item.id}"><span><strong>${escapeHtml(item.full_name)}</strong><small>${escapeHtml(item.student_number)} · ${(item.module_codes || []).map(escapeHtml).join(', ') || 'No modules assigned'}</small></span><span class="badge ${item.approved && item.active ? 'done' : 'pending'}">${item.active ? (item.approved ? 'Active' : 'Awaiting approval') : 'Inactive'}</span></button>`).join('') : '<p class="muted">No student profiles yet.</p>'; $('studentList').querySelectorAll('[data-student]').forEach(button => button.addEventListener('click', () => selectStudent(button.dataset.student, students))); }).catch(err => showMsg($('studentMsg'), err.message, 'error')); }
+function loadSrcPresidents() {
+  api('/admin/src-presidents').then(profiles => {
+    $('srcPresidentList').innerHTML = profiles.length ? profiles.map(item => `<button class="admin-list-item" data-src-president="${item.id}"><span><strong>${escapeHtml(item.full_name)}</strong><small>${escapeHtml(item.party_name)} · ${escapeHtml(item.email)}</small></span><span class="badge ${item.approved && item.active ? 'done' : 'pending'}">${item.active ? (item.approved ? 'Active' : 'Awaiting approval') : 'Inactive'}</span></button>`).join('') : '<p class="muted">No SRC president profiles yet.</p>';
+    $('srcPresidentList').querySelectorAll('[data-src-president]').forEach(button => button.addEventListener('click', () => selectSrcPresident(button.dataset.srcPresident, profiles)));
+  }).catch(error => showMsg($('srcPresidentMsg'), error.message, 'error'));
+}
+function selectSrcPresident(id, profiles) {
+  const profile = profiles.find(item => item.id === Number(id)); if (!profile) return;
+  selectedSrcPresidentId = profile.id; $('srcPresidentApproved').checked = profile.approved; $('srcPresidentActive').checked = profile.active;
+  $('srcPresidentAdminCard').classList.remove('hidden'); $('srcPresidentMsg').innerHTML = '';
+  document.querySelectorAll('[data-src-president]').forEach(row => row.classList.toggle('student-selected', Number(row.dataset.srcPresident) === profile.id));
+}
+async function saveSrcPresident() {
+  if (!selectedSrcPresidentId) return;
+  try { await api(`/admin/src-presidents/${selectedSrcPresidentId}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({approved:$('srcPresidentApproved').checked, active:$('srcPresidentActive').checked})}); showMsg($('srcPresidentMsg'), 'SRC access saved.', 'ok'); loadSrcPresidents(); }
+  catch (error) { showMsg($('srcPresidentMsg'), error.message, 'error'); }
+}
+async function deleteSrcPresident() {
+  if (!selectedSrcPresidentId || !confirm('Remove this SRC president profile? Existing announcements will remain.')) return;
+  try { await api(`/admin/src-presidents/${selectedSrcPresidentId}`, {method:'DELETE'}); selectedSrcPresidentId = null; $('srcPresidentAdminCard').classList.add('hidden'); loadSrcPresidents(); }
+  catch (error) { showMsg($('srcPresidentMsg'), error.message, 'error'); }
+}
 function renderModerationItem(item, area) {
   const pinAction = item.is_pinned ? 'Unpin' : 'Pin';
   const kind = item.kind || 'lesson';
@@ -291,6 +321,9 @@ $('saveLecturerBtn').addEventListener('click', saveLecturer);
 $('approveLecturerBtn').addEventListener('click', approveLecturer);
 $('resetPasswordBtn').addEventListener('click', resetLecturerPassword);
 $('refreshStudentsBtn').addEventListener('click', loadStudents);
+$('refreshSrcPresidentsBtn').addEventListener('click', loadSrcPresidents);
+$('saveSrcPresidentBtn').addEventListener('click', saveSrcPresident);
+$('deleteSrcPresidentBtn').addEventListener('click', deleteSrcPresident);
 $('saveStudentBtn').addEventListener('click', saveStudent);
 $('resetStudentPasswordBtn').addEventListener('click', resetStudentPassword);
 $('deleteStudentBtn').addEventListener('click', deleteStudent);

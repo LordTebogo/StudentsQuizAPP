@@ -79,6 +79,7 @@ from models import (
     Submission,
     Student,
     StudentModule,
+    SrcPresident,
     ComradePost, ComradeReply,
 )
 from cloudinary_utils import upload_image_bytes, upload_video_bytes
@@ -92,9 +93,7 @@ from cloudinary_utils import upload_image_bytes, upload_video_bytes
 LECTURER_PIN = os.getenv("LECTURER_PIN", "90435")
 LECTURER_SESSION_SECRET = os.getenv("LECTURER_SESSION_SECRET", LECTURER_PIN)
 STUDENT_SESSION_SECRET = os.getenv("STUDENT_SESSION_SECRET", LECTURER_SESSION_SECRET)
-# Keep this credential out of source control. Configure it in the hosting
-# environment before enabling the official SRC publishing desk.
-SRC_PRESIDENT_PASSWORD = os.getenv("SRC_PRESIDENT_PASSWORD", "")
+SRC_SESSION_SECRET = os.getenv("SRC_SESSION_SECRET", STUDENT_SESSION_SECRET)
 
 # Optional convenience folder: images committed into the repo ahead of time
 # (e.g. shipped alongside the code) can be referenced by filename in a quiz
@@ -233,13 +232,27 @@ class PinCheck(BaseModel):
 
 
 class ComradeAnnouncement(BaseModel):
-    party_name: str
-    password: str
     content: str
 
 
 class ComradeReplyInput(BaseModel):
     content: str
+
+
+class SrcPresidentLogin(BaseModel):
+    email: str
+    password: str
+
+
+class SrcPasswordChange(BaseModel):
+    current_password: str
+    new_password: str
+    confirm_password: str
+
+
+class AdminSrcPresidentUpdate(BaseModel):
+    approved: Optional[bool] = None
+    active: Optional[bool] = None
 
 
 class CommentCreate(BaseModel):
@@ -366,6 +379,13 @@ def _issue_student_token(student_id: int) -> str:
     return f"{base64.urlsafe_b64encode(payload).decode().rstrip('=')}.{base64.urlsafe_b64encode(signature).decode().rstrip('=')}"
 
 
+def _issue_src_token(src_president_id: int) -> str:
+    expires = int((datetime.now(timezone.utc) + timedelta(hours=12)).timestamp())
+    payload = f"{src_president_id}:{expires}".encode("utf-8")
+    signature = hmac.new(SRC_SESSION_SECRET.encode("utf-8"), payload, hashlib.sha256).digest()
+    return f"{base64.urlsafe_b64encode(payload).decode().rstrip('=')}.{base64.urlsafe_b64encode(signature).decode().rstrip('=')}"
+
+
 def _lecturer_id_from_token(token: Optional[str]) -> int:
     if not token or "." not in token:
         raise HTTPException(status_code=401, detail="Sign in as a lecturer first")
@@ -398,6 +418,22 @@ def _student_id_from_token(token: Optional[str]) -> int:
         raise HTTPException(status_code=401, detail="Your student session has expired. Sign in again.")
 
 
+def _src_president_id_from_token(token: Optional[str]) -> int:
+    if not token or "." not in token:
+        raise HTTPException(status_code=401, detail="Sign in as the SRC president first")
+    encoded_payload, encoded_signature = token.split(".", 1)
+    try:
+        payload = base64.urlsafe_b64decode(encoded_payload + "=" * (-len(encoded_payload) % 4))
+        signature = base64.urlsafe_b64decode(encoded_signature + "=" * (-len(encoded_signature) % 4))
+        expected = hmac.new(SRC_SESSION_SECRET.encode("utf-8"), payload, hashlib.sha256).digest()
+        president_id_text, expires_text = payload.decode("utf-8").split(":", 1)
+        if not hmac.compare_digest(signature, expected) or int(expires_text) < int(datetime.now(timezone.utc).timestamp()):
+            raise ValueError
+        return int(president_id_text)
+    except (ValueError, UnicodeDecodeError):
+        raise HTTPException(status_code=401, detail="Your SRC session has expired. Sign in again.")
+
+
 def require_lecturer_account(
     x_lecturer_token: Optional[str] = Header(None, alias="X-Lecturer-Token"),
     db: Session = Depends(get_db),
@@ -418,11 +454,35 @@ def require_student_account(
     return student
 
 
+def require_src_president_account(
+    x_src_token: Optional[str] = Header(None, alias="X-Src-Token"),
+    db: Session = Depends(get_db),
+) -> SrcPresident:
+    president = db.query(SrcPresident).filter(SrcPresident.id == _src_president_id_from_token(x_src_token)).first()
+    if not president or not president.active or not president.approved:
+        raise HTTPException(status_code=403, detail="Your SRC president account is not active and approved")
+    return president
+
+
 def _student_profile(student: Student) -> dict:
     return {"id": student.id, "student_number": student.student_number, "full_name": student.full_name,
             "email": student.email, "phone": student.phone or "", "institution": student.institution or "",
             "bio": student.bio or "", "profile_image_url": student.profile_image_url,
             "approved": student.approved, "active": student.active, "module_codes": [item.module_code for item in student.modules], "created_at": student.created_at}
+
+
+def _src_president_profile(president: SrcPresident) -> dict:
+    return {
+        "id": president.id,
+        "full_name": president.full_name,
+        "party_name": president.party_name,
+        "email": president.email,
+        "phone": president.phone or "",
+        "profile_image_url": president.profile_image_url,
+        "approved": president.approved,
+        "active": president.active,
+        "created_at": president.created_at,
+    }
 
 
 def _set_student_modules(db: Session, student: Student, codes: List[str]):
@@ -2037,6 +2097,34 @@ def admin_delete_student(student_id: int, _pin_ok: bool = Depends(require_lectur
     return {"ok": True}
 
 
+@app.get("/admin/src-presidents")
+def admin_list_src_presidents(_pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    return [_src_president_profile(item) for item in db.query(SrcPresident).order_by(SrcPresident.created_at.desc()).all()]
+
+
+@app.put("/admin/src-presidents/{president_id}")
+def admin_update_src_president(president_id: int, payload: AdminSrcPresidentUpdate, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    president = db.query(SrcPresident).filter(SrcPresident.id == president_id).first()
+    if not president:
+        raise HTTPException(status_code=404, detail="SRC president profile not found")
+    if payload.approved is not None:
+        president.approved = payload.approved
+    if payload.active is not None:
+        president.active = payload.active
+    db.commit()
+    return _src_president_profile(president)
+
+
+@app.delete("/admin/src-presidents/{president_id}")
+def admin_delete_src_president(president_id: int, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    president = db.query(SrcPresident).filter(SrcPresident.id == president_id).first()
+    if not president:
+        raise HTTPException(status_code=404, detail="SRC president profile not found")
+    db.delete(president)
+    db.commit()
+    return {"ok": True}
+
+
 # ---------------------------------------------------------------------------
 # Administrator: every quiz script across every module
 # ---------------------------------------------------------------------------
@@ -2318,6 +2406,72 @@ FUN_STICKERS = {
     "thinking": "🤔",
 }
 
+@app.post("/src/register")
+async def register_src_president(
+    full_name: str = Form(...), party_name: str = Form(...), email: str = Form(...),
+    password: str = Form(...), confirm_password: str = Form(...), phone: str = Form(""),
+    profile_image: Optional[UploadFile] = File(None), db: Session = Depends(get_db),
+):
+    email = email.strip().lower()
+    if not full_name.strip() or not party_name.strip() or "@" not in email or len(password) < 8:
+        raise HTTPException(status_code=400, detail="Provide your name, party name, valid email, and a password of at least 8 characters")
+    if password != confirm_password:
+        raise HTTPException(status_code=400, detail="The password confirmation does not match")
+    if db.query(SrcPresident).filter(SrcPresident.email == email).first():
+        raise HTTPException(status_code=409, detail="An SRC president profile already uses this email")
+    image_url = upload_image_bytes(await profile_image.read(), folder="src_profiles") if profile_image and profile_image.filename else None
+    president = SrcPresident(full_name=full_name.strip()[:160], party_name=party_name.strip()[:120], email=email,
+        phone=phone.strip()[:60], profile_image_url=image_url, password_hash=_password_hash(password),
+        approved=False, active=True, created_at=datetime.now(timezone.utc).isoformat())
+    db.add(president); db.commit()
+    return {"ok": True, "message": "SRC profile created. An administrator must approve it before it can publish announcements."}
+
+
+@app.post("/src/login")
+def src_president_login(payload: SrcPresidentLogin, db: Session = Depends(get_db)):
+    president = db.query(SrcPresident).filter(SrcPresident.email == payload.email.strip().lower()).first()
+    if not president or not _password_matches(payload.password, president.password_hash):
+        raise HTTPException(status_code=401, detail="Incorrect SRC email or password")
+    if not president.active:
+        raise HTTPException(status_code=403, detail="This SRC president profile is inactive")
+    if not president.approved:
+        raise HTTPException(status_code=403, detail="Your SRC president profile is waiting for administrator approval")
+    return {"token": _issue_src_token(president.id), "profile": _src_president_profile(president)}
+
+
+@app.get("/src/me")
+def src_president_me(president: SrcPresident = Depends(require_src_president_account)):
+    return _src_president_profile(president)
+
+
+@app.put("/src/me")
+async def update_src_president_me(
+    full_name: str = Form(...), party_name: str = Form(...), phone: str = Form(""),
+    profile_image: Optional[UploadFile] = File(None), president: SrcPresident = Depends(require_src_president_account),
+    db: Session = Depends(get_db),
+):
+    if not full_name.strip() or not party_name.strip():
+        raise HTTPException(status_code=400, detail="Full name and party name are required")
+    president.full_name, president.party_name = full_name.strip()[:160], party_name.strip()[:120]
+    president.phone = phone.strip()[:60]
+    if profile_image and profile_image.filename:
+        president.profile_image_url = upload_image_bytes(await profile_image.read(), folder="src_profiles")
+    db.commit()
+    return _src_president_profile(president)
+
+
+@app.post("/src/me/change-password")
+def change_src_president_password(payload: SrcPasswordChange, president: SrcPresident = Depends(require_src_president_account), db: Session = Depends(get_db)):
+    if not _password_matches(payload.current_password, president.password_hash):
+        raise HTTPException(status_code=401, detail="Your current password is incorrect")
+    if len(payload.new_password) < 8:
+        raise HTTPException(status_code=400, detail="Your new password must be at least 8 characters")
+    if payload.new_password != payload.confirm_password:
+        raise HTTPException(status_code=400, detail="The new password confirmation does not match")
+    president.password_hash = _password_hash(payload.new_password); db.commit()
+    return {"ok": True}
+
+
 @app.get("/comrade/posts")
 def comrade_posts(db: Session = Depends(get_db)):
     """Public feed for the campus civic space; only replies require a student account."""
@@ -2339,17 +2493,12 @@ def comrade_posts(db: Session = Depends(get_db)):
     } for post in posts]
 
 @app.post("/comrade/posts")
-def create_comrade_post(payload: ComradeAnnouncement, db: Session = Depends(get_db)):
-    if not SRC_PRESIDENT_PASSWORD:
-        raise HTTPException(status_code=503, detail="SRC publishing has not been configured yet")
-    if not hmac.compare_digest(payload.password, SRC_PRESIDENT_PASSWORD):
-        raise HTTPException(status_code=401, detail="Incorrect SRC president password")
-    party_name = payload.party_name.strip()
+def create_comrade_post(payload: ComradeAnnouncement, president: SrcPresident = Depends(require_src_president_account), db: Session = Depends(get_db)):
     content = payload.content.strip()
-    if not party_name or not content:
-        raise HTTPException(status_code=400, detail="Party name and announcement are required")
+    if not content:
+        raise HTTPException(status_code=400, detail="An announcement is required")
     post = ComradePost(
-        party_name=party_name[:120],
+        party_name=president.party_name,
         content=content[:2000],
         created_at=datetime.now(timezone.utc).isoformat(),
     )
