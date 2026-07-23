@@ -1495,7 +1495,18 @@ async def upload_lesson(
     # in one step (no need for the old two-step "create row, then update
     # with the filename" dance that local-disk storage required).
     video_bytes = await video.read()
-    video_url = upload_video_bytes(video_bytes, folder=f"lesson_videos/{module_code}")
+    if not video_bytes:
+        raise HTTPException(status_code=400, detail="The selected video file is empty")
+    try:
+        video_url = upload_video_bytes(video_bytes, folder=f"lesson_videos/{module_code}")
+    except Exception:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "Video upload could not be completed. Check the Cloudinary credentials "
+                "and video upload limit, then retry with a smaller MP4 if needed."
+            ),
+        )
 
     lesson = Lesson(
         title=title,

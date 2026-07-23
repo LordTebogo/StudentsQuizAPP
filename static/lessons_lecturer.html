@@ -145,7 +145,7 @@ async function api(path, options = {}, needsAuth = false) {
   let data = null;
   try { data = await res.json(); } catch (e) { /* no body */ }
   if (!res.ok) {
-    const detail = (data && data.detail) ? data.detail : res.statusText;
+    const detail = (data && data.detail) || res.statusText || `The server did not return an error message (HTTP ${res.status}). Check the Render logs and try again.`;
     throw new Error(detail);
   }
   return data;
