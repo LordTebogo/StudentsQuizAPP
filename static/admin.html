@@ -11,6 +11,13 @@
 <link rel="manifest" href="/static/manifest.webmanifest">
 <title>Admin — QuizMark</title>
 <link rel="stylesheet" href="/static/style.css">
+<style>
+  .card { position: relative; }
+  .card-toggle { position:absolute; top:14px; right:14px; z-index:3; width:32px; height:32px; padding:0; border:1px solid rgba(103,232,249,.45); border-radius:50%; background:rgba(8,18,40,.88); color:#67e8f9; font:700 1.1rem/1 var(--font-mono, monospace); cursor:pointer; transition:transform .2s ease, background .2s ease; }
+  .card-toggle:hover { transform:scale(1.08); background:rgba(103,232,249,.18); }
+  .card.collapsed { min-height:60px; padding-bottom:18px; overflow:hidden; }
+  .card.collapsed > :not(.card-toggle) { display:none !important; }
+</style>
 </head>
 <body>
 <div class="wrap" id="gateWrap">
@@ -62,6 +69,7 @@
     <div class="admin-editor-heading"><div><span class="kicker">Assessment archive</span><h2>All student scripts</h2></div><button class="btn secondary" id="refreshScriptsBtn">Refresh scripts</button></div>
     <p class="muted">Every quiz script submitted across every module. Download a complete PDF including answers, marks, and expected answers.</p>
     <div id="adminScriptsList" class="admin-list"></div><div id="adminScriptsMsg"></div>
+    <div id="adminMarkCard" class="hidden"><h3>Mark selected script</h3><p class="muted">Score short or long answers below. Multiple-choice scores remain automatic.</p><div id="adminMarkQuestions"></div><button class="btn" id="saveAdminMarksBtn">Save marks</button><div id="adminMarkMsg"></div></div>
   </section>
 
   <section class="card">
@@ -158,11 +166,29 @@ async function loadAdminScripts() {
     const scripts = await api('/admin/submissions');
     $('adminScriptsList').innerHTML = scripts.length ? scripts.map(script => `<div class="admin-list-item"><span><strong>${escapeHtml(script.student_name)}</strong><small>${escapeHtml(script.module_code)} · ${escapeHtml(script.quiz_title)} · ${escapeHtml(script.student_id)} · ${escapeHtml(script.submitted_at)}</small></span><span><span class="badge ${script.fully_marked ? 'done' : 'pending'}">${script.total_score} / ${script.max_score}${script.fully_marked ? ' final' : ' pending'}</span> <button class="row-download-btn" data-admin-script="${script.id}">PDF</button></span></div>`).join('') : '<p class="muted">No student scripts have been submitted yet.</p>';
     $('adminScriptsList').querySelectorAll('[data-admin-script]').forEach(button => button.addEventListener('click', () => downloadAdminScript(button.dataset.adminScript)));
+    $('adminScriptsList').querySelectorAll('.admin-list-item').forEach(row => { const pdf = row.querySelector('[data-admin-script]'); if (pdf && row.textContent.includes('pending')) { const mark = document.createElement('button'); mark.className = 'row-download-btn'; mark.textContent = 'Mark'; mark.addEventListener('click', () => openAdminMarking(pdf.dataset.adminScript)); pdf.parentElement.appendChild(mark); } });
   } catch (err) { showMsg($('adminScriptsMsg'), err.message, 'error'); }
 }
 async function downloadAdminScript(id) {
   try { const response = await fetch(`/admin/submissions/${id}/pdf`, {headers:{'X-Lecturer-Pin':pin}}); if (!response.ok) throw new Error('Could not download this script.'); const blob = await response.blob(); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `student_script_${id}.pdf`; link.click(); URL.revokeObjectURL(url); }
   catch (err) { showMsg($('adminScriptsMsg'), err.message, 'error'); }
+}
+let adminMarkSubmissionId = null;
+async function openAdminMarking(id) {
+  try {
+    const detail = await api(`/admin/submissions/${id}`); adminMarkSubmissionId = id;
+    const answers = detail.answers.filter(answer => answer.type === 'short' || answer.type === 'long');
+    $('adminMarkQuestions').innerHTML = answers.length ? answers.map(answer => `<div class="q"><strong>${escapeHtml(answer.question)}</strong><p class="muted">Student answer: ${escapeHtml(answer.answer_text || 'No answer')} · Maximum: ${answer.max_marks}</p><label>Mark</label><input class="admin-mark-input" data-question="${answer.question_id}" type="number" min="0" max="${answer.max_marks}" step="0.5" value="${answer.awarded_marks ?? 0}"></div>`).join('') : '<p class="muted">There are no manual answers in this script.</p>';
+    $('adminMarkMsg').innerHTML = ''; $('adminMarkCard').classList.remove('hidden'); $('adminMarkCard').scrollIntoView({behavior:'smooth', block:'center'});
+  } catch (error) { showMsg($('adminScriptsMsg'), error.message, 'error'); }
+}
+async function saveAdminMarks() {
+  if (!adminMarkSubmissionId) return;
+  try {
+    const marks = [...document.querySelectorAll('.admin-mark-input')].map(input => ({question_id:Number(input.dataset.question), awarded_marks:Number(input.value) || 0}));
+    await api(`/admin/submissions/${adminMarkSubmissionId}/mark`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({marks})});
+    showMsg($('adminMarkMsg'), 'Marks saved successfully.', 'success'); loadAdminScripts();
+  } catch (error) { showMsg($('adminMarkMsg'), error.message, 'error'); }
 }
 function lecturerFormPayload(includePassword) {
   const modules = $('lecturerModules').value.split(',').map(code => code.trim()).filter(Boolean);
@@ -260,12 +286,18 @@ $('deleteStudentBtn').addEventListener('click', deleteStudent);
 $('deleteLecturerBtn').addEventListener('click', deleteLecturer);
 $('refreshLecturersBtn').addEventListener('click', loadLecturers);
 $('refreshScriptsBtn').addEventListener('click', loadAdminScripts);
+$('saveAdminMarksBtn').addEventListener('click', saveAdminMarks);
 $('refreshCommunityBtn').addEventListener('click', () => loadCommunityModeration());
 $('postOfficialFunBtn').addEventListener('click', postOfficialFun);
 $('postOfficialLessonBtn').addEventListener('click', postOfficialLesson);
 $('saveBtn').addEventListener('click', save); $('deleteBtn').addEventListener('click', remove);
 $('closeEditorBtn').addEventListener('click', () => $('editorCard').classList.add('hidden'));
 $('lockBtn').addEventListener('click', event => { event.preventDefault(); sessionStorage.removeItem('lecturerPin'); pin = null; $('appWrap').classList.add('hidden'); $('gateWrap').classList.remove('hidden'); });
+document.querySelectorAll('.card').forEach(card => {
+  const toggle = document.createElement('button'); toggle.type = 'button'; toggle.className = 'card-toggle'; toggle.title = 'Collapse this panel'; toggle.setAttribute('aria-label', 'Collapse this panel'); toggle.textContent = '−';
+  toggle.addEventListener('click', () => { const collapsed = card.classList.toggle('collapsed'); toggle.textContent = collapsed ? '+' : '−'; toggle.title = collapsed ? 'Expand this panel' : 'Collapse this panel'; });
+  card.appendChild(toggle);
+});
 if (pin) unlock(pin);
 </script>
 <script src="/static/pwa.js"></script>
