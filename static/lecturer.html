@@ -11,6 +11,24 @@
 <link rel="manifest" href="/static/manifest.webmanifest">
 <title>Lecturer — Quiz App</title>
 <link rel="stylesheet" href="/static/style.css">
+<style>
+  .lecturer-workbench { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(280px, .75fr); gap: 22px; align-items: start; }
+  .lecturer-workbench .card { margin-bottom: 0; }
+  .lecturer-roster .admin-editor-heading { align-items: center; }
+  .lecturer-roster details, .message-history { margin-top: 18px; border: 1px solid var(--line); border-radius: 13px; background: rgba(3, 7, 18, .23); }
+  .lecturer-roster summary, .message-history summary { padding: 13px 15px; color: var(--cyan); font: 500 .72rem var(--font-mono); letter-spacing: .07em; text-transform: uppercase; cursor: pointer; }
+  .lecturer-roster details[open] summary, .message-history[open] summary { border-bottom: 1px solid var(--line); }
+  .lecturer-roster .admin-list, .message-history .admin-list { margin: 0; padding: 12px; }
+  .message-entry { padding: 14px 0; border-bottom: 1px solid var(--line); }
+  .message-entry:first-child { padding-top: 0; }
+  .message-entry:last-child { padding-bottom: 0; border-bottom: 0; }
+  .message-entry header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .message-entry strong { color: var(--text); }
+  .message-entry time { color: var(--text-muted); font: .66rem var(--font-mono); white-space: nowrap; }
+  .message-entry p { margin: 7px 0 0; color: var(--text-muted); white-space: pre-wrap; }
+  #lecturerMessagesCard textarea { min-height: 96px; }
+  @media (max-width: 760px) { .lecturer-workbench { grid-template-columns: 1fr; } }
+</style>
 </head>
 <body>
 
@@ -53,11 +71,12 @@
 
   <h1>Lecturer</h1>
   <p class="lede">Upload a quiz to a module, share the module link with your class, then mark long answers as submissions come in.</p>
-  <section class="card"><div class="admin-editor-heading"><div><span class="kicker">Assigned learners</span><h2>Students in my modules</h2></div><button class="btn secondary" id="refreshMyStudents">Refresh</button></div><div id="myStudentsList" class="admin-list"></div></section>
-  <section class="card" id="lecturerMessagesCard"><div class="admin-editor-heading"><h2>Message a student</h2><button class="btn secondary" id="refreshLecturerMessagesBtn">Refresh</button></div><label for="lecturerMessageStudent">Choose student</label><select id="lecturerMessageStudent"></select><label for="lecturerMessageText">Message</label><textarea id="lecturerMessageText" maxlength="2000" placeholder="Write a private message to the selected student"></textarea><button class="btn" id="sendLecturerMessageBtn">Send message</button><div id="lecturerMessageMsg"></div><div id="lecturerMessagesList" class="admin-list"></div></section>
+  <section class="card lecturer-roster"><div class="admin-editor-heading"><div><span class="kicker">Assigned learners</span><h2>Students in my modules</h2><p class="muted" id="myStudentsSummary">Loading enrolled students…</p></div><button class="btn secondary" id="refreshMyStudents">Refresh</button></div><details><summary>Show enrolled students</summary><div id="myStudentsList" class="admin-list"></div></details></section>
+  <section class="card" id="lecturerMessagesCard"><div class="admin-editor-heading"><div><span class="kicker">Student support</span><h2>Message a student</h2></div><button class="btn secondary" id="refreshLecturerMessagesBtn">Refresh</button></div><label for="lecturerMessageStudent">Choose student</label><select id="lecturerMessageStudent"></select><label for="lecturerMessageText">Message</label><textarea id="lecturerMessageText" maxlength="2000" placeholder="Write a private message to the selected student"></textarea><button class="btn" id="sendLecturerMessageBtn">Send message</button><div id="lecturerMessageMsg"></div><details class="message-history"><summary>Show conversation history</summary><div id="lecturerMessagesList" class="admin-list"></div></details></section>
   <div class="card"><div class="profile-strip"><img id="profileImage" class="profile-avatar hidden" alt="Lecturer profile image"><div id="profileSummary" class="muted"></div><button class="btn secondary" id="editProfileBtn">Edit profile</button></div></div>
   <div class="card hidden" id="profileCard"><h2>My lecturer profile</h2><label for="profileName">Full name</label><input id="profileName" type="text"><label for="profilePhone">Phone</label><input id="profilePhone" type="text"><label for="profileInstitution">Institution</label><input id="profileInstitution" type="text"><label for="profileBio">Professional bio</label><textarea id="profileBio"></textarea><label for="profileUpload">Profile image</label><input id="profileUpload" type="file" accept="image/*"><button class="btn" id="saveProfileBtn">Save profile</button><div id="profileMsg"></div></div>
 
+  <div class="lecturer-workbench">
   <!-- Upload -->
   <div class="card">
     <h2>1. Upload a quiz</h2>
@@ -86,6 +105,8 @@
       <button class="btn" id="loadStudentsBtn" disabled>See students who took this quiz</button>
     </div>
     <p class="muted" id="quizReviewStatus" aria-live="polite">Choose a quiz, then load its student submissions.</p>
+  </div>
+
   </div>
 
   <!-- Submissions -->
@@ -555,11 +576,11 @@ $('saveMarksBtn').addEventListener('click', async () => {
   }
 });
 
-async function loadLecturerMessages() { try { const [students, messages] = await Promise.all([api('/lecturer/message-students', {}, true), api('/lecturer/messages', {}, true)]); $('lecturerMessageStudent').innerHTML = students.map(student => `<option value="${student.id}">${student.full_name}</option>`).join('') || '<option value="">No approved students</option>'; $('lecturerMessagesList').innerHTML = messages.length ? messages.map(message => `<div class="q"><strong>${message.sender_name}</strong><small>${message.created_at}</small><div>${message.content}</div></div>`).join('') : '<p class="muted">No messages yet.</p>'; } catch (error) { showMsg($('lecturerMessageMsg'), error.message, 'error'); } }
+async function loadLecturerMessages() { try { const [students, messages] = await Promise.all([api('/lecturer/message-students', {}, true), api('/lecturer/messages', {}, true)]); $('lecturerMessageStudent').innerHTML = students.map(student => `<option value="${student.id}">${escapeHtml(student.full_name)}</option>`).join('') || '<option value="">No approved students</option>'; $('lecturerMessagesList').innerHTML = messages.length ? messages.map(message => `<article class="message-entry"><header><strong>${escapeHtml(message.sender_name)}</strong><time>${formatSAST(message.created_at)}</time></header><p>${escapeHtml(message.content)}</p></article>`).join('') : '<p class="muted">No messages yet.</p>'; } catch (error) { showMsg($('lecturerMessageMsg'), error.message, 'error'); } }
 $('refreshLecturerMessagesBtn').addEventListener('click', loadLecturerMessages);
 $('sendLecturerMessageBtn').addEventListener('click', async () => { try { await api('/lecturer/messages', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({recipient_type:'student', recipient_id:Number($('lecturerMessageStudent').value), content:$('lecturerMessageText').value.trim()})}, true); $('lecturerMessageText').value=''; loadLecturerMessages(); } catch (error) { showMsg($('lecturerMessageMsg'), error.message, 'error'); } });
 if (LECTURER_TOKEN) loadLecturerMessages();
-async function loadMyStudents(){try{const rows=await api('/lecturer/students',{},true);$('myStudentsList').innerHTML=rows.length?rows.map(s=>`<div class="admin-list-item"><span><strong>${s.full_name}</strong><small>${s.student_number} · ${s.module_codes.join(', ')}</small></span><span class="badge done">Enrolled</span></div>`).join(''):'<p class="muted">No enrolled students in your assigned modules yet.</p>'}catch(e){$('myStudentsList').innerHTML='<p class="muted">Could not load students.</p>'}}
+async function loadMyStudents(){try{const rows=await api('/lecturer/students',{},true);const modules=[...new Set(rows.flatMap(student=>student.module_codes||[]))];$('myStudentsSummary').textContent=rows.length?`${rows.length} enrolled student${rows.length===1?'':'s'} across ${modules.length} assigned module${modules.length===1?'':'s'}.`:'No enrolled students in your assigned modules yet.';$('myStudentsList').innerHTML=rows.length?rows.map(s=>`<div class="admin-list-item"><span><strong>${escapeHtml(s.full_name)}</strong><small>${escapeHtml(s.student_number)} · ${escapeHtml((s.module_codes||[]).join(', '))}</small></span><span class="badge done">Enrolled</span></div>`).join(''):'<p class="muted">No enrolled students in your assigned modules yet.</p>'}catch(e){$('myStudentsSummary').textContent='Could not load enrolled students.';$('myStudentsList').innerHTML='<p class="muted">Could not load students.</p>'}}
 $('refreshMyStudents').addEventListener('click',loadMyStudents);if(LECTURER_TOKEN)loadMyStudents();
 const lecturerWorkspace = $('appWrap'); const lecturerProfileCard = $('profileImage').closest('.card'); const lecturerMessageCard = $('lecturerMessagesCard'); lecturerWorkspace.insertBefore(lecturerProfileCard, lecturerWorkspace.querySelector('.card')); lecturerWorkspace.appendChild(lecturerMessageCard);
 $('downloadOnePdfBtn').addEventListener('click', () => {
