@@ -103,6 +103,7 @@ SRC_SESSION_SECRET = os.getenv("SRC_SESSION_SECRET", STUDENT_SESSION_SECRET)
 VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "").strip()
 VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "").strip()
 VAPID_SUBJECT = os.getenv("VAPID_SUBJECT", "mailto:admin@example.com").strip()
+MAX_LESSON_VIDEO_BYTES = 80 * 1024 * 1024
 
 # Optional convenience folder: images committed into the repo ahead of time
 # (e.g. shipped alongside the code) can be referenced by filename in a quiz
@@ -1536,15 +1537,17 @@ async def upload_lesson(
     video_bytes = await video.read()
     if not video_bytes:
         raise HTTPException(status_code=400, detail="The selected video file is empty")
+    if len(video_bytes) > MAX_LESSON_VIDEO_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail="Your video is too large. The maximum allowed size is 80 MB. Please compress the video or choose a smaller MP4.",
+        )
     try:
         video_url = upload_video_bytes(video_bytes, folder=f"lesson_videos/{module_code}")
     except Exception:
         raise HTTPException(
             status_code=502,
-            detail=(
-                "Video upload could not be completed. Check the Cloudinary credentials "
-                "and video upload limit, then retry with a smaller MP4 if needed."
-            ),
+            detail="Your video is too large. The maximum allowed size is 80 MB. Please compress the video or choose a smaller MP4.",
         )
 
     lesson = Lesson(

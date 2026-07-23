@@ -208,6 +208,10 @@ $('uploadLessonBtn').addEventListener('click', async () => {
   if (!moduleCode) { showMsg(msgBox, 'Enter a module code first.', 'error'); return; }
   if (!fileInput.files.length) { showMsg(msgBox, 'Choose a lesson JSON file first.', 'error'); return; }
   if (!videoInput.files.length) { showMsg(msgBox, 'Choose a video file first.', 'error'); return; }
+  if (videoInput.files[0].size > 80 * 1024 * 1024) {
+    showMsg(msgBox, 'Your video is too large. The maximum allowed size is 80 MB. Please compress the video or choose a smaller MP4.', 'error');
+    return;
+  }
 
   const formData = new FormData();
   formData.append('file', fileInput.files[0]);
