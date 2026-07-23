@@ -1,5 +1,15 @@
 let installPrompt = null;
 
+function isInstalledApp() {
+  return window.matchMedia("(display-mode: standalone)").matches
+    || window.navigator.standalone === true;
+}
+
+function syncInstallButton() {
+  const button = document.getElementById("installAppBtn");
+  if (button && isInstalledApp()) button.remove();
+}
+
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => navigator.serviceWorker.register("/static/service-worker.js"));
 }
@@ -14,13 +24,14 @@ window.addEventListener("beforeinstallprompt", event => {
 window.addEventListener("appinstalled", () => {
   const button = document.getElementById("installAppBtn");
   const hint = document.getElementById("installHint");
-  if (button) button.classList.add("hidden");
+  if (button) button.remove();
   if (hint) hint.textContent = "QuizMark is installed on this device.";
 });
 
 document.addEventListener("DOMContentLoaded", () => {
   const button = document.getElementById("installAppBtn");
   const hint = document.getElementById("installHint");
+  syncInstallButton();
   if (!button) return;
   button.addEventListener("click", async () => {
     if (installPrompt) {
@@ -33,3 +44,5 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 });
+
+window.matchMedia("(display-mode: standalone)").addEventListener("change", syncInstallButton);

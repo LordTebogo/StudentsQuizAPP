@@ -99,7 +99,18 @@ class FunPost(Base):
     image_url = Column(Text)
     video_url = Column(Text)
     sticker_code = Column(String)
+    is_pinned = Column(Boolean, nullable=False, default=False)
     is_anonymous = Column(Boolean, nullable=False, default=False)
+    created_at = Column(String, nullable=False)
+
+
+class FunOfficialPost(Base):
+    """Administrator notices shown alongside student Fun Page posts."""
+    __tablename__ = "fun_official_posts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    content = Column(Text, nullable=False)
+    is_pinned = Column(Boolean, nullable=False, default=False)
     created_at = Column(String, nullable=False)
 
 
@@ -269,6 +280,8 @@ class LessonComment(Base):
     lesson_id = Column(Integer, ForeignKey("lessons.id"), nullable=False)
     author_name = Column(String, nullable=False)
     is_lecturer = Column(Boolean, nullable=False, default=False)
+    is_official = Column(Boolean, nullable=False, default=False)
+    is_pinned = Column(Boolean, nullable=False, default=False)
     comment_text = Column(Text, nullable=False)
     created_at = Column(String, nullable=False)
 

@@ -72,6 +72,7 @@ from models import (
     Lecturer,
     LecturerModule,
     FunPost,
+    FunOfficialPost,
     Question,
     Quiz,
     Submission,
@@ -149,9 +150,26 @@ def ensure_fun_post_media_schema():
             conn.execute(text("ALTER TABLE fun_posts ADD COLUMN video_url TEXT"))
         if "sticker_code" not in columns:
             conn.execute(text("ALTER TABLE fun_posts ADD COLUMN sticker_code VARCHAR(32)"))
+        if "is_pinned" not in columns:
+            conn.execute(text("ALTER TABLE fun_posts ADD COLUMN is_pinned BOOLEAN DEFAULT FALSE"))
 
 
 ensure_fun_post_media_schema()
+
+
+def ensure_comment_moderation_schema():
+    """Add official and pinned state to lesson discussions created before moderation."""
+    if "lesson_comments" not in inspect(engine).get_table_names():
+        return
+    columns = {column["name"] for column in inspect(engine).get_columns("lesson_comments")}
+    with engine.begin() as conn:
+        if "is_official" not in columns:
+            conn.execute(text("ALTER TABLE lesson_comments ADD COLUMN is_official BOOLEAN DEFAULT FALSE"))
+        if "is_pinned" not in columns:
+            conn.execute(text("ALTER TABLE lesson_comments ADD COLUMN is_pinned BOOLEAN DEFAULT FALSE"))
+
+
+ensure_comment_moderation_schema()
 
 app = FastAPI(title="Quiz + Video Lessons App")
 
@@ -197,6 +215,14 @@ class CommentCreate(BaseModel):
     author_name: str
     comment_text: str
     is_lecturer: bool = False
+
+
+class AdminOfficialComment(BaseModel):
+    content: str
+
+
+class PinUpdate(BaseModel):
+    pinned: bool
 
 
 class FunPostCreate(BaseModel):
@@ -1621,11 +1647,12 @@ def get_lesson_comments(lesson_id: int, db: Session = Depends(get_db)):
     rows = (
         db.query(LessonComment)
         .filter(LessonComment.lesson_id == lesson_id)
-        .order_by(LessonComment.created_at.asc())
+        .order_by(LessonComment.is_pinned.desc(), LessonComment.created_at.asc())
         .all()
     )
     return [
         {"id": c.id, "author_name": c.author_name, "is_lecturer": c.is_lecturer,
+         "is_official": c.is_official, "is_pinned": c.is_pinned,
          "comment_text": c.comment_text, "created_at": c.created_at}
         for c in rows
     ]
@@ -1654,6 +1681,8 @@ def post_lesson_comment(
         lesson_id=lesson_id,
         author_name=lecturer.full_name if lecturer else (payload.author_name.strip() or "Anonymous"),
         is_lecturer=payload.is_lecturer,
+        is_official=False,
+        is_pinned=False,
         comment_text=payload.comment_text.strip(),
         created_at=datetime.utcnow().isoformat() + "Z",
     )
@@ -2005,12 +2034,35 @@ def _fun_post_payload(post: FunPost, students_by_id: dict, current_student_id: i
         "image_url": post.image_url,
         "video_url": post.video_url,
         "sticker_code": post.sticker_code,
+        "is_pinned": post.is_pinned,
+        "is_official": False,
+        "can_reply": True,
         "is_anonymous": post.is_anonymous,
         "author_name": "Anonymous student" if post.is_anonymous else (author.full_name if author else "Former student"),
         "author_image_url": None if post.is_anonymous or not author else author.profile_image_url,
         "created_at": post.created_at,
         "is_author": post.author_student_id == current_student_id,
         "replies": replies,
+    }
+
+
+def _official_fun_post_payload(post: FunOfficialPost) -> dict:
+    return {
+        "id": f"official-{post.id}",
+        "parent_id": None,
+        "content": post.content,
+        "image_url": None,
+        "video_url": None,
+        "sticker_code": None,
+        "is_pinned": post.is_pinned,
+        "is_official": True,
+        "can_reply": False,
+        "is_anonymous": False,
+        "author_name": "QuizMark Admin",
+        "author_image_url": None,
+        "created_at": post.created_at,
+        "is_author": False,
+        "replies": [],
     }
 
 
@@ -2047,8 +2099,10 @@ def list_fun_posts(student: Student = Depends(require_student_account), db: Sess
             [serialize(child) for child in children_by_parent.get(post.id, [])],
         )
 
-    # New discussions appear first; replies remain in their natural conversation order.
-    return [serialize(post) for post in reversed(children_by_parent.get(None, []))]
+    roots = [serialize(post) for post in children_by_parent.get(None, [])]
+    roots.extend(_official_fun_post_payload(post) for post in db.query(FunOfficialPost).all())
+    # Pinned notices come first; replies remain in their natural conversation order.
+    return sorted(roots, key=lambda item: (bool(item["is_pinned"]), item["created_at"]), reverse=True)
 
 
 @app.post("/fun/posts")
@@ -2123,6 +2177,145 @@ def delete_fun_post(post_id: int, student: Student = Depends(require_student_acc
         db.delete(item)
 
     delete_thread(post)
+    db.commit()
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Administrator community moderation
+# ---------------------------------------------------------------------------
+
+def _delete_fun_post_thread(db: Session, post: FunPost):
+    for child in db.query(FunPost).filter(FunPost.parent_id == post.id).all():
+        _delete_fun_post_thread(db, child)
+    db.delete(post)
+
+
+@app.get("/admin/fun/posts")
+def admin_list_fun_posts(_pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    student_posts = db.query(FunPost).order_by(FunPost.is_pinned.desc(), FunPost.created_at.desc()).all()
+    author_ids = {post.author_student_id for post in student_posts}
+    students_by_id = {
+        item.id: item for item in db.query(Student).filter(Student.id.in_(author_ids)).all()
+    } if author_ids else {}
+    items = []
+    for post in student_posts:
+        item = _fun_post_payload(post, students_by_id, -1, [])
+        item["kind"] = "student"
+        items.append(item)
+    for post in db.query(FunOfficialPost).order_by(FunOfficialPost.is_pinned.desc(), FunOfficialPost.created_at.desc()).all():
+        item = _official_fun_post_payload(post)
+        item["kind"] = "official"
+        items.append(item)
+    return sorted(items, key=lambda item: (bool(item["is_pinned"]), item["created_at"]), reverse=True)
+
+
+@app.post("/admin/fun/official-posts")
+def admin_create_fun_official_post(payload: AdminOfficialComment, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    content = payload.content.strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="Write an official comment before posting")
+    if len(content) > 1500:
+        raise HTTPException(status_code=400, detail="Official comments can be up to 1,500 characters")
+    post = FunOfficialPost(content=content, is_pinned=False, created_at=datetime.utcnow().isoformat() + "Z")
+    db.add(post)
+    db.commit()
+    return {"ok": True, "id": post.id}
+
+
+@app.put("/admin/fun/posts/{post_id}/pin")
+def admin_pin_fun_post(post_id: int, payload: PinUpdate, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    post = db.query(FunPost).filter(FunPost.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Fun Page post not found")
+    post.is_pinned = payload.pinned
+    db.commit()
+    return {"ok": True, "pinned": post.is_pinned}
+
+
+@app.put("/admin/fun/official-posts/{post_id}/pin")
+def admin_pin_official_fun_post(post_id: int, payload: PinUpdate, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    post = db.query(FunOfficialPost).filter(FunOfficialPost.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Official Fun Page post not found")
+    post.is_pinned = payload.pinned
+    db.commit()
+    return {"ok": True, "pinned": post.is_pinned}
+
+
+@app.delete("/admin/fun/posts/{post_id}")
+def admin_delete_fun_post(post_id: int, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    post = db.query(FunPost).filter(FunPost.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Fun Page post not found")
+    _delete_fun_post_thread(db, post)
+    db.commit()
+    return {"ok": True}
+
+
+@app.delete("/admin/fun/official-posts/{post_id}")
+def admin_delete_official_fun_post(post_id: int, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    post = db.query(FunOfficialPost).filter(FunOfficialPost.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Official Fun Page post not found")
+    db.delete(post)
+    db.commit()
+    return {"ok": True}
+
+
+@app.get("/admin/lesson-comments")
+def admin_list_lesson_comments(_pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    rows = (
+        db.query(LessonComment, Lesson)
+        .join(Lesson, Lesson.id == LessonComment.lesson_id)
+        .order_by(LessonComment.is_pinned.desc(), LessonComment.created_at.desc())
+        .all()
+    )
+    return [
+        {"id": comment.id, "lesson_id": lesson.id, "lesson_title": lesson.title,
+         "author_name": comment.author_name, "is_lecturer": comment.is_lecturer,
+         "is_official": comment.is_official, "is_pinned": comment.is_pinned,
+         "comment_text": comment.comment_text, "created_at": comment.created_at}
+        for comment, lesson in rows
+    ]
+
+
+@app.post("/admin/lessons/{lesson_id}/comments")
+def admin_create_lesson_comment(lesson_id: int, payload: AdminOfficialComment, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    lesson = db.query(Lesson).filter(Lesson.id == lesson_id).first()
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    content = payload.content.strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="Write an official comment before posting")
+    if len(content) > 1500:
+        raise HTTPException(status_code=400, detail="Official comments can be up to 1,500 characters")
+    comment = LessonComment(
+        lesson_id=lesson.id, author_name="QuizMark Admin", is_lecturer=True,
+        is_official=True, is_pinned=False, comment_text=content,
+        created_at=datetime.utcnow().isoformat() + "Z",
+    )
+    db.add(comment)
+    db.commit()
+    return {"ok": True, "id": comment.id}
+
+
+@app.put("/admin/lesson-comments/{comment_id}/pin")
+def admin_pin_lesson_comment(comment_id: int, payload: PinUpdate, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    comment = db.query(LessonComment).filter(LessonComment.id == comment_id).first()
+    if not comment:
+        raise HTTPException(status_code=404, detail="Lesson comment not found")
+    comment.is_pinned = payload.pinned
+    db.commit()
+    return {"ok": True, "pinned": comment.is_pinned}
+
+
+@app.delete("/admin/lesson-comments/{comment_id}")
+def admin_delete_lesson_comment(comment_id: int, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    comment = db.query(LessonComment).filter(LessonComment.id == comment_id).first()
+    if not comment:
+        raise HTTPException(status_code=404, detail="Lesson comment not found")
+    db.delete(comment)
     db.commit()
     return {"ok": True}
 

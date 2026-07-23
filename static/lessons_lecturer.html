@@ -304,7 +304,7 @@ async function loadComments(lessonId) {
     }
     list.innerHTML = comments.map(c => `
       <div class="comment">
-        <div class="comment-meta">${escapeHtml(c.author_name)}${c.is_lecturer ? ' <span class="lecturer-tag">(Lecturer)</span>' : ''} &middot; ${formatSAST(c.created_at)}</div>
+        <div class="comment-meta">${escapeHtml(c.author_name)}${c.is_official ? ' <span class="lecturer-tag">(Official)</span>' : (c.is_lecturer ? ' <span class="lecturer-tag">(Lecturer)</span>' : '')}${c.is_pinned ? ' <span class="lecturer-tag">(Pinned)</span>' : ''} &middot; ${formatSAST(c.created_at)}</div>
         <div>${escapeHtml(c.comment_text)}</div>
       </div>
     `).join('');

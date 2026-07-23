@@ -58,6 +58,26 @@
     <div id="studentAdminCard" class="hidden"><label class="check-label"><input id="studentApproved" type="checkbox"> Approved</label><label class="check-label"><input id="studentActive" type="checkbox"> Active</label><label for="studentResetPassword">New password</label><input id="studentResetPassword" type="password" placeholder="At least 8 characters"><button class="btn" id="saveStudentBtn">Save student access</button><button class="btn secondary" id="resetStudentPasswordBtn">Reset password</button><button class="btn secondary" id="deleteStudentBtn">Remove student</button><div id="studentMsg"></div></div>
   </section>
 
+  <section class="card">
+    <div class="admin-editor-heading"><div><span class="kicker">Safe community</span><h2>Community moderation</h2></div><button class="btn secondary" id="refreshCommunityBtn">Refresh discussions</button></div>
+    <p class="muted">Publish official notices, pin important discussion items, or remove inappropriate posts and comments.</p>
+    <div class="admin-grid">
+      <div>
+        <h3>Fun Page</h3>
+        <label for="officialFunText">Official Fun Page comment</label><textarea id="officialFunText" maxlength="1500" placeholder="A notice from QuizMark Admin…"></textarea>
+        <button class="btn" id="postOfficialFunBtn">Post official comment</button><div id="officialFunMsg"></div>
+        <div id="funModerationList" class="admin-list"></div>
+      </div>
+      <div>
+        <h3>Lesson discussions</h3>
+        <label for="officialLessonSelect">Lesson</label><select id="officialLessonSelect"></select>
+        <label for="officialLessonText">Official lesson comment</label><textarea id="officialLessonText" maxlength="1500" placeholder="A notice for students taking this lesson…"></textarea>
+        <button class="btn" id="postOfficialLessonBtn">Post official comment</button><div id="officialLessonMsg"></div>
+        <div id="lessonModerationList" class="admin-list"></div>
+      </div>
+    </div>
+  </section>
+
   <section class="card hidden" id="editorCard">
     <div class="admin-editor-heading"><div><span class="kicker" id="editorKicker">Create</span><h2 id="editorTitle">New content</h2></div><button class="btn secondary" id="closeEditorBtn">Close</button></div>
     <div id="quizFields">
@@ -124,7 +144,7 @@ function renderList(target, items, kind) {
   $(target).querySelectorAll('[data-id]').forEach(button => button.addEventListener('click', () => edit(kind, button.dataset.id)));
 }
 async function loadLists() {
-  try { const [quizzes, lessons] = await Promise.all([api('/admin/quizzes'), api('/admin/lessons')]); renderList('quizList', quizzes, 'quiz'); renderList('lessonList', lessons, 'lesson'); loadLecturers(); loadStudents(); }
+  try { const [quizzes, lessons] = await Promise.all([api('/admin/quizzes'), api('/admin/lessons')]); renderList('quizList', quizzes, 'quiz'); renderList('lessonList', lessons, 'lesson'); loadLecturers(); loadStudents(); loadCommunityModeration(lessons); }
   catch (err) { showMsg($('editorMsg'), `Could not load content: ${err.message}`, 'error'); }
 }
 function lecturerFormPayload(includePassword) {
@@ -157,6 +177,29 @@ async function saveLecturer() {
 }
 async function deleteLecturer() { if (!selectedLecturerId || !confirm('Remove this lecturer profile? Profiles with owned quizzes or lessons cannot be removed.')) return; try { await api(`/admin/lecturers/${selectedLecturerId}`, {method:'DELETE'}); clearLecturerForm(); loadLecturers(); } catch (err) { showMsg($('lecturerMsg'), err.message, 'error'); } }
 function loadStudents() { api('/admin/students').then(students => { $('studentList').innerHTML = students.length ? students.map(item => `<button class="admin-list-item" data-student="${item.id}"><span><strong>${escapeHtml(item.full_name)}</strong><small>${escapeHtml(item.student_number)} · ${escapeHtml(item.email)}</small></span><span class="badge ${item.approved && item.active ? 'done' : 'pending'}">${item.active ? (item.approved ? 'Active' : 'Awaiting approval') : 'Inactive'}</span></button>`).join('') : '<p class="muted">No student profiles yet.</p>'; $('studentList').querySelectorAll('[data-student]').forEach(button => button.addEventListener('click', () => selectStudent(button.dataset.student, students))); }).catch(err => showMsg($('studentMsg'), err.message, 'error')); }
+function renderModerationItem(item, area) {
+  const pinAction = item.is_pinned ? 'Unpin' : 'Pin';
+  const kind = item.kind || 'lesson';
+  const title = area === 'fun' ? (item.is_official ? 'QuizMark Admin' : item.author_name) : `${item.lesson_title} · ${item.author_name}`;
+  const badge = item.is_pinned ? '<span class="badge pending">Pinned</span>' : (item.is_official ? '<span class="badge done">Official</span>' : '');
+  return `<div class="q"><div class="qmarks">${badge}</div><div class="qtext">${escapeHtml(title)}</div><div>${escapeHtml(item.content || item.comment_text)}</div><p class="muted">${escapeHtml(item.created_at)}</p><button class="row-download-btn" data-moderate-area="${area}" data-moderate-kind="${kind}" data-moderate-id="${item.id}" data-moderate-action="pin">${pinAction}</button> <button class="row-download-btn" data-moderate-area="${area}" data-moderate-kind="${kind}" data-moderate-id="${item.id}" data-moderate-action="delete">Delete</button></div>`;
+}
+function bindModerationActions() { document.querySelectorAll('[data-moderate-action]').forEach(button => button.addEventListener('click', () => moderateItem(button.dataset.moderateArea, button.dataset.moderateKind, button.dataset.moderateId, button.dataset.moderateAction))); }
+async function loadCommunityModeration(lessons = null) {
+  if (lessons) { const selected = $('officialLessonSelect').value; $('officialLessonSelect').innerHTML = lessons.length ? lessons.map(item => `<option value="${item.id}">${escapeHtml(item.title)} · ${escapeHtml(item.module_code)}</option>`).join('') : '<option value="">No lessons available</option>'; if (selected) $('officialLessonSelect').value = selected; }
+  try { const [funPosts, lessonComments] = await Promise.all([api('/admin/fun/posts'), api('/admin/lesson-comments')]); $('funModerationList').innerHTML = funPosts.length ? funPosts.map(item => renderModerationItem(item, 'fun')).join('') : '<p class="muted">No Fun Page posts yet.</p>'; $('lessonModerationList').innerHTML = lessonComments.length ? lessonComments.map(item => renderModerationItem(item, 'lesson')).join('') : '<p class="muted">No lesson comments yet.</p>'; bindModerationActions(); }
+  catch (err) { showMsg($('officialFunMsg'), `Could not load discussions: ${err.message}`, 'error'); }
+}
+async function moderateItem(area, kind, id, action) {
+  if (action === 'delete' && !confirm('Delete this discussion item? This cannot be undone.')) return;
+  let url;
+  if (area === 'fun') { const base = kind === 'official' ? '/admin/fun/official-posts/' : '/admin/fun/posts/'; url = base + String(id).replace('official-', ''); }
+  else url = '/admin/lesson-comments/' + id;
+  try { if (action === 'pin') { const items = await (area === 'fun' ? api('/admin/fun/posts') : api('/admin/lesson-comments')); const current = items.find(row => String(row.id) === String(id)); await api(url + '/pin', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pinned: !(current && current.is_pinned)})}); } else await api(url, {method:'DELETE'}); await loadCommunityModeration(); }
+  catch (err) { showMsg($('officialFunMsg'), err.message, 'error'); }
+}
+async function postOfficialFun() { const content = $('officialFunText').value.trim(); if (!content) { showMsg($('officialFunMsg'), 'Write an official comment first.', 'error'); return; } try { await api('/admin/fun/official-posts', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({content})}); $('officialFunText').value = ''; showMsg($('officialFunMsg'), 'Official Fun Page comment posted.', 'ok'); await loadCommunityModeration(); } catch (err) { showMsg($('officialFunMsg'), err.message, 'error'); } }
+async function postOfficialLesson() { const lessonId = $('officialLessonSelect').value, content = $('officialLessonText').value.trim(); if (!lessonId || !content) { showMsg($('officialLessonMsg'), 'Choose a lesson and write an official comment.', 'error'); return; } try { await api(`/admin/lessons/${lessonId}/comments`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({content})}); $('officialLessonText').value = ''; showMsg($('officialLessonMsg'), 'Official lesson comment posted.', 'ok'); await loadCommunityModeration(); } catch (err) { showMsg($('officialLessonMsg'), err.message, 'error'); } }
 function selectStudent(id, students) { const student = students.find(item => item.id === Number(id)); if (!student) return; selectedStudentId = student.id; $('studentApproved').checked = student.approved; $('studentActive').checked = student.active; $('studentResetPassword').value = ''; $('studentAdminCard').classList.remove('hidden'); $('studentMsg').innerHTML = ''; }
 async function saveStudent() { if (!selectedStudentId) return; try { await api(`/admin/students/${selectedStudentId}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({approved:$('studentApproved').checked, active:$('studentActive').checked})}); showMsg($('studentMsg'), 'Student access saved.', 'ok'); loadStudents(); } catch (err) { showMsg($('studentMsg'), err.message, 'error'); } }
 async function resetStudentPassword() { const password = $('studentResetPassword').value; if (!selectedStudentId || password.length < 8) { showMsg($('studentMsg'), 'Enter a new password with at least 8 characters.', 'error'); return; } try { await api(`/admin/students/${selectedStudentId}/reset-password`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({password})}); $('studentResetPassword').value = ''; showMsg($('studentMsg'), 'Student password reset.', 'ok'); } catch (err) { showMsg($('studentMsg'), err.message, 'error'); } }
@@ -199,6 +242,9 @@ $('resetStudentPasswordBtn').addEventListener('click', resetStudentPassword);
 $('deleteStudentBtn').addEventListener('click', deleteStudent);
 $('deleteLecturerBtn').addEventListener('click', deleteLecturer);
 $('refreshLecturersBtn').addEventListener('click', loadLecturers);
+$('refreshCommunityBtn').addEventListener('click', () => loadCommunityModeration());
+$('postOfficialFunBtn').addEventListener('click', postOfficialFun);
+$('postOfficialLessonBtn').addEventListener('click', postOfficialLesson);
 $('saveBtn').addEventListener('click', save); $('deleteBtn').addEventListener('click', remove);
 $('closeEditorBtn').addEventListener('click', () => $('editorCard').classList.add('hidden'));
 $('lockBtn').addEventListener('click', event => { event.preventDefault(); sessionStorage.removeItem('lecturerPin'); pin = null; $('appWrap').classList.add('hidden'); $('gateWrap').classList.remove('hidden'); });
