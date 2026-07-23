@@ -40,6 +40,14 @@
     .post-actions { flex-wrap: wrap; }
     .text-btn { padding: 5px 0; color: var(--cyan); font-family: var(--font-mono); font-size: .69rem; letter-spacing: .05em; text-transform: uppercase; border: 0; background: transparent; cursor: pointer; }
     .text-btn.danger { color: #fda4af; }
+    .thread-toggle { display: inline-flex; align-items: center; gap: 7px; min-height: 31px; padding: 4px 9px 4px 7px; color: #c4f9ff; font-family: var(--font-mono); font-size: .62rem; letter-spacing: .055em; text-transform: uppercase; border: 1px solid rgba(103,232,249,.34); border-radius: 999px; background: linear-gradient(100deg, rgba(103,232,249,.12), rgba(167,139,250,.09)); box-shadow: inset 0 0 15px rgba(34,211,238,.06), 0 0 0 rgba(103,232,249,0); cursor: pointer; transition: border-color .2s ease, background .2s ease, box-shadow .2s ease, transform .2s ease; }
+    .thread-toggle:hover, .thread-toggle:focus-visible { border-color: var(--cyan); background: linear-gradient(100deg, rgba(103,232,249,.19), rgba(167,139,250,.16)); box-shadow: inset 0 0 17px rgba(34,211,238,.13), 0 0 18px rgba(34,211,238,.12); transform: translateY(-1px); outline: none; }
+    .thread-signal { position: relative; display: inline-grid; place-items: center; width: 17px; height: 17px; border: 1px solid rgba(103,232,249,.6); border-radius: 50%; background: rgba(34,211,238,.12); }
+    .thread-signal::after { content: ''; width: 4px; height: 4px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 9px var(--cyan); }
+    .thread-signal::before { content: ''; position: absolute; inset: -4px; border: 1px solid rgba(103,232,249,.38); border-radius: 50%; animation: thread-pulse 1.8s ease-out infinite; }
+    .thread-state { color: var(--violet); }
+    .thread-count { display: inline-grid; place-items: center; min-width: 17px; height: 17px; color: #06121d; font-weight: 700; border-radius: 50%; background: var(--cyan); }
+    @keyframes thread-pulse { 0% { opacity: .85; transform: scale(.7); } 70%, 100% { opacity: 0; transform: scale(1.65); } }
     .reply-composer { margin-top: 13px; padding-top: 13px; border-top: 1px dashed var(--line); }
     .reply-composer textarea { min-height: 72px; }
     .reply-composer .btn { margin-top: 9px; }
@@ -109,7 +117,7 @@
       const video = post.video_url ? `<video controls preload="metadata" src="${escapeHtml(post.video_url)}">Your browser cannot play this video.</video>` : '';
       return image || video ? `<div class="post-media">${image}${video}</div>` : '';
     }
-    function replyToggleLabel(count, expanded) { return `${expanded ? 'Hide' : 'Show'} ${count} repl${count === 1 ? 'y' : 'ies'}`; }
+    function replyToggleContent(count, expanded) { return `<span class="thread-signal" aria-hidden="true"></span><span>Reply signal</span><span class="thread-state">${expanded ? 'hide' : 'show'}</span><span class="thread-count">${count}</span>`; }
     function postHtml(post) {
       const replyCount = post.replies.length;
       const replies = post.replies.map(postHtml).join('');
@@ -117,9 +125,9 @@
         <div class="post-meta"><div class="identity">${avatar(post)}<div><div class="post-author">${escapeHtml(post.author_name)} ${post.is_anonymous ? '<span class="anonymous-tag">Anonymous</span>' : ''}</div><div class="post-time">${escapeHtml(formatDate(post.created_at))}</div></div></div></div>
         <div class="post-content">${formatContent(post.content)}</div>
         ${mediaHtml(post)}
-        <div class="post-actions"><button class="text-btn reply-btn" data-reply="${post.id}">Reply</button>${replyCount ? `<button class="text-btn toggle-replies-btn" data-toggle-replies="${post.id}" data-reply-count="${replyCount}" data-expanded="true">${replyToggleLabel(replyCount, true)}</button>` : ''}${post.is_author ? `<button class="text-btn danger delete-btn" data-delete="${post.id}">Delete</button>` : ''}</div>
+        <div class="post-actions"><button class="text-btn reply-btn" data-reply="${post.id}">Reply</button>${replyCount ? `<button class="thread-toggle toggle-replies-btn" data-toggle-replies="${post.id}" data-reply-count="${replyCount}" data-expanded="false" aria-expanded="false" aria-label="Show ${replyCount} repl${replyCount === 1 ? 'y' : 'ies'}">${replyToggleContent(replyCount, false)}</button>` : ''}${post.is_author ? `<button class="text-btn danger delete-btn" data-delete="${post.id}">Delete</button>` : ''}</div>
         <div class="reply-composer hidden" id="replyBox-${post.id}"><textarea id="replyText-${post.id}" maxlength="1500" placeholder="Write a reply…"></textarea><div class="media-tools"><label for="replyImage-${post.id}">Add image<input id="replyImage-${post.id}" type="file" accept="image/*"></label><label for="replyVideo-${post.id}">Add video<input id="replyVideo-${post.id}" type="file" accept="video/*"></label></div><label class="check-label"><input id="replyAnonymous-${post.id}" type="checkbox"> Reply anonymously</label><button class="btn secondary send-reply-btn" data-send-reply="${post.id}">Post reply</button><div id="replyMsg-${post.id}"></div></div>
-        ${replyCount ? `<div class="replies" id="replies-${post.id}">${replies}</div>` : ''}
+        ${replyCount ? `<div class="replies hidden" id="replies-${post.id}">${replies}</div>` : ''}
       </article>`;
     }
     function attachFeedEvents() {
@@ -129,7 +137,10 @@
         const expanded = button.dataset.expanded === 'true';
         replies.classList.toggle('hidden', expanded);
         button.dataset.expanded = String(!expanded);
-        button.textContent = replyToggleLabel(Number(button.dataset.replyCount), !expanded);
+        const count = Number(button.dataset.replyCount);
+        button.setAttribute('aria-expanded', String(!expanded));
+        button.setAttribute('aria-label', `${!expanded ? 'Hide' : 'Show'} ${count} repl${count === 1 ? 'y' : 'ies'}`);
+        button.innerHTML = replyToggleContent(count, !expanded);
       }));
       document.querySelectorAll('.send-reply-btn').forEach(button => button.addEventListener('click', () => submitPost(button.dataset.sendReply)));
       document.querySelectorAll('.delete-btn').forEach(button => button.addEventListener('click', () => deletePost(button.dataset.delete)));
