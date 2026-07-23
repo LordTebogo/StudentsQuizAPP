@@ -539,6 +539,7 @@ $('sendLecturerMessageBtn').addEventListener('click', async () => { try { await 
 if (LECTURER_TOKEN) loadLecturerMessages();
 async function loadMyStudents(){try{const rows=await api('/lecturer/students',{},true);$('myStudentsList').innerHTML=rows.length?rows.map(s=>`<div class="admin-list-item"><span><strong>${s.full_name}</strong><small>${s.student_number} · ${s.module_codes.join(', ')}</small></span><span class="badge done">Enrolled</span></div>`).join(''):'<p class="muted">No enrolled students in your assigned modules yet.</p>'}catch(e){$('myStudentsList').innerHTML='<p class="muted">Could not load students.</p>'}}
 $('refreshMyStudents').addEventListener('click',loadMyStudents);if(LECTURER_TOKEN)loadMyStudents();
+const lecturerWorkspace = $('appWrap'); const lecturerProfileCard = $('profileImage').closest('.card'); const lecturerMessageCard = $('lecturerMessagesCard'); lecturerWorkspace.insertBefore(lecturerProfileCard, lecturerWorkspace.querySelector('.card')); lecturerWorkspace.appendChild(lecturerMessageCard);
 $('downloadOnePdfBtn').addEventListener('click', () => {
   if (!currentSubmissionId) return;
   downloadPdf(`/lecturer/submission/${currentSubmissionId}/pdf`, `submission_${currentSubmissionId}_answers.pdf`, $('gradingMsg'));
