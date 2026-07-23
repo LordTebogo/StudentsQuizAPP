@@ -32,7 +32,7 @@
     .anonymous-tag { padding: 3px 7px; color: var(--violet); font-family: var(--font-mono); font-size: .61rem; letter-spacing: .07em; text-transform: uppercase; border: 1px solid rgba(167,139,250,.35); border-radius: 99px; }
     .post-content { margin: 13px 0 15px; line-height: 1.62; overflow-wrap: anywhere; white-space: pre-wrap; }
     .post-media { display: grid; gap: 11px; margin: 12px 0 15px; }
-    .post-media img, .post-media video { display: block; width: 100%; max-height: 520px; object-fit: contain; border: 1px solid var(--line); border-radius: 12px; background: #02050c; }
+    .post-media img, .post-media video { display: block; width: 100%; max-height: 520px; object-fit: contain; border: 1px solid var(--line); border-radius: 12px; background: #02050c; user-select: none; -webkit-user-drag: none; }
     .media-tools { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 15px; }
     .upload-control { position: relative; display: flex !important; align-items: center; gap: 11px; min-height: 66px; padding: 11px 12px !important; margin: 0 !important; color: var(--text) !important; font-family: var(--font-body) !important; letter-spacing: 0 !important; text-transform: none !important; border: 1px dashed rgba(103,232,249,.36); border-radius: 13px; background: linear-gradient(135deg, rgba(103,232,249,.08), rgba(167,139,250,.045)); cursor: pointer; transition: border-color .2s ease, background .2s ease, transform .2s ease, box-shadow .2s ease; }
     .upload-control:hover, .upload-control:focus-within { border-color: var(--cyan); background: linear-gradient(135deg, rgba(103,232,249,.14), rgba(167,139,250,.1)); box-shadow: 0 0 20px rgba(34,211,238,.1); transform: translateY(-2px); }
@@ -43,7 +43,7 @@
     .media-input { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
     .media-preview { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 12px; }
     .preview-card { position: relative; min-width: 0; overflow: hidden; border: 1px solid rgba(103,232,249,.28); border-radius: 13px; background: #030712; box-shadow: inset 0 0 21px rgba(34,211,238,.07); }
-    .preview-card img, .preview-card video { display: block; width: 100%; height: 180px; object-fit: cover; background: #02050c; }
+    .preview-card img, .preview-card video { display: block; width: 100%; height: auto; max-height: 420px; object-fit: contain; background: #02050c; }
     .preview-caption { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; color: var(--text-muted); font-family: var(--font-mono); font-size: .61rem; letter-spacing: .04em; text-transform: uppercase; }
     .remove-preview { width: 22px; height: 22px; padding: 0; color: #ffe4e6; font: 700 1rem/1 var(--font-body); border: 1px solid rgba(251,113,133,.55); border-radius: 7px; background: rgba(190,24,93,.22); cursor: pointer; }
     .remove-preview:hover, .remove-preview:focus-visible { color: #fff; border-color: #fda4af; background: rgba(190,24,93,.42); outline: none; }
@@ -169,8 +169,8 @@
     }
     function clearMediaPreviews(owner) { ['image', 'video'].forEach(kind => removeMediaPreview(owner, kind)); }
     function mediaHtml(post) {
-      const image = post.image_url ? `<img src="${escapeHtml(post.image_url)}" alt="Post attachment">` : '';
-      const video = post.video_url ? `<video controls preload="metadata" src="${escapeHtml(post.video_url)}">Your browser cannot play this video.</video>` : '';
+      const image = post.image_url ? `<img src="${escapeHtml(post.image_url)}" alt="Post attachment" draggable="false">` : '';
+      const video = post.video_url ? `<video controls controlslist="nodownload noplaybackrate" disablepictureinpicture disableremoteplayback preload="metadata" src="${escapeHtml(post.video_url)}">Your browser cannot play this video.</video>` : '';
       return image || video ? `<div class="post-media">${image}${video}</div>` : '';
     }
     function replyToggleContent(count, expanded) { return `<span class="thread-signal" aria-hidden="true"></span><span>Reply signal</span><span class="thread-state">${expanded ? 'hide' : 'show'}</span><span class="thread-count">${count}</span>`; }
@@ -258,6 +258,8 @@
       if (removeButton) removeMediaPreview(removeButton.dataset.removePreviewOwner, removeButton.dataset.removePreviewKind);
     });
     document.addEventListener('change', event => { if (event.target.matches('.media-input')) updateMediaPreview(event.target); });
+    document.addEventListener('contextmenu', event => { if (event.target.closest('.post-media')) event.preventDefault(); });
+    document.addEventListener('dragstart', event => { if (event.target.closest('.post-media')) event.preventDefault(); });
     $('publishBtn').addEventListener('click', () => submitPost());
     $('refreshBtn').addEventListener('click', loadFeed);
     $('postStickerPicker').innerHTML = stickerPickerHtml('post');
