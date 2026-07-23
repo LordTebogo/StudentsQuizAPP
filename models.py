@@ -84,6 +84,20 @@ class Student(Base):
     created_at = Column(String, nullable=False)
 
 
+class DirectMessage(Base):
+    """Private messages between students, lecturers and the administrator."""
+    __tablename__ = "direct_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    sender_type = Column(String, nullable=False)      # student, lecturer, admin
+    sender_id = Column(Integer, nullable=True)
+    recipient_type = Column(String, nullable=False)   # student or lecturer
+    recipient_id = Column(Integer, nullable=False, index=True)
+    content = Column(Text, nullable=False)
+    read_at = Column(String)
+    created_at = Column(String, nullable=False)
+
+
 # ---------------------------------------------------------------------------
 # Student community
 # ---------------------------------------------------------------------------

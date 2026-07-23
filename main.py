@@ -64,6 +64,7 @@ from PIL import Image as PILImage
 from database import Base, engine, get_db
 from models import (
     Answer,
+    DirectMessage,
     Lesson,
     LessonAnswer,
     LessonComment,
@@ -205,6 +206,12 @@ class LongAnswerMark(BaseModel):
 
 class MarkSubmissionRequest(BaseModel):
     marks: List[LongAnswerMark]
+
+
+class DirectMessageCreate(BaseModel):
+    recipient_type: str
+    recipient_id: int
+    content: str
 
 
 class PinCheck(BaseModel):
@@ -1981,6 +1988,160 @@ def admin_delete_student(student_id: int, _pin_ok: bool = Depends(require_lectur
 # ---------------------------------------------------------------------------
 # Administrator: every quiz script across every module
 # ---------------------------------------------------------------------------
+
+def _message_person(db: Session, kind: str, person_id: Optional[int]) -> str:
+    if kind == "admin":
+        return "QuizMark Admin"
+    model = Student if kind == "student" else Lecturer
+    person = db.query(model).filter(model.id == person_id).first()
+    return person.full_name if person else "Unknown account"
+
+
+def _message_dict(db: Session, message: DirectMessage):
+    return {"id": message.id, "sender_type": message.sender_type, "sender_id": message.sender_id,
+            "sender_name": _message_person(db, message.sender_type, message.sender_id),
+            "recipient_type": message.recipient_type, "recipient_id": message.recipient_id,
+            "recipient_name": _message_person(db, message.recipient_type, message.recipient_id),
+            "content": message.content, "read_at": message.read_at, "created_at": message.created_at}
+
+
+def _create_direct_message(db: Session, sender_type: str, sender_id: Optional[int], payload: DirectMessageCreate):
+    recipient_type = payload.recipient_type.strip().lower()
+    content = payload.content.strip()
+    if recipient_type not in {"student", "lecturer"} or not content or len(content) > 2000:
+        raise HTTPException(status_code=400, detail="Choose a recipient and enter a message of up to 2,000 characters")
+    model = Student if recipient_type == "student" else Lecturer
+    recipient = db.query(model).filter(model.id == payload.recipient_id).first()
+    if not recipient or not recipient.approved or not recipient.active:
+        raise HTTPException(status_code=404, detail="That recipient is not available")
+    message = DirectMessage(sender_type=sender_type, sender_id=sender_id, recipient_type=recipient_type,
+                            recipient_id=recipient.id, content=content,
+                            created_at=datetime.now(timezone.utc).isoformat())
+    db.add(message); db.commit(); db.refresh(message)
+    return _message_dict(db, message)
+
+
+def _inbox(db: Session, kind: str, person_id: int):
+    unread = db.query(DirectMessage).filter(DirectMessage.recipient_type == kind,
+        DirectMessage.recipient_id == person_id, DirectMessage.read_at.is_(None)).all()
+    now = datetime.now(timezone.utc).isoformat()
+    for item in unread:
+        item.read_at = now
+    if unread:
+        db.commit()
+    rows = db.query(DirectMessage).filter(
+        ((DirectMessage.recipient_type == kind) & (DirectMessage.recipient_id == person_id)) |
+        ((DirectMessage.sender_type == kind) & (DirectMessage.sender_id == person_id))
+    ).order_by(DirectMessage.created_at.desc()).all()
+    return [_message_dict(db, row) for row in rows]
+
+
+@app.get("/student/message-lecturers")
+def student_message_lecturers(student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+    return [{"id": item.id, "full_name": item.full_name} for item in db.query(Lecturer).filter(Lecturer.approved.is_(True), Lecturer.active.is_(True)).order_by(Lecturer.full_name).all()]
+
+
+@app.get("/lecturer/message-students")
+def lecturer_message_students(lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db)):
+    return [{"id": item.id, "full_name": item.full_name} for item in db.query(Student).filter(Student.approved.is_(True), Student.active.is_(True)).order_by(Student.full_name).all()]
+
+
+@app.get("/student/messages")
+def student_messages(student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+    return _inbox(db, "student", student.id)
+
+
+@app.get("/lecturer/messages")
+def lecturer_messages(lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db)):
+    return _inbox(db, "lecturer", lecturer.id)
+
+
+@app.get("/student/messages/unread")
+def student_unread_messages(student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+    return {"count": db.query(DirectMessage).filter(DirectMessage.recipient_type == "student", DirectMessage.recipient_id == student.id, DirectMessage.read_at.is_(None)).count()}
+
+
+@app.get("/lecturer/messages/unread")
+def lecturer_unread_messages(lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db)):
+    return {"count": db.query(DirectMessage).filter(DirectMessage.recipient_type == "lecturer", DirectMessage.recipient_id == lecturer.id, DirectMessage.read_at.is_(None)).count()}
+
+
+@app.post("/student/messages")
+def student_send_message(payload: DirectMessageCreate, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+    if payload.recipient_type.strip().lower() != "lecturer":
+        raise HTTPException(status_code=400, detail="Students can message lecturers only")
+    return _create_direct_message(db, "student", student.id, payload)
+
+
+@app.post("/lecturer/messages")
+def lecturer_send_message(payload: DirectMessageCreate, lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db)):
+    if payload.recipient_type.strip().lower() != "student":
+        raise HTTPException(status_code=400, detail="Lecturers can message students only")
+    return _create_direct_message(db, "lecturer", lecturer.id, payload)
+
+
+@app.get("/admin/messages")
+def admin_messages(_pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    return [_message_dict(db, item) for item in db.query(DirectMessage).order_by(DirectMessage.created_at.desc()).all()]
+
+
+@app.post("/admin/messages")
+def admin_send_message(payload: DirectMessageCreate, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    return _create_direct_message(db, "admin", None, payload)
+
+
+@app.delete("/admin/messages/{message_id}")
+def admin_delete_message(message_id: int, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    message = db.query(DirectMessage).filter(DirectMessage.id == message_id).first()
+    if not message:
+        raise HTTPException(status_code=404, detail="Message not found")
+    db.delete(message); db.commit()
+    return {"ok": True}
+
+def _submission_detail_payload(db: Session, submission: Submission):
+    answers = (db.query(Answer).join(Question, Answer.question_id == Question.id)
+               .filter(Answer.submission_id == submission.id).order_by(Question.q_order).all())
+    return {
+        "submission": {"id": submission.id, "quiz_id": submission.quiz_id,
+                       "student_id": submission.student_id, "student_name": submission.student_name,
+                       "submitted_at": submission.submitted_at, "total_score": submission.total_score,
+                       "max_score": submission.max_score, "fully_marked": submission.fully_marked},
+        "answers": [{"answer_id": a.id, "question_id": a.question_id, "answer_text": a.answer_text,
+                     "awarded_marks": a.awarded_marks, "marked": a.marked, "type": a.question.type,
+                     "question": a.question.question, "max_marks": a.question.marks,
+                     "correct_answer": a.question.correct_answer, "image_url": a.question.image_url} for a in answers],
+    }
+
+
+def _apply_marks(db: Session, submission: Submission, marks: List[LongAnswerMark]):
+    for item in marks:
+        answer = (db.query(Answer).join(Question, Answer.question_id == Question.id)
+                  .filter(Answer.submission_id == submission.id, Answer.question_id == item.question_id,
+                          Question.type.in_(("long", "short"))).first())
+        if answer:
+            answer.awarded_marks = max(0, min(item.awarded_marks, answer.question.marks))
+            answer.marked = True
+    answers = db.query(Answer).filter(Answer.submission_id == submission.id).all()
+    submission.total_score = sum(answer.awarded_marks or 0 for answer in answers)
+    submission.fully_marked = not any(not answer.marked for answer in answers)
+    db.commit()
+    return {"submission_id": submission.id, "total_score": submission.total_score, "fully_marked": submission.fully_marked}
+
+
+@app.get("/admin/submissions/{submission_id}")
+def admin_submission_detail(submission_id: int, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    submission = db.query(Submission).filter(Submission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    return _submission_detail_payload(db, submission)
+
+
+@app.post("/admin/submissions/{submission_id}/mark")
+def admin_mark_submission(submission_id: int, payload: MarkSubmissionRequest, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    submission = db.query(Submission).filter(Submission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    return _apply_marks(db, submission, payload.marks)
 
 @app.get("/admin/submissions")
 def admin_list_all_submissions(_pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
