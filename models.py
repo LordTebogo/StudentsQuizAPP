@@ -83,6 +83,17 @@ class Student(Base):
     active = Column(Boolean, nullable=False, default=True)
     created_at = Column(String, nullable=False)
 
+    modules = relationship("StudentModule", back_populates="student", cascade="all, delete-orphan")
+
+
+class StudentModule(Base):
+    __tablename__ = "student_modules"
+    __table_args__ = (UniqueConstraint("student_id", "module_code", name="student_module_unique"),)
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer, ForeignKey("students.id"), nullable=False, index=True)
+    module_code = Column(String, nullable=False, index=True)
+    student = relationship("Student", back_populates="modules")
+
 
 class DirectMessage(Base):
     """Private messages between students, lecturers and the administrator."""

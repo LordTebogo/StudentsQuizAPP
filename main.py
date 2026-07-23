@@ -78,6 +78,7 @@ from models import (
     Quiz,
     Submission,
     Student,
+    StudentModule,
 )
 from cloudinary_utils import upload_image_bytes, upload_video_bytes
 
@@ -214,6 +215,11 @@ class DirectMessageCreate(BaseModel):
     content: str
 
 
+class AdminBroadcastMessage(BaseModel):
+    content: str
+    module_codes: List[str] = []
+
+
 class PinCheck(BaseModel):
     pin: str
 
@@ -302,6 +308,7 @@ class StudentLogin(BaseModel):
 class AdminStudentUpdate(BaseModel):
     approved: Optional[bool] = None
     active: Optional[bool] = None
+    module_codes: Optional[List[str]] = None
 
 
 class AdminStudentCreate(BaseModel):
@@ -397,7 +404,15 @@ def _student_profile(student: Student) -> dict:
     return {"id": student.id, "student_number": student.student_number, "full_name": student.full_name,
             "email": student.email, "phone": student.phone or "", "institution": student.institution or "",
             "bio": student.bio or "", "profile_image_url": student.profile_image_url,
-            "approved": student.approved, "active": student.active, "created_at": student.created_at}
+            "approved": student.approved, "active": student.active, "module_codes": [item.module_code for item in student.modules], "created_at": student.created_at}
+
+
+def _set_student_modules(db: Session, student: Student, codes: List[str]):
+    wanted = {code.strip().upper() for code in codes if code and code.strip()}
+    existing = {item.module_code: item for item in student.modules}
+    for code, item in existing.items():
+        if code not in wanted: db.delete(item)
+    for code in wanted - set(existing): db.add(StudentModule(student_id=student.id, module_code=code))
 
 
 def _lecturer_profile(lecturer: Lecturer) -> dict:
@@ -537,7 +552,7 @@ async def update_lecturer_me(
 async def register_student(
     student_number: str = Form(...), full_name: str = Form(...), email: str = Form(...),
     password: str = Form(...), confirm_password: str = Form(...), phone: str = Form(""),
-    institution: str = Form(""), bio: str = Form(""), profile_image: Optional[UploadFile] = File(None),
+    institution: str = Form(""), bio: str = Form(""), module_codes: str = Form(""), profile_image: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
     student_number, email = student_number.strip().upper(), email.strip().lower()
@@ -552,7 +567,9 @@ async def register_student(
                       phone=phone.strip(), institution=institution.strip(), bio=bio.strip(), profile_image_url=image_url,
                       password_hash=_password_hash(password), approved=False, active=True,
                       created_at=datetime.utcnow().isoformat() + "Z")
-    db.add(student); db.commit()
+    db.add(student); db.flush()
+    _set_student_modules(db, student, module_codes.split(","))
+    db.commit()
     return {"ok": True, "message": "Profile created. An administrator must approve it before you can sign in."}
 
 
@@ -1964,6 +1981,7 @@ def admin_update_student(student_id: int, payload: AdminStudentUpdate, _pin_ok: 
         raise HTTPException(status_code=404, detail="Student not found")
     if payload.approved is not None: student.approved = payload.approved
     if payload.active is not None: student.active = payload.active
+    if payload.module_codes is not None: _set_student_modules(db, student, payload.module_codes)
     db.commit()
     return _student_profile(student)
 
@@ -2088,6 +2106,23 @@ def admin_messages(_pin_ok: bool = Depends(require_lecturer_pin), db: Session = 
 @app.post("/admin/messages")
 def admin_send_message(payload: DirectMessageCreate, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
     return _create_direct_message(db, "admin", None, payload)
+
+
+@app.post("/admin/messages/broadcast")
+def admin_broadcast_message(payload: AdminBroadcastMessage, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    content = payload.content.strip()
+    if not content or len(content) > 2000:
+        raise HTTPException(status_code=400, detail="Enter a message of up to 2,000 characters")
+    codes = {code.strip().upper() for code in payload.module_codes if code and code.strip()}
+    query = db.query(Student).filter(Student.approved.is_(True), Student.active.is_(True))
+    if codes:
+        query = query.join(StudentModule).filter(StudentModule.module_code.in_(codes)).distinct()
+    recipients = query.all()
+    now = datetime.now(timezone.utc).isoformat()
+    for student in recipients:
+        db.add(DirectMessage(sender_type="admin", sender_id=None, recipient_type="student", recipient_id=student.id, content=content, created_at=now))
+    db.commit()
+    return {"ok": True, "recipient_count": len(recipients)}
 
 
 @app.delete("/admin/messages/{message_id}")
