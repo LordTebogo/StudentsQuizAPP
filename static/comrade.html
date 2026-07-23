@@ -57,6 +57,7 @@
     byId('srcPasswordForm').addEventListener('submit',async event=>{event.preventDefault();const form=event.currentTarget;setStatus('srcPasswordStatus','Saving...');try{await api('/src/me/change-password',{method:'POST',headers:srcHeaders(true),body:JSON.stringify({current_password:form.current_password.value,new_password:form.new_password.value,confirm_password:form.confirm_password.value})});form.reset();setStatus('srcPasswordStatus','Password updated.');}catch(error){setStatus('srcPasswordStatus',error.message);}});
     byId('srcSignOut').addEventListener('click',clearSrcAccount);
     byId('announcementForm').addEventListener('submit',async event=>{event.preventDefault();const status=byId('deskStatus'),button=event.currentTarget.querySelector('button');button.disabled=true;setStatus('deskStatus','Publishing...');try{await api('/comrade/posts',{method:'POST',headers:srcHeaders(true),body:JSON.stringify({content:byId('announcement').value})});event.currentTarget.reset();setStatus('deskStatus','Announcement published.');await loadPosts();}catch(error){setStatus('deskStatus',error.message);}finally{button.disabled=false;}});
+    if(location.hash==='#srcAccess'||location.hash==='#srcRegister'){byId('srcAccess').open=true;setTimeout(()=>{byId('srcAccess').scrollIntoView({behavior:'smooth',block:'start'});if(location.hash==='#srcRegister')byId('srcRegisterForm').querySelector('input').focus();},0);}
     hydrateSrc();loadPosts();
   </script>
 </body>
