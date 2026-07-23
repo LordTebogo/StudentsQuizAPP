@@ -186,6 +186,14 @@ def ensure_comrade_identity_schema():
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE comrade_posts ADD COLUMN src_president_id INTEGER"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_comrade_posts_src_president_id ON comrade_posts (src_president_id)"))
+    for table in ("comrade_replies", "comrade_src_replies"):
+        if table not in inspect(engine).get_table_names():
+            continue
+        reply_columns = {column["name"] for column in inspect(engine).get_columns(table)}
+        if "parent_key" not in reply_columns:
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN parent_key VARCHAR(64)"))
+                conn.execute(text(f"CREATE INDEX IF NOT EXISTS ix_{table}_parent_key ON {table} (parent_key)"))
 
 
 ensure_comrade_identity_schema()
@@ -251,6 +259,7 @@ class ComradeAnnouncement(BaseModel):
 
 class ComradeReplyInput(BaseModel):
     content: str
+    parent_key: Optional[str] = None
 
 
 class SrcPresidentLogin(BaseModel):
@@ -2159,6 +2168,9 @@ def admin_delete_src_president(president_id: int, _pin_ok: bool = Depends(requir
 def _message_person(db: Session, kind: str, person_id: Optional[int]) -> str:
     if kind == "admin":
         return "QuizMark Admin"
+    if kind == "src_president":
+        president = db.query(SrcPresident).filter(SrcPresident.id == person_id).first()
+        return f"{president.party_name} SRC president" if president else "Former SRC president"
     model = Student if kind == "student" else Lecturer
     person = db.query(model).filter(model.id == person_id).first()
     return person.full_name if person else "Unknown account"
@@ -2501,35 +2513,85 @@ def change_src_president_password(payload: SrcPasswordChange, president: SrcPres
     return {"ok": True}
 
 
+def _comrade_parent_key(db: Session, post_id: int, parent_key: Optional[str]) -> Optional[str]:
+    """Validate a reply parent across student and SRC reply tables."""
+    if not parent_key:
+        return None
+    try:
+        parent_type, parent_id_text = parent_key.split(":", 1)
+        parent_id = int(parent_id_text)
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=400, detail="That parent comment is invalid")
+    model = ComradeReply if parent_type == "student" else ComradeSrcReply if parent_type == "src" else None
+    if not model or not db.query(model).filter(model.id == parent_id, model.post_id == post_id).first():
+        raise HTTPException(status_code=404, detail="The parent comment no longer exists")
+    return f"{parent_type}:{parent_id}"
+
+
+def _notify_comrade_tags(db: Session, content: str, sender_type: str, sender_id: int, sender_label: str):
+    """Mentions in Comrade discussions create the same private student alert as Fun Page mentions."""
+    tagged_students = db.query(Student).filter(Student.approved == True, Student.active == True).all()  # noqa: E712
+    for tagged in tagged_students:
+        if sender_type == "student" and tagged.id == sender_id:
+            continue
+        mention = "@" + tagged.full_name.strip()
+        if mention != "@" and re.search(r"(?<!\w)" + re.escape(mention) + r"(?!\w)", content, re.IGNORECASE):
+            db.add(DirectMessage(
+                sender_type=sender_type, sender_id=sender_id, recipient_type="student", recipient_id=tagged.id,
+                content=f"{sender_label} mentioned you in a Comrade Page reply: {content[:300]}",
+                created_at=datetime.now(timezone.utc).isoformat(),
+            ))
+
+
+@app.get("/comrade/members")
+def comrade_members(
+    x_student_token: Optional[str] = Header(None, alias="X-Student-Token"),
+    x_src_token: Optional[str] = Header(None, alias="X-Src-Token"),
+    db: Session = Depends(get_db),
+):
+    if x_student_token:
+        require_student_account(x_student_token, db)
+    elif x_src_token:
+        require_src_president_account(x_src_token, db)
+    else:
+        raise HTTPException(status_code=401, detail="Sign in to tag a student")
+    rows = db.query(Student).filter(Student.approved == True, Student.active == True).order_by(Student.full_name.asc()).all()  # noqa: E712
+    return [{"full_name": row.full_name} for row in rows]
+
+
 @app.get("/comrade/posts")
 def comrade_posts(db: Session = Depends(get_db)):
-    """Public feed for the campus civic space; only replies require a student account."""
+    """Public announcements with a threaded mixture of student and official SRC responses."""
     posts = db.query(ComradePost).order_by(ComradePost.created_at.desc()).all()
     students = {student.id: student.full_name for student in db.query(Student).all()}
-    replies_by_post = {}
+    nodes_by_post = {}
     for reply in db.query(ComradeReply).order_by(ComradeReply.created_at).all():
-        replies_by_post.setdefault(reply.post_id, []).append({
-            "author_label": students.get(reply.student_id, "Former student"),
-            "author_type": "student",
-            "content": reply.content,
-            "created_at": reply.created_at,
+        nodes_by_post.setdefault(reply.post_id, []).append({
+            "key": f"student:{reply.id}", "parent_key": reply.parent_key,
+            "author_label": students.get(reply.student_id, "Former student"), "author_type": "student",
+            "content": reply.content, "created_at": reply.created_at,
         })
     for reply in db.query(ComradeSrcReply).order_by(ComradeSrcReply.created_at).all():
-        replies_by_post.setdefault(reply.post_id, []).append({
-            "author_label": f"{reply.party_name} SRC president",
-            "author_type": "src_president",
-            "content": reply.content,
-            "created_at": reply.created_at,
+        nodes_by_post.setdefault(reply.post_id, []).append({
+            "key": f"src:{reply.id}", "parent_key": reply.parent_key,
+            "author_label": f"{reply.party_name} SRC president", "author_type": "src_president",
+            "content": reply.content, "created_at": reply.created_at,
         })
-    for replies in replies_by_post.values():
-        replies.sort(key=lambda item: item["created_at"])
+
+    def thread(nodes: list) -> list:
+        by_key = {node["key"]: node for node in nodes}
+        children = {}
+        for node in nodes:
+            children.setdefault(node["parent_key"], []).append(node)
+        def serialize(node):
+            result = dict(node)
+            result["replies"] = [serialize(child) for child in children.get(node["key"], [])]
+            return result
+        return [serialize(node) for node in nodes if not node["parent_key"] or node["parent_key"] not in by_key]
+
     return [{
-        "id": post.id,
-        "party_name": post.party_name,
-        "created_by": f"{post.party_name} SRC president",
-        "content": post.content,
-        "created_at": post.created_at,
-        "replies": replies_by_post.get(post.id, []),
+        "id": post.id, "party_name": post.party_name, "created_by": f"{post.party_name} SRC president",
+        "content": post.content, "created_at": post.created_at, "replies": thread(nodes_by_post.get(post.id, [])),
     } for post in posts]
 
 @app.post("/comrade/posts")
@@ -2554,12 +2616,15 @@ def reply_comrade_post(post_id: int, payload: ComradeReplyInput, student: Studen
     content = payload.content.strip()
     if not content:
         raise HTTPException(status_code=400, detail="Write a reply")
+    parent_key = _comrade_parent_key(db, post_id, payload.parent_key)
     db.add(ComradeReply(
         post_id=post_id,
         student_id=student.id,
+        parent_key=parent_key,
         content=content[:1500],
         created_at=datetime.now(timezone.utc).isoformat(),
     ))
+    _notify_comrade_tags(db, content, "student", student.id, student.full_name)
     db.commit()
     return {"ok": True}
 
@@ -2571,13 +2636,16 @@ def reply_comrade_post_as_src(post_id: int, payload: ComradeReplyInput, presiden
     content = payload.content.strip()
     if not content:
         raise HTTPException(status_code=400, detail="Write a reply")
+    parent_key = _comrade_parent_key(db, post_id, payload.parent_key)
     db.add(ComradeSrcReply(
         post_id=post_id,
         src_president_id=president.id,
+        parent_key=parent_key,
         party_name=president.party_name,
         content=content[:1500],
         created_at=datetime.now(timezone.utc).isoformat(),
     ))
+    _notify_comrade_tags(db, content, "src_president", president.id, f"{president.party_name} SRC president")
     db.commit()
     return {"ok": True}
 

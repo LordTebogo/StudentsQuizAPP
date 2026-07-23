@@ -169,6 +169,7 @@ class ComradeReply(Base):
     id = Column(Integer, primary_key=True, index=True)
     post_id = Column(Integer, ForeignKey("comrade_posts.id", ondelete="CASCADE"), nullable=False, index=True)
     student_id = Column(Integer, ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True)
+    parent_key = Column(String, index=True)
     content = Column(Text, nullable=False)
     created_at = Column(String, nullable=False)
 
@@ -178,6 +179,7 @@ class ComradeSrcReply(Base):
     id = Column(Integer, primary_key=True, index=True)
     post_id = Column(Integer, ForeignKey("comrade_posts.id", ondelete="CASCADE"), nullable=False, index=True)
     src_president_id = Column(Integer, ForeignKey("src_presidents.id", ondelete="CASCADE"), nullable=False, index=True)
+    parent_key = Column(String, index=True)
     party_name = Column(String, nullable=False)
     content = Column(Text, nullable=False)
     created_at = Column(String, nullable=False)
@@ -309,7 +311,6 @@ class LessonQuestion(Base):
         "LessonAnswer", back_populates="question", cascade="all, delete-orphan",
     )
 
-
 class LessonSubmission(Base):
     __tablename__ = "lesson_submissions"
 
@@ -326,7 +327,6 @@ class LessonSubmission(Base):
     answers = relationship(
         "LessonAnswer", back_populates="submission", cascade="all, delete-orphan",
     )
-
 
 class LessonAnswer(Base):
     __tablename__ = "lesson_answers"
