@@ -79,6 +79,7 @@ from models import (
     Submission,
     Student,
     StudentModule,
+    ComradePost, ComradeReply,
 )
 from cloudinary_utils import upload_image_bytes, upload_video_bytes
 
@@ -91,6 +92,9 @@ from cloudinary_utils import upload_image_bytes, upload_video_bytes
 LECTURER_PIN = os.getenv("LECTURER_PIN", "90435")
 LECTURER_SESSION_SECRET = os.getenv("LECTURER_SESSION_SECRET", LECTURER_PIN)
 STUDENT_SESSION_SECRET = os.getenv("STUDENT_SESSION_SECRET", LECTURER_SESSION_SECRET)
+# Keep this credential out of source control. Configure it in the hosting
+# environment before enabling the official SRC publishing desk.
+SRC_PRESIDENT_PASSWORD = os.getenv("SRC_PRESIDENT_PASSWORD", "")
 
 # Optional convenience folder: images committed into the repo ahead of time
 # (e.g. shipped alongside the code) can be referenced by filename in a quiz
@@ -226,6 +230,16 @@ class ModuleSelection(BaseModel):
 
 class PinCheck(BaseModel):
     pin: str
+
+
+class ComradeAnnouncement(BaseModel):
+    party_name: str
+    password: str
+    content: str
+
+
+class ComradeReplyInput(BaseModel):
+    content: str
 
 
 class CommentCreate(BaseModel):
@@ -2303,6 +2317,61 @@ FUN_STICKERS = {
     "laugh": "😂",
     "thinking": "🤔",
 }
+
+@app.get("/comrade/posts")
+def comrade_posts(db: Session = Depends(get_db)):
+    """Public feed for the campus civic space; only replies require a student account."""
+    posts = db.query(ComradePost).order_by(ComradePost.created_at.desc()).all()
+    students = {student.id: student.full_name for student in db.query(Student).all()}
+    replies_by_post = {}
+    for reply in db.query(ComradeReply).order_by(ComradeReply.created_at).all():
+        replies_by_post.setdefault(reply.post_id, []).append({
+            "student_name": students.get(reply.student_id, "Former student"),
+            "content": reply.content,
+            "created_at": reply.created_at,
+        })
+    return [{
+        "id": post.id,
+        "party_name": post.party_name,
+        "content": post.content,
+        "created_at": post.created_at,
+        "replies": replies_by_post.get(post.id, []),
+    } for post in posts]
+
+@app.post("/comrade/posts")
+def create_comrade_post(payload: ComradeAnnouncement, db: Session = Depends(get_db)):
+    if not SRC_PRESIDENT_PASSWORD:
+        raise HTTPException(status_code=503, detail="SRC publishing has not been configured yet")
+    if not hmac.compare_digest(payload.password, SRC_PRESIDENT_PASSWORD):
+        raise HTTPException(status_code=401, detail="Incorrect SRC president password")
+    party_name = payload.party_name.strip()
+    content = payload.content.strip()
+    if not party_name or not content:
+        raise HTTPException(status_code=400, detail="Party name and announcement are required")
+    post = ComradePost(
+        party_name=party_name[:120],
+        content=content[:2000],
+        created_at=datetime.now(timezone.utc).isoformat(),
+    )
+    db.add(post)
+    db.commit()
+    return {"ok": True, "id": post.id}
+
+@app.post("/comrade/posts/{post_id}/replies")
+def reply_comrade_post(post_id: int, payload: ComradeReplyInput, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+    if not db.query(ComradePost).filter(ComradePost.id == post_id).first():
+        raise HTTPException(status_code=404, detail="Announcement not found")
+    content = payload.content.strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="Write a reply")
+    db.add(ComradeReply(
+        post_id=post_id,
+        student_id=student.id,
+        content=content[:1500],
+        created_at=datetime.now(timezone.utc).isoformat(),
+    ))
+    db.commit()
+    return {"ok": True}
 
 def _fun_post_payload(post: FunPost, students_by_id: dict, current_student_id: int, replies: list) -> dict:
     author = students_by_id.get(post.author_student_id)

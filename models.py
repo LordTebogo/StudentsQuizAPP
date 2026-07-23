@@ -139,6 +139,23 @@ class FunOfficialPost(Base):
     created_at = Column(String, nullable=False)
 
 
+class ComradePost(Base):
+    __tablename__ = "comrade_posts"
+    id = Column(Integer, primary_key=True, index=True)
+    party_name = Column(String, nullable=False)
+    content = Column(Text, nullable=False)
+    created_at = Column(String, nullable=False)
+
+
+class ComradeReply(Base):
+    __tablename__ = "comrade_replies"
+    id = Column(Integer, primary_key=True, index=True)
+    post_id = Column(Integer, ForeignKey("comrade_posts.id", ondelete="CASCADE"), nullable=False, index=True)
+    student_id = Column(Integer, ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True)
+    content = Column(Text, nullable=False)
+    created_at = Column(String, nullable=False)
+
+
 # ---------------------------------------------------------------------------
 # Quizzes
 # ---------------------------------------------------------------------------

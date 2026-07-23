@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Comrade Page &mdash; QuizMark</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    .comrade-hero { position: relative; overflow: hidden; display: grid; grid-template-columns: minmax(0,1.25fr) minmax(240px,.75fr); gap: 28px; margin: 30px 0 24px; padding: 36px; border: 1px solid rgba(111, 228, 255, .28); border-radius: 28px; background: linear-gradient(125deg, #102148 0%, #0c1733 54%, #301953 100%); }
+    .comrade-hero::after { content: "CIVIC"; position: absolute; right: -12px; bottom: -62px; color: rgba(255,255,255,.055); font: 900 8.8rem/1 system-ui; letter-spacing: -.1em; pointer-events: none; }
+    .comrade-hero > * { position: relative; z-index: 1; }
+    .comrade-hero h1 { margin: 7px 0 10px; font-size: clamp(2.55rem, 6vw, 4.9rem); letter-spacing: -.065em; }
+    .comrade-hero .lede { max-width: 680px; margin: 0; }
+    .civic-note { align-self: center; padding: 19px; border: 1px solid rgba(202,176,255,.3); border-radius: 18px; color: #e6ddff; background: rgba(7,13,34,.54); font-size: .92rem; line-height: 1.65; }
+    .civic-note strong { display: block; margin-bottom: 5px; color: #70e7ff; letter-spacing: .1em; font-size: .72rem; text-transform: uppercase; }
+    .president-desk { margin-bottom: 24px; padding: 0; overflow: hidden; }
+    .president-desk summary { display: flex; align-items: center; gap: 13px; padding: 20px 24px; cursor: pointer; list-style: none; font-weight: 750; font-size: 1.08rem; }
+    .president-desk summary::-webkit-details-marker { display: none; }
+    .desk-symbol { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; color: #061221; background: linear-gradient(135deg, #70e7ff, #b990ff); font-size: 1.1rem; }
+    .desk-hint { margin-left: auto; color: var(--muted, #a8b6d4); font: .72rem/1.2 ui-monospace, monospace; letter-spacing: .08em; text-transform: uppercase; }
+    .desk-form { display: grid; gap: 14px; padding: 0 24px 24px; border-top: 1px solid rgba(126,153,201,.18); }
+    .desk-form .two-up { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .desk-form input, .desk-form textarea, .reply-box textarea { width: 100%; box-sizing: border-box; }
+    .desk-form textarea { min-height: 142px; resize: vertical; }
+    .desk-status { min-height: 1.3em; margin: 0; color: #95b0da; }
+    .feed-head { display: flex; align-items: end; justify-content: space-between; gap: 18px; margin: 34px 0 16px; }
+    .feed-head h2 { margin: 0; }
+    .feed-head span { color: #74ddf8; font: .72rem/1 ui-monospace, monospace; letter-spacing: .12em; text-transform: uppercase; }
+    .announcement { position: relative; padding: 25px; margin-bottom: 16px; overflow: hidden; border: 1px solid rgba(130,151,203,.25); border-radius: 22px; background: linear-gradient(140deg, rgba(24,40,76,.96), rgba(10,18,43,.96)); box-shadow: 0 14px 40px rgba(0,0,0,.18); }
+    .announcement::before { content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 3px; background: linear-gradient(90deg, #6fe8ff, #b88eff, transparent 74%); }
+    .announcement-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+    .party { display: inline-flex; align-items: center; gap: 8px; color: #f0ebff; font-weight: 780; }
+    .party::before { content: "SRC"; padding: 4px 7px; border-radius: 6px; color: #0a1432; background: #72e7ff; font: 700 .61rem/1 ui-monospace, monospace; letter-spacing: .08em; }
+    .when { flex: none; color: #9caed0; font: .72rem/1.35 ui-monospace, monospace; text-align: right; }
+    .announcement-copy { margin: 18px 0 20px; color: #edf3ff; white-space: pre-wrap; line-height: 1.7; }
+    .reply-count { margin: 0 0 12px; color: #a8b9da; font-size: .9rem; }
+    .replies { display: grid; gap: 8px; }
+    .reply { padding: 13px 15px; border-left: 2px solid #795eff; border-radius: 0 13px 13px 0; background: rgba(118,96,255,.08); }
+    .reply strong { color: #79e8ff; font-size: .9rem; }
+    .reply p { margin: 5px 0 0; color: #dce7fb; line-height: 1.5; white-space: pre-wrap; }
+    .reply time { display: block; margin-top: 5px; color: #8395b9; font-size: .72rem; }
+    .reply-box { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: end; margin-top: 16px; }
+    .reply-box textarea { min-height: 46px; max-height: 160px; resize: vertical; }
+    .reply-box .btn { min-height: 46px; }
+    .empty-state { padding: 42px 20px; text-align: center; border: 1px dashed rgba(127,153,202,.35); border-radius: 20px; color: #a9bad9; }
+    .sign-in-note { margin: 15px 0 0; color: #a9bad9; font-size: .9rem; }
+    .sign-in-note a { color: #78e7ff; }
+    @media (max-width: 700px) { .comrade-hero { grid-template-columns: 1fr; padding: 25px 20px; border-radius: 22px; } .civic-note { display: none; } .desk-form .two-up { grid-template-columns: 1fr; } .president-desk summary, .desk-form { padding-left: 17px; padding-right: 17px; } .desk-hint { display: none; } .announcement { padding: 19px; border-radius: 18px; } .announcement-top { gap: 10px; } .when { max-width: 100px; } .reply-box { grid-template-columns: 1fr; } .reply-box .btn { width: 100%; } }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header class="top">
+      <div class="brand-group"><img class="brand-logo" src="/branding/logo" alt=""><div class="brand-text"><div class="brand">Quiz<span>Mark</span></div><div class="brand-tagline">Campus community</div></div></div>
+      <nav><a href="/static/index.html">Home</a><a href="/static/fun.html">Fun Page</a></nav>
+    </header>
+
+    <section class="comrade-hero">
+      <div><span class="kicker">Campus civic space</span><h1>Comrade Page</h1><p class="lede">Official SRC and party announcements, with room for the campus conversation underneath.</p></div>
+      <aside class="civic-note"><strong>Open to the campus</strong>Everyone can read announcements. Approved students can add a named response, keeping the conversation constructive and accountable.</aside>
+    </section>
+
+    <details class="card president-desk" id="presidentDesk">
+      <summary><span class="desk-symbol">&#9998;</span> SRC president desk <span class="desk-hint">official publishing only</span></summary>
+      <form class="desk-form" id="announcementForm">
+        <div class="two-up"><input id="party" maxlength="120" required placeholder="Party name"><input id="password" type="password" required autocomplete="current-password" placeholder="SRC president password"></div>
+        <textarea id="announcement" maxlength="2000" required placeholder="Write the announcement for the university community"></textarea>
+        <div><button class="btn" type="submit">Publish announcement</button><p class="desk-status" id="deskStatus" aria-live="polite"></p></div>
+      </form>
+    </details>
+
+    <section aria-labelledby="announcementTitle">
+      <div class="feed-head"><div><span class="kicker">Official channel</span><h2 id="announcementTitle">Campus announcements</h2></div><span id="feedCount"></span></div>
+      <div id="feed" aria-live="polite"><div class="empty-state">Loading announcements...</div></div>
+    </section>
+  </main>
+  <script>
+    const studentToken = sessionStorage.getItem('studentToken');
+    const byId = id => document.getElementById(id);
+    const escapeHtml = value => { const node = document.createElement('div'); node.textContent = value || ''; return node.innerHTML; };
+    const showDate = value => { const date = new Date(value); return Number.isNaN(date.valueOf()) ? '' : date.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }); };
+    async function api(url, options) {
+      const response = await fetch(url, options);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || 'Something went wrong. Please try again.');
+      return data;
+    }
+    function replyMarkup(reply) {
+      return `<article class="reply"><strong>${escapeHtml(reply.student_name)}</strong><p>${escapeHtml(reply.content)}</p><time>${escapeHtml(showDate(reply.created_at))}</time></article>`;
+    }
+    function postMarkup(post) {
+      const replies = post.replies || [];
+      const responder = studentToken ? `<form class="reply-box" data-reply-form="${post.id}"><textarea data-reply="${post.id}" maxlength="1500" required placeholder="Add a thoughtful response"></textarea><button class="btn secondary" type="submit">Respond</button></form>` : `<p class="sign-in-note">Approved students can respond. <a href="/static/index.html">Sign in</a> to join the discussion.</p>`;
+      return `<article class="announcement"><div class="announcement-top"><div class="party">${escapeHtml(post.party_name)}</div><time class="when">${escapeHtml(showDate(post.created_at))}</time></div><p class="announcement-copy">${escapeHtml(post.content)}</p><p class="reply-count">${replies.length} ${replies.length === 1 ? 'response' : 'responses'}</p><div class="replies">${replies.map(replyMarkup).join('')}</div>${responder}</article>`;
+    }
+    async function loadPosts() {
+      const feed = byId('feed');
+      try {
+        const posts = await api('/comrade/posts');
+        byId('feedCount').textContent = posts.length ? `${posts.length} live` : 'No announcements yet';
+        feed.innerHTML = posts.length ? posts.map(postMarkup).join('') : '<div class="empty-state">No announcements have been published yet. Check back soon.</div>';
+        document.querySelectorAll('[data-reply-form]').forEach(form => form.addEventListener('submit', submitReply));
+      } catch (error) { feed.innerHTML = `<div class="empty-state">${escapeHtml(error.message)}</div>`; }
+    }
+    async function submitReply(event) {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const postId = form.dataset.replyForm;
+      const content = form.querySelector(`[data-reply="${postId}"]`).value;
+      const button = form.querySelector('button');
+      button.disabled = true;
+      try {
+        await api(`/comrade/posts/${postId}/replies`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Student-Token': studentToken }, body: JSON.stringify({ content }) });
+        await loadPosts();
+      } catch (error) { alert(error.message); button.disabled = false; }
+    }
+    byId('announcementForm').addEventListener('submit', async event => {
+      event.preventDefault();
+      const status = byId('deskStatus');
+      const button = event.currentTarget.querySelector('button');
+      button.disabled = true; status.textContent = 'Publishing...';
+      try {
+        await api('/comrade/posts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ party_name: byId('party').value, password: byId('password').value, content: byId('announcement').value }) });
+        event.currentTarget.reset(); byId('presidentDesk').open = false; status.textContent = 'Announcement published.'; await loadPosts();
+      } catch (error) { status.textContent = error.message; } finally { button.disabled = false; }
+    });
+    loadPosts();
+  </script>
+</body>
+</html>
