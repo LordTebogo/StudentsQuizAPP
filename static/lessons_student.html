@@ -196,18 +196,23 @@ $('backToModulesBtn').addEventListener('click', () => {
 async function loadLessonList(moduleCode) {
   const box = $('lessonList');
   try {
-    const path = moduleCode ? `/lessons?module_code=${encodeURIComponent(moduleCode)}` : '/lessons';
+    const path = moduleCode ? `/student/lessons?module_code=${encodeURIComponent(moduleCode)}` : '/student/lessons';
     const lessons = await api(path);
     if (!lessons.length) {
       box.innerHTML = '<p class="muted">No lessons in this module yet — check back soon.</p>';
       return;
     }
-    box.innerHTML = lessons.map(l => `
-      <a class="lesson-list-item" data-id="${l.id}">
-        <div class="lesson-list-title">${escapeHtml(l.title)}</div>
-        <p class="muted">${escapeHtml(l.description || '')}</p>
-      </a>
-    `).join('');
+    box.innerHTML = lessons.map(l => {
+      const progress = l.completed
+        ? `<span class="badge done">Completed · ${l.total_score} / ${l.max_score}</span><p class="muted">${l.fully_marked ? 'Final result' : 'Awaiting final marking'}</p>`
+        : `<span class="badge pending">Not completed</span>`;
+      return `
+        <a class="lesson-list-item" data-id="${l.id}">
+          <div class="lesson-list-title">${escapeHtml(l.title)}</div>
+          <p class="muted">${escapeHtml(l.description || '')}</p>
+          ${progress}
+        </a>`;
+    }).join('');
     box.querySelectorAll('.lesson-list-item').forEach(el => {
       el.addEventListener('click', () => openLesson(el.dataset.id));
     });

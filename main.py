@@ -1145,6 +1145,45 @@ def list_quizzes_by_module(module_code: str, db: Session = Depends(get_db)):
     return [{"id": q.id, "title": q.title, "module_code": q.module_code, "created_at": q.created_at} for q in rows]
 
 
+@app.get("/student/quizzes/by-module/{module_code}")
+def list_student_quizzes_by_module(
+    module_code: str,
+    student: Student = Depends(require_student_account),
+    db: Session = Depends(get_db),
+):
+    """List a module's quizzes together with this student's latest result."""
+    rows = (
+        db.query(Quiz)
+        .filter(Quiz.module_code == module_code.strip().upper())
+        .order_by(Quiz.id.desc())
+        .all()
+    )
+    latest_by_quiz = {}
+    for submission in (
+        db.query(Submission)
+        .filter(Submission.student_id == student.student_number)
+        .order_by(Submission.submitted_at.desc())
+        .all()
+    ):
+        latest_by_quiz.setdefault(submission.quiz_id, submission)
+
+    output = []
+    for quiz in rows:
+        submission = latest_by_quiz.get(quiz.id)
+        output.append({
+            "id": quiz.id,
+            "title": quiz.title,
+            "module_code": quiz.module_code,
+            "created_at": quiz.created_at,
+            "completed": submission is not None,
+            "submission_id": submission.id if submission else None,
+            "total_score": submission.total_score if submission else None,
+            "max_score": submission.max_score if submission else None,
+            "fully_marked": submission.fully_marked if submission else None,
+        })
+    return output
+
+
 # ---------------------------------------------------------------------------
 # Student: fetch a quiz (answers hidden)
 # ---------------------------------------------------------------------------
@@ -1575,6 +1614,44 @@ def list_lessons(module_code: Optional[str] = None, db: Session = Depends(get_db
          "module_code": l.module_code, "created_at": l.created_at}
         for l in rows
     ]
+
+
+@app.get("/student/lessons")
+def list_student_lessons(
+    module_code: Optional[str] = None,
+    student: Student = Depends(require_student_account),
+    db: Session = Depends(get_db),
+):
+    """List lessons with each student's latest completion and result state."""
+    query = db.query(Lesson)
+    if module_code:
+        query = query.filter(Lesson.module_code == module_code.strip().upper())
+    rows = query.order_by(Lesson.id.desc()).all()
+    latest_by_lesson = {}
+    for submission in (
+        db.query(LessonSubmission)
+        .filter(LessonSubmission.student_id == student.student_number)
+        .order_by(LessonSubmission.submitted_at.desc())
+        .all()
+    ):
+        latest_by_lesson.setdefault(submission.lesson_id, submission)
+
+    output = []
+    for lesson in rows:
+        submission = latest_by_lesson.get(lesson.id)
+        output.append({
+            "id": lesson.id,
+            "title": lesson.title,
+            "description": lesson.description,
+            "module_code": lesson.module_code,
+            "created_at": lesson.created_at,
+            "completed": submission is not None,
+            "submission_id": submission.id if submission else None,
+            "total_score": submission.total_score if submission else None,
+            "max_score": submission.max_score if submission else None,
+            "fully_marked": submission.fully_marked if submission else None,
+        })
+    return output
 
 
 @app.get("/lecturer/lessons")
