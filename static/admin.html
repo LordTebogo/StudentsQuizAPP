@@ -58,12 +58,12 @@
         <label class="check-label"><input id="lecturerActive" type="checkbox" checked> Active</label>
         <button class="btn" id="saveLecturerBtn">Save lecturer</button><button class="btn secondary hidden" id="approveLecturerBtn">Approve &amp; activate</button><button class="btn secondary hidden" id="deleteLecturerBtn">Remove lecturer</button><div id="lecturerMsg"></div>
       </div>
-      <div><div class="admin-editor-heading"><h3>Lecturer profiles</h3><button class="btn secondary" id="refreshLecturersBtn">Refresh</button></div><div id="lecturerList" class="admin-list"></div></div>
+      <div><div class="admin-editor-heading"><h3>Lecturer profiles</h3><span><button class="btn secondary" id="activateAllLecturersBtn">Activate all</button><button class="btn secondary" id="inactivateAllLecturersBtn">Inactivate all</button><button class="btn secondary" id="refreshLecturersBtn">Refresh</button></span></div><div id="lecturerList" class="admin-list"></div></div>
     </div>
   </section>
 
   <section class="card">
-    <div class="admin-editor-heading"><div><span class="kicker">Student access</span><h2>Student management</h2></div><button class="btn secondary" id="refreshStudentsBtn">Refresh</button></div>
+    <div class="admin-editor-heading"><div><span class="kicker">Student access</span><h2>Student management</h2></div><span><button class="btn secondary" id="activateAllStudentsBtn">Activate all</button><button class="btn secondary" id="inactivateAllStudentsBtn">Inactivate all</button><button class="btn secondary" id="refreshStudentsBtn">Refresh</button></span></div>
     <p class="muted">Select a student profile to approve, activate, deactivate, reset their password, or remove it.</p>
     <div id="studentList" class="admin-list"></div>
     <div id="studentAdminCard" class="hidden"><label class="check-label"><input id="studentApproved" type="checkbox"> Approved</label><label class="check-label"><input id="studentActive" type="checkbox"> Active</label><label for="studentResetPassword">New password</label><input id="studentResetPassword" type="password" placeholder="At least 8 characters"><button class="btn" id="saveStudentBtn">Save student access</button><button class="btn secondary" id="resetStudentPasswordBtn">Reset password</button><button class="btn secondary" id="deleteStudentBtn">Remove student</button><div id="studentMsg"></div></div>
@@ -289,6 +289,11 @@ $('saveStudentBtn').addEventListener('click', saveStudent);
 $('resetStudentPasswordBtn').addEventListener('click', resetStudentPassword);
 $('deleteStudentBtn').addEventListener('click', deleteStudent);
 $('deleteLecturerBtn').addEventListener('click', deleteLecturer);
+async function setAllAccounts(kind, active) { const label = kind === 'lecturers' ? 'lecturers' : 'students'; if (!confirm(`${active ? 'Activate' : 'Inactivate'} every ${label}?`)) return; try { const rows = await api(`/admin/${kind}`); await Promise.all(rows.map(row => api(`/admin/${kind}/${row.id}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({active})}))); if (kind === 'lecturers') loadLecturers(); else loadStudents(); } catch (error) { window.alert(error.message); } }
+$('activateAllLecturersBtn').addEventListener('click', () => setAllAccounts('lecturers', true));
+$('inactivateAllLecturersBtn').addEventListener('click', () => setAllAccounts('lecturers', false));
+$('activateAllStudentsBtn').addEventListener('click', () => setAllAccounts('students', true));
+$('inactivateAllStudentsBtn').addEventListener('click', () => setAllAccounts('students', false));
 $('refreshLecturersBtn').addEventListener('click', loadLecturers);
 $('refreshScriptsBtn').addEventListener('click', loadAdminScripts);
 $('saveAdminMarksBtn').addEventListener('click', saveAdminMarks);
