@@ -33,9 +33,20 @@
     .post-content { margin: 13px 0 15px; line-height: 1.62; overflow-wrap: anywhere; white-space: pre-wrap; }
     .post-media { display: grid; gap: 11px; margin: 12px 0 15px; }
     .post-media img, .post-media video { display: block; width: 100%; max-height: 520px; object-fit: contain; border: 1px solid var(--line); border-radius: 12px; background: #02050c; }
-    .media-tools { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 13px; }
-    .media-tools label { flex: 1 1 210px; margin: 0; }
-    .media-tools input[type="file"] { margin-top: 7px; }
+    .media-tools { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 15px; }
+    .upload-control { position: relative; display: flex !important; align-items: center; gap: 11px; min-height: 66px; padding: 11px 12px !important; margin: 0 !important; color: var(--text) !important; font-family: var(--font-body) !important; letter-spacing: 0 !important; text-transform: none !important; border: 1px dashed rgba(103,232,249,.36); border-radius: 13px; background: linear-gradient(135deg, rgba(103,232,249,.08), rgba(167,139,250,.045)); cursor: pointer; transition: border-color .2s ease, background .2s ease, transform .2s ease, box-shadow .2s ease; }
+    .upload-control:hover, .upload-control:focus-within { border-color: var(--cyan); background: linear-gradient(135deg, rgba(103,232,249,.14), rgba(167,139,250,.1)); box-shadow: 0 0 20px rgba(34,211,238,.1); transform: translateY(-2px); }
+    .upload-control .upload-icon { display: grid; place-items: center; width: 35px; height: 35px; flex: 0 0 auto; font-size: 1.05rem; border: 1px solid rgba(103,232,249,.38); border-radius: 10px; background: rgba(3,7,18,.44); }
+    .upload-control strong, .upload-control small { display: block; }
+    .upload-control strong { color: #ddfbff; font-size: .86rem; }
+    .upload-control small { margin-top: 3px; color: var(--text-muted); font-family: var(--font-mono); font-size: .61rem; letter-spacing: .035em; text-transform: uppercase; }
+    .media-input { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+    .media-preview { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 12px; }
+    .preview-card { position: relative; min-width: 0; overflow: hidden; border: 1px solid rgba(103,232,249,.28); border-radius: 13px; background: #030712; box-shadow: inset 0 0 21px rgba(34,211,238,.07); }
+    .preview-card img, .preview-card video { display: block; width: 100%; height: 180px; object-fit: cover; background: #02050c; }
+    .preview-caption { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; color: var(--text-muted); font-family: var(--font-mono); font-size: .61rem; letter-spacing: .04em; text-transform: uppercase; }
+    .remove-preview { width: 22px; height: 22px; padding: 0; color: #ffe4e6; font: 700 1rem/1 var(--font-body); border: 1px solid rgba(251,113,133,.55); border-radius: 7px; background: rgba(190,24,93,.22); cursor: pointer; }
+    .remove-preview:hover, .remove-preview:focus-visible { color: #fff; border-color: #fda4af; background: rgba(190,24,93,.42); outline: none; }
     .sticker-tray { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 13px; }
     .sticker-choice { display: inline-grid; place-items: center; width: 36px; height: 36px; font-size: 1.2rem; border: 1px solid var(--line); border-radius: 10px; background: rgba(103,232,249,.045); cursor: pointer; transition: transform .18s ease, border-color .18s ease, background .18s ease, box-shadow .18s ease; }
     .sticker-choice:hover, .sticker-choice:focus-visible { border-color: rgba(103,232,249,.74); background: rgba(103,232,249,.13); transform: translateY(-2px) rotate(-4deg); outline: none; }
@@ -75,7 +86,8 @@
     <section class="card composer">
       <h2>Start a conversation</h2>
       <textarea id="postContent" maxlength="1500" placeholder="What’s on your mind?"></textarea>
-      <div class="media-tools"><label for="postImage">Add image<input id="postImage" type="file" accept="image/*"></label><label for="postVideo">Add video<input id="postVideo" type="file" accept="video/*"></label></div>
+      <div class="media-tools"><label class="upload-control" for="postImage"><input class="media-input" id="postImage" type="file" accept="image/*" data-preview-owner="post" data-media-kind="image"><span class="upload-icon">▧</span><span><strong>Add image</strong><small>Preview before sharing</small></span></label><label class="upload-control" for="postVideo"><input class="media-input" id="postVideo" type="file" accept="video/*" data-preview-owner="post" data-media-kind="video"><span class="upload-icon">▶</span><span><strong>Add video</strong><small>Preview before sharing</small></span></label></div>
+      <div class="media-preview" id="mediaPreview-post" aria-live="polite"></div>
       <div class="sticker-tray" id="postStickerPicker" aria-label="Choose a sticker"></div>
       <div class="composer-tools">
         <div class="tag-tools"><input id="tagPicker" list="memberNames" placeholder="Tag a student by name"><datalist id="memberNames"></datalist><button class="btn secondary" id="addTagBtn" type="button">Add @tag</button></div>
@@ -96,6 +108,7 @@
     const token = sessionStorage.getItem('studentToken');
     let members = [];
     const selectedStickers = new Map();
+    const mediaPreviewUrls = new Map();
     const STICKERS = [{code: 'spark', emoji: '✨', label: 'Spark'}, {code: 'celebrate', emoji: '🎉', label: 'Celebrate'}, {code: 'study', emoji: '📚', label: 'Study'}, {code: 'rocket', emoji: '🚀', label: 'Rocket'}, {code: 'heart', emoji: '💜', label: 'Love'}, {code: 'science', emoji: '🧬', label: 'Science'}, {code: 'laugh', emoji: '😂', label: 'Laugh'}, {code: 'thinking', emoji: '🤔', label: 'Thinking'}];
 
     function escapeHtml(value) { const node = document.createElement('div'); node.textContent = value ?? ''; return node.innerHTML; }
@@ -127,6 +140,34 @@
       document.querySelectorAll(`[data-sticker-owner="${owner}"]`).forEach(button => button.setAttribute('aria-pressed', String(button.dataset.stickerCode === code)));
     }
     function clearSticker(owner) { selectedStickers.delete(owner); document.querySelectorAll(`[data-sticker-owner="${owner}"]`).forEach(button => button.setAttribute('aria-pressed', 'false')); }
+    function previewKey(owner, kind) { return `${owner}:${kind}`; }
+    function mediaPreviewHtml(owner) {
+      const cards = ['image', 'video'].map(kind => {
+        const item = mediaPreviewUrls.get(previewKey(owner, kind));
+        if (!item) return '';
+        const media = kind === 'image' ? `<img src="${item.url}" alt="Image preview">` : `<video controls muted preload="metadata" src="${item.url}"></video>`;
+        return `<div class="preview-card">${media}<div class="preview-caption"><span>${kind} · ${escapeHtml(item.name)}</span><button class="remove-preview" type="button" data-remove-preview-owner="${owner}" data-remove-preview-kind="${kind}" aria-label="Remove ${kind}">×</button></div></div>`;
+      }).join('');
+      const container = $('mediaPreview-' + owner);
+      if (container) container.innerHTML = cards;
+    }
+    function updateMediaPreview(input) {
+      const owner = input.dataset.previewOwner, kind = input.dataset.mediaKind, key = previewKey(owner, kind), old = mediaPreviewUrls.get(key);
+      if (old) URL.revokeObjectURL(old.url);
+      if (input.files.length) {
+        const file = input.files[0];
+        mediaPreviewUrls.set(key, {url: URL.createObjectURL(file), name: file.name});
+      } else mediaPreviewUrls.delete(key);
+      mediaPreviewHtml(owner);
+    }
+    function removeMediaPreview(owner, kind) {
+      const input = kind === 'image' ? $(owner === 'post' ? 'postImage' : 'replyImage-' + owner.replace('reply-', '')) : $(owner === 'post' ? 'postVideo' : 'replyVideo-' + owner.replace('reply-', ''));
+      if (input) input.value = '';
+      const key = previewKey(owner, kind), item = mediaPreviewUrls.get(key);
+      if (item) URL.revokeObjectURL(item.url);
+      mediaPreviewUrls.delete(key); mediaPreviewHtml(owner);
+    }
+    function clearMediaPreviews(owner) { ['image', 'video'].forEach(kind => removeMediaPreview(owner, kind)); }
     function mediaHtml(post) {
       const image = post.image_url ? `<img src="${escapeHtml(post.image_url)}" alt="Post attachment">` : '';
       const video = post.video_url ? `<video controls preload="metadata" src="${escapeHtml(post.video_url)}">Your browser cannot play this video.</video>` : '';
@@ -141,7 +182,7 @@
         <div class="post-content">${formatContent(post.content)}</div>${post.sticker_code ? `<div class="sticker-pop" title="Sticker">${stickerEmoji(post.sticker_code)}</div>` : ''}
         ${mediaHtml(post)}
         <div class="post-actions"><button class="text-btn reply-btn" data-reply="${post.id}">Reply</button>${replyCount ? `<button class="thread-toggle toggle-replies-btn" data-toggle-replies="${post.id}" data-reply-count="${replyCount}" data-expanded="false" aria-expanded="false" aria-label="Show ${replyCount} repl${replyCount === 1 ? 'y' : 'ies'}">${replyToggleContent(replyCount, false)}</button>` : ''}${post.is_author ? `<button class="text-btn danger delete-btn" data-delete="${post.id}">Delete</button>` : ''}</div>
-        <div class="reply-composer hidden" id="replyBox-${post.id}"><textarea id="replyText-${post.id}" maxlength="1500" placeholder="Write a reply…"></textarea><div class="media-tools"><label for="replyImage-${post.id}">Add image<input id="replyImage-${post.id}" type="file" accept="image/*"></label><label for="replyVideo-${post.id}">Add video<input id="replyVideo-${post.id}" type="file" accept="video/*"></label></div><div class="sticker-tray" aria-label="Choose a reply sticker">${stickerPickerHtml('reply-' + post.id)}</div><label class="check-label"><input id="replyAnonymous-${post.id}" type="checkbox"> Reply anonymously</label><button class="btn secondary send-reply-btn" data-send-reply="${post.id}">Post reply</button><div id="replyMsg-${post.id}"></div></div>
+        <div class="reply-composer hidden" id="replyBox-${post.id}"><textarea id="replyText-${post.id}" maxlength="1500" placeholder="Write a reply…"></textarea><div class="media-tools"><label class="upload-control" for="replyImage-${post.id}"><input class="media-input" id="replyImage-${post.id}" type="file" accept="image/*" data-preview-owner="reply-${post.id}" data-media-kind="image"><span class="upload-icon">▧</span><span><strong>Add image</strong><small>Preview before sharing</small></span></label><label class="upload-control" for="replyVideo-${post.id}"><input class="media-input" id="replyVideo-${post.id}" type="file" accept="video/*" data-preview-owner="reply-${post.id}" data-media-kind="video"><span class="upload-icon">▶</span><span><strong>Add video</strong><small>Preview before sharing</small></span></label></div><div class="media-preview" id="mediaPreview-reply-${post.id}" aria-live="polite"></div><div class="sticker-tray" aria-label="Choose a reply sticker">${stickerPickerHtml('reply-' + post.id)}</div><label class="check-label"><input id="replyAnonymous-${post.id}" type="checkbox"> Reply anonymously</label><button class="btn secondary send-reply-btn" data-send-reply="${post.id}">Post reply</button><div id="replyMsg-${post.id}"></div></div>
         ${replyCount ? `<div class="replies hidden" id="replies-${post.id}">${replies}</div>` : ''}
       </article>`;
     }
@@ -188,6 +229,7 @@
         await api('/fun/posts', {method: 'POST', body: form});
         contentInput.value = ''; messageBox.innerHTML = '';
         imageInput.value = ''; videoInput.value = '';
+        clearMediaPreviews(stickerOwner);
         clearSticker(stickerOwner);
         if (!parentId) $('anonymousPost').checked = false;
         await loadFeed();
@@ -211,9 +253,11 @@
     });
     document.addEventListener('click', event => {
       const button = event.target.closest('.sticker-choice');
-      if (!button) return;
-      selectSticker(button.dataset.stickerOwner, button.dataset.stickerCode);
+      if (button) { selectSticker(button.dataset.stickerOwner, button.dataset.stickerCode); return; }
+      const removeButton = event.target.closest('.remove-preview');
+      if (removeButton) removeMediaPreview(removeButton.dataset.removePreviewOwner, removeButton.dataset.removePreviewKind);
     });
+    document.addEventListener('change', event => { if (event.target.matches('.media-input')) updateMediaPreview(event.target); });
     $('publishBtn').addEventListener('click', () => submitPost());
     $('refreshBtn').addEventListener('click', loadFeed);
     $('postStickerPicker').innerHTML = stickerPickerHtml('post');
