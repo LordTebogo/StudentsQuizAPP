@@ -2061,7 +2061,9 @@ def student_message_lecturers(student: Student = Depends(require_student_account
 
 @app.get("/lecturer/message-students")
 def lecturer_message_students(lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db)):
-    return [{"id": item.id, "full_name": item.full_name} for item in db.query(Student).filter(Student.approved.is_(True), Student.active.is_(True)).order_by(Student.full_name).all()]
+    return [{"id": item.id, "full_name": item.full_name, "student_number": item.student_number,
+             "module_codes": [module.module_code for module in item.modules]}
+            for item in db.query(Student).filter(Student.approved.is_(True), Student.active.is_(True)).order_by(Student.full_name).all()]
 
 
 @app.get("/student/messages")
