@@ -96,6 +96,8 @@ class FunPost(Base):
     author_student_id = Column(Integer, ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True)
     parent_id = Column(Integer, ForeignKey("fun_posts.id", ondelete="CASCADE"), index=True)
     content = Column(Text, nullable=False)
+    image_url = Column(Text)
+    video_url = Column(Text)
     is_anonymous = Column(Boolean, nullable=False, default=False)
     created_at = Column(String, nullable=False)
 

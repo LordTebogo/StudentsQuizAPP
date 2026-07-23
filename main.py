@@ -136,6 +136,21 @@ def ensure_lecturer_ownership_schema():
 
 ensure_lecturer_ownership_schema()
 
+
+def ensure_fun_post_media_schema():
+    """Add attachment fields for Fun Page installations created before media posts."""
+    if "fun_posts" not in inspect(engine).get_table_names():
+        return
+    columns = {column["name"] for column in inspect(engine).get_columns("fun_posts")}
+    with engine.begin() as conn:
+        if "image_url" not in columns:
+            conn.execute(text("ALTER TABLE fun_posts ADD COLUMN image_url TEXT"))
+        if "video_url" not in columns:
+            conn.execute(text("ALTER TABLE fun_posts ADD COLUMN video_url TEXT"))
+
+
+ensure_fun_post_media_schema()
+
 app = FastAPI(title="Quiz + Video Lessons App")
 
 # Wide-open CORS since this app has no per-user accounts; the PIN gates the
@@ -1974,6 +1989,8 @@ def _fun_post_payload(post: FunPost, students_by_id: dict, current_student_id: i
         "id": post.id,
         "parent_id": post.parent_id,
         "content": post.content,
+        "image_url": post.image_url,
+        "video_url": post.video_url,
         "is_anonymous": post.is_anonymous,
         "author_name": "Anonymous student" if post.is_anonymous else (author.full_name if author else "Former student"),
         "author_image_url": None if post.is_anonymous or not author else author.profile_image_url,
@@ -2021,20 +2038,50 @@ def list_fun_posts(student: Student = Depends(require_student_account), db: Sess
 
 
 @app.post("/fun/posts")
-def create_fun_post(payload: FunPostCreate, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
-    content = payload.content.strip()
-    if not content:
-        raise HTTPException(status_code=400, detail="Write something before posting")
+async def create_fun_post(
+    content: str = Form(""),
+    is_anonymous: bool = Form(False),
+    parent_id: Optional[int] = Form(None),
+    image: Optional[UploadFile] = File(None),
+    video: Optional[UploadFile] = File(None),
+    student: Student = Depends(require_student_account),
+    db: Session = Depends(get_db),
+):
+    content = content.strip()
+    has_image = bool(image and image.filename)
+    has_video = bool(video and video.filename)
+    if not content and not has_image and not has_video:
+        raise HTTPException(status_code=400, detail="Write something or attach an image or video before posting")
     if len(content) > 1500:
         raise HTTPException(status_code=400, detail="Posts can be up to 1,500 characters")
-    if payload.parent_id is not None and not db.query(FunPost).filter(FunPost.id == payload.parent_id).first():
+    if parent_id is not None and not db.query(FunPost).filter(FunPost.id == parent_id).first():
         raise HTTPException(status_code=404, detail="The post you are replying to no longer exists")
+
+    image_url = None
+    if has_image:
+        if not (image.content_type or "").startswith("image/"):
+            raise HTTPException(status_code=400, detail="Please choose a valid image file")
+        image_bytes = await image.read()
+        if len(image_bytes) > 10 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="Images must be 10 MB or smaller")
+        image_url = upload_image_bytes(image_bytes, folder="fun_page/images")
+
+    video_url = None
+    if has_video:
+        if not (video.content_type or "").startswith("video/"):
+            raise HTTPException(status_code=400, detail="Please choose a valid video file")
+        video_bytes = await video.read()
+        if len(video_bytes) > 50 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="Videos must be 50 MB or smaller")
+        video_url = upload_video_bytes(video_bytes, folder="fun_page/videos")
 
     post = FunPost(
         author_student_id=student.id,
-        parent_id=payload.parent_id,
+        parent_id=parent_id,
         content=content,
-        is_anonymous=payload.is_anonymous,
+        image_url=image_url,
+        video_url=video_url,
+        is_anonymous=is_anonymous,
         created_at=datetime.utcnow().isoformat() + "Z",
     )
     db.add(post)
