@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#070a14">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="icon" type="image/png" href="/branding/logo">
+  <link rel="apple-touch-icon" href="/branding/logo">
+  <link rel="manifest" href="/static/manifest.webmanifest">
+  <title>Fun Page — QuizMark</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    .fun-hero { display: grid; grid-template-columns: 1fr auto; gap: 22px; align-items: end; margin-bottom: 23px; }
+    .fun-hero p { margin: 0; }
+    .fun-note { max-width: 230px; padding: 12px 14px; color: #d8fcff; font-family: var(--font-mono); font-size: .7rem; line-height: 1.55; border: 1px solid rgba(103,232,249,.26); border-radius: 12px; background: rgba(103,232,249,.06); }
+    .composer textarea { min-height: 128px; }
+    .composer-tools, .post-actions, .post-meta, .identity { display: flex; align-items: center; gap: 10px; }
+    .composer-tools { flex-wrap: wrap; justify-content: space-between; margin-top: 13px; }
+    .tag-tools { display: flex; flex: 1 1 290px; gap: 8px; }
+    .tag-tools input { min-height: 38px; }
+    .tag-tools .btn { min-height: 38px; padding: 8px 12px; margin: 0; white-space: nowrap; }
+    .post-feed { display: grid; gap: 14px; margin-top: 20px; }
+    .fun-post { padding: 17px; border: 1px solid var(--line); border-radius: 14px; background: linear-gradient(135deg, rgba(10, 21, 42, .78), rgba(3, 7, 18, .6)); box-shadow: inset 0 1px rgba(255,255,255,.025); }
+    .fun-post.reply { margin-top: 12px; margin-left: 25px; border-left: 2px solid rgba(103,232,249,.43); border-radius: 0 13px 13px 0; background: rgba(4, 10, 23, .62); }
+    .avatar { width: 37px; height: 37px; object-fit: cover; border: 1px solid rgba(103,232,249,.45); border-radius: 50%; background: #0c1730; }
+    .avatar-fallback { display: inline-grid; place-items: center; width: 37px; height: 37px; color: var(--cyan); font-family: var(--font-mono); font-size: .72rem; border: 1px solid rgba(103,232,249,.35); border-radius: 50%; background: rgba(103,232,249,.08); }
+    .identity { gap: 9px; }
+    .post-author { font-weight: 700; }
+    .post-time { color: var(--text-muted); font-family: var(--font-mono); font-size: .66rem; }
+    .anonymous-tag { padding: 3px 7px; color: var(--violet); font-family: var(--font-mono); font-size: .61rem; letter-spacing: .07em; text-transform: uppercase; border: 1px solid rgba(167,139,250,.35); border-radius: 99px; }
+    .post-content { margin: 13px 0 15px; line-height: 1.62; overflow-wrap: anywhere; white-space: pre-wrap; }
+    .mention { color: var(--cyan); font-weight: 700; }
+    .post-actions { flex-wrap: wrap; }
+    .text-btn { padding: 5px 0; color: var(--cyan); font-family: var(--font-mono); font-size: .69rem; letter-spacing: .05em; text-transform: uppercase; border: 0; background: transparent; cursor: pointer; }
+    .text-btn.danger { color: #fda4af; }
+    .reply-composer { margin-top: 13px; padding-top: 13px; border-top: 1px dashed var(--line); }
+    .reply-composer textarea { min-height: 72px; }
+    .reply-composer .btn { margin-top: 9px; }
+    .empty-feed { padding: 28px; color: var(--text-muted); text-align: center; border: 1px dashed var(--line); border-radius: 14px; }
+    @media (max-width: 640px) { .fun-hero { grid-template-columns: 1fr; } .fun-note { max-width: none; } .fun-post.reply { margin-left: 13px; } .tag-tools { flex-basis: 100%; } }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header class="top">
+      <div class="brand-group"><img class="brand-logo" src="/branding/logo" alt=""><div class="brand-text"><div class="brand">Quiz<span>Mark</span></div><div class="brand-tagline">Student community</div></div></div>
+      <nav><a href="/static/student.html">Quizzes</a><a href="/static/lessons_student.html">Lessons</a><a href="/static/index.html">Home</a></nav>
+    </header>
+
+    <div class="fun-hero">
+      <div><span class="kicker">Campus connection</span><h1>Fun Page</h1><p class="lede">Share a win, ask a question, reply in a thread, and make studying feel less lonely.</p></div>
+      <div class="fun-note">Only approved students can take part. Be kind, protect each other’s privacy, and keep the space welcoming.</div>
+    </div>
+
+    <section class="card composer">
+      <h2>Start a conversation</h2>
+      <textarea id="postContent" maxlength="1500" placeholder="What’s on your mind?"></textarea>
+      <div class="composer-tools">
+        <div class="tag-tools"><input id="tagPicker" list="memberHandles" placeholder="Tag a student number"><datalist id="memberHandles"></datalist><button class="btn secondary" id="addTagBtn" type="button">Add @tag</button></div>
+        <label class="check-label"><input id="anonymousPost" type="checkbox"> Post anonymously</label>
+      </div>
+      <button class="btn" id="publishBtn">Publish post</button>
+      <div id="composerMsg"></div>
+    </section>
+
+    <section class="card">
+      <div class="admin-editor-heading"><div><span class="kicker">Live discussion</span><h2>Community feed</h2></div><button class="btn secondary" id="refreshBtn">Refresh</button></div>
+      <div id="feed" class="post-feed"><div class="empty-feed">Loading conversations…</div></div>
+    </section>
+  </main>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    const token = sessionStorage.getItem('studentToken');
+    let members = [];
+
+    function escapeHtml(value) { const node = document.createElement('div'); node.textContent = value ?? ''; return node.innerHTML; }
+    function showMsg(el, text, kind) { el.innerHTML = `<div class="msg ${kind}">${escapeHtml(text)}</div>`; }
+    async function api(path, options = {}) {
+      options.headers = Object.assign({}, options.headers, {'X-Student-Token': token});
+      const response = await fetch(path, options); let body = null;
+      try { body = await response.json(); } catch (_) {}
+      if (!response.ok) throw new Error((body && body.detail) || 'Something went wrong');
+      return body;
+    }
+    function formatDate(value) { try { return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)); } catch (_) { return value; } }
+    function formatContent(value) { return escapeHtml(value).replace(/(^|\s)(@[A-Za-z0-9_-]{2,64})/g, '$1<span class="mention">$2</span>'); }
+    function avatar(post) {
+      if (post.author_image_url) return `<img class="avatar" src="${escapeHtml(post.author_image_url)}" alt="">`;
+      return `<span class="avatar-fallback">${post.is_anonymous ? '?' : escapeHtml(post.author_name.slice(0, 1).toUpperCase())}</span>`;
+    }
+    function postHtml(post) {
+      const replies = post.replies.map(postHtml).join('');
+      return `<article class="fun-post${post.parent_id ? ' reply' : ''}" id="post-${post.id}">
+        <div class="post-meta"><div class="identity">${avatar(post)}<div><div class="post-author">${escapeHtml(post.author_name)} ${post.is_anonymous ? '<span class="anonymous-tag">Anonymous</span>' : ''}</div><div class="post-time">${escapeHtml(formatDate(post.created_at))}</div></div></div></div>
+        <div class="post-content">${formatContent(post.content)}</div>
+        <div class="post-actions"><button class="text-btn reply-btn" data-reply="${post.id}">Reply</button>${post.is_author ? `<button class="text-btn danger delete-btn" data-delete="${post.id}">Delete</button>` : ''}</div>
+        <div class="reply-composer hidden" id="replyBox-${post.id}"><textarea id="replyText-${post.id}" maxlength="1500" placeholder="Write a reply…"></textarea><label class="check-label"><input id="replyAnonymous-${post.id}" type="checkbox"> Reply anonymously</label><button class="btn secondary send-reply-btn" data-send-reply="${post.id}">Post reply</button><div id="replyMsg-${post.id}"></div></div>
+        ${replies}
+      </article>`;
+    }
+    function attachFeedEvents() {
+      document.querySelectorAll('.reply-btn').forEach(button => button.addEventListener('click', () => $('replyBox-' + button.dataset.reply).classList.toggle('hidden')));
+      document.querySelectorAll('.send-reply-btn').forEach(button => button.addEventListener('click', () => submitPost(button.dataset.sendReply)));
+      document.querySelectorAll('.delete-btn').forEach(button => button.addEventListener('click', () => deletePost(button.dataset.delete)));
+    }
+    async function loadFeed() {
+      const feed = $('feed');
+      try {
+        const posts = await api('/fun/posts');
+        feed.innerHTML = posts.length ? posts.map(postHtml).join('') : '<div class="empty-feed">No posts yet. Be the first to start the conversation.</div>';
+        attachFeedEvents();
+      } catch (error) { feed.innerHTML = `<div class="msg error">${escapeHtml(error.message)}</div>`; }
+    }
+    async function submitPost(parentId = null) {
+      const contentInput = parentId ? $('replyText-' + parentId) : $('postContent');
+      const messageBox = parentId ? $('replyMsg-' + parentId) : $('composerMsg');
+      const anonymous = parentId ? $('replyAnonymous-' + parentId).checked : $('anonymousPost').checked;
+      const content = contentInput.value.trim();
+      if (!content) { showMsg(messageBox, 'Write something before posting.', 'error'); return; }
+      try {
+        await api('/fun/posts', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({content, is_anonymous: anonymous, parent_id: parentId ? Number(parentId) : null})});
+        contentInput.value = ''; messageBox.innerHTML = '';
+        if (!parentId) $('anonymousPost').checked = false;
+        await loadFeed();
+      } catch (error) { showMsg(messageBox, error.message, 'error'); }
+    }
+    async function deletePost(id) {
+      if (!window.confirm('Delete this post and its replies?')) return;
+      try { await api('/fun/posts/' + id, {method: 'DELETE'}); await loadFeed(); } catch (error) { window.alert(error.message); }
+    }
+    async function loadMembers() {
+      try {
+        members = await api('/fun/members');
+        $('memberHandles').innerHTML = members.map(member => `<option value="${escapeHtml(member.student_number)}" label="${escapeHtml(member.full_name)}"></option>`).join('');
+      } catch (_) {}
+    }
+    $('addTagBtn').addEventListener('click', () => {
+      const handle = $('tagPicker').value.trim().toUpperCase();
+      if (!members.some(member => member.student_number === handle)) { showMsg($('composerMsg'), 'Choose a student number from the tag list.', 'error'); return; }
+      const input = $('postContent'); input.value += `${input.value && !input.value.endsWith(' ') ? ' ' : ''}@${handle} `; input.focus(); $('tagPicker').value = '';
+    });
+    $('publishBtn').addEventListener('click', () => submitPost());
+    $('refreshBtn').addEventListener('click', loadFeed);
+    (async () => { if (!token) { window.location.href = '/static/student.html'; return; } try { await api('/student/me'); await Promise.all([loadMembers(), loadFeed()]); } catch (_) { sessionStorage.removeItem('studentToken'); window.location.href = '/static/student.html'; } })();
+  </script>
+  <script src="/static/pwa.js"></script>
+</body>
+</html>

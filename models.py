@@ -85,6 +85,22 @@ class Student(Base):
 
 
 # ---------------------------------------------------------------------------
+# Student community
+# ---------------------------------------------------------------------------
+
+class FunPost(Base):
+    """A student community post or a reply to another community post."""
+    __tablename__ = "fun_posts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    author_student_id = Column(Integer, ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True)
+    parent_id = Column(Integer, ForeignKey("fun_posts.id", ondelete="CASCADE"), index=True)
+    content = Column(Text, nullable=False)
+    is_anonymous = Column(Boolean, nullable=False, default=False)
+    created_at = Column(String, nullable=False)
+
+
+# ---------------------------------------------------------------------------
 # Quizzes
 # ---------------------------------------------------------------------------
 

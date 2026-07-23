@@ -71,6 +71,7 @@ from models import (
     LessonSubmission,
     Lecturer,
     LecturerModule,
+    FunPost,
     Question,
     Quiz,
     Submission,
@@ -179,6 +180,12 @@ class CommentCreate(BaseModel):
     author_name: str
     comment_text: str
     is_lecturer: bool = False
+
+
+class FunPostCreate(BaseModel):
+    content: str
+    is_anonymous: bool = False
+    parent_id: Optional[int] = None
 
 
 class AdminQuestionInput(BaseModel):
@@ -1955,6 +1962,103 @@ def get_results(student_id: str, quiz_id: Optional[int] = None, student: Student
             "status": "Final result ready" if s.fully_marked else "Long-answer questions still being marked",
         })
     return results
+
+
+# ---------------------------------------------------------------------------
+# Student community / Fun Page
+# ---------------------------------------------------------------------------
+
+def _fun_post_payload(post: FunPost, students_by_id: dict, current_student_id: int, replies: list) -> dict:
+    author = students_by_id.get(post.author_student_id)
+    return {
+        "id": post.id,
+        "parent_id": post.parent_id,
+        "content": post.content,
+        "is_anonymous": post.is_anonymous,
+        "author_name": "Anonymous student" if post.is_anonymous else (author.full_name if author else "Former student"),
+        "author_image_url": None if post.is_anonymous or not author else author.profile_image_url,
+        "created_at": post.created_at,
+        "is_author": post.author_student_id == current_student_id,
+        "replies": replies,
+    }
+
+
+@app.get("/fun/members")
+def fun_members(student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+    """Member handles are used by the Fun Page's @tag helper."""
+    rows = (
+        db.query(Student)
+        .filter(Student.approved == True, Student.active == True)  # noqa: E712
+        .order_by(Student.full_name.asc())
+        .all()
+    )
+    return [{"student_number": item.student_number, "full_name": item.full_name} for item in rows]
+
+
+@app.get("/fun/posts")
+def list_fun_posts(student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+    posts = db.query(FunPost).order_by(FunPost.created_at.asc()).all()
+    author_ids = {post.author_student_id for post in posts}
+    students_by_id = {
+        item.id: item
+        for item in db.query(Student).filter(Student.id.in_(author_ids)).all()
+    } if author_ids else {}
+
+    children_by_parent = {}
+    for post in posts:
+        children_by_parent.setdefault(post.parent_id, []).append(post)
+
+    def serialize(post: FunPost) -> dict:
+        return _fun_post_payload(
+            post,
+            students_by_id,
+            student.id,
+            [serialize(child) for child in children_by_parent.get(post.id, [])],
+        )
+
+    # New discussions appear first; replies remain in their natural conversation order.
+    return [serialize(post) for post in reversed(children_by_parent.get(None, []))]
+
+
+@app.post("/fun/posts")
+def create_fun_post(payload: FunPostCreate, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+    content = payload.content.strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="Write something before posting")
+    if len(content) > 1500:
+        raise HTTPException(status_code=400, detail="Posts can be up to 1,500 characters")
+    if payload.parent_id is not None and not db.query(FunPost).filter(FunPost.id == payload.parent_id).first():
+        raise HTTPException(status_code=404, detail="The post you are replying to no longer exists")
+
+    post = FunPost(
+        author_student_id=student.id,
+        parent_id=payload.parent_id,
+        content=content,
+        is_anonymous=payload.is_anonymous,
+        created_at=datetime.utcnow().isoformat() + "Z",
+    )
+    db.add(post)
+    db.commit()
+    return {"ok": True, "id": post.id}
+
+
+@app.delete("/fun/posts/{post_id}")
+def delete_fun_post(post_id: int, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+    post = db.query(FunPost).filter(FunPost.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    if post.author_student_id != student.id:
+        raise HTTPException(status_code=403, detail="You can only delete your own posts")
+
+    # Delete the full reply thread so no reply is left without its parent.
+    def delete_thread(item: FunPost):
+        for child in db.query(FunPost).filter(FunPost.parent_id == item.id).all():
+            delete_thread(child)
+        db.delete(item)
+
+    delete_thread(post)
+    db.commit()
+    return {"ok": True}
 
 
 @app.get("/")
