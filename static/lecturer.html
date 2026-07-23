@@ -81,14 +81,18 @@
     <h2>2. Choose a quiz to review</h2>
     <label for="quizSelect">Quiz</label>
     <select id="quizSelect"><option value="">Loading quizzes…</option></select>
-    <button class="btn secondary" id="refreshQuizzesBtn">Refresh list</button>
+    <div class="account-actions">
+      <button class="btn secondary" id="refreshQuizzesBtn">Refresh quiz list</button>
+      <button class="btn" id="loadStudentsBtn" disabled>See students who took this quiz</button>
+    </div>
+    <p class="muted" id="quizReviewStatus" aria-live="polite">Choose a quiz, then load its student submissions.</p>
   </div>
 
   <!-- Submissions -->
   <div class="card hidden" id="submissionsCard">
     <h2>3. Submissions <span class="muted" id="submissionsCount" style="font-family: var(--font-mono); font-size: 0.8rem; font-weight: normal;"></span></h2>
     <p class="muted">Click a row to open it and mark long-answer questions or override short-answer marks. This list checks for new submissions automatically every few seconds.</p>
-    <button class="btn secondary" id="refreshSubmissionsBtn">Refresh submissions now</button>
+    <button class="btn secondary" id="refreshSubmissionsBtn">Refresh students who took this quiz</button>
     <button class="btn secondary" id="downloadAllPdfBtn">Download all as PDF</button>
     <span class="muted" id="lastCheckedText"></span>
 
@@ -312,18 +316,34 @@ $('uploadBtn').addEventListener('click', async () => {
 // ---- Load quiz list ----------------------------------------------------
 async function loadQuizzes() {
   const select = $('quizSelect');
+  const selectedId = select.value || String(currentQuizId || '');
   try {
     const quizzes = await api('/quizzes', {}, true);
     if (!quizzes.length) {
       select.innerHTML = '<option value="">No quizzes uploaded yet</option>';
+      $('loadStudentsBtn').disabled = true;
+      $('quizReviewStatus').textContent = 'Upload a quiz before viewing student submissions.';
       return;
     }
     select.innerHTML = quizzes.map(q => `<option value="${q.id}">${q.module_code} — ${q.title}</option>`).join('');
+    if ([...select.options].some(option => option.value === selectedId)) select.value = selectedId;
+    $('loadStudentsBtn').disabled = !select.value;
+    $('quizReviewStatus').textContent = select.value ? 'Ready to load students who took the selected quiz.' : 'Choose a quiz, then load its student submissions.';
   } catch (err) {
     select.innerHTML = '<option value="">Could not load quizzes</option>';
+    $('loadStudentsBtn').disabled = true;
+    $('quizReviewStatus').textContent = 'Could not load your quiz list.';
   }
 }
 $('refreshQuizzesBtn').addEventListener('click', loadQuizzes);
+$('loadStudentsBtn').addEventListener('click', () => {
+  const quizId = $('quizSelect').value;
+  if (!quizId) return;
+  $('gradingCard').classList.add('hidden');
+  $('studentSearchInput').value = '';
+  $('statusFilterSelect').value = 'all';
+  loadSubmissions(quizId).then(() => $('submissionsCard').scrollIntoView({ behavior: 'smooth', block: 'start' }));
+});
 $('refreshSubmissionsBtn').addEventListener('click', () => {
   if (currentQuizId) loadSubmissions(currentQuizId);
 });
@@ -332,6 +352,8 @@ $('downloadAllPdfBtn').addEventListener('click', () => {
   downloadPdf(`/lecturer/quiz/${currentQuizId}/pdf`, `quiz_${currentQuizId}_all_answers.pdf`, $('downloadAllMsg'));
 });
 $('quizSelect').addEventListener('change', (e) => {
+  $('loadStudentsBtn').disabled = !e.target.value;
+  $('quizReviewStatus').textContent = e.target.value ? 'Ready to load students who took the selected quiz.' : 'Choose a quiz, then load its student submissions.';
   if (e.target.value) {
     $('gradingCard').classList.add('hidden');
     $('studentSearchInput').value = '';
