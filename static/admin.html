@@ -15,8 +15,12 @@
   .card { position: relative; }
   .card-toggle { position:absolute; top:14px; right:14px; z-index:3; width:32px; height:32px; padding:0; border:1px solid rgba(103,232,249,.45); border-radius:50%; background:rgba(8,18,40,.88); color:#67e8f9; font:700 1.1rem/1 var(--font-mono, monospace); cursor:pointer; transition:transform .2s ease, background .2s ease; }
   .card-toggle:hover { transform:scale(1.08); background:rgba(103,232,249,.18); }
-  .card.collapsed { min-height:60px; padding-bottom:18px; overflow:hidden; }
-  .card.collapsed > :not(.card-toggle) { display:none !important; }
+  .card.collapsed { min-height:70px; padding:17px 60px 17px 22px; overflow:hidden; display:flex; align-items:center; }
+  .card.collapsed > :not(.card-toggle):not(.card-summary) { display:none !important; }
+  .card-summary { display:none; min-width:0; }
+  .card.collapsed .card-summary { display:block; }
+  .card-summary strong { display:block; color:var(--text); font-size:1rem; letter-spacing:.01em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .card-summary small { display:block; margin-top:3px; color:var(--muted); font-family:var(--font-mono, monospace); font-size:.68rem; letter-spacing:.04em; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 </style>
 </head>
 <body>
@@ -293,10 +297,21 @@ $('postOfficialLessonBtn').addEventListener('click', postOfficialLesson);
 $('saveBtn').addEventListener('click', save); $('deleteBtn').addEventListener('click', remove);
 $('closeEditorBtn').addEventListener('click', () => $('editorCard').classList.add('hidden'));
 $('lockBtn').addEventListener('click', event => { event.preventDefault(); sessionStorage.removeItem('lecturerPin'); pin = null; $('appWrap').classList.add('hidden'); $('gateWrap').classList.remove('hidden'); });
-document.querySelectorAll('.card').forEach(card => {
+document.querySelectorAll('#appWrap .card:not(#editorCard)').forEach(card => {
   const toggle = document.createElement('button'); toggle.type = 'button'; toggle.className = 'card-toggle'; toggle.title = 'Collapse this panel'; toggle.setAttribute('aria-label', 'Collapse this panel'); toggle.textContent = '−';
   toggle.addEventListener('click', () => { const collapsed = card.classList.toggle('collapsed'); toggle.textContent = collapsed ? '+' : '−'; toggle.title = collapsed ? 'Expand this panel' : 'Collapse this panel'; });
   card.appendChild(toggle);
+});
+document.querySelectorAll('#appWrap .card:not(#editorCard)').forEach(card => {
+  const heading = card.querySelector('h2, h3');
+  const kicker = card.querySelector('.kicker');
+  const label = heading ? heading.textContent.trim() : (kicker ? kicker.textContent.trim() : 'Admin panel');
+  const detail = kicker && kicker.textContent.trim() !== label ? kicker.textContent.trim() : 'Tap to open this workspace';
+  const summary = document.createElement('div'); summary.className = 'card-summary';
+  summary.innerHTML = `<strong>${escapeHtml(label)}</strong><small>${escapeHtml(detail)}</small>`;
+  card.appendChild(summary); card.classList.add('collapsed');
+  const toggle = card.querySelector('.card-toggle');
+  if (toggle) { toggle.textContent = '+'; toggle.title = 'Expand this panel'; toggle.setAttribute('aria-label', `Expand ${label}`); }
 });
 if (pin) unlock(pin);
 </script>
