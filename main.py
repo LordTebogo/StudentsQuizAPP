@@ -1979,6 +1979,59 @@ def admin_delete_student(student_id: int, _pin_ok: bool = Depends(require_lectur
 
 
 # ---------------------------------------------------------------------------
+# Administrator: every quiz script across every module
+# ---------------------------------------------------------------------------
+
+@app.get("/admin/submissions")
+def admin_list_all_submissions(_pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    rows = (
+        db.query(Submission)
+        .join(Quiz, Quiz.id == Submission.quiz_id)
+        .order_by(Submission.submitted_at.desc())
+        .all()
+    )
+    return [
+        {
+            "id": submission.id,
+            "quiz_id": submission.quiz_id,
+            "quiz_title": submission.quiz.title,
+            "module_code": submission.quiz.module_code,
+            "student_id": submission.student_id,
+            "student_name": submission.student_name,
+            "submitted_at": submission.submitted_at,
+            "total_score": submission.total_score,
+            "max_score": submission.max_score,
+            "fully_marked": submission.fully_marked,
+        }
+        for submission in rows
+    ]
+
+
+@app.get("/admin/submissions/{submission_id}/pdf")
+def admin_download_submission_pdf(submission_id: int, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    submission = db.query(Submission).filter(Submission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    buffer = io.BytesIO()
+    document = SimpleDocTemplate(
+        buffer, pagesize=A4, topMargin=2 * cm, bottomMargin=2 * cm,
+        leftMargin=2 * cm, rightMargin=2 * cm,
+    )
+    document.build(build_submission_pdf(db, submission_id, build_pdf_stylesheet(), include_expected_answers=True))
+    buffer.seek(0)
+
+    safe_name = "".join(c for c in (submission.student_name or "student") if c.isalnum() or c in (" ", "_", "-")).strip() or "student"
+    safe_module = "".join(c for c in (submission.quiz.module_code or "module") if c.isalnum() or c in ("_", "-")).strip() or "module"
+    filename = f"{safe_module}_{safe_name}_script.pdf"
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# ---------------------------------------------------------------------------
 # Student: check results (quizzes)
 # ---------------------------------------------------------------------------
 

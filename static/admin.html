@@ -59,6 +59,12 @@
   </section>
 
   <section class="card">
+    <div class="admin-editor-heading"><div><span class="kicker">Assessment archive</span><h2>All student scripts</h2></div><button class="btn secondary" id="refreshScriptsBtn">Refresh scripts</button></div>
+    <p class="muted">Every quiz script submitted across every module. Download a complete PDF including answers, marks, and expected answers.</p>
+    <div id="adminScriptsList" class="admin-list"></div><div id="adminScriptsMsg"></div>
+  </section>
+
+  <section class="card">
     <div class="admin-editor-heading"><div><span class="kicker">Safe community</span><h2>Community moderation</h2></div><button class="btn secondary" id="refreshCommunityBtn">Refresh discussions</button></div>
     <p class="muted">Publish official notices, pin important discussion items, or remove inappropriate posts and comments.</p>
     <div class="admin-grid">
@@ -144,8 +150,19 @@ function renderList(target, items, kind) {
   $(target).querySelectorAll('[data-id]').forEach(button => button.addEventListener('click', () => edit(kind, button.dataset.id)));
 }
 async function loadLists() {
-  try { const [quizzes, lessons] = await Promise.all([api('/admin/quizzes'), api('/admin/lessons')]); renderList('quizList', quizzes, 'quiz'); renderList('lessonList', lessons, 'lesson'); loadLecturers(); loadStudents(); loadCommunityModeration(lessons); }
+  try { const [quizzes, lessons] = await Promise.all([api('/admin/quizzes'), api('/admin/lessons')]); renderList('quizList', quizzes, 'quiz'); renderList('lessonList', lessons, 'lesson'); loadLecturers(); loadStudents(); loadAdminScripts(); loadCommunityModeration(lessons); }
   catch (err) { showMsg($('editorMsg'), `Could not load content: ${err.message}`, 'error'); }
+}
+async function loadAdminScripts() {
+  try {
+    const scripts = await api('/admin/submissions');
+    $('adminScriptsList').innerHTML = scripts.length ? scripts.map(script => `<div class="admin-list-item"><span><strong>${escapeHtml(script.student_name)}</strong><small>${escapeHtml(script.module_code)} · ${escapeHtml(script.quiz_title)} · ${escapeHtml(script.student_id)} · ${escapeHtml(script.submitted_at)}</small></span><span><span class="badge ${script.fully_marked ? 'done' : 'pending'}">${script.total_score} / ${script.max_score}${script.fully_marked ? ' final' : ' pending'}</span> <button class="row-download-btn" data-admin-script="${script.id}">PDF</button></span></div>`).join('') : '<p class="muted">No student scripts have been submitted yet.</p>';
+    $('adminScriptsList').querySelectorAll('[data-admin-script]').forEach(button => button.addEventListener('click', () => downloadAdminScript(button.dataset.adminScript)));
+  } catch (err) { showMsg($('adminScriptsMsg'), err.message, 'error'); }
+}
+async function downloadAdminScript(id) {
+  try { const response = await fetch(`/admin/submissions/${id}/pdf`, {headers:{'X-Lecturer-Pin':pin}}); if (!response.ok) throw new Error('Could not download this script.'); const blob = await response.blob(); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `student_script_${id}.pdf`; link.click(); URL.revokeObjectURL(url); }
+  catch (err) { showMsg($('adminScriptsMsg'), err.message, 'error'); }
 }
 function lecturerFormPayload(includePassword) {
   const modules = $('lecturerModules').value.split(',').map(code => code.trim()).filter(Boolean);
@@ -242,6 +259,7 @@ $('resetStudentPasswordBtn').addEventListener('click', resetStudentPassword);
 $('deleteStudentBtn').addEventListener('click', deleteStudent);
 $('deleteLecturerBtn').addEventListener('click', deleteLecturer);
 $('refreshLecturersBtn').addEventListener('click', loadLecturers);
+$('refreshScriptsBtn').addEventListener('click', loadAdminScripts);
 $('refreshCommunityBtn').addEventListener('click', () => loadCommunityModeration());
 $('postOfficialFunBtn').addEventListener('click', postOfficialFun);
 $('postOfficialLessonBtn').addEventListener('click', postOfficialLesson);
