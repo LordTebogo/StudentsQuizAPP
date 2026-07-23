@@ -9,65 +9,37 @@
 <link rel="icon" type="image/png" href="/branding/logo">
 <link rel="apple-touch-icon" href="/branding/logo">
 <link rel="manifest" href="/static/manifest.webmanifest">
-<title>Local Quiz App</title>
+<title>Welcome — QuizMark</title>
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<div class="wrap">
+<div class="wrap" id="welcome">
   <header class="top">
     <div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Quiz<span>Mark</span></div><div class="brand-tagline">Bioscientist</div></div></div>
     <nav><button class="install-app-btn" id="installAppBtn" type="button">Install app</button></nav>
   </header>
 
-  <h1>A quiz &amp; video-lesson app that lives on your local network.</h1>
-  
-  <h2>Quizzes</h2>
-  <div class="role-grid">
-    <a class="role-card" href="/static/lecturer.html">
-      <span class="kicker">For the lecturer</span>
-      <h2>Set up &amp; mark</h2>
-      <p>Upload a quiz JSON file, watch submissions come in, and grade long-answer questions.</p>
-    </a>
-    <a class="role-card" href="/static/student.html">
-      <span class="kicker">For students</span>
-      <h2>Take the quiz</h2>
-      <p>Choose your module, take any assigned quiz, and download your script when you are done.</p>
-    </a>
+  <span class="kicker">Your learning space</span>
+  <h1>Welcome to QuizMark</h1>
+  <p class="lede">Choose your role to sign in. New here? Create your profile first — an administrator will approve it before you can enter.</p>
+  <div class="role-grid" id="guestChoices">
+    <section class="role-card"><span class="kicker">Student</span><h2>Learn, submit &amp; connect</h2><p>Quizzes, video lessons, scripts and the student community — all in one private workspace.</p><a class="btn" href="/static/student.html">Student sign in</a><a class="btn secondary" href="/static/student.html#register">Create student account</a></section>
+    <section class="role-card"><span class="kicker">Lecturer / tutor</span><h2>Teach, assess &amp; guide</h2><p>Create module content, review only your students’ scripts, and communicate with your class.</p><a class="btn" href="/static/lecturer.html">Lecturer sign in</a><a class="btn secondary" href="/static/lecturer.html#register">Create lecturer account</a></section>
   </div>
-
-  <h2 style="margin-top:36px;">Video lessons</h2>
-  <div class="role-grid">
-    <a class="role-card" href="/static/lessons_lecturer.html">
-      <span class="kicker">For the lecturer</span>
-      <h2>Upload &amp; mark</h2>
-      <p>Upload a video with comprehension questions attached, mark student answers, and join the discussion.</p>
-    </a>
-    <a class="role-card" href="/static/lessons_student.html">
-      <span class="kicker">For students</span>
-      <h2>Watch &amp; answer</h2>
-      <p>Browse video lessons, answer the questions below each one privately, and discuss openly in the comments.</p>
-    </a>
-  </div>
-
-  <h2 style="margin-top:36px;">Student community</h2>
-  <div class="role-grid">
-    <a class="role-card" href="/static/fun.html">
-      <span class="kicker">For approved students</span>
-      <h2>Explore the Fun Page</h2>
-      <p>Share moments, post images or videos, reply in threads, and connect with fellow students.</p>
-    </a>
-  </div>
-
-  <h2 style="margin-top:36px;">Administration</h2>
-  <div class="role-grid">
-    <a class="role-card" href="/static/admin.html">
-      <span class="kicker">Protected workspace</span>
-      <h2>Manage content</h2>
-      <p>Create, update, review, or remove quizzes and video lessons in one place.</p>
-    </a>
-  </div>
+  <section class="card hidden" id="studentPortal"><span class="kicker">Student account active</span><h2>Your student workspace</h2><p class="muted">Only student tools are shown here.</p><div class="role-grid"><a class="role-card" href="/static/student.html"><h3>Quizzes &amp; scripts</h3></a><a class="role-card" href="/static/lessons_student.html"><h3>Video lessons</h3></a><a class="role-card" href="/static/fun.html"><h3>Fun Page</h3></a></div><button class="btn secondary" id="studentSignOut">Sign out</button></section>
+  <section class="card hidden" id="lecturerPortal"><span class="kicker">Lecturer account active</span><h2>Your lecturer workspace</h2><p class="muted">Only lecturer tools are shown here.</p><div class="role-grid"><a class="role-card" href="/static/lecturer.html"><h3>Quizzes &amp; marking</h3></a><a class="role-card" href="/static/lessons_lecturer.html"><h3>Video lessons</h3></a></div><button class="btn secondary" id="lecturerSignOut">Sign out</button></section>
+  <p class="muted" style="margin-top:28px">Administrator? <a href="/static/admin.html">Open the protected admin workspace</a>.</p>
 </div>
 <p class="install-hint" id="installHint" aria-live="polite"></p>
 <script src="/static/pwa.js"></script>
+<script>
+  const studentToken = sessionStorage.getItem('studentToken');
+  const lecturerToken = sessionStorage.getItem('lecturerToken');
+  const guest = document.getElementById('guestChoices');
+  if (studentToken) { guest.classList.add('hidden'); document.getElementById('studentPortal').classList.remove('hidden'); }
+  else if (lecturerToken) { guest.classList.add('hidden'); document.getElementById('lecturerPortal').classList.remove('hidden'); }
+  document.getElementById('studentSignOut').addEventListener('click', () => { sessionStorage.removeItem('studentToken'); location.reload(); });
+  document.getElementById('lecturerSignOut').addEventListener('click', () => { sessionStorage.removeItem('lecturerToken'); location.reload(); });
+</script>
 </body>
 </html>
