@@ -519,6 +519,35 @@ def student_me(student: Student = Depends(require_student_account)):
     return _student_profile(student)
 
 
+@app.put("/student/me")
+async def update_student_me(
+    full_name: str = Form(...),
+    phone: str = Form(""),
+    institution: str = Form(""),
+    bio: str = Form(""),
+    profile_image: Optional[UploadFile] = File(None),
+    student: Student = Depends(require_student_account),
+    db: Session = Depends(get_db),
+):
+    """Let an approved student update their profile without changing access settings."""
+    if not full_name.strip():
+        raise HTTPException(status_code=400, detail="Full name is required")
+
+    student.full_name = full_name.strip()
+    student.phone = phone.strip()
+    student.institution = institution.strip()
+    student.bio = bio.strip()
+
+    if profile_image and profile_image.filename:
+        student.profile_image_url = upload_image_bytes(
+            await profile_image.read(), folder="student_profiles"
+        )
+
+    db.commit()
+    db.refresh(student)
+    return _student_profile(student)
+
+
 # ---------------------------------------------------------------------------
 # App logo — serves image.png from the app's working directory if present.
 # ---------------------------------------------------------------------------
