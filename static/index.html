@@ -83,7 +83,7 @@
   function openProfileMenu(){ profileMenu.classList.toggle('hidden'); }
   avatar.addEventListener('click', event => { event.stopPropagation(); openProfileMenu(); });
   profileMenu.addEventListener('click', event => event.stopPropagation());
-  document.addEventListener('click', () => profileMenu.classList.add('hidden'));
+  document.addEventListener('click', event => { profileMenu.classList.add('hidden'); const inbox=document.getElementById('homeInbox'); const messageButton=document.getElementById('homeMessagesBtn'); if (!inbox.contains(event.target) && !messageButton.contains(event.target)) inbox.classList.add('hidden'); });
   document.getElementById('menuEditProfile').addEventListener('click',()=>{ location.href=studentToken ? '/static/student.html' : '/static/lecturer.html'; });
   document.getElementById('menuSignOut').addEventListener('click',()=>{ sessionStorage.removeItem(studentToken ? 'studentToken' : 'lecturerToken'); location.reload(); });
   if (studentToken) document.getElementById('studentSignOut').classList.add('hidden');
