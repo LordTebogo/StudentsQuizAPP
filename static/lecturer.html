@@ -206,10 +206,7 @@ async function tryUnlock(email, password) {
     });
     LECTURER_TOKEN = result.token;
     sessionStorage.setItem('lecturerToken', result.token);
-    $('gateWrap').classList.add('hidden');
-    $('appWrap').classList.remove('hidden');
-    applyProfile(result.lecturer);
-    loadQuizzes();
+    window.location.href = '/static/index.html';
   } catch (err) {
     sessionStorage.removeItem('lecturerToken');
     showMsg(msgBox, err.message, 'error');

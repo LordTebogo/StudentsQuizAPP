@@ -21,6 +21,8 @@
   .home-inbox { position:absolute; z-index:20; top:82px; right:0; width:min(390px,calc(100vw - 32px)); max-height:440px; overflow:auto; padding:16px; border:1px solid rgba(103,232,249,.35); border-radius:18px; background:rgba(7,14,31,.98); box-shadow:0 24px 60px rgba(0,0,0,.42); }
   .home-inbox h3 { margin:0 0 12px; } .home-inbox .q { margin:9px 0; padding:12px; } .home-inbox small { display:block; color:var(--muted); margin:3px 0 6px; }
   @media(max-width:620px){.home-profile-name{display:none}.student-home-actions{gap:7px}.home-inbox{right:8px;top:74px}}
+  .home-profile-menu { position:absolute; z-index:21; top:82px; right:0; width:180px; padding:8px; border:1px solid rgba(103,232,249,.35); border-radius:15px; background:rgba(7,14,31,.98); box-shadow:0 24px 60px rgba(0,0,0,.42); }
+  .home-profile-menu button { width:100%; margin:0; padding:11px; border:0; border-radius:10px; background:transparent; color:var(--text); text-align:left; cursor:pointer; } .home-profile-menu button:hover { background:rgba(103,232,249,.12); color:#67e8f9; }
 </style>
 </head>
 <body>
@@ -55,6 +57,16 @@
   else if (lecturerToken) { guest.classList.add('hidden'); document.getElementById('lecturerPortal').classList.remove('hidden'); }
   document.getElementById('studentSignOut').addEventListener('click', () => { sessionStorage.removeItem('studentToken'); location.reload(); });
   document.getElementById('lecturerSignOut').addEventListener('click', () => { sessionStorage.removeItem('lecturerToken'); location.reload(); });
+  const avatar = document.getElementById('homeStudentAvatar');
+  const actionBar = document.getElementById('studentHomeActions');
+  const profileMenu = document.createElement('div'); profileMenu.className='home-profile-menu hidden'; profileMenu.innerHTML='<button type="button" id="menuEditProfile">Edit profile</button><button type="button" id="menuSignOut">Sign out</button>';
+  document.getElementById('welcome').appendChild(profileMenu);
+  function openProfileMenu(){ profileMenu.classList.toggle('hidden'); }
+  avatar.addEventListener('click', openProfileMenu);
+  document.getElementById('menuEditProfile').addEventListener('click',()=>{ location.href=studentToken ? '/static/student.html' : '/static/lecturer.html'; });
+  document.getElementById('menuSignOut').addEventListener('click',()=>{ sessionStorage.removeItem(studentToken ? 'studentToken' : 'lecturerToken'); location.reload(); });
+  if (studentToken) document.getElementById('studentSignOut').classList.add('hidden');
+  if (lecturerToken) { document.getElementById('lecturerSignOut').classList.add('hidden'); guest.classList.add('hidden'); document.getElementById('lecturerPortal').classList.remove('hidden'); actionBar.classList.add('active'); fetch('/lecturer/me',{headers:{'X-Lecturer-Token':lecturerToken}}).then(r=>r.json()).then(profile=>{document.getElementById('homeStudentName').textContent=profile.full_name; if(profile.profile_image_url) avatar.src=profile.profile_image_url;}); fetch('/lecturer/messages/unread',{headers:{'X-Lecturer-Token':lecturerToken}}).then(r=>r.json()).then(result=>{const badge=document.getElementById('homeMessageCount');badge.textContent=result.count||0;badge.classList.toggle('hidden',!result.count)}); document.getElementById('homeMessagesBtn').addEventListener('click',async()=>{const inbox=document.getElementById('homeInbox');inbox.classList.toggle('hidden');if(!inbox.classList.contains('hidden')){const rows=await fetch('/lecturer/messages',{headers:{'X-Lecturer-Token':lecturerToken}}).then(r=>r.json());document.getElementById('homeInboxList').innerHTML=rows.length?rows.map(m=>`<div class="q"><strong>${escapeHome(m.sender_name)}</strong><small>${escapeHome(m.created_at)}</small><div>${escapeHome(m.content)}</div></div>`).join(''):'<p class="muted">No messages yet.</p>';}}); }
 </script>
 </body>
 </html>
