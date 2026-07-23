@@ -1985,14 +1985,14 @@ def _fun_post_payload(post: FunPost, students_by_id: dict, current_student_id: i
 
 @app.get("/fun/members")
 def fun_members(student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
-    """Member handles are used by the Fun Page's @tag helper."""
+    """Names are used by the Fun Page's @tag helper; student numbers stay private."""
     rows = (
         db.query(Student)
         .filter(Student.approved == True, Student.active == True)  # noqa: E712
         .order_by(Student.full_name.asc())
         .all()
     )
-    return [{"student_number": item.student_number, "full_name": item.full_name} for item in rows]
+    return [{"full_name": item.full_name, "profile_image_url": item.profile_image_url} for item in rows]
 
 
 @app.get("/fun/posts")

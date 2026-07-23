@@ -58,7 +58,7 @@
       <h2>Start a conversation</h2>
       <textarea id="postContent" maxlength="1500" placeholder="What’s on your mind?"></textarea>
       <div class="composer-tools">
-        <div class="tag-tools"><input id="tagPicker" list="memberHandles" placeholder="Tag a student number"><datalist id="memberHandles"></datalist><button class="btn secondary" id="addTagBtn" type="button">Add @tag</button></div>
+        <div class="tag-tools"><input id="tagPicker" list="memberNames" placeholder="Tag a student by name"><datalist id="memberNames"></datalist><button class="btn secondary" id="addTagBtn" type="button">Add @tag</button></div>
         <label class="check-label"><input id="anonymousPost" type="checkbox"> Post anonymously</label>
       </div>
       <button class="btn" id="publishBtn">Publish post</button>
@@ -86,23 +86,39 @@
       return body;
     }
     function formatDate(value) { try { return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)); } catch (_) { return value; } }
-    function formatContent(value) { return escapeHtml(value).replace(/(^|\s)(@[A-Za-z0-9_-]{2,64})/g, '$1<span class="mention">$2</span>'); }
+    function formatContent(value) {
+      let content = escapeHtml(value);
+      members.slice().sort((a, b) => b.full_name.length - a.full_name.length).forEach(member => {
+        const tag = '@' + escapeHtml(member.full_name);
+        content = content.split(tag).join(`<span class="mention">${tag}</span>`);
+      });
+      return content;
+    }
     function avatar(post) {
       if (post.author_image_url) return `<img class="avatar" src="${escapeHtml(post.author_image_url)}" alt="">`;
       return `<span class="avatar-fallback">${post.is_anonymous ? '?' : escapeHtml(post.author_name.slice(0, 1).toUpperCase())}</span>`;
     }
+    function replyToggleLabel(count, expanded) { return `${expanded ? 'Hide' : 'Show'} ${count} repl${count === 1 ? 'y' : 'ies'}`; }
     function postHtml(post) {
+      const replyCount = post.replies.length;
       const replies = post.replies.map(postHtml).join('');
       return `<article class="fun-post${post.parent_id ? ' reply' : ''}" id="post-${post.id}">
         <div class="post-meta"><div class="identity">${avatar(post)}<div><div class="post-author">${escapeHtml(post.author_name)} ${post.is_anonymous ? '<span class="anonymous-tag">Anonymous</span>' : ''}</div><div class="post-time">${escapeHtml(formatDate(post.created_at))}</div></div></div></div>
         <div class="post-content">${formatContent(post.content)}</div>
-        <div class="post-actions"><button class="text-btn reply-btn" data-reply="${post.id}">Reply</button>${post.is_author ? `<button class="text-btn danger delete-btn" data-delete="${post.id}">Delete</button>` : ''}</div>
+        <div class="post-actions"><button class="text-btn reply-btn" data-reply="${post.id}">Reply</button>${replyCount ? `<button class="text-btn toggle-replies-btn" data-toggle-replies="${post.id}" data-reply-count="${replyCount}" data-expanded="true">${replyToggleLabel(replyCount, true)}</button>` : ''}${post.is_author ? `<button class="text-btn danger delete-btn" data-delete="${post.id}">Delete</button>` : ''}</div>
         <div class="reply-composer hidden" id="replyBox-${post.id}"><textarea id="replyText-${post.id}" maxlength="1500" placeholder="Write a reply…"></textarea><label class="check-label"><input id="replyAnonymous-${post.id}" type="checkbox"> Reply anonymously</label><button class="btn secondary send-reply-btn" data-send-reply="${post.id}">Post reply</button><div id="replyMsg-${post.id}"></div></div>
-        ${replies}
+        ${replyCount ? `<div class="replies" id="replies-${post.id}">${replies}</div>` : ''}
       </article>`;
     }
     function attachFeedEvents() {
       document.querySelectorAll('.reply-btn').forEach(button => button.addEventListener('click', () => $('replyBox-' + button.dataset.reply).classList.toggle('hidden')));
+      document.querySelectorAll('.toggle-replies-btn').forEach(button => button.addEventListener('click', () => {
+        const replies = $('replies-' + button.dataset.toggleReplies);
+        const expanded = button.dataset.expanded === 'true';
+        replies.classList.toggle('hidden', expanded);
+        button.dataset.expanded = String(!expanded);
+        button.textContent = replyToggleLabel(Number(button.dataset.replyCount), !expanded);
+      }));
       document.querySelectorAll('.send-reply-btn').forEach(button => button.addEventListener('click', () => submitPost(button.dataset.sendReply)));
       document.querySelectorAll('.delete-btn').forEach(button => button.addEventListener('click', () => deletePost(button.dataset.delete)));
     }
@@ -134,17 +150,18 @@
     async function loadMembers() {
       try {
         members = await api('/fun/members');
-        $('memberHandles').innerHTML = members.map(member => `<option value="${escapeHtml(member.student_number)}" label="${escapeHtml(member.full_name)}"></option>`).join('');
+        $('memberNames').innerHTML = members.map(member => `<option value="${escapeHtml(member.full_name)}"></option>`).join('');
       } catch (_) {}
     }
     $('addTagBtn').addEventListener('click', () => {
-      const handle = $('tagPicker').value.trim().toUpperCase();
-      if (!members.some(member => member.student_number === handle)) { showMsg($('composerMsg'), 'Choose a student number from the tag list.', 'error'); return; }
-      const input = $('postContent'); input.value += `${input.value && !input.value.endsWith(' ') ? ' ' : ''}@${handle} `; input.focus(); $('tagPicker').value = '';
+      const name = $('tagPicker').value.trim();
+      if (!members.some(member => member.full_name.toLowerCase() === name.toLowerCase())) { showMsg($('composerMsg'), 'Choose a student name from the tag list.', 'error'); return; }
+      const member = members.find(item => item.full_name.toLowerCase() === name.toLowerCase());
+      const input = $('postContent'); input.value += `${input.value && !input.value.endsWith(' ') ? ' ' : ''}@${member.full_name} `; input.focus(); $('tagPicker').value = '';
     });
     $('publishBtn').addEventListener('click', () => submitPost());
     $('refreshBtn').addEventListener('click', loadFeed);
-    (async () => { if (!token) { window.location.href = '/static/student.html'; return; } try { await api('/student/me'); await Promise.all([loadMembers(), loadFeed()]); } catch (_) { sessionStorage.removeItem('studentToken'); window.location.href = '/static/student.html'; } })();
+    (async () => { if (!token) { window.location.href = '/static/student.html'; return; } try { await api('/student/me'); await loadMembers(); await loadFeed(); } catch (_) { sessionStorage.removeItem('studentToken'); window.location.href = '/static/student.html'; } })();
   </script>
   <script src="/static/pwa.js"></script>
 </body>
