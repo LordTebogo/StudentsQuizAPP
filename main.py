@@ -220,6 +220,10 @@ class AdminBroadcastMessage(BaseModel):
     module_codes: List[str] = []
 
 
+class ModuleSelection(BaseModel):
+    module_codes: List[str]
+
+
 class PinCheck(BaseModel):
     pin: str
 
@@ -979,6 +983,22 @@ def list_quiz_modules(db: Session = Depends(get_db)):
         .group_by(Quiz.module_code).order_by(Quiz.module_code.asc()).all()
     )
     return [{"module_code": code, "quiz_count": count} for code, count in rows]
+
+
+@app.get("/student/modules")
+def student_modules(student: Student = Depends(require_student_account)):
+    return {"module_codes": [item.module_code for item in student.modules]}
+
+
+@app.put("/student/modules")
+def update_student_modules(payload: ModuleSelection, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+    available = {row[0] for row in db.query(Quiz.module_code).distinct().all()} | {row[0] for row in db.query(Lesson.module_code).distinct().all()}
+    wanted = {code.strip().upper() for code in payload.module_codes if code and code.strip()}
+    invalid = wanted - available
+    if invalid:
+        raise HTTPException(status_code=400, detail="Only modules created by Admin can be selected")
+    _set_student_modules(db, student, list(wanted)); db.commit()
+    return {"module_codes": sorted(wanted)}
 
 
 @app.get("/quizzes/by-module/{module_code}")
@@ -2064,6 +2084,14 @@ def lecturer_message_students(lecturer: Lecturer = Depends(require_lecturer_acco
     return [{"id": item.id, "full_name": item.full_name, "student_number": item.student_number,
              "module_codes": [module.module_code for module in item.modules]}
             for item in db.query(Student).filter(Student.approved.is_(True), Student.active.is_(True)).order_by(Student.full_name).all()]
+
+
+@app.get("/lecturer/students")
+def lecturer_students(lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db)):
+    assigned = {item.module_code for item in lecturer.modules}
+    rows = db.query(Student).join(StudentModule).filter(Student.approved.is_(True), Student.active.is_(True), StudentModule.module_code.in_(assigned)).distinct().order_by(Student.full_name).all()
+    return [{"id": item.id, "full_name": item.full_name, "student_number": item.student_number,
+             "module_codes": [module.module_code for module in item.modules if module.module_code in assigned]} for item in rows]
 
 
 @app.get("/student/messages")
