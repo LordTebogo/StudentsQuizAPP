@@ -80,7 +80,7 @@ from models import (
     Student,
     StudentModule,
     SrcPresident,
-    ComradePost, ComradeReply,
+    ComradePost, ComradeReply, ComradeSrcReply,
 )
 from cloudinary_utils import upload_image_bytes, upload_video_bytes
 
@@ -175,6 +175,20 @@ def ensure_comment_moderation_schema():
 
 
 ensure_comment_moderation_schema()
+
+
+def ensure_comrade_identity_schema():
+    """Link new announcements to the verified SRC profile that created them."""
+    if "comrade_posts" not in inspect(engine).get_table_names():
+        return
+    columns = {column["name"] for column in inspect(engine).get_columns("comrade_posts")}
+    if "src_president_id" not in columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE comrade_posts ADD COLUMN src_president_id INTEGER"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_comrade_posts_src_president_id ON comrade_posts (src_president_id)"))
+
+
+ensure_comrade_identity_schema()
 
 app = FastAPI(title="Quiz + Video Lessons App")
 
@@ -483,6 +497,16 @@ def _src_president_profile(president: SrcPresident) -> dict:
         "active": president.active,
         "created_at": president.created_at,
     }
+
+
+def _active_src_party_exists(db: Session, party_name: str, exclude_id: Optional[int] = None) -> bool:
+    query = db.query(SrcPresident).filter(
+        func.lower(SrcPresident.party_name) == party_name.strip().lower(),
+        SrcPresident.active.is_(True),
+    )
+    if exclude_id is not None:
+        query = query.filter(SrcPresident.id != exclude_id)
+    return query.first() is not None
 
 
 def _set_student_modules(db: Session, student: Student, codes: List[str]):
@@ -2107,6 +2131,9 @@ def admin_update_src_president(president_id: int, payload: AdminSrcPresidentUpda
     president = db.query(SrcPresident).filter(SrcPresident.id == president_id).first()
     if not president:
         raise HTTPException(status_code=404, detail="SRC president profile not found")
+    next_active = president.active if payload.active is None else payload.active
+    if next_active and _active_src_party_exists(db, president.party_name, president.id):
+        raise HTTPException(status_code=409, detail="Another active SRC president profile already represents this party")
     if payload.approved is not None:
         president.approved = payload.approved
     if payload.active is not None:
@@ -2422,9 +2449,9 @@ async def register_src_president(
     image_url = upload_image_bytes(await profile_image.read(), folder="src_profiles") if profile_image and profile_image.filename else None
     president = SrcPresident(full_name=full_name.strip()[:160], party_name=party_name.strip()[:120], email=email,
         phone=phone.strip()[:60], profile_image_url=image_url, password_hash=_password_hash(password),
-        approved=False, active=True, created_at=datetime.now(timezone.utc).isoformat())
+        approved=False, active=False, created_at=datetime.now(timezone.utc).isoformat())
     db.add(president); db.commit()
-    return {"ok": True, "message": "SRC profile created. An administrator must approve it before it can publish announcements."}
+    return {"ok": True, "message": "SRC profile created. An administrator must approve and activate it before it can publish announcements."}
 
 
 @app.post("/src/login")
@@ -2452,6 +2479,8 @@ async def update_src_president_me(
 ):
     if not full_name.strip() or not party_name.strip():
         raise HTTPException(status_code=400, detail="Full name and party name are required")
+    if president.active and _active_src_party_exists(db, party_name, president.id):
+        raise HTTPException(status_code=409, detail="Another active SRC president profile already represents this party")
     president.full_name, president.party_name = full_name.strip()[:160], party_name.strip()[:120]
     president.phone = phone.strip()[:60]
     if profile_image and profile_image.filename:
@@ -2480,13 +2509,24 @@ def comrade_posts(db: Session = Depends(get_db)):
     replies_by_post = {}
     for reply in db.query(ComradeReply).order_by(ComradeReply.created_at).all():
         replies_by_post.setdefault(reply.post_id, []).append({
-            "student_name": students.get(reply.student_id, "Former student"),
+            "author_label": students.get(reply.student_id, "Former student"),
+            "author_type": "student",
             "content": reply.content,
             "created_at": reply.created_at,
         })
+    for reply in db.query(ComradeSrcReply).order_by(ComradeSrcReply.created_at).all():
+        replies_by_post.setdefault(reply.post_id, []).append({
+            "author_label": f"{reply.party_name} SRC president",
+            "author_type": "src_president",
+            "content": reply.content,
+            "created_at": reply.created_at,
+        })
+    for replies in replies_by_post.values():
+        replies.sort(key=lambda item: item["created_at"])
     return [{
         "id": post.id,
         "party_name": post.party_name,
+        "created_by": f"{post.party_name} SRC president",
         "content": post.content,
         "created_at": post.created_at,
         "replies": replies_by_post.get(post.id, []),
@@ -2498,6 +2538,7 @@ def create_comrade_post(payload: ComradeAnnouncement, president: SrcPresident = 
     if not content:
         raise HTTPException(status_code=400, detail="An announcement is required")
     post = ComradePost(
+        src_president_id=president.id,
         party_name=president.party_name,
         content=content[:2000],
         created_at=datetime.now(timezone.utc).isoformat(),
@@ -2516,6 +2557,24 @@ def reply_comrade_post(post_id: int, payload: ComradeReplyInput, student: Studen
     db.add(ComradeReply(
         post_id=post_id,
         student_id=student.id,
+        content=content[:1500],
+        created_at=datetime.now(timezone.utc).isoformat(),
+    ))
+    db.commit()
+    return {"ok": True}
+
+
+@app.post("/comrade/posts/{post_id}/src-replies")
+def reply_comrade_post_as_src(post_id: int, payload: ComradeReplyInput, president: SrcPresident = Depends(require_src_president_account), db: Session = Depends(get_db)):
+    if not db.query(ComradePost).filter(ComradePost.id == post_id).first():
+        raise HTTPException(status_code=404, detail="Announcement not found")
+    content = payload.content.strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="Write a reply")
+    db.add(ComradeSrcReply(
+        post_id=post_id,
+        src_president_id=president.id,
+        party_name=president.party_name,
         content=content[:1500],
         created_at=datetime.now(timezone.utc).isoformat(),
     ))
