@@ -53,6 +53,7 @@
 
   <h1>Lecturer</h1>
   <p class="lede">Upload a quiz to a module, share the module link with your class, then mark long answers as submissions come in.</p>
+  <section class="card" id="lecturerMessagesCard"><div class="admin-editor-heading"><h2>Message a student</h2><button class="btn secondary" id="refreshLecturerMessagesBtn">Refresh</button></div><label for="lecturerMessageStudent">Choose student</label><select id="lecturerMessageStudent"></select><label for="lecturerMessageText">Message</label><textarea id="lecturerMessageText" maxlength="2000" placeholder="Write a private message to the selected student"></textarea><button class="btn" id="sendLecturerMessageBtn">Send message</button><div id="lecturerMessageMsg"></div><div id="lecturerMessagesList" class="admin-list"></div></section>
   <div class="card"><div class="profile-strip"><img id="profileImage" class="profile-avatar hidden" alt="Lecturer profile image"><div id="profileSummary" class="muted"></div><button class="btn secondary" id="editProfileBtn">Edit profile</button></div></div>
   <div class="card hidden" id="profileCard"><h2>My lecturer profile</h2><label for="profileName">Full name</label><input id="profileName" type="text"><label for="profilePhone">Phone</label><input id="profilePhone" type="text"><label for="profileInstitution">Institution</label><input id="profileInstitution" type="text"><label for="profileBio">Professional bio</label><textarea id="profileBio"></textarea><label for="profileUpload">Profile image</label><input id="profileUpload" type="file" accept="image/*"><button class="btn" id="saveProfileBtn">Save profile</button><div id="profileMsg"></div></div>
 
@@ -534,6 +535,10 @@ $('saveMarksBtn').addEventListener('click', async () => {
   }
 });
 
+async function loadLecturerMessages() { try { const [students, messages] = await Promise.all([api('/lecturer/message-students', {}, true), api('/lecturer/messages', {}, true)]); $('lecturerMessageStudent').innerHTML = students.map(student => `<option value="${student.id}">${student.full_name}</option>`).join('') || '<option value="">No approved students</option>'; $('lecturerMessagesList').innerHTML = messages.length ? messages.map(message => `<div class="q"><strong>${message.sender_name}</strong><small>${message.created_at}</small><div>${message.content}</div></div>`).join('') : '<p class="muted">No messages yet.</p>'; } catch (error) { showMsg($('lecturerMessageMsg'), error.message, 'error'); } }
+$('refreshLecturerMessagesBtn').addEventListener('click', loadLecturerMessages);
+$('sendLecturerMessageBtn').addEventListener('click', async () => { try { await api('/lecturer/messages', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({recipient_type:'student', recipient_id:Number($('lecturerMessageStudent').value), content:$('lecturerMessageText').value.trim()})}, true); $('lecturerMessageText').value=''; loadLecturerMessages(); } catch (error) { showMsg($('lecturerMessageMsg'), error.message, 'error'); } });
+if (LECTURER_TOKEN) loadLecturerMessages();
 $('downloadOnePdfBtn').addEventListener('click', () => {
   if (!currentSubmissionId) return;
   downloadPdf(`/lecturer/submission/${currentSubmissionId}/pdf`, `submission_${currentSubmissionId}_answers.pdf`, $('gradingMsg'));

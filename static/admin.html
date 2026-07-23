@@ -207,6 +207,7 @@ function clearLecturerForm() {
   ['lecturerName','lecturerEmail','lecturerPassword','lecturerPhone','lecturerInstitution','lecturerBio','lecturerModules'].forEach(id => $(id).value = '');
   $('lecturerLimit').value = 1; $('lecturerApproved').checked = false; $('lecturerActive').checked = true; $('lecturerEmail').disabled = false; $('lecturerPassword').classList.remove('hidden'); $('passwordResetFields').classList.add('hidden'); $('approveLecturerBtn').classList.add('hidden'); $('deleteLecturerBtn').classList.add('hidden'); $('lecturerMsg').innerHTML = '';
 }
+async function quickAdminMessage(type, id, name) { const content = window.prompt(`Message ${name}:`); if (!content || !content.trim()) return; try { await api('/admin/messages', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({recipient_type:type, recipient_id:Number(id), content:content.trim()})}); window.alert(`Message sent to ${name}.`); } catch (error) { window.alert(error.message); } }
 function loadLecturers() {
   api('/admin/lecturers').then(lecturers => {
     $('lecturerList').innerHTML = lecturers.length ? lecturers.map(item => `<button class="admin-list-item" data-lecturer="${item.id}"><span><strong>${escapeHtml(item.full_name)}</strong><small>${escapeHtml(item.email)} · ${escapeHtml(item.module_codes.join(', ') || 'No modules')}</small></span><span class="badge ${item.active && item.approved ? 'done' : 'pending'}">${item.active ? (item.approved ? 'Active' : 'Awaiting approval') : 'Inactive'}</span></button>`).join('') : '<p class="muted">No lecturer profiles yet.</p>';
@@ -313,6 +314,19 @@ document.querySelectorAll('#appWrap .card:not(#editorCard)').forEach(card => {
   const toggle = card.querySelector('.card-toggle');
   if (toggle) { toggle.textContent = '+'; toggle.title = 'Expand this panel'; toggle.setAttribute('aria-label', `Expand ${label}`); }
 });
+function addAdminMessageButtons() {
+  [['lecturerList','lecturer'], ['studentList','student']].forEach(([listId, type]) => {
+    const list = $(listId); if (!list) return;
+    list.querySelectorAll(type === 'lecturer' ? '[data-lecturer]' : '[data-student]').forEach(row => {
+      if (row.querySelector('.quick-message-btn') || !row.textContent.includes('Active')) return;
+      const id = type === 'lecturer' ? row.dataset.lecturer : row.dataset.student;
+      const name = row.querySelector('strong')?.textContent || 'this account';
+      const button = document.createElement('button'); button.type='button'; button.className='row-download-btn quick-message-btn'; button.textContent='Message';
+      button.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); quickAdminMessage(type, id, name); }); row.appendChild(button);
+    });
+  });
+}
+new MutationObserver(addAdminMessageButtons).observe($('appWrap'), {childList:true, subtree:true});
 if (pin) unlock(pin);
 </script>
 <script src="/static/pwa.js"></script>
