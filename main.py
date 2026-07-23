@@ -2372,6 +2372,22 @@ async def create_fun_post(
         created_at=datetime.utcnow().isoformat() + "Z",
     )
     db.add(post)
+    # A tag is a private notification as well as visible text in the post.
+    # Match complete display names only, so @Ann does not notify @Annette.
+    tagged_students = db.query(Student).filter(
+        Student.approved == True, Student.active == True, Student.id != student.id  # noqa: E712
+    ).all()
+    for tagged in tagged_students:
+        mention = "@" + tagged.full_name.strip()
+        if mention != "@" and re.search(r"(?<!\\w)" + re.escape(mention) + r"(?!\\w)", content, re.IGNORECASE):
+            db.add(DirectMessage(
+                sender_type="student",
+                sender_id=student.id,
+                recipient_type="student",
+                recipient_id=tagged.id,
+                content=f"{student.full_name} mentioned you in a Fun Page post: {content[:300]}",
+                created_at=datetime.now(timezone.utc).isoformat(),
+            ))
     db.commit()
     return {"ok": True, "id": post.id}
 
