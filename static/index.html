@@ -23,6 +23,25 @@
   @media(max-width:620px){.home-profile-name{display:none}.student-home-actions{gap:7px}.home-inbox{right:8px;top:74px}}
   .home-profile-menu { position:absolute; z-index:21; top:54px; right:0; width:180px; padding:8px; border:1px solid rgba(103,232,249,.35); border-radius:15px; background:rgba(7,14,31,.98); box-shadow:0 24px 60px rgba(0,0,0,.42); }
   .home-profile-menu button { width:100%; margin:0; padding:11px; border:0; border-radius:10px; background:transparent; color:var(--text); text-align:left; cursor:pointer; } .home-profile-menu button:hover { background:rgba(103,232,249,.12); color:#67e8f9; }
+  @media (max-width:620px) {
+    #welcome { width:min(100% - 20px, 520px); padding-top:12px; }
+    #welcome .top { min-height:0; padding:14px 16px; align-items:center; gap:10px; }
+    #welcome .brand-logo { width:42px; height:42px; }
+    #welcome .brand { font-size:1.35rem; }
+    #welcome .brand-tagline { font-size:.58rem; }
+    #welcome nav { margin-left:auto; display:flex; align-items:center; gap:7px; }
+    #welcome .install-app-btn { min-height:40px; padding:0 12px; font-size:.62rem; letter-spacing:.08em; }
+    .home-message-button, .home-profile-avatar { width:40px; height:40px; }
+    .home-profile-menu { top:48px; right:0; width:164px; padding:6px; }
+    .home-profile-menu button { padding:10px; font-size:.9rem; }
+    #welcome h1 { margin-top:42px; font-size:clamp(2.45rem, 13vw, 3.35rem); line-height:.98; letter-spacing:-.055em; }
+    #welcome .lede { font-size:1rem; line-height:1.55; }
+    #welcome .role-grid { grid-template-columns:1fr; gap:14px; }
+    #welcome .role-card { min-height:0; padding:20px; }
+    #studentPortal { padding:20px 16px; }
+    #studentPortal h2 { font-size:1.6rem; }
+    .home-inbox { position:fixed; top:82px; right:10px; width:calc(100vw - 20px); max-height:calc(100vh - 100px); border-radius:16px; }
+  }
 </style>
 </head>
 <body>
