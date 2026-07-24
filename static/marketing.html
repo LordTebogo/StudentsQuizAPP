@@ -41,6 +41,29 @@ async function toggleAvailability(id){const mine=await api('/marketing/landlord/
 async function deleteListing(id){if(!confirm('Delete this listing and its discussion?'))return;try{await api('/marketing/listings/'+id,{method:'DELETE'});await loadMyListings();await loadListings()}catch(e){landlordMessage(e.message,'error')}}
 document.querySelectorAll('[data-desk]').forEach(b=>b.addEventListener('click',()=>setDesk(b.dataset.desk)));$('filterBtn').addEventListener('click',loadListings);$('resetFilterBtn').addEventListener('click',()=>{$('campusFilter').value='';loadListings()});$('landlordLoginForm').addEventListener('submit',async e=>{e.preventDefault();try{const result=await api('/marketing/landlords/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:$('landlordEmail').value,password:$('landlordPassword').value})});landlordToken=result.token;sessionStorage.setItem('landlordToken',landlordToken);await openLandlordPanel()}catch(err){landlordMessage(err.message,'error')}});$('landlordRegisterForm').addEventListener('submit',async e=>{e.preventDefault();try{const result=await api('/marketing/landlords/register',{method:'POST',body:new FormData(e.currentTarget)});landlordToken=result.token;sessionStorage.setItem('landlordToken',landlordToken);await openLandlordPanel()}catch(err){landlordMessage(err.message,'error')}});$('listingForm').addEventListener('submit',async e=>{e.preventDefault();try{await api('/marketing/listings',{method:'POST',body:new FormData(e.currentTarget)});e.currentTarget.reset();landlordMessage('Accommodation published.');await loadMyListings();await loadListings()}catch(err){landlordMessage(err.message,'error')}});$('landlordSignOut').addEventListener('click',()=>{landlordToken='';sessionStorage.removeItem('landlordToken');$('landlordPanel').classList.add('hidden');$('landlordGuest').classList.remove('hidden');});loadListings();if(landlordToken)openLandlordPanel();
 </script>
+<script>
+  // Keep the form reference before the asynchronous upload begins. Native
+  // event.currentTarget is cleared after an awaited request completes.
+  const safeListingForm = document.getElementById('listingForm');
+  safeListingForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const form = event.currentTarget;
+    const button = form.querySelector('button[type="submit"]');
+    button.disabled = true;
+    try {
+      await api('/marketing/listings', {method: 'POST', body: new FormData(form)});
+      form.reset();
+      landlordMessage('Accommodation published.');
+      await loadMyListings();
+      await loadListings();
+    } catch (error) {
+      landlordMessage(error.message, 'error');
+    } finally {
+      button.disabled = false;
+    }
+  }, true);
+</script>
 <script src="/static/pwa.js"></script>
 </body>
 </html>
