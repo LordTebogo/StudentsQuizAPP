@@ -349,6 +349,7 @@
     $('postStickerPicker').innerHTML = stickerPickerHtml('post');
     (async () => { if (!token) { window.location.href = '/static/student.html'; return; } try { await api('/student/me'); await loadMembers(); await loadFeed(); } catch (_) { sessionStorage.removeItem('studentToken'); window.location.href = '/static/student.html'; } })();
   </script>
-  <script src="/static/pwa.js"></script>
+<script src="/static/loading.js"></script>
+<script src="/static/pwa.js"></script>
 </body>
 </html>

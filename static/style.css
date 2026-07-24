@@ -161,6 +161,11 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { border-color
 .btn.secondary, .row-download-btn { color: var(--cyan); border-color: rgba(103,232,249,.38); background: rgba(103,232,249,.07); box-shadow: none; }
 .btn.secondary:hover { color: #d8fcff; border-color: var(--cyan); background: rgba(103,232,249,.13); }
 .row-download-btn { min-height: 31px; padding: 5px 9px; margin-top: 0; font-size: .66rem; }
+.is-fetching { position: relative; gap: 8px; pointer-events: none; opacity: .78; cursor: wait !important; }
+.is-fetching::before { content: ""; width: .84em; height: .84em; flex: 0 0 .84em; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: control-fetch-spin .7s linear infinite; }
+.fetching-note { display: inline-flex; align-items: center; gap: 9px; }
+.fetching-note::before { content: ""; width: .88em; height: .88em; border: 2px solid var(--cyan); border-bottom-color: transparent; border-radius: 50%; animation: control-fetch-spin .7s linear infinite; }
+@keyframes control-fetch-spin { to { transform: rotate(360deg); } }
 
 .q { padding: 22px 0; border-top: 1px solid var(--line); }
 .q:first-child { padding-top: 0; border-top: 0; }

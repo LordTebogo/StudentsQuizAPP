@@ -189,6 +189,7 @@ let currentModule = null;
 
 async function loadModuleList() {
   const box = $('moduleList');
+  box.innerHTML = '<p class="muted fetching-note">Fetching lesson modules…</p>';
   try {
     const modules = await api('/modules');
     if (!modules.length) {
@@ -228,6 +229,7 @@ $('backToModulesBtn').addEventListener('click', () => {
 // ---- Lesson list (scoped to the selected module) ------------------------
 async function loadLessonList(moduleCode) {
   const box = $('lessonList');
+  box.innerHTML = '<p class="muted fetching-note">Fetching lessons…</p>';
   try {
     const path = moduleCode ? `/student/lessons?module_code=${encodeURIComponent(moduleCode)}` : '/student/lessons';
     const lessons = await api(path);
@@ -392,6 +394,7 @@ $('submitAnswersBtn').addEventListener('click', async () => {
   });
 
   $('submitAnswersBtn').disabled = true;
+  showMsg(msgBox, 'Fetching your result…', 'ok');
   try {
     const result = await api(`/lesson/${currentLesson.lesson_id}/submit`, {
       method: 'POST',
@@ -583,6 +586,7 @@ restoreStudentSession().then(ready => {
   else if (params.get('module')) openModule(params.get('module'));
 });
 </script>
+<script src="/static/loading.js"></script>
 <script src="/static/pwa.js"></script>
 </body>
 </html>

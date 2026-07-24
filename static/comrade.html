@@ -68,5 +68,6 @@
     if(location.hash==='#srcAccess'||location.hash==='#srcRegister'){byId('srcAccess').open=true;setTimeout(()=>{byId('srcAccess').scrollIntoView({behavior:'smooth',block:'start'});if(location.hash==='#srcRegister')byId('srcRegisterForm').querySelector('input').focus();},0);}
     (async()=>{await hydrateSrc();await loadMembers();await loadPosts();})();
   </script>
+<script src="/static/loading.js"></script>
 </body>
 </html>
