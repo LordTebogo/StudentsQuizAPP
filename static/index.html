@@ -24,6 +24,13 @@
   .home-profile-menu { position:absolute; z-index:21; top:54px; right:0; width:180px; padding:8px; border:1px solid rgba(103,232,249,.35); border-radius:15px; background:rgba(7,14,31,.98); box-shadow:0 24px 60px rgba(0,0,0,.42); }
   .home-profile-menu button { width:100%; margin:0; padding:11px; border:0; border-radius:10px; background:transparent; color:var(--text); text-align:left; cursor:pointer; } .home-profile-menu button:hover { background:rgba(103,232,249,.12); color:#67e8f9; }
   #guestChoices .role-card:first-child { order:3; }
+  .market-role-card { position:relative; overflow:hidden; isolation:isolate; background:radial-gradient(circle at 82% 20%,rgba(192,132,252,.34),transparent 36%),linear-gradient(135deg,#11264a,#38205c); }
+  .market-role-card::before { content:''; position:absolute; inset:0; z-index:-2; opacity:0; background:center/cover no-repeat var(--market-image); transform:scale(1.05); transition:opacity .7s ease, transform 4.5s ease; }
+  .market-role-card::after { content:''; position:absolute; inset:0; z-index:-1; background:linear-gradient(105deg,rgba(8,17,37,.96) 0%,rgba(10,23,48,.76) 58%,rgba(47,22,79,.68) 100%); }
+  .market-role-card.has-market-image::before { opacity:.72; transform:scale(1); }
+  .market-role-card .market-pulse { display:inline-flex; align-items:center; gap:6px; color:#d9bcff; font:700 .66rem var(--font-mono,monospace); letter-spacing:.08em; text-transform:uppercase; }
+  .market-role-card .market-pulse::before { content:''; width:7px; height:7px; border-radius:99px; background:#d9bcff; box-shadow:0 0 14px #d9bcff; animation:marketPulse 1.5s infinite; }
+  @keyframes marketPulse { 50% { opacity:.28; transform:scale(.7); } }
   @media (max-width:620px) {
     #welcome { width:min(100% - 20px, 520px); padding-top:12px; }
     #welcome .top { min-height:0; padding:14px 16px; align-items:center; gap:10px; }
@@ -59,6 +66,7 @@
     <section class="role-card"><span class="kicker">SRC president</span><h2>Lead &amp; announce</h2><p>Create your verified party profile, share official announcements, and join the civic conversation.</p><a class="btn" href="/static/comrade.html#srcAccess">SRC president sign in</a><a class="btn secondary" href="/static/comrade.html#srcRegister">Create SRC account</a></section>
     <section class="role-card"><span class="kicker">Student</span><h2>Learn, submit &amp; connect</h2><p>Quizzes, video lessons, scripts and the student community — all in one private workspace.</p><a class="btn" href="/static/student.html">Student sign in</a><a class="btn secondary" href="/static/student.html#register">Create student account</a></section>
     <section class="role-card"><span class="kicker">Lecturer / tutor</span><h2>Teach, assess &amp; guide</h2><p>Create module content, review only your students’ scripts, and communicate with your class.</p><a class="btn" href="/static/lecturer.html">Lecturer sign in</a><a class="btn secondary" href="/static/lecturer.html#register">Create lecturer account</a></section>
+    <section class="role-card market-role-card" id="marketRoleCard"><span class="kicker">Campus market</span><h2>Find a place. Discover opportunities.</h2><p>Explore student accommodation, local offers and the campus businesses being built around you.</p><span class="market-pulse" id="marketPulseText">Market spaces loading</span><br><a class="btn" href="/static/marketing.html">Open Campus Market</a></section>
   </div>
   <section class="card hidden" id="studentPortal"><span class="kicker">Student account active</span><h2>Your student workspace</h2><p class="muted">Your quizzes, lessons, community, and private notifications in one place.</p><div class="role-grid"><a class="role-card" href="/static/student.html"><h3>Quizzes &amp; scripts</h3><p>Take assessments and download your work.</p></a><a class="role-card" href="/static/lessons_student.html"><h3>Video lessons</h3><p>Learn at your pace and answer lesson questions.</p></a><a class="role-card" href="/static/fun.html"><h3>Fun Page</h3><p>Join the campus conversation and view tags.</p></a><a class="role-card" href="/static/comrade.html"><h3>Comrade Page</h3><p>Read SRC announcements and respond thoughtfully.</p></a></div><button class="btn secondary" id="studentSignOut">Sign out</button></section>
   <aside class="home-inbox hidden" id="homeInbox"><h3>Messages &amp; mentions</h3><div id="homeInboxList"></div></aside>
@@ -92,6 +100,28 @@
   if (studentToken) document.getElementById('studentSignOut').classList.add('hidden');
   if (lecturerToken) { document.getElementById('lecturerSignOut').classList.add('hidden'); guest.classList.add('hidden'); document.getElementById('lecturerPortal').classList.remove('hidden'); actionBar.classList.add('active'); fetch('/lecturer/me',{headers:{'X-Lecturer-Token':lecturerToken}}).then(r=>r.json()).then(profile=>{document.getElementById('homeStudentName').textContent=profile.full_name; if(profile.profile_image_url) avatar.src=profile.profile_image_url;}); fetch('/lecturer/messages/unread',{headers:{'X-Lecturer-Token':lecturerToken}}).then(r=>r.json()).then(result=>{const badge=document.getElementById('homeMessageCount');badge.textContent=result.count||0;badge.classList.toggle('hidden',!result.count)}); document.getElementById('homeMessagesBtn').addEventListener('click',async()=>{const inbox=document.getElementById('homeInbox');inbox.classList.toggle('hidden');if(!inbox.classList.contains('hidden')){const rows=await fetch('/lecturer/messages',{headers:{'X-Lecturer-Token':lecturerToken}}).then(r=>r.json());document.getElementById('homeInboxList').innerHTML=rows.length?rows.map(m=>`<div class="q"><strong>${escapeHome(m.sender_name)}</strong><small>${escapeHome(m.created_at)}</small><div>${escapeHome(m.content)}</div></div>`).join(''):'<p class="muted">No messages yet.</p>';}}); }
   if (studentToken || lecturerToken) document.getElementById('adminEntry').classList.add('hidden');
+  // Available accommodation images become a quiet, rotating window into the
+  // market. The card keeps its colour treatment when no images exist yet.
+  (async () => {
+    const card = document.getElementById('marketRoleCard');
+    const label = document.getElementById('marketPulseText');
+    if (!card) return;
+    try {
+      const listings = await fetch('/marketing/listings').then(response => response.ok ? response.json() : []);
+      const images = listings.filter(item => item.is_available && item.image_url).map(item => item.image_url);
+      if (!images.length) { label.textContent = 'Fresh campus spaces'; return; }
+      let imageIndex = 0;
+      const showImage = () => {
+        const image = images[imageIndex % images.length];
+        card.style.setProperty('--market-image', `url("${String(image).replace(/"/g, '%22')}")`);
+        card.classList.add('has-market-image');
+        label.textContent = images.length === 1 ? 'Available market space' : `Available spaces · ${imageIndex + 1} of ${images.length}`;
+        imageIndex += 1;
+      };
+      showImage();
+      if (images.length > 1) window.setInterval(showImage, 4200);
+    } catch (_) { label.textContent = 'Fresh campus spaces'; }
+  })();
 </script>
 </body>
 </html>
