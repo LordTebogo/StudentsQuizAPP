@@ -85,6 +85,7 @@ from models import (
     Student,
     PushSubscription,
     StudentModule,
+    Landlord, Accommodation, AccommodationComment,
     SrcPresident,
     ComradePost, ComradeReply, ComradeSrcReply,
 )
@@ -100,6 +101,7 @@ LECTURER_PIN = os.getenv("LECTURER_PIN", "90435")
 LECTURER_SESSION_SECRET = os.getenv("LECTURER_SESSION_SECRET", LECTURER_PIN)
 STUDENT_SESSION_SECRET = os.getenv("STUDENT_SESSION_SECRET", LECTURER_SESSION_SECRET)
 SRC_SESSION_SECRET = os.getenv("SRC_SESSION_SECRET", STUDENT_SESSION_SECRET)
+LANDLORD_SESSION_SECRET = os.getenv("LANDLORD_SESSION_SECRET", STUDENT_SESSION_SECRET)
 VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "").strip()
 VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "").strip()
 VAPID_SUBJECT = os.getenv("VAPID_SUBJECT", "mailto:admin@example.com").strip()
@@ -305,6 +307,17 @@ class SrcPresidentLogin(BaseModel):
     password: str
 
 
+class LandlordLogin(BaseModel):
+    email: str
+    password: str
+
+
+class AccommodationCommentCreate(BaseModel):
+    content: str
+    parent_id: Optional[int] = None
+    is_anonymous: bool = False
+
+
 class SrcPasswordChange(BaseModel):
     current_password: str
     new_password: str
@@ -449,6 +462,13 @@ def _issue_src_token(src_president_id: int) -> str:
     return f"{base64.urlsafe_b64encode(payload).decode().rstrip('=')}.{base64.urlsafe_b64encode(signature).decode().rstrip('=')}"
 
 
+def _issue_landlord_token(landlord_id: int) -> str:
+    expires = int((datetime.now(timezone.utc) + timedelta(hours=12)).timestamp())
+    payload = f"{landlord_id}:{expires}".encode("utf-8")
+    signature = hmac.new(LANDLORD_SESSION_SECRET.encode("utf-8"), payload, hashlib.sha256).digest()
+    return f"{base64.urlsafe_b64encode(payload).decode().rstrip('=')}.{base64.urlsafe_b64encode(signature).decode().rstrip('=')}"
+
+
 def _lecturer_id_from_token(token: Optional[str]) -> int:
     if not token or "." not in token:
         raise HTTPException(status_code=401, detail="Sign in as a lecturer first")
@@ -497,6 +517,22 @@ def _src_president_id_from_token(token: Optional[str]) -> int:
         raise HTTPException(status_code=401, detail="Your SRC session has expired. Sign in again.")
 
 
+def _landlord_id_from_token(token: Optional[str]) -> int:
+    if not token or "." not in token:
+        raise HTTPException(status_code=401, detail="Sign in as a landlord first")
+    encoded_payload, encoded_signature = token.split(".", 1)
+    try:
+        payload = base64.urlsafe_b64decode(encoded_payload + "=" * (-len(encoded_payload) % 4))
+        signature = base64.urlsafe_b64decode(encoded_signature + "=" * (-len(encoded_signature) % 4))
+        expected = hmac.new(LANDLORD_SESSION_SECRET.encode("utf-8"), payload, hashlib.sha256).digest()
+        landlord_id_text, expires_text = payload.decode("utf-8").split(":", 1)
+        if not hmac.compare_digest(signature, expected) or int(expires_text) < int(datetime.now(timezone.utc).timestamp()):
+            raise ValueError
+        return int(landlord_id_text)
+    except (ValueError, UnicodeDecodeError):
+        raise HTTPException(status_code=401, detail="Your landlord session has expired. Sign in again.")
+
+
 def require_lecturer_account(
     x_lecturer_token: Optional[str] = Header(None, alias="X-Lecturer-Token"),
     db: Session = Depends(get_db),
@@ -515,6 +551,16 @@ def require_student_account(
     if not student or not student.active or not student.approved:
         raise HTTPException(status_code=403, detail="Your student profile is not active and approved")
     return student
+
+
+def require_landlord_account(
+    x_landlord_token: Optional[str] = Header(None, alias="X-Landlord-Token"),
+    db: Session = Depends(get_db),
+) -> Landlord:
+    landlord = db.query(Landlord).filter(Landlord.id == _landlord_id_from_token(x_landlord_token)).first()
+    if not landlord or not landlord.active:
+        raise HTTPException(status_code=403, detail="Your landlord account is inactive")
+    return landlord
 
 
 def require_src_president_account(
@@ -2781,6 +2827,173 @@ FUN_STICKERS = {
     "laugh": "😂",
     "thinking": "🤔",
 }
+
+# ---------------------------------------------------------------------------
+# Campus marketing / accommodation marketplace
+# ---------------------------------------------------------------------------
+
+def _landlord_profile(landlord: Landlord) -> dict:
+    return {"id": landlord.id, "full_name": landlord.full_name, "business_name": landlord.business_name or "", "email": landlord.email, "phone": landlord.phone, "profile_image_url": landlord.profile_image_url}
+
+
+def _accommodation_payload(item: Accommodation, landlord: Landlord) -> dict:
+    return {"id": item.id, "title": item.title, "campus": item.campus, "area": item.area, "monthly_rent": item.monthly_rent, "bedrooms": item.bedrooms or "", "description": item.description, "contact": item.contact or landlord.phone, "image_url": item.image_url, "is_available": item.is_available, "created_at": item.created_at, "landlord": {"name": landlord.full_name, "business_name": landlord.business_name or "", "profile_image_url": landlord.profile_image_url}}
+
+
+@app.post("/marketing/landlords/register")
+async def register_landlord(full_name: str = Form(...), business_name: str = Form(""), email: str = Form(...), phone: str = Form(...), password: str = Form(...), confirm_password: str = Form(...), profile_image: Optional[UploadFile] = File(None), db: Session = Depends(get_db)):
+    email = email.strip().lower()
+    if not full_name.strip() or not phone.strip() or "@" not in email or len(password) < 8:
+        raise HTTPException(status_code=400, detail="Provide your name, contact number, valid email, and a password of at least 8 characters")
+    if password != confirm_password:
+        raise HTTPException(status_code=400, detail="The password confirmation does not match")
+    if db.query(Landlord).filter(Landlord.email == email).first():
+        raise HTTPException(status_code=409, detail="A landlord profile already uses this email")
+    image_url = None
+    if profile_image and profile_image.filename:
+        if not (profile_image.content_type or "").startswith("image/"):
+            raise HTTPException(status_code=400, detail="Please choose a valid profile image")
+        image_url = upload_image_bytes(await profile_image.read(), folder="landlord_profiles")
+    landlord = Landlord(full_name=full_name.strip()[:160], business_name=business_name.strip()[:160], email=email, phone=phone.strip()[:60], profile_image_url=image_url, password_hash=_password_hash(password), active=True, created_at=datetime.now(timezone.utc).isoformat())
+    db.add(landlord); db.commit()
+    return {"ok": True, "token": _issue_landlord_token(landlord.id), "profile": _landlord_profile(landlord)}
+
+
+@app.post("/marketing/landlords/login")
+def landlord_login(payload: LandlordLogin, db: Session = Depends(get_db)):
+    landlord = db.query(Landlord).filter(Landlord.email == payload.email.strip().lower()).first()
+    if not landlord or not _password_matches(payload.password, landlord.password_hash):
+        raise HTTPException(status_code=401, detail="Incorrect landlord email or password")
+    if not landlord.active:
+        raise HTTPException(status_code=403, detail="This landlord profile is inactive")
+    return {"token": _issue_landlord_token(landlord.id), "profile": _landlord_profile(landlord)}
+
+
+@app.get("/marketing/landlords/me")
+def landlord_me(landlord: Landlord = Depends(require_landlord_account)):
+    return _landlord_profile(landlord)
+
+
+@app.get("/marketing/listings")
+def list_accommodations(campus: str = "", db: Session = Depends(get_db)):
+    query = db.query(Accommodation, Landlord).join(Landlord, Landlord.id == Accommodation.landlord_id).filter(Landlord.active == True)  # noqa: E712
+    if campus.strip():
+        query = query.filter(func.lower(Accommodation.campus) == campus.strip().lower())
+    rows = query.order_by(Accommodation.is_available.desc(), Accommodation.created_at.desc()).all()
+    return [_accommodation_payload(item, landlord) for item, landlord in rows]
+
+
+@app.get("/marketing/landlord/listings")
+def landlord_listings(landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
+    rows = db.query(Accommodation).filter(Accommodation.landlord_id == landlord.id).order_by(Accommodation.created_at.desc()).all()
+    return [_accommodation_payload(item, landlord) for item in rows]
+
+
+@app.post("/marketing/listings")
+async def create_accommodation(title: str = Form(...), campus: str = Form(...), area: str = Form(...), monthly_rent: str = Form(""), bedrooms: str = Form(""), description: str = Form(...), contact: str = Form(""), image: Optional[UploadFile] = File(None), landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
+    if not title.strip() or not campus.strip() or not area.strip() or not description.strip():
+        raise HTTPException(status_code=400, detail="Add a title, campus, area, and description")
+    if len(description.strip()) > 2500:
+        raise HTTPException(status_code=400, detail="Accommodation descriptions can be up to 2,500 characters")
+    try:
+        rent = int(monthly_rent) if monthly_rent.strip() else None
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Monthly rent must be a whole number")
+    if rent is not None and rent < 0:
+        raise HTTPException(status_code=400, detail="Monthly rent cannot be negative")
+    image_url = None
+    if image and image.filename:
+        if not (image.content_type or "").startswith("image/"):
+            raise HTTPException(status_code=400, detail="Please choose a valid accommodation image")
+        image_bytes = await image.read()
+        if len(image_bytes) > 10 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="Accommodation images must be 10 MB or smaller")
+        image_url = upload_image_bytes(image_bytes, folder="accommodation_listings")
+    item = Accommodation(landlord_id=landlord.id, title=title.strip()[:180], campus=campus.strip()[:120], area=area.strip()[:160], monthly_rent=rent, bedrooms=bedrooms.strip()[:80], description=description.strip(), contact=contact.strip()[:160], image_url=image_url, is_available=True, created_at=datetime.now(timezone.utc).isoformat())
+    db.add(item); db.commit()
+    return {"ok": True, "listing": _accommodation_payload(item, landlord)}
+
+
+@app.put("/marketing/listings/{listing_id}")
+async def update_accommodation(listing_id: int, title: str = Form(...), campus: str = Form(...), area: str = Form(...), monthly_rent: str = Form(""), bedrooms: str = Form(""), description: str = Form(...), contact: str = Form(""), is_available: bool = Form(True), image: Optional[UploadFile] = File(None), landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
+    item = db.query(Accommodation).filter(Accommodation.id == listing_id, Accommodation.landlord_id == landlord.id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Accommodation listing not found")
+    if not title.strip() or not campus.strip() or not area.strip() or not description.strip():
+        raise HTTPException(status_code=400, detail="Add a title, campus, area, and description")
+    try:
+        rent = int(monthly_rent) if monthly_rent.strip() else None
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Monthly rent must be a whole number")
+    if rent is not None and rent < 0:
+        raise HTTPException(status_code=400, detail="Monthly rent cannot be negative")
+    item.title, item.campus, item.area = title.strip()[:180], campus.strip()[:120], area.strip()[:160]
+    item.monthly_rent, item.bedrooms, item.description = rent, bedrooms.strip()[:80], description.strip()[:2500]
+    item.contact, item.is_available = contact.strip()[:160], is_available
+    if image and image.filename:
+        if not (image.content_type or "").startswith("image/"):
+            raise HTTPException(status_code=400, detail="Please choose a valid accommodation image")
+        image_bytes = await image.read()
+        if len(image_bytes) > 10 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="Accommodation images must be 10 MB or smaller")
+        item.image_url = upload_image_bytes(image_bytes, folder="accommodation_listings")
+    db.commit()
+    return {"ok": True, "listing": _accommodation_payload(item, landlord)}
+
+
+@app.delete("/marketing/listings/{listing_id}")
+def delete_accommodation(listing_id: int, landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
+    item = db.query(Accommodation).filter(Accommodation.id == listing_id, Accommodation.landlord_id == landlord.id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Accommodation listing not found")
+    for comment in db.query(AccommodationComment).filter(AccommodationComment.accommodation_id == item.id).all():
+        db.delete(comment)
+    db.delete(item); db.commit()
+    return {"ok": True}
+
+
+@app.get("/marketing/listings/{listing_id}/comments")
+def list_accommodation_comments(listing_id: int, db: Session = Depends(get_db)):
+    if not db.query(Accommodation).filter(Accommodation.id == listing_id).first():
+        raise HTTPException(status_code=404, detail="Accommodation listing not found")
+    rows = db.query(AccommodationComment).filter(AccommodationComment.accommodation_id == listing_id).order_by(AccommodationComment.created_at.asc()).all()
+    student_ids = {item.author_student_id for item in rows if item.author_student_id}
+    landlord_ids = {item.author_landlord_id for item in rows if item.author_landlord_id}
+    students = {item.id: item for item in db.query(Student).filter(Student.id.in_(student_ids)).all()} if student_ids else {}
+    landlords = {item.id: item for item in db.query(Landlord).filter(Landlord.id.in_(landlord_ids)).all()} if landlord_ids else {}
+    children = {}
+    for item in rows: children.setdefault(item.parent_id, []).append(item)
+    def serialize(item: AccommodationComment) -> dict:
+        is_landlord = bool(item.author_landlord_id)
+        author = landlords.get(item.author_landlord_id) if is_landlord else students.get(item.author_student_id)
+        return {"id": item.id, "parent_id": item.parent_id, "content": item.content, "author_name": "Anonymous student" if item.is_anonymous else (author.full_name if author else item.author_name), "author_image_url": None if item.is_anonymous or not author else author.profile_image_url, "is_landlord": is_landlord, "business_name": (author.business_name or "") if is_landlord and author else "", "is_anonymous": item.is_anonymous, "created_at": item.created_at, "replies": [serialize(child) for child in children.get(item.id, [])]}
+    return [serialize(item) for item in children.get(None, [])]
+
+
+@app.post("/marketing/listings/{listing_id}/comments")
+def create_accommodation_comment(listing_id: int, payload: AccommodationCommentCreate, x_student_token: Optional[str] = Header(None, alias="X-Student-Token"), x_landlord_token: Optional[str] = Header(None, alias="X-Landlord-Token"), db: Session = Depends(get_db)):
+    content = payload.content.strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="Write a comment first")
+    if len(content) > 1500:
+        raise HTTPException(status_code=400, detail="Comments can be up to 1,500 characters")
+    if not db.query(Accommodation).filter(Accommodation.id == listing_id).first():
+        raise HTTPException(status_code=404, detail="Accommodation listing not found")
+    if payload.parent_id is not None and not db.query(AccommodationComment).filter(AccommodationComment.id == payload.parent_id, AccommodationComment.accommodation_id == listing_id).first():
+        raise HTTPException(status_code=404, detail="The comment you are replying to no longer exists")
+    landlord = None; student = None
+    if x_landlord_token:
+        landlord = db.query(Landlord).filter(Landlord.id == _landlord_id_from_token(x_landlord_token)).first()
+        if not landlord or not landlord.active:
+            raise HTTPException(status_code=403, detail="Your landlord account is inactive")
+    else:
+        student = db.query(Student).filter(Student.id == _student_id_from_token(x_student_token)).first()
+        if not student or not student.active or not student.approved:
+            raise HTTPException(status_code=403, detail="An approved student account is required to join the discussion")
+    comment = AccommodationComment(accommodation_id=listing_id, parent_id=payload.parent_id, author_student_id=student.id if student else None, author_landlord_id=landlord.id if landlord else None, author_name=landlord.full_name if landlord else ("Anonymous student" if payload.is_anonymous else student.full_name), content=content, is_anonymous=bool(payload.is_anonymous) if student else False, created_at=datetime.now(timezone.utc).isoformat())
+    db.add(comment); db.commit()
+    return {"ok": True, "id": comment.id}
+
 
 @app.post("/src/register")
 async def register_src_president(

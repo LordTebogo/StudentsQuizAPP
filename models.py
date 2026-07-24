@@ -121,6 +121,55 @@ class PushSubscription(Base):
 
 
 # ---------------------------------------------------------------------------
+# Campus marketing: landlord-owned student accommodation listings
+# ---------------------------------------------------------------------------
+
+class Landlord(Base):
+    __tablename__ = "landlords"
+
+    id = Column(Integer, primary_key=True, index=True)
+    full_name = Column(String, nullable=False)
+    business_name = Column(String)
+    email = Column(String, nullable=False, unique=True, index=True)
+    phone = Column(String, nullable=False)
+    profile_image_url = Column(Text)
+    password_hash = Column(String, nullable=False)
+    active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(String, nullable=False)
+
+
+class Accommodation(Base):
+    __tablename__ = "accommodations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    landlord_id = Column(Integer, ForeignKey("landlords.id", ondelete="CASCADE"), nullable=False, index=True)
+    title = Column(String, nullable=False)
+    campus = Column(String, nullable=False)
+    area = Column(String, nullable=False)
+    monthly_rent = Column(Integer)
+    bedrooms = Column(String)
+    description = Column(Text, nullable=False)
+    contact = Column(String)
+    image_url = Column(Text)
+    is_available = Column(Boolean, nullable=False, default=True)
+    created_at = Column(String, nullable=False)
+
+
+class AccommodationComment(Base):
+    __tablename__ = "accommodation_comments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    accommodation_id = Column(Integer, ForeignKey("accommodations.id", ondelete="CASCADE"), nullable=False, index=True)
+    parent_id = Column(Integer, ForeignKey("accommodation_comments.id", ondelete="CASCADE"), index=True)
+    author_student_id = Column(Integer, ForeignKey("students.id", ondelete="SET NULL"), index=True)
+    author_landlord_id = Column(Integer, ForeignKey("landlords.id", ondelete="SET NULL"), index=True)
+    author_name = Column(String, nullable=False)
+    content = Column(Text, nullable=False)
+    is_anonymous = Column(Boolean, nullable=False, default=False)
+    created_at = Column(String, nullable=False)
+
+
+# ---------------------------------------------------------------------------
 # Student community
 # ---------------------------------------------------------------------------
 
