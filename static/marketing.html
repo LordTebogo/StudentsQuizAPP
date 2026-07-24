@@ -73,6 +73,61 @@ document.querySelectorAll('[data-desk]').forEach(b=>b.addEventListener('click',(
     if (event.key === 'Enter') { event.preventDefault(); loadListings(); }
   });
 </script>
+<style>
+  .mobile-listings-more { display: none; width: 100%; margin: 4px 0 20px; }
+  .ad-more { margin-top: 6px; }
+  .ad-extra { display: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(192,132,252,.28); }
+  .ad-card.expanded .ad-extra { display: block; }
+  @media (max-width: 560px) {
+    #listingFeed:not(.show-all) .listing-card.mobile-extra { display: none; }
+    .mobile-listings-more.visible { display: block; }
+  }
+</style>
+<script>
+  // Mobile gives the first two rooms priority, then opens space for the ad
+  // and student-business cards. Desktop continues to show every listing.
+  const listingFeed = document.getElementById('listingFeed');
+  const moreListingsButton = document.createElement('button');
+  moreListingsButton.type = 'button';
+  moreListingsButton.className = 'btn secondary mobile-listings-more';
+  listingFeed.insertAdjacentElement('afterend', moreListingsButton);
+  let visibleListingCount = -1;
+  function arrangeMobileListings() {
+    const cards = [...listingFeed.querySelectorAll('.listing-card')];
+    const changedResultSet = cards.length !== visibleListingCount;
+    visibleListingCount = cards.length;
+    cards.forEach((card, index) => card.classList.toggle('mobile-extra', index > 1));
+    if (changedResultSet) listingFeed.classList.remove('show-all');
+    moreListingsButton.classList.toggle('visible', cards.length > 2 && !listingFeed.classList.contains('show-all'));
+    moreListingsButton.textContent = `See ${Math.max(cards.length - 2, 0)} more accommodation${cards.length === 3 ? '' : 's'}`;
+  }
+  new MutationObserver(arrangeMobileListings).observe(listingFeed, {childList: true});
+  moreListingsButton.addEventListener('click', () => {
+    listingFeed.classList.add('show-all');
+    moreListingsButton.classList.remove('visible');
+  });
+  let rapidSearchTimer;
+  const listingSearch = document.getElementById('campusFilter');
+  listingSearch.addEventListener('input', () => {
+    clearTimeout(rapidSearchTimer);
+    rapidSearchTimer = setTimeout(() => {
+      listingFeed.classList.remove('show-all');
+      visibleListingCount = -1;
+      loadListings();
+    }, 120);
+  });
+  document.querySelectorAll('.ad-card').forEach((card, index) => {
+    const label = index === 0 ? 'See feed ad details' : 'See student business details';
+    const detail = index === 0
+      ? 'Promoted campus offers will be clearly labelled here so students can explore them without interrupting accommodation search.'
+      : 'Student-made products and services will have their own discoverable space here, with more information when the feature launches.';
+    card.insertAdjacentHTML('beforeend', `<button class="reply-signal ad-more" type="button">${label}</button><p class="notice ad-extra">${detail}</p>`);
+    card.querySelector('.ad-more').addEventListener('click', event => {
+      const expanded = card.classList.toggle('expanded');
+      event.currentTarget.textContent = expanded ? 'Show less' : label;
+    });
+  });
+</script>
 <script src="/static/pwa.js"></script>
 </body>
 </html>
