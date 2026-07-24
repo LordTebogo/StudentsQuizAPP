@@ -20,15 +20,38 @@
   .lesson-list-item:first-child { border-top: none; }
   .lesson-list-item:hover .lesson-list-title { color: var(--pen-red); }
   .lesson-list-title { font-weight: 600; }
-  .comment {
-    padding: 10px 0; border-top: 1px dashed var(--paper-line);
-  }
-  .comment:first-child { border-top: none; }
-  .comment .comment-meta {
-    font-family: var(--font-mono); font-size: 0.72rem; color: var(--ink-soft);
-    text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px;
-  }
-  .comment .comment-meta .lecturer-tag { color: var(--pen-red); }
+  .lesson-discussion-head { display: flex; justify-content: space-between; align-items: start; gap: 14px; margin-bottom: 16px; }
+  .lesson-discussion-head h2 { margin: 2px 0 0; }
+  .discussion-kicker { color: var(--accent); font-family: var(--font-mono); font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; }
+  .lesson-feed { display: grid; gap: 12px; margin-bottom: 18px; }
+  .lesson-comment { border: 1px solid var(--border); border-radius: 16px; background: rgba(17, 29, 55, .62); padding: 14px; }
+  .lesson-comment.reply { margin: 10px 0 0 24px; border-left: 2px solid var(--accent); background: rgba(24, 35, 68, .62); }
+  .lesson-comment-top, .lesson-identity, .lesson-comment-actions, .lesson-composer-tools { display: flex; align-items: center; gap: 10px; }
+  .lesson-identity { min-width: 0; }
+  .comment-avatar, .comment-avatar-fallback { width: 36px; height: 36px; border-radius: 50%; flex: 0 0 36px; object-fit: cover; border: 1px solid var(--accent); }
+  .comment-avatar-fallback { display: grid; place-items: center; color: var(--accent); background: rgba(80, 222, 246, .12); font-weight: 700; }
+  .comment-author { font-weight: 700; line-height: 1.15; }
+  .comment-time { color: var(--ink-soft); font-family: var(--font-mono); font-size: .7rem; margin-top: 3px; }
+  .comment-label { display: inline-block; margin-left: 5px; padding: 2px 6px; border-radius: 99px; font-family: var(--font-mono); font-size: .62rem; letter-spacing: .04em; color: var(--accent); background: rgba(80, 222, 246, .12); }
+  .comment-label.official, .comment-label.pinned { color: #ffc979; background: rgba(255, 177, 74, .12); }
+  .lesson-comment-content { margin: 12px 0; line-height: 1.55; white-space: pre-wrap; }
+  .lesson-mention { color: var(--accent); font-weight: 700; }
+  .lesson-comment-actions { flex-wrap: wrap; }
+  .text-btn, .reply-signal { border: 0; background: transparent; color: var(--accent); padding: 5px 0; cursor: pointer; font: inherit; font-size: .85rem; }
+  .text-btn.danger { color: #ff849b; }
+  .reply-signal { display: inline-flex; align-items: center; gap: 6px; border: 1px solid rgba(80, 222, 246, .38); border-radius: 99px; padding: 5px 10px; font-family: var(--font-mono); font-size: .7rem; letter-spacing: .03em; }
+  .reply-signal::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 12px var(--accent); }
+  .reply-signal .reply-count { opacity: .75; }
+  .lesson-reply-composer { margin-top: 12px; padding: 12px; border-radius: 12px; background: rgba(4, 10, 24, .35); }
+  .lesson-reply-composer textarea, .lesson-composer textarea { min-height: 92px; }
+  .lesson-composer { border: 1px solid var(--border); border-radius: 16px; padding: 14px; background: rgba(9, 17, 36, .48); }
+  .lesson-composer label, .lesson-reply-composer label { margin-top: 10px; }
+  .lesson-composer-tools { flex-wrap: wrap; margin: 10px 0; }
+  .lesson-composer-tools input { flex: 1 1 190px; margin: 0; }
+  .check-label { margin: 0 !important; display: inline-flex; align-items: center; gap: 7px; color: var(--ink-soft); }
+  .check-label input { width: auto; margin: 0; }
+  .lesson-replies.hidden, .lesson-reply-composer.hidden { display: none; }
+  @media (max-width: 560px) { .lesson-discussion-head { display: block; } .lesson-comment.reply { margin-left: 12px; } .lesson-composer-tools { align-items: stretch; } }
 </style>
 </head>
 <body>
@@ -84,14 +107,23 @@
 
   <!-- Comments -->
   <div class="card hidden" id="commentsCard">
-    <h2>Discussion (visible to everyone)</h2>
-    <div id="commentsList" class="muted">No comments yet.</div>
-    <label for="commentName">Your name</label>
-    <input type="text" id="commentName" placeholder="How you'll appear in the discussion">
-    <label for="commentText">Add a comment</label>
-    <textarea id="commentText" placeholder="Ask a question or share a thought about this video…"></textarea>
-    <button class="btn secondary" id="postCommentBtn">Post comment</button>
+    <div class="lesson-discussion-head">
+      <div><div class="discussion-kicker">Lesson conversation</div><h2>Discussion</h2></div>
+      <span class="muted">Visible to everyone</span>
+    </div>
+    <div id="commentsList" class="lesson-feed"><div class="muted">Loading discussion...</div></div>
+    <div class="lesson-composer">
+    <label for="commentText">Start a discussion</label>
+    <textarea id="commentText" maxlength="1500" placeholder="Ask a question or share a thought about this video..."></textarea>
+    <div class="lesson-composer-tools">
+      <input id="commentTagPicker" list="lessonMemberNames" placeholder="Tag a student by name">
+      <button class="btn secondary" type="button" id="addCommentTagBtn">Add @tag</button>
+      <label class="check-label"><input id="commentAnonymous" type="checkbox"> Post anonymously</label>
+    </div>
+    <button class="btn secondary" type="button" id="postCommentBtn">Post comment</button>
     <div id="commentMsg"></div>
+    </div>
+    <datalist id="lessonMemberNames"></datalist>
   </div>
 </div>
 
@@ -99,6 +131,7 @@
 const $ = (id) => document.getElementById(id);
 let currentLesson = null;
 let STUDENT_TOKEN = sessionStorage.getItem('studentToken') || null;
+let lessonMembers = [];
 
 function formatSAST(isoString) {
   const d = isoString ? new Date(isoString) : new Date();
@@ -402,10 +435,9 @@ async function loadComments(lessonId) {
 $('postCommentBtn').addEventListener('click', async () => {
   if (!currentLesson) return;
   const msgBox = $('commentMsg');
-  const name = $('commentName').value.trim();
   const text = $('commentText').value.trim();
-  if (!name || !text) {
-    showMsg(msgBox, 'Enter your name and a comment first.', 'error');
+  if (!text) {
+    showMsg(msgBox, 'Write a comment first.', 'error');
     return;
   }
   $('postCommentBtn').disabled = true;
@@ -413,9 +445,10 @@ $('postCommentBtn').addEventListener('click', async () => {
     await api(`/lesson/${currentLesson.lesson_id}/comments`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ author_name: name, comment_text: text, is_lecturer: false }),
+      body: JSON.stringify({ comment_text: text, is_anonymous: $('commentAnonymous').checked }),
     });
     $('commentText').value = '';
+    $('commentAnonymous').checked = false;
     msgBox.innerHTML = '';
     await loadComments(currentLesson.lesson_id);
   } catch (err) {
@@ -425,10 +458,126 @@ $('postCommentBtn').addEventListener('click', async () => {
   }
 });
 
+// ---- Threaded lesson discussion -----------------------------------------
+function formatLessonComment(content) {
+  let rendered = escapeHtml(content || '');
+  lessonMembers.forEach(member => {
+    const tag = escapeHtml('@' + member.full_name);
+    rendered = rendered.split(tag).join(`<span class="lesson-mention">${tag}</span>`);
+  });
+  return rendered;
+}
+
+function lessonCommentAvatar(comment) {
+  if (comment.author_image_url) {
+    return `<img class="comment-avatar" src="${escapeHtml(comment.author_image_url)}" alt="">`;
+  }
+  const initial = comment.is_anonymous ? '?' : escapeHtml((comment.author_name || '?').slice(0, 1).toUpperCase());
+  return `<span class="comment-avatar-fallback">${initial}</span>`;
+}
+
+function replySignal(count, expanded) {
+  return `<span>Reply signal</span><span>${expanded ? 'hide' : 'show'}</span><span class="reply-count">${count}</span>`;
+}
+
+function lessonCommentHtml(comment) {
+  const replies = comment.replies || [];
+  const replyCount = replies.length;
+  const badges = `${comment.is_official ? '<span class="comment-label official">Official</span>' : ''}${comment.is_lecturer ? '<span class="comment-label">Lecturer</span>' : ''}${comment.is_pinned ? '<span class="comment-label pinned">Pinned</span>' : ''}${comment.is_anonymous ? '<span class="comment-label">Anonymous</span>' : ''}`;
+  return `<article class="lesson-comment${comment.parent_id ? ' reply' : ''}" id="lessonComment-${comment.id}">
+    <div class="lesson-comment-top"><div class="lesson-identity">${lessonCommentAvatar(comment)}<div><div class="comment-author">${escapeHtml(comment.author_name)}${badges}</div><div class="comment-time">${escapeHtml(formatSAST(comment.created_at))}</div></div></div></div>
+    <div class="lesson-comment-content">${formatLessonComment(comment.comment_text)}</div>
+    <div class="lesson-comment-actions">
+      <button class="text-btn lesson-reply-btn" type="button" data-reply-comment="${comment.id}">Reply</button>
+      ${replyCount ? `<button class="reply-signal lesson-toggle-replies" type="button" data-toggle-comment="${comment.id}" data-reply-count="${replyCount}" data-expanded="false" aria-expanded="false">${replySignal(replyCount, false)}</button>` : ''}
+      ${comment.is_author ? `<button class="text-btn danger lesson-delete-btn" type="button" data-delete-comment="${comment.id}">Delete</button>` : ''}
+    </div>
+    <div class="lesson-reply-composer hidden" id="lessonReplyBox-${comment.id}">
+      <textarea id="lessonReplyText-${comment.id}" maxlength="1500" placeholder="Write a reply..."></textarea>
+      <div class="lesson-composer-tools"><input id="lessonReplyTag-${comment.id}" list="lessonMemberNames" placeholder="Tag a student by name"><button class="btn secondary lesson-add-tag" type="button" data-tag-picker="lessonReplyTag-${comment.id}" data-tag-target="lessonReplyText-${comment.id}" data-tag-message="lessonReplyMsg-${comment.id}">Add @tag</button><label class="check-label"><input id="lessonReplyAnonymous-${comment.id}" type="checkbox"> Reply anonymously</label></div>
+      <button class="btn secondary lesson-send-reply" type="button" data-send-reply="${comment.id}">Post reply</button><div id="lessonReplyMsg-${comment.id}"></div>
+    </div>
+    ${replyCount ? `<div class="lesson-replies hidden" id="lessonReplies-${comment.id}">${replies.map(lessonCommentHtml).join('')}</div>` : ''}
+  </article>`;
+}
+
+function addLessonTag(pickerId, targetId, messageId) {
+  const picker = $(pickerId);
+  const name = picker.value.trim();
+  const member = lessonMembers.find(item => item.full_name.toLowerCase() === name.toLowerCase());
+  if (!member) { showMsg($(messageId), 'Choose a student name from the tag list.', 'error'); return; }
+  const target = $(targetId);
+  target.value += `${target.value && !target.value.endsWith(' ') ? ' ' : ''}@${member.full_name} `;
+  target.focus(); picker.value = '';
+}
+
+function attachLessonCommentEvents() {
+  document.querySelectorAll('.lesson-reply-btn').forEach(button => button.addEventListener('click', () => {
+    $('lessonReplyBox-' + button.dataset.replyComment).classList.toggle('hidden');
+  }));
+  document.querySelectorAll('.lesson-toggle-replies').forEach(button => button.addEventListener('click', () => {
+    const replies = $('lessonReplies-' + button.dataset.toggleComment);
+    const expanded = button.dataset.expanded === 'true';
+    replies.classList.toggle('hidden', expanded);
+    button.dataset.expanded = String(!expanded);
+    button.setAttribute('aria-expanded', String(!expanded));
+    button.innerHTML = replySignal(Number(button.dataset.replyCount), !expanded);
+  }));
+  document.querySelectorAll('.lesson-add-tag').forEach(button => button.addEventListener('click', () => {
+    addLessonTag(button.dataset.tagPicker, button.dataset.tagTarget, button.dataset.tagMessage);
+  }));
+  document.querySelectorAll('.lesson-send-reply').forEach(button => button.addEventListener('click', () => submitLessonReply(button.dataset.sendReply)));
+  document.querySelectorAll('.lesson-delete-btn').forEach(button => button.addEventListener('click', () => deleteLessonComment(button.dataset.deleteComment)));
+}
+
+async function loadComments(lessonId) {
+  const list = $('commentsList');
+  try {
+    const comments = await api(`/lesson/${lessonId}/comments`);
+    list.innerHTML = comments.length ? comments.map(lessonCommentHtml).join('') : '<div class="muted">No comments yet - be the first to ask a question.</div>';
+    attachLessonCommentEvents();
+  } catch (err) {
+    list.innerHTML = `<div class="msg error">Could not load comments: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+async function submitLessonReply(parentId) {
+  if (!currentLesson) return;
+  const textInput = $('lessonReplyText-' + parentId);
+  const messageBox = $('lessonReplyMsg-' + parentId);
+  const content = textInput.value.trim();
+  if (!content) { showMsg(messageBox, 'Write a reply first.', 'error'); return; }
+  try {
+    await api(`/lesson/${currentLesson.lesson_id}/comments`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ comment_text: content, parent_id: Number(parentId), is_anonymous: $('lessonReplyAnonymous-' + parentId).checked }),
+    });
+    await loadComments(currentLesson.lesson_id);
+  } catch (err) { showMsg(messageBox, `Could not post reply: ${escapeHtml(err.message)}`, 'error'); }
+}
+
+async function deleteLessonComment(commentId) {
+  if (!window.confirm('Delete this comment and any replies beneath it?')) return;
+  try {
+    await api('/lesson/comments/' + commentId, { method: 'DELETE' });
+    await loadComments(currentLesson.lesson_id);
+  } catch (err) { window.alert(err.message); }
+}
+
+async function loadLessonMembers() {
+  try {
+    lessonMembers = await api('/fun/members');
+    $('lessonMemberNames').innerHTML = lessonMembers.map(member => `<option value="${escapeHtml(member.full_name)}"></option>`).join('');
+  } catch (_) { lessonMembers = []; }
+}
+
+$('addCommentTagBtn').addEventListener('click', () => addLessonTag('commentTagPicker', 'commentText', 'commentMsg'));
+
 // ---- Init: auto-open a module or lesson if present in the URL -----------
 const params = new URLSearchParams(window.location.search);
 restoreStudentSession().then(ready => {
   if (!ready) return;
+  loadLessonMembers();
   loadModuleList();
   if (params.get('lesson')) openLesson(params.get('lesson'));
   else if (params.get('module')) openModule(params.get('module'));

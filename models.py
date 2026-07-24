@@ -358,10 +358,13 @@ class LessonComment(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     lesson_id = Column(Integer, ForeignKey("lessons.id"), nullable=False)
+    author_student_id = Column(Integer, ForeignKey("students.id", ondelete="SET NULL"), index=True)
+    parent_id = Column(Integer, ForeignKey("lesson_comments.id", ondelete="CASCADE"), index=True)
     author_name = Column(String, nullable=False)
     is_lecturer = Column(Boolean, nullable=False, default=False)
     is_official = Column(Boolean, nullable=False, default=False)
     is_pinned = Column(Boolean, nullable=False, default=False)
+    is_anonymous = Column(Boolean, nullable=False, default=False)
     comment_text = Column(Text, nullable=False)
     created_at = Column(String, nullable=False)
 

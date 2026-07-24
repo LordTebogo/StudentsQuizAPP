@@ -20,6 +20,7 @@
     text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px;
   }
   .comment .comment-meta .lecturer-tag { color: var(--pen-red); }
+  .comment.reply { margin: 10px 0 0 20px; padding: 10px 0 0 12px; border-left: 2px solid var(--accent); }
 </style>
 </head>
 <body>
@@ -306,15 +307,19 @@ async function loadComments(lessonId) {
       list.innerHTML = '<p class="muted">No comments yet.</p>';
       return;
     }
-    list.innerHTML = comments.map(c => `
-      <div class="comment">
-        <div class="comment-meta">${escapeHtml(c.author_name)}${c.is_official ? ' <span class="lecturer-tag">(Official)</span>' : (c.is_lecturer ? ' <span class="lecturer-tag">(Lecturer)</span>' : '')}${c.is_pinned ? ' <span class="lecturer-tag">(Pinned)</span>' : ''} &middot; ${formatSAST(c.created_at)}</div>
-        <div>${escapeHtml(c.comment_text)}</div>
-      </div>
-    `).join('');
+    list.innerHTML = comments.map(lessonCommentPreviewHtml).join('');
   } catch (err) {
     list.innerHTML = `<div class="msg error">Could not load comments: ${err.message}</div>`;
   }
+}
+
+function lessonCommentPreviewHtml(comment) {
+  const labels = `${comment.is_official ? ' <span class="lecturer-tag">(Official)</span>' : ''}${comment.is_lecturer ? ' <span class="lecturer-tag">(Lecturer)</span>' : ''}${comment.is_pinned ? ' <span class="lecturer-tag">(Pinned)</span>' : ''}${comment.is_anonymous ? ' <span class="lecturer-tag">(Anonymous)</span>' : ''}`;
+  return `<div class="comment${comment.parent_id ? ' reply' : ''}">
+    <div class="comment-meta">${escapeHtml(comment.author_name)}${labels} &middot; ${formatSAST(comment.created_at)}</div>
+    <div>${escapeHtml(comment.comment_text)}</div>
+    ${(comment.replies || []).map(lessonCommentPreviewHtml).join('')}
+  </div>`;
 }
 
 $('postCommentBtn').addEventListener('click', async () => {

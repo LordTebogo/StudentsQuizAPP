@@ -187,6 +187,25 @@ def ensure_comment_moderation_schema():
 ensure_comment_moderation_schema()
 
 
+def ensure_lesson_comment_thread_schema():
+    """Bring existing lesson discussions up to the threaded Fun Page experience."""
+    if "lesson_comments" not in inspect(engine).get_table_names():
+        return
+    columns = {column["name"] for column in inspect(engine).get_columns("lesson_comments")}
+    with engine.begin() as conn:
+        if "author_student_id" not in columns:
+            conn.execute(text("ALTER TABLE lesson_comments ADD COLUMN author_student_id INTEGER"))
+        if "parent_id" not in columns:
+            conn.execute(text("ALTER TABLE lesson_comments ADD COLUMN parent_id INTEGER"))
+        if "is_anonymous" not in columns:
+            conn.execute(text("ALTER TABLE lesson_comments ADD COLUMN is_anonymous BOOLEAN DEFAULT FALSE"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_lesson_comments_parent_id ON lesson_comments (parent_id)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_lesson_comments_author_student_id ON lesson_comments (author_student_id)"))
+
+
+ensure_lesson_comment_thread_schema()
+
+
 def ensure_comrade_identity_schema():
     """Link new announcements to the verified SRC profile that created them."""
     if "comrade_posts" not in inspect(engine).get_table_names():
@@ -298,9 +317,11 @@ class AdminSrcPresidentUpdate(BaseModel):
 
 
 class CommentCreate(BaseModel):
-    author_name: str
     comment_text: str
+    author_name: str = ""
     is_lecturer: bool = False
+    parent_id: Optional[int] = None
+    is_anonymous: bool = False
 
 
 class AdminOfficialComment(BaseModel):
@@ -1916,19 +1937,54 @@ def mark_lesson_answers(submission_id: int, payload: MarkSubmissionRequest, lect
 # ---------------------------------------------------------------------------
 
 @app.get("/lesson/{lesson_id}/comments")
-def get_lesson_comments(lesson_id: int, db: Session = Depends(get_db)):
+def get_lesson_comments(
+    lesson_id: int,
+    x_student_token: Optional[str] = Header(None, alias="X-Student-Token"),
+    db: Session = Depends(get_db),
+):
     rows = (
         db.query(LessonComment)
         .filter(LessonComment.lesson_id == lesson_id)
         .order_by(LessonComment.is_pinned.desc(), LessonComment.created_at.asc())
         .all()
     )
-    return [
-        {"id": c.id, "author_name": c.author_name, "is_lecturer": c.is_lecturer,
-         "is_official": c.is_official, "is_pinned": c.is_pinned,
-         "comment_text": c.comment_text, "created_at": c.created_at}
-        for c in rows
-    ]
+    current_student_id = None
+    if x_student_token:
+        try:
+            current_student_id = _student_id_from_token(x_student_token)
+        except HTTPException:
+            # Reading stays public; an expired login only removes own-post controls.
+            pass
+
+    author_ids = {item.author_student_id for item in rows if item.author_student_id}
+    students_by_id = {
+        item.id: item
+        for item in db.query(Student).filter(Student.id.in_(author_ids)).all()
+    } if author_ids else {}
+    children_by_parent = {}
+    for comment in rows:
+        children_by_parent.setdefault(comment.parent_id, []).append(comment)
+
+    def serialize(comment: LessonComment) -> dict:
+        author = students_by_id.get(comment.author_student_id)
+        anonymous = bool(comment.is_anonymous)
+        return {
+            "id": comment.id,
+            "parent_id": comment.parent_id,
+            "author_name": "Anonymous student" if anonymous else (author.full_name if author else comment.author_name),
+            "author_image_url": None if anonymous else (author.profile_image_url if author else None),
+            "is_anonymous": anonymous,
+            "is_author": bool(comment.author_student_id and comment.author_student_id == current_student_id),
+            "is_lecturer": comment.is_lecturer,
+            "is_official": comment.is_official,
+            "is_pinned": comment.is_pinned,
+            "comment_text": comment.comment_text,
+            "created_at": comment.created_at,
+            "replies": [serialize(child) for child in children_by_parent.get(comment.id, [])],
+        }
+
+    roots = [serialize(comment) for comment in children_by_parent.get(None, [])]
+    return sorted(roots, key=lambda item: (bool(item["is_pinned"]), item["created_at"]), reverse=True)
 
 
 @app.post("/lesson/{lesson_id}/comments")
@@ -1936,32 +1992,87 @@ def post_lesson_comment(
     lesson_id: int,
     payload: CommentCreate,
     x_lecturer_token: Optional[str] = Header(None, alias="X-Lecturer-Token"),
+    x_student_token: Optional[str] = Header(None, alias="X-Student-Token"),
     db: Session = Depends(get_db),
 ):
-    if not payload.comment_text.strip():
+    content = payload.comment_text.strip()
+    if not content:
         raise HTTPException(status_code=400, detail="Comment can't be empty")
+    if len(content) > 1500:
+        raise HTTPException(status_code=400, detail="Comments can be up to 1,500 characters")
     lecturer = None
+    student = None
     if payload.is_lecturer:
         lecturer = db.query(Lecturer).filter(Lecturer.id == _lecturer_id_from_token(x_lecturer_token)).first()
         if not lecturer or not lecturer.active or not lecturer.approved:
             raise HTTPException(status_code=401, detail="An approved lecturer account is required to post as a lecturer")
+    else:
+        student = db.query(Student).filter(Student.id == _student_id_from_token(x_student_token)).first()
+        if not student or not student.active or not student.approved:
+            raise HTTPException(status_code=401, detail="An approved student account is required to join the discussion")
 
     lesson = db.query(Lesson).filter(Lesson.id == lesson_id).first()
     if not lesson:
         raise HTTPException(status_code=404, detail="Lesson not found")
+    if payload.parent_id is not None and not db.query(LessonComment).filter(
+        LessonComment.id == payload.parent_id,
+        LessonComment.lesson_id == lesson_id,
+    ).first():
+        raise HTTPException(status_code=404, detail="The comment you are replying to no longer exists")
 
     comment = LessonComment(
         lesson_id=lesson_id,
-        author_name=lecturer.full_name if lecturer else (payload.author_name.strip() or "Anonymous"),
+        author_student_id=student.id if student else None,
+        parent_id=payload.parent_id,
+        author_name=lecturer.full_name if lecturer else ("Anonymous student" if payload.is_anonymous else student.full_name),
         is_lecturer=payload.is_lecturer,
+        is_anonymous=bool(payload.is_anonymous) if student else False,
         is_official=False,
         is_pinned=False,
-        comment_text=payload.comment_text.strip(),
+        comment_text=content,
         created_at=datetime.utcnow().isoformat() + "Z",
     )
     db.add(comment)
+    if student:
+        # Full-name tags create the same private notification as Fun Page tags.
+        tagged_students = db.query(Student).filter(
+            Student.approved == True, Student.active == True, Student.id != student.id  # noqa: E712
+        ).all()
+        for tagged in tagged_students:
+            mention = "@" + tagged.full_name.strip()
+            if mention != "@" and re.search(r"(?<!\\w)" + re.escape(mention) + r"(?!\\w)", content, re.IGNORECASE):
+                db.add(DirectMessage(
+                    sender_type="student",
+                    sender_id=student.id,
+                    recipient_type="student",
+                    recipient_id=tagged.id,
+                    content=f"{student.full_name} mentioned you in the lesson discussion for {lesson.title}: {content[:300]}",
+                    created_at=datetime.now(timezone.utc).isoformat(),
+                ))
     db.commit()
     return {"id": comment.id, "ok": True}
+
+
+@app.delete("/lesson/comments/{comment_id}")
+def delete_lesson_comment(
+    comment_id: int,
+    student: Student = Depends(require_student_account),
+    db: Session = Depends(get_db),
+):
+    comment = db.query(LessonComment).filter(LessonComment.id == comment_id).first()
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    if comment.author_student_id != student.id:
+        raise HTTPException(status_code=403, detail="You can only delete your own comments")
+
+    def delete_thread(item: LessonComment):
+        for child in db.query(LessonComment).filter(LessonComment.parent_id == item.id).all():
+            delete_thread(child)
+        db.delete(item)
+
+    delete_thread(comment)
+    db.commit()
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------------------
@@ -3140,6 +3251,7 @@ def admin_list_lesson_comments(_pin_ok: bool = Depends(require_lecturer_pin), db
     return [
         {"id": comment.id, "lesson_id": lesson.id, "lesson_title": lesson.title,
          "author_name": comment.author_name, "is_lecturer": comment.is_lecturer,
+         "parent_id": comment.parent_id, "is_anonymous": comment.is_anonymous,
          "is_official": comment.is_official, "is_pinned": comment.is_pinned,
          "comment_text": comment.comment_text, "created_at": comment.created_at}
         for comment, lesson in rows
@@ -3181,7 +3293,13 @@ def admin_delete_lesson_comment(comment_id: int, _pin_ok: bool = Depends(require
     comment = db.query(LessonComment).filter(LessonComment.id == comment_id).first()
     if not comment:
         raise HTTPException(status_code=404, detail="Lesson comment not found")
-    db.delete(comment)
+
+    def delete_thread(item: LessonComment):
+        for child in db.query(LessonComment).filter(LessonComment.parent_id == item.id).all():
+            delete_thread(child)
+        db.delete(item)
+
+    delete_thread(comment)
     db.commit()
     return {"ok": True}
 
