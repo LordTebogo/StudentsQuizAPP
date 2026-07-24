@@ -452,9 +452,16 @@ def _password_hash(password: str, salt: Optional[str] = None) -> str:
 def _password_matches(password: str, stored: str) -> bool:
     try:
         salt, _ = stored.split("$", 1)
-    except ValueError:
+    except (AttributeError, ValueError):
         return False
-    return hmac.compare_digest(_password_hash(password, salt), stored)
+    # Older student registration screens removed accidental leading/trailing
+    # spaces before saving. Accept that same normalised value at sign-in too,
+    # while preserving exact matching for every other password.
+    candidates = [password]
+    trimmed = password.strip()
+    if trimmed != password:
+        candidates.append(trimmed)
+    return any(hmac.compare_digest(_password_hash(candidate, salt), stored) for candidate in candidates)
 
 
 def _issue_lecturer_token(lecturer_id: int) -> str:
@@ -2413,7 +2420,11 @@ def admin_reset_student_password(student_id: int, payload: PasswordReset, _pin_o
     student = db.query(Student).filter(Student.id == student_id).first()
     if not student: raise HTTPException(status_code=404, detail="Student not found")
     if len(payload.password) < 8: raise HTTPException(status_code=400, detail="The new password must be at least 8 characters")
-    student.password_hash = _password_hash(payload.password); db.commit()
+    student.password_hash = _password_hash(payload.password)
+    db.commit()
+    db.refresh(student)
+    if not _password_matches(payload.password, student.password_hash):
+        raise HTTPException(status_code=500, detail="The new password could not be saved. Please try again.")
     return {"ok": True}
 
 
