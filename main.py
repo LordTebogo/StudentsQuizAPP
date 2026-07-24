@@ -2875,10 +2875,19 @@ def landlord_me(landlord: Landlord = Depends(require_landlord_account)):
 
 
 @app.get("/marketing/listings")
-def list_accommodations(campus: str = "", db: Session = Depends(get_db)):
+def list_accommodations(search: str = "", campus: str = "", db: Session = Depends(get_db)):
     query = db.query(Accommodation, Landlord).join(Landlord, Landlord.id == Accommodation.landlord_id).filter(Landlord.active == True)  # noqa: E712
-    if campus.strip():
-        query = query.filter(func.lower(Accommodation.campus) == campus.strip().lower())
+    # Keep the former campus parameter as a compatible alias while making the
+    # market search useful for listing/accommodation names as well.
+    term = (search or campus).strip().lower()
+    if term:
+        phrase = f"%{term}%"
+        query = query.filter(
+            (func.lower(Accommodation.title).like(phrase))
+            | (func.lower(Accommodation.area).like(phrase))
+            | (func.lower(Accommodation.campus).like(phrase))
+            | (func.lower(Accommodation.description).like(phrase))
+        )
     rows = query.order_by(Accommodation.is_available.desc(), Accommodation.created_at.desc()).all()
     return [_accommodation_payload(item, landlord) for item, landlord in rows]
 

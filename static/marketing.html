@@ -64,6 +64,15 @@ document.querySelectorAll('[data-desk]').forEach(b=>b.addEventListener('click',(
     }
   }, true);
 </script>
+<script>
+  // The same search still accepts a campus, but now prioritises the
+  // accommodation/listing name students are looking for.
+  document.getElementById('campusFilter').placeholder = 'Search accommodation name, listing, area or campus';
+  document.getElementById('filterBtn').textContent = 'Search listings';
+  document.getElementById('campusFilter').addEventListener('keydown', event => {
+    if (event.key === 'Enter') { event.preventDefault(); loadListings(); }
+  });
+</script>
 <script src="/static/pwa.js"></script>
 </body>
 </html>
