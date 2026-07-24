@@ -151,6 +151,8 @@ class Accommodation(Base):
     description = Column(Text, nullable=False)
     contact = Column(String)
     image_url = Column(Text)
+    latitude = Column(Float)
+    longitude = Column(Float)
     is_available = Column(Boolean, nullable=False, default=True)
     created_at = Column(String, nullable=False)
 

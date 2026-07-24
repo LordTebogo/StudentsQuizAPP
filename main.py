@@ -105,6 +105,7 @@ LANDLORD_SESSION_SECRET = os.getenv("LANDLORD_SESSION_SECRET", STUDENT_SESSION_S
 VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "").strip()
 VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "").strip()
 VAPID_SUBJECT = os.getenv("VAPID_SUBJECT", "mailto:admin@example.com").strip()
+GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY", "").strip()
 MAX_LESSON_VIDEO_BYTES = 80 * 1024 * 1024
 
 # Optional convenience folder: images committed into the repo ahead of time
@@ -206,6 +207,21 @@ def ensure_lesson_comment_thread_schema():
 
 
 ensure_lesson_comment_thread_schema()
+
+
+def ensure_accommodation_location_schema():
+    """Add map coordinates without interrupting existing accommodation listings."""
+    if "accommodations" not in inspect(engine).get_table_names():
+        return
+    columns = {column["name"] for column in inspect(engine).get_columns("accommodations")}
+    with engine.begin() as conn:
+        if "latitude" not in columns:
+            conn.execute(text("ALTER TABLE accommodations ADD COLUMN latitude FLOAT"))
+        if "longitude" not in columns:
+            conn.execute(text("ALTER TABLE accommodations ADD COLUMN longitude FLOAT"))
+
+
+ensure_accommodation_location_schema()
 
 
 def ensure_comrade_identity_schema():
@@ -700,12 +716,12 @@ async def register_lecturer(
     lecturer = Lecturer(
         full_name=full_name.strip(), email=email, password_hash=_password_hash(password),
         phone=phone.strip(), institution=institution.strip(), bio=bio.strip(),
-        profile_image_url=image_url, approved=False, active=True, module_limit=1,
+        profile_image_url=image_url, approved=True, active=True, module_limit=1,
         created_at=datetime.utcnow().isoformat() + "Z",
     )
     db.add(lecturer)
     db.commit()
-    return {"ok": True, "message": "Profile created. An administrator must approve it and assign modules before you can sign in."}
+    return {"ok": True, "message": "Profile created and activated. You can sign in now; module access appears once modules are assigned."}
 
 
 @app.post("/lecturers/login")
@@ -718,7 +734,7 @@ def lecturer_login(payload: LecturerLogin, db: Session = Depends(get_db)):
     if not lecturer.active:
         raise HTTPException(status_code=403, detail="This lecturer profile is inactive")
     if not lecturer.approved:
-        raise HTTPException(status_code=403, detail="Your profile is waiting for administrator approval")
+        raise HTTPException(status_code=403, detail="This lecturer profile is not currently approved")
     return {"token": _issue_lecturer_token(lecturer.id), "lecturer": _lecturer_profile(lecturer)}
 
 
@@ -762,12 +778,12 @@ async def register_student(
     image_url = upload_image_bytes(await profile_image.read(), folder="student_profiles") if profile_image and profile_image.filename else None
     student = Student(student_number=student_number, full_name=full_name.strip(), email=email,
                       phone=phone.strip(), institution=institution.strip(), bio=bio.strip(), profile_image_url=image_url,
-                      password_hash=_password_hash(password), approved=False, active=True,
+                      password_hash=_password_hash(password), approved=True, active=True,
                       created_at=datetime.utcnow().isoformat() + "Z")
     db.add(student); db.flush()
     _set_student_modules(db, student, module_codes.split(","))
     db.commit()
-    return {"ok": True, "message": "Profile created. An administrator must approve it before you can sign in."}
+    return {"ok": True, "message": "Profile created and activated. You can sign in now."}
 
 
 @app.post("/students/login")
@@ -781,7 +797,7 @@ def student_login(payload: StudentLogin, db: Session = Depends(get_db)):
     if not student.active:
         raise HTTPException(status_code=403, detail="This student profile is inactive")
     if not student.approved:
-        raise HTTPException(status_code=403, detail="Your profile is waiting for administrator approval")
+        raise HTTPException(status_code=403, detail="This student profile is not currently approved")
     return {"token": _issue_student_token(student.id), "student": _student_profile(student)}
 
 
@@ -2837,7 +2853,25 @@ def _landlord_profile(landlord: Landlord) -> dict:
 
 
 def _accommodation_payload(item: Accommodation, landlord: Landlord) -> dict:
-    return {"id": item.id, "title": item.title, "campus": item.campus, "area": item.area, "monthly_rent": item.monthly_rent, "bedrooms": item.bedrooms or "", "description": item.description, "contact": item.contact or landlord.phone, "image_url": item.image_url, "is_available": item.is_available, "created_at": item.created_at, "landlord": {"name": landlord.full_name, "business_name": landlord.business_name or "", "profile_image_url": landlord.profile_image_url}}
+    directions_url = None
+    if item.latitude is not None and item.longitude is not None:
+        directions_url = f"https://www.google.com/maps/dir/?api=1&destination={item.latitude},{item.longitude}"
+    return {"id": item.id, "title": item.title, "campus": item.campus, "area": item.area, "monthly_rent": item.monthly_rent, "bedrooms": item.bedrooms or "", "description": item.description, "contact": item.contact or landlord.phone, "image_url": item.image_url, "latitude": item.latitude, "longitude": item.longitude, "directions_url": directions_url, "is_available": item.is_available, "created_at": item.created_at, "landlord": {"name": landlord.full_name, "business_name": landlord.business_name or "", "profile_image_url": landlord.profile_image_url}}
+
+
+def _accommodation_coordinates(latitude: str, longitude: str) -> tuple[Optional[float], Optional[float]]:
+    latitude, longitude = latitude.strip(), longitude.strip()
+    if not latitude and not longitude:
+        return None, None
+    if not latitude or not longitude:
+        raise HTTPException(status_code=400, detail="Choose a complete location on the map")
+    try:
+        lat, lng = float(latitude), float(longitude)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="The selected map coordinates are invalid")
+    if not -90 <= lat <= 90 or not -180 <= lng <= 180:
+        raise HTTPException(status_code=400, detail="The selected map coordinates are outside the valid range")
+    return lat, lng
 
 
 @app.post("/marketing/landlords/register")
@@ -2892,6 +2926,12 @@ def list_accommodations(search: str = "", campus: str = "", db: Session = Depend
     return [_accommodation_payload(item, landlord) for item, landlord in rows]
 
 
+@app.get("/marketing/maps-config")
+def marketing_maps_config():
+    """The browser Maps key is intentionally public, but should be domain-restricted in Google Cloud."""
+    return {"api_key": GOOGLE_MAPS_API_KEY}
+
+
 @app.get("/marketing/landlord/listings")
 def landlord_listings(landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
     rows = db.query(Accommodation).filter(Accommodation.landlord_id == landlord.id).order_by(Accommodation.created_at.desc()).all()
@@ -2899,7 +2939,7 @@ def landlord_listings(landlord: Landlord = Depends(require_landlord_account), db
 
 
 @app.post("/marketing/listings")
-async def create_accommodation(title: str = Form(...), campus: str = Form(...), area: str = Form(...), monthly_rent: str = Form(""), bedrooms: str = Form(""), description: str = Form(...), contact: str = Form(""), image: Optional[UploadFile] = File(None), landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
+async def create_accommodation(title: str = Form(...), campus: str = Form(...), area: str = Form(...), monthly_rent: str = Form(""), bedrooms: str = Form(""), description: str = Form(...), contact: str = Form(""), latitude: str = Form(""), longitude: str = Form(""), image: Optional[UploadFile] = File(None), landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
     if not title.strip() or not campus.strip() or not area.strip() or not description.strip():
         raise HTTPException(status_code=400, detail="Add a title, campus, area, and description")
     if len(description.strip()) > 2500:
@@ -2910,6 +2950,7 @@ async def create_accommodation(title: str = Form(...), campus: str = Form(...), 
         raise HTTPException(status_code=400, detail="Monthly rent must be a whole number")
     if rent is not None and rent < 0:
         raise HTTPException(status_code=400, detail="Monthly rent cannot be negative")
+    lat, lng = _accommodation_coordinates(latitude, longitude)
     image_url = None
     if image and image.filename:
         if not (image.content_type or "").startswith("image/"):
@@ -2918,13 +2959,13 @@ async def create_accommodation(title: str = Form(...), campus: str = Form(...), 
         if len(image_bytes) > 10 * 1024 * 1024:
             raise HTTPException(status_code=400, detail="Accommodation images must be 10 MB or smaller")
         image_url = upload_image_bytes(image_bytes, folder="accommodation_listings")
-    item = Accommodation(landlord_id=landlord.id, title=title.strip()[:180], campus=campus.strip()[:120], area=area.strip()[:160], monthly_rent=rent, bedrooms=bedrooms.strip()[:80], description=description.strip(), contact=contact.strip()[:160], image_url=image_url, is_available=True, created_at=datetime.now(timezone.utc).isoformat())
+    item = Accommodation(landlord_id=landlord.id, title=title.strip()[:180], campus=campus.strip()[:120], area=area.strip()[:160], monthly_rent=rent, bedrooms=bedrooms.strip()[:80], description=description.strip(), contact=contact.strip()[:160], image_url=image_url, latitude=lat, longitude=lng, is_available=True, created_at=datetime.now(timezone.utc).isoformat())
     db.add(item); db.commit()
     return {"ok": True, "listing": _accommodation_payload(item, landlord)}
 
 
 @app.put("/marketing/listings/{listing_id}")
-async def update_accommodation(listing_id: int, title: str = Form(...), campus: str = Form(...), area: str = Form(...), monthly_rent: str = Form(""), bedrooms: str = Form(""), description: str = Form(...), contact: str = Form(""), is_available: bool = Form(True), image: Optional[UploadFile] = File(None), landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
+async def update_accommodation(listing_id: int, title: str = Form(...), campus: str = Form(...), area: str = Form(...), monthly_rent: str = Form(""), bedrooms: str = Form(""), description: str = Form(...), contact: str = Form(""), latitude: str = Form(""), longitude: str = Form(""), is_available: bool = Form(True), image: Optional[UploadFile] = File(None), landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
     item = db.query(Accommodation).filter(Accommodation.id == listing_id, Accommodation.landlord_id == landlord.id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Accommodation listing not found")
@@ -2936,9 +2977,12 @@ async def update_accommodation(listing_id: int, title: str = Form(...), campus: 
         raise HTTPException(status_code=400, detail="Monthly rent must be a whole number")
     if rent is not None and rent < 0:
         raise HTTPException(status_code=400, detail="Monthly rent cannot be negative")
+    # Availability updates do not include the picker fields, so retain a
+    # previously selected point unless the landlord supplies a new one.
+    lat, lng = _accommodation_coordinates(latitude, longitude) if latitude.strip() or longitude.strip() else (item.latitude, item.longitude)
     item.title, item.campus, item.area = title.strip()[:180], campus.strip()[:120], area.strip()[:160]
     item.monthly_rent, item.bedrooms, item.description = rent, bedrooms.strip()[:80], description.strip()[:2500]
-    item.contact, item.is_available = contact.strip()[:160], is_available
+    item.contact, item.latitude, item.longitude, item.is_available = contact.strip()[:160], lat, lng, is_available
     if image and image.filename:
         if not (image.content_type or "").startswith("image/"):
             raise HTTPException(status_code=400, detail="Please choose a valid accommodation image")
@@ -3020,9 +3064,9 @@ async def register_src_president(
     image_url = upload_image_bytes(await profile_image.read(), folder="src_profiles") if profile_image and profile_image.filename else None
     president = SrcPresident(full_name=full_name.strip()[:160], party_name=party_name.strip()[:120], email=email,
         phone=phone.strip()[:60], profile_image_url=image_url, password_hash=_password_hash(password),
-        approved=False, active=False, created_at=datetime.now(timezone.utc).isoformat())
+        approved=True, active=True, created_at=datetime.now(timezone.utc).isoformat())
     db.add(president); db.commit()
-    return {"ok": True, "message": "SRC profile created. An administrator must approve and activate it before it can publish announcements."}
+    return {"ok": True, "message": "SRC profile created and activated. You can sign in and publish announcements now."}
 
 
 @app.post("/src/login")
@@ -3033,7 +3077,7 @@ def src_president_login(payload: SrcPresidentLogin, db: Session = Depends(get_db
     if not president.active:
         raise HTTPException(status_code=403, detail="This SRC president profile is inactive")
     if not president.approved:
-        raise HTTPException(status_code=403, detail="Your SRC president profile is waiting for administrator approval")
+        raise HTTPException(status_code=403, detail="This SRC president profile is not currently approved")
     return {"token": _issue_src_token(president.id), "profile": _src_president_profile(president)}
 
 

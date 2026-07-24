@@ -22,6 +22,13 @@
   .card.collapsed .card-summary { display:block; }
   .card-summary strong { display:block; color:var(--text); font-size:1rem; letter-spacing:.01em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .card-summary small { display:block; margin-top:3px; color:var(--muted); font-family:var(--font-mono, monospace); font-size:.68rem; letter-spacing:.04em; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .account-row { margin:9px 0; border:1px solid transparent; border-radius:14px; overflow:hidden; }
+  .account-row.selected { border-color:rgba(103,232,249,.62); box-shadow:0 0 0 1px rgba(103,232,249,.14); }
+  .account-row .admin-list-item { margin:0; width:100%; border-radius:0; }
+  .inline-account-actions { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:10px 12px 12px; background:rgba(5,12,30,.7); border-top:1px solid rgba(103,232,249,.2); }
+  .inline-account-actions .account-state { flex:1 1 190px; color:var(--muted); font-size:.8rem; }
+  .inline-account-actions .btn { margin:0; padding:8px 12px; font-size:.74rem; }
+  .inline-account-actions .danger-action { border-color:rgba(251,113,133,.6); color:#fecdd3; }
 </style>
 </head>
 <body>
@@ -55,9 +62,7 @@
         <label for="lecturerBio">Professional bio</label><textarea id="lecturerBio" placeholder="Tutoring background"></textarea>
         <label for="lecturerModules">Assigned module codes</label><input id="lecturerModules" type="text" placeholder="e.g. BIO101, BIO102">
         <label for="lecturerLimit">Module limit</label><input id="lecturerLimit" type="number" min="0" value="1">
-        <label class="check-label"><input id="lecturerApproved" type="checkbox"> Approved</label>
-        <label class="check-label"><input id="lecturerActive" type="checkbox" checked> Active</label>
-        <button class="btn" id="saveLecturerBtn">Save lecturer</button><button class="btn secondary hidden" id="approveLecturerBtn">Approve &amp; activate</button><button class="btn secondary hidden" id="deleteLecturerBtn">Remove lecturer</button><div id="lecturerMsg"></div>
+        <button class="btn" id="saveLecturerBtn">Save lecturer</button><button class="btn secondary hidden" id="deleteLecturerBtn">Remove lecturer</button><div id="lecturerMsg"></div>
       </div>
       <div><div class="admin-editor-heading"><h3>Lecturer profiles</h3><span><button class="btn secondary" id="activateAllLecturersBtn">Activate all</button><button class="btn secondary" id="inactivateAllLecturersBtn">Inactivate all</button><button class="btn secondary" id="refreshLecturersBtn">Refresh</button></span></div><div id="lecturerList" class="admin-list"></div></div>
     </div>
@@ -65,16 +70,16 @@
 
   <section class="card">
     <div class="admin-editor-heading"><div><span class="kicker">Student access</span><h2>Student management</h2></div><span><button class="btn secondary" id="activateAllStudentsBtn">Activate all</button><button class="btn secondary" id="inactivateAllStudentsBtn">Inactivate all</button><button class="btn secondary" id="refreshStudentsBtn">Refresh</button></span></div>
-    <p class="muted">Select a student profile to approve, activate, deactivate, reset their password, or remove it.</p>
+    <p class="muted">Select a student to manage modules or reset a password. Access controls appear immediately beneath the selected student.</p>
     <div id="studentList" class="admin-list"></div>
-    <div id="studentAdminCard" class="hidden"><label class="check-label"><input id="studentApproved" type="checkbox"> Approved</label><label class="check-label"><input id="studentActive" type="checkbox"> Active</label><label for="studentResetPassword">New password</label><input id="studentResetPassword" type="password" placeholder="At least 8 characters"><button class="btn" id="saveStudentBtn">Save student access</button><button class="btn secondary" id="resetStudentPasswordBtn">Reset password</button><button class="btn secondary" id="deleteStudentBtn">Remove student</button><div id="studentMsg"></div></div>
+    <div id="studentAdminCard" class="hidden"><label for="studentResetPassword">New password</label><input id="studentResetPassword" type="password" placeholder="At least 8 characters"><button class="btn" id="saveStudentBtn">Save modules</button><button class="btn secondary" id="resetStudentPasswordBtn">Reset password</button><button class="btn secondary" id="deleteStudentBtn">Remove student</button><div id="studentMsg"></div></div>
   </section>
 
   <section class="card">
     <div class="admin-editor-heading"><div><span class="kicker">Official SRC access</span><h2>SRC president management</h2></div><button class="btn secondary" id="refreshSrcPresidentsBtn">Refresh</button></div>
-    <p class="muted">Approve pending SRC president profiles, suspend access when a term ends, or remove a profile. SRC presidents create and control their own passwords.</p>
+    <p class="muted">SRC profiles activate automatically. Select a profile to change its access or remove it.</p>
     <div id="srcPresidentList" class="admin-list"></div>
-    <div id="srcPresidentAdminCard" class="hidden"><label class="check-label"><input id="srcPresidentApproved" type="checkbox"> Approved</label><label class="check-label"><input id="srcPresidentActive" type="checkbox"> Active</label><button class="btn" id="saveSrcPresidentBtn">Save SRC access</button><button class="btn secondary" id="deleteSrcPresidentBtn">Remove SRC profile</button><div id="srcPresidentMsg"></div></div>
+    <div id="srcPresidentAdminCard" class="hidden"><button class="btn secondary" id="deleteSrcPresidentBtn">Remove SRC profile</button><div id="srcPresidentMsg"></div></div>
   </section>
 
   <section class="card">
@@ -211,25 +216,41 @@ function lecturerFormPayload(includePassword) {
   const modules = $('lecturerModules').value.split(',').map(code => code.trim()).filter(Boolean);
   const moduleLimit = Math.max(Number($('lecturerLimit').value) || 0, modules.length);
   $('lecturerLimit').value = moduleLimit;
-  const payload = { full_name: $('lecturerName').value.trim(), phone: $('lecturerPhone').value.trim(), institution: $('lecturerInstitution').value.trim(), bio: $('lecturerBio').value.trim(), approved: $('lecturerApproved').checked, active: $('lecturerActive').checked, module_limit: moduleLimit, module_codes: modules };
-  if (includePassword) { payload.email = $('lecturerEmail').value.trim(); payload.password = $('lecturerPassword').value; }
+  const payload = { full_name: $('lecturerName').value.trim(), phone: $('lecturerPhone').value.trim(), institution: $('lecturerInstitution').value.trim(), bio: $('lecturerBio').value.trim(), module_limit: moduleLimit, module_codes: modules };
+  if (includePassword) { payload.email = $('lecturerEmail').value.trim(); payload.password = $('lecturerPassword').value; payload.approved = true; payload.active = true; }
   return payload;
 }
 function clearLecturerForm() {
   selectedLecturerId = null;
   ['lecturerName','lecturerEmail','lecturerPassword','lecturerPhone','lecturerInstitution','lecturerBio','lecturerModules'].forEach(id => $(id).value = '');
-  $('lecturerLimit').value = 1; $('lecturerApproved').checked = false; $('lecturerActive').checked = true; $('lecturerEmail').disabled = false; $('lecturerPassword').classList.remove('hidden'); $('passwordResetFields').classList.add('hidden'); $('approveLecturerBtn').classList.add('hidden'); $('deleteLecturerBtn').classList.add('hidden'); $('lecturerMsg').innerHTML = '';
+  $('lecturerLimit').value = 1; $('lecturerEmail').disabled = false; $('lecturerPassword').classList.remove('hidden'); $('passwordResetFields').classList.add('hidden'); $('deleteLecturerBtn').classList.add('hidden'); $('lecturerMsg').innerHTML = '';
 }
 async function quickAdminMessage(type, id, name) { const content = window.prompt(`Message ${name}:`); if (!content || !content.trim()) return; try { await api('/admin/messages', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({recipient_type:type, recipient_id:Number(id), content:content.trim()})}); window.alert(`Message sent to ${name}.`); } catch (error) { window.alert(error.message); } }
+function accountState(item) { return `${item.approved ? 'Approved' : 'Not approved'} · ${item.active ? 'Active' : 'Inactive'}`; }
+function accessControls(kind, item) {
+  const activeAction = item.active ? 'Deactivate' : 'Activate';
+  const approvalAction = item.approved ? 'Disapprove' : 'Approve';
+  return `<div class="inline-account-actions"><span class="account-state">${accountState(item)}</span><button class="btn secondary" data-account-update="${kind}" data-account-id="${item.id}" data-account-field="active" data-account-value="${!item.active}">${activeAction}</button><button class="btn secondary ${item.approved ? 'danger-action' : ''}" data-account-update="${kind}" data-account-id="${item.id}" data-account-field="approved" data-account-value="${!item.approved}">${approvalAction}</button></div>`;
+}
+function bindAccessControls(container) { container.querySelectorAll('[data-account-update]').forEach(button => button.addEventListener('click', event => { event.stopPropagation(); setAccountAccess(button.dataset.accountUpdate, Number(button.dataset.accountId), button.dataset.accountField, button.dataset.accountValue === 'true'); })); }
+async function setAccountAccess(kind, id, field, value) {
+  const action = field === 'active' ? (value ? 'activate' : 'deactivate') : (value ? 'approve' : 'disapprove');
+  if (!confirm(`Are you sure you want to ${action} this account?`)) return;
+  try {
+    await api(`/admin/${kind}/${id}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({[field]:value})});
+    if (kind === 'lecturers') loadLecturers(); else if (kind === 'students') loadStudents(); else loadSrcPresidents();
+  } catch (error) { window.alert(error.message); }
+}
 function loadLecturers() {
   api('/admin/lecturers').then(lecturers => {
-    $('lecturerList').innerHTML = lecturers.length ? lecturers.map(item => `<button class="admin-list-item" data-lecturer="${item.id}"><span><strong>${escapeHtml(item.full_name)}</strong><small>${escapeHtml(item.email)} · ${escapeHtml(item.module_codes.join(', ') || 'No modules')}</small></span><span class="badge ${item.active && item.approved ? 'done' : 'pending'}">${item.active ? (item.approved ? 'Active' : 'Awaiting approval') : 'Inactive'}</span></button>`).join('') : '<p class="muted">No lecturer profiles yet.</p>';
+    $('lecturerList').innerHTML = lecturers.length ? lecturers.map(item => `<div class="account-row ${selectedLecturerId === item.id ? 'selected' : ''}"><button class="admin-list-item" data-lecturer="${item.id}"><span><strong>${escapeHtml(item.full_name)}</strong><small>${escapeHtml(item.email)} · ${escapeHtml(item.module_codes.join(', ') || 'No modules')}</small></span><span class="badge ${item.active && item.approved ? 'done' : 'pending'}">${item.active ? (item.approved ? 'Active' : 'Not approved') : 'Inactive'}</span></button>${selectedLecturerId === item.id ? accessControls('lecturers', item) : ''}</div>`).join('') : '<p class="muted">No lecturer profiles yet.</p>';
     $('lecturerList').querySelectorAll('[data-lecturer]').forEach(button => button.addEventListener('click', () => editLecturer(button.dataset.lecturer, lecturers)));
+    bindAccessControls($('lecturerList'));
   }).catch(err => showMsg($('lecturerMsg'), err.message, 'error'));
 }
 function editLecturer(id, lecturers) {
   const item = lecturers.find(lecturer => lecturer.id === Number(id)); if (!item) return;
-  selectedLecturerId = item.id; $('lecturerName').value = item.full_name; $('lecturerEmail').value = item.email; $('lecturerEmail').disabled = true; $('lecturerPassword').value = ''; $('lecturerPhone').value = item.phone || ''; $('lecturerInstitution').value = item.institution || ''; $('lecturerBio').value = item.bio || ''; $('lecturerModules').value = item.module_codes.join(', '); $('lecturerLimit').value = Math.max(item.module_limit, item.module_codes.length, 1); $('lecturerApproved').checked = item.approved; $('lecturerActive').checked = item.active; $('lecturerPassword').classList.add('hidden'); $('passwordResetFields').classList.remove('hidden'); $('approveLecturerBtn').classList.toggle('hidden', item.approved && item.active); $('deleteLecturerBtn').classList.remove('hidden'); $('lecturerMsg').innerHTML = '';
+  selectedLecturerId = item.id; $('lecturerName').value = item.full_name; $('lecturerEmail').value = item.email; $('lecturerEmail').disabled = true; $('lecturerPassword').value = ''; $('lecturerPhone').value = item.phone || ''; $('lecturerInstitution').value = item.institution || ''; $('lecturerBio').value = item.bio || ''; $('lecturerModules').value = item.module_codes.join(', '); $('lecturerLimit').value = Math.max(item.module_limit, item.module_codes.length, 1); $('lecturerPassword').classList.add('hidden'); $('passwordResetFields').classList.remove('hidden'); $('deleteLecturerBtn').classList.remove('hidden'); $('lecturerMsg').innerHTML = ''; loadLecturers();
 }
 async function saveLecturer() {
   const creating = !selectedLecturerId; const payload = lecturerFormPayload(creating);
@@ -237,24 +258,25 @@ async function saveLecturer() {
   catch (err) { showMsg($('lecturerMsg'), err.message, 'error'); }
 }
 async function deleteLecturer() { if (!selectedLecturerId || !confirm('Remove this lecturer profile? Profiles with owned quizzes or lessons cannot be removed.')) return; try { await api(`/admin/lecturers/${selectedLecturerId}`, {method:'DELETE'}); clearLecturerForm(); loadLecturers(); } catch (err) { showMsg($('lecturerMsg'), err.message, 'error'); } }
-function loadStudents() { api('/admin/students').then(students => { $('studentList').innerHTML = students.length ? students.map(item => `<button class="admin-list-item" data-student="${item.id}"><span><strong>${escapeHtml(item.full_name)}</strong><small>${escapeHtml(item.student_number)} · ${escapeHtml(item.email)}</small></span><span class="badge ${item.approved && item.active ? 'done' : 'pending'}">${item.active ? (item.approved ? 'Active' : 'Awaiting approval') : 'Inactive'}</span></button>`).join('') : '<p class="muted">No student profiles yet.</p>'; $('studentList').querySelectorAll('[data-student]').forEach(button => button.addEventListener('click', () => selectStudent(button.dataset.student, students))); }).catch(err => showMsg($('studentMsg'), err.message, 'error')); }
-function loadStudents() { api('/admin/students').then(students => { $('studentList').innerHTML = students.length ? students.map(item => `<button class="admin-list-item" data-student="${item.id}"><span><strong>${escapeHtml(item.full_name)}</strong><small>${escapeHtml(item.student_number)} · ${(item.module_codes || []).map(escapeHtml).join(', ') || 'No modules assigned'}</small></span><span class="badge ${item.approved && item.active ? 'done' : 'pending'}">${item.active ? (item.approved ? 'Active' : 'Awaiting approval') : 'Inactive'}</span></button>`).join('') : '<p class="muted">No student profiles yet.</p>'; $('studentList').querySelectorAll('[data-student]').forEach(button => button.addEventListener('click', () => selectStudent(button.dataset.student, students))); }).catch(err => showMsg($('studentMsg'), err.message, 'error')); }
+function loadStudents() {
+  api('/admin/students').then(students => {
+    $('studentList').innerHTML = students.length ? students.map(item => `<div class="account-row ${selectedStudentId === item.id ? 'selected' : ''}"><button class="admin-list-item" data-student="${item.id}"><span><strong>${escapeHtml(item.full_name)}</strong><small>${escapeHtml(item.student_number)} · ${(item.module_codes || []).map(escapeHtml).join(', ') || 'No modules assigned'}</small></span><span class="badge ${item.active && item.approved ? 'done' : 'pending'}">${item.active ? (item.approved ? 'Active' : 'Not approved') : 'Inactive'}</span></button>${selectedStudentId === item.id ? accessControls('students', item) : ''}</div>`).join('') : '<p class="muted">No student profiles yet.</p>';
+    $('studentList').querySelectorAll('[data-student]').forEach(button => button.addEventListener('click', () => selectStudent(button.dataset.student, students)));
+    bindAccessControls($('studentList'));
+  }).catch(err => showMsg($('studentMsg'), err.message, 'error'));
+}
 function loadSrcPresidents() {
   api('/admin/src-presidents').then(profiles => {
-    $('srcPresidentList').innerHTML = profiles.length ? profiles.map(item => `<button class="admin-list-item" data-src-president="${item.id}"><span><strong>${escapeHtml(item.full_name)}</strong><small>${escapeHtml(item.party_name)} · ${escapeHtml(item.email)}</small></span><span class="badge ${item.approved && item.active ? 'done' : 'pending'}">${item.active ? (item.approved ? 'Active' : 'Awaiting approval') : 'Inactive'}</span></button>`).join('') : '<p class="muted">No SRC president profiles yet.</p>';
+    $('srcPresidentList').innerHTML = profiles.length ? profiles.map(item => `<div class="account-row ${selectedSrcPresidentId === item.id ? 'selected' : ''}"><button class="admin-list-item" data-src-president="${item.id}"><span><strong>${escapeHtml(item.full_name)}</strong><small>${escapeHtml(item.party_name)} · ${escapeHtml(item.email)}</small></span><span class="badge ${item.active && item.approved ? 'done' : 'pending'}">${item.active ? (item.approved ? 'Active' : 'Not approved') : 'Inactive'}</span></button>${selectedSrcPresidentId === item.id ? accessControls('src-presidents', item) : ''}</div>`).join('') : '<p class="muted">No SRC president profiles yet.</p>';
     $('srcPresidentList').querySelectorAll('[data-src-president]').forEach(button => button.addEventListener('click', () => selectSrcPresident(button.dataset.srcPresident, profiles)));
+    bindAccessControls($('srcPresidentList'));
   }).catch(error => showMsg($('srcPresidentMsg'), error.message, 'error'));
 }
 function selectSrcPresident(id, profiles) {
   const profile = profiles.find(item => item.id === Number(id)); if (!profile) return;
-  selectedSrcPresidentId = profile.id; $('srcPresidentApproved').checked = profile.approved; $('srcPresidentActive').checked = profile.active;
+  selectedSrcPresidentId = profile.id;
   $('srcPresidentAdminCard').classList.remove('hidden'); $('srcPresidentMsg').innerHTML = '';
-  document.querySelectorAll('[data-src-president]').forEach(row => row.classList.toggle('student-selected', Number(row.dataset.srcPresident) === profile.id));
-}
-async function saveSrcPresident() {
-  if (!selectedSrcPresidentId) return;
-  try { await api(`/admin/src-presidents/${selectedSrcPresidentId}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({approved:$('srcPresidentApproved').checked, active:$('srcPresidentActive').checked})}); showMsg($('srcPresidentMsg'), 'SRC access saved.', 'ok'); loadSrcPresidents(); }
-  catch (error) { showMsg($('srcPresidentMsg'), error.message, 'error'); }
+  loadSrcPresidents();
 }
 async function deleteSrcPresident() {
   if (!selectedSrcPresidentId || !confirm('Remove this SRC president profile? Existing announcements will remain.')) return;
@@ -284,11 +306,10 @@ async function moderateItem(area, kind, id, action) {
 }
 async function postOfficialFun() { const content = $('officialFunText').value.trim(); if (!content) { showMsg($('officialFunMsg'), 'Write an official comment first.', 'error'); return; } try { await api('/admin/fun/official-posts', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({content})}); $('officialFunText').value = ''; showMsg($('officialFunMsg'), 'Official Fun Page comment posted.', 'ok'); await loadCommunityModeration(); } catch (err) { showMsg($('officialFunMsg'), err.message, 'error'); } }
 async function postOfficialLesson() { const lessonId = $('officialLessonSelect').value, content = $('officialLessonText').value.trim(); if (!lessonId || !content) { showMsg($('officialLessonMsg'), 'Choose a lesson and write an official comment.', 'error'); return; } try { await api(`/admin/lessons/${lessonId}/comments`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({content})}); $('officialLessonText').value = ''; showMsg($('officialLessonMsg'), 'Official lesson comment posted.', 'ok'); await loadCommunityModeration(); } catch (err) { showMsg($('officialLessonMsg'), err.message, 'error'); } }
-function selectStudent(id, students) { const student = students.find(item => item.id === Number(id)); if (!student) return; selectedStudentId = student.id; $('studentApproved').checked = student.approved; $('studentActive').checked = student.active; $('studentModules').value = (student.module_codes || []).join(', '); $('studentResetPassword').value = ''; $('studentAdminCard').classList.remove('hidden'); $('studentMsg').innerHTML = ''; const modules=(student.module_codes || []).join(', ') || 'No modules assigned'; $('selectedStudentBanner').innerHTML=`<strong>Editing: ${escapeHtml(student.full_name)}</strong><small>${escapeHtml(student.student_number)} · ${escapeHtml(modules)}</small>`; $('selectedStudentBanner').classList.remove('hidden'); document.querySelectorAll('[data-student]').forEach(row=>row.classList.toggle('student-selected', Number(row.dataset.student) === student.id)); }
-async function saveStudent() { if (!selectedStudentId) return; try { await api(`/admin/students/${selectedStudentId}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({approved:$('studentApproved').checked, active:$('studentActive').checked, module_codes:$('studentModules').value.split(',').map(code=>code.trim()).filter(Boolean)})}); showMsg($('studentMsg'), 'Student access and modules saved.', 'ok'); loadStudents(); } catch (err) { showMsg($('studentMsg'), err.message, 'error'); } }
+function selectStudent(id, students) { const student = students.find(item => item.id === Number(id)); if (!student) return; selectedStudentId = student.id; $('studentModules').value = (student.module_codes || []).join(', '); $('studentResetPassword').value = ''; $('studentAdminCard').classList.remove('hidden'); $('studentMsg').innerHTML = ''; const modules=(student.module_codes || []).join(', ') || 'No modules assigned'; $('selectedStudentBanner').innerHTML=`<strong>Editing: ${escapeHtml(student.full_name)}</strong><small>${escapeHtml(student.student_number)} · ${escapeHtml(modules)}</small>`; $('selectedStudentBanner').classList.remove('hidden'); loadStudents(); }
+async function saveStudent() { if (!selectedStudentId) return; try { await api(`/admin/students/${selectedStudentId}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({module_codes:$('studentModules').value.split(',').map(code=>code.trim()).filter(Boolean)})}); showMsg($('studentMsg'), 'Student modules saved.', 'ok'); loadStudents(); } catch (err) { showMsg($('studentMsg'), err.message, 'error'); } }
 async function resetStudentPassword() { const password = $('studentResetPassword').value; if (!selectedStudentId || password.length < 8) { showMsg($('studentMsg'), 'Enter a new password with at least 8 characters.', 'error'); return; } try { await api(`/admin/students/${selectedStudentId}/reset-password`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({password})}); $('studentResetPassword').value = ''; showMsg($('studentMsg'), 'Student password reset.', 'ok'); } catch (err) { showMsg($('studentMsg'), err.message, 'error'); } }
 async function deleteStudent() { if (!selectedStudentId || !confirm('Remove this student profile? Existing submission records will remain.')) return; try { await api(`/admin/students/${selectedStudentId}`, {method:'DELETE'}); selectedStudentId = null; $('studentAdminCard').classList.add('hidden'); loadStudents(); } catch (err) { showMsg($('studentMsg'), err.message, 'error'); } }
-async function approveLecturer() { if (!selectedLecturerId) return; $('lecturerApproved').checked = true; $('lecturerActive').checked = true; await saveLecturer(); }
 async function resetLecturerPassword() { const password = $('resetPassword').value; if (!selectedLecturerId || password.length < 8) { showMsg($('lecturerMsg'), 'Enter a new password with at least 8 characters.', 'error'); return; } try { await api(`/admin/lecturers/${selectedLecturerId}/reset-password`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({password})}); $('resetPassword').value = ''; showMsg($('lecturerMsg'), 'Password reset. Share the new password securely with the lecturer.', 'ok'); } catch (err) { showMsg($('lecturerMsg'), err.message, 'error'); } }
 function buildPayload() {
   let questions;
@@ -318,11 +339,9 @@ $('newQuizBtn').addEventListener('click', () => openEditor('quiz'));
 $('newLessonBtn').addEventListener('click', () => openEditor('lesson'));
 $('newLecturerBtn').addEventListener('click', clearLecturerForm);
 $('saveLecturerBtn').addEventListener('click', saveLecturer);
-$('approveLecturerBtn').addEventListener('click', approveLecturer);
 $('resetPasswordBtn').addEventListener('click', resetLecturerPassword);
 $('refreshStudentsBtn').addEventListener('click', loadStudents);
 $('refreshSrcPresidentsBtn').addEventListener('click', loadSrcPresidents);
-$('saveSrcPresidentBtn').addEventListener('click', saveSrcPresident);
 $('deleteSrcPresidentBtn').addEventListener('click', deleteSrcPresident);
 $('saveStudentBtn').addEventListener('click', saveStudent);
 $('resetStudentPasswordBtn').addEventListener('click', resetStudentPassword);
