@@ -1069,6 +1069,131 @@ def build_submission_pdf(db: Session, submission_id: int, styles, include_expect
     return flow
 
 
+def _append_pdf_question_image(flow: list, image_url: Optional[str]):
+    """Add a remotely hosted question image to a PDF without making a
+    temporary disk file. A missing/unavailable image must never prevent the
+    learner from downloading the rest of the script."""
+    if not image_url:
+        return
+    try:
+        with urllib.request.urlopen(image_url, timeout=10) as response:
+            image_bytes = response.read()
+        buffer = io.BytesIO(image_bytes)
+        with PILImage.open(buffer) as image:
+            pixel_width, pixel_height = image.size
+        buffer.seek(0)
+        scale = min((14 * cm) / pixel_width, (8 * cm) / pixel_height, 1.0)
+        flow.append(RLImage(buffer, width=pixel_width * scale, height=pixel_height * scale))
+        flow.append(Spacer(1, 0.15 * cm))
+    except Exception:
+        pass
+
+
+def build_lesson_script_pdf(db: Session, lesson_id: int, styles) -> list:
+    """Build a downloadable lesson handout. Expected quiz answers are not
+    included here; they are released in the learner's marked script."""
+    lesson = db.query(Lesson).filter(Lesson.id == lesson_id).first()
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+
+    flow = [
+        Paragraph(_pdf_escape(lesson.title), styles["QuizTitle"]),
+        Paragraph(f"Module: {_pdf_escape(lesson.module_code)}", styles["MetaLine"]),
+    ]
+    if lesson.description:
+        for paragraph in re.split(r"\n\s*\n", lesson.description.strip()):
+            flow.append(Paragraph(_pdf_escape(paragraph).replace("\n", "<br/>"), styles["Answer"]))
+            flow.append(Spacer(1, 0.15 * cm))
+
+    questions = (
+        db.query(LessonQuestion)
+        .filter(LessonQuestion.lesson_id == lesson_id)
+        .order_by(LessonQuestion.q_order)
+        .all()
+    )
+    if questions:
+        flow.append(Spacer(1, 0.3 * cm))
+        flow.append(Paragraph("Lesson quiz", styles["Question"]))
+    for index, question in enumerate(questions, start=1):
+        flow.append(Paragraph(
+            f"Q{index}. {_pdf_escape(question.question)} "
+            f"<font size=9 color='#4A5568'>[{question.marks} mark{'s' if question.marks != 1 else ''}]</font>",
+            styles["Question"],
+        ))
+        _append_pdf_question_image(flow, question.image_url)
+        if question.type == "mcq" and question.options_json:
+            try:
+                options = json.loads(question.options_json)
+            except (TypeError, json.JSONDecodeError):
+                options = []
+            for option in options:
+                flow.append(Paragraph(f"• {_pdf_escape(str(option))}", styles["Answer"]))
+        flow.append(Spacer(1, 0.25 * cm))
+    return flow
+
+
+def build_lesson_submission_pdf(
+    db: Session,
+    submission_id: int,
+    styles,
+    include_expected_answers: bool = True,
+) -> list:
+    """Build one learner's marked lesson quiz script, including expected
+    answers for automatically marked MCQ and short-answer questions."""
+    submission = db.query(LessonSubmission).filter(LessonSubmission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Lesson submission not found")
+    lesson = db.query(Lesson).filter(Lesson.id == submission.lesson_id).first()
+    answers = (
+        db.query(LessonAnswer)
+        .join(LessonQuestion, LessonAnswer.question_id == LessonQuestion.id)
+        .filter(LessonAnswer.submission_id == submission_id)
+        .order_by(LessonQuestion.q_order)
+        .all()
+    )
+
+    status = "Fully marked" if submission.fully_marked else "Some questions still pending marking"
+    flow = [
+        Paragraph(_pdf_escape(lesson.title), styles["QuizTitle"]),
+        Paragraph(
+            f"Student: {_pdf_escape(submission.student_name)} &nbsp;&nbsp;|&nbsp;&nbsp; "
+            f"ID: {_pdf_escape(submission.student_id)} &nbsp;&nbsp;|&nbsp;&nbsp; "
+            f"Submitted: {_pdf_escape(format_sast(submission.submitted_at))}",
+            styles["MetaLine"],
+        ),
+        Paragraph(
+            f"Total score: <b>{submission.total_score} / {submission.max_score}</b> "
+            f"&nbsp;&nbsp;({_pdf_escape(status)})",
+            styles["ScoreLine"],
+        ),
+        Spacer(1, 0.5 * cm),
+    ]
+    for index, answer in enumerate(answers, start=1):
+        question = answer.question
+        flow.append(Paragraph(
+            f"Q{index}. {_pdf_escape(question.question)} "
+            f"<font size=9 color='#4A5568'>[{question.marks} mark{'s' if question.marks != 1 else ''}]</font>",
+            styles["Question"],
+        ))
+        _append_pdf_question_image(flow, question.image_url)
+        flow.append(Paragraph(
+            f"<b>Student's answer:</b> {_pdf_escape(answer.answer_text or '(no answer given)')}",
+            styles["Answer"],
+        ))
+        if include_expected_answers and question.type in ("mcq", "short") and question.correct_answer:
+            flow.append(Paragraph(
+                f"<b>Expected answer:</b> {_pdf_escape(question.correct_answer)}",
+                styles["Expected"],
+            ))
+        if answer.awarded_marks is None:
+            marks_text = f"<font color='#C81E3A'><b>Needs marking</b></font> / {question.marks}"
+        else:
+            marks_text = f"{answer.awarded_marks} / {question.marks}"
+        flow.append(Paragraph(f"<b>Marks awarded:</b> {marks_text}", styles["Marks"]))
+        flow.append(Spacer(1, 0.35 * cm))
+    return flow
+
+
 def build_pdf_stylesheet():
     """Reportlab paragraph styles used across the marked-answers PDFs."""
     base = getSampleStyleSheet()
@@ -1792,6 +1917,25 @@ def get_lesson(lesson_id: int, db: Session = Depends(get_db)):
     }
 
 
+@app.get("/lesson/{lesson_id}/script/pdf")
+def download_lesson_script_pdf(lesson_id: int, db: Session = Depends(get_db)):
+    """Download the lesson notes and quiz questions shown below the video."""
+    lesson = db.query(Lesson).filter(Lesson.id == lesson_id).first()
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    buffer = io.BytesIO()
+    document = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=2 * cm, leftMargin=2 * cm,
+                                 topMargin=2 * cm, bottomMargin=2 * cm)
+    document.build(build_lesson_script_pdf(db, lesson_id, build_pdf_stylesheet()))
+    buffer.seek(0)
+    safe_title = "".join(c for c in lesson.title if c.isalnum() or c in (" ", "_", "-")).strip() or "lesson"
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{safe_title}_lesson_script.pdf"'},
+    )
+
+
 # ---------------------------------------------------------------------------
 # Student: submit answers to a lesson's comprehension questions.
 # ---------------------------------------------------------------------------
@@ -1903,6 +2047,30 @@ def get_my_lesson_submission(lesson_id: int, student_id: str, student: Student =
     }
 
 
+@app.get("/student/lesson/submission/{submission_id}/pdf")
+def download_student_lesson_submission_pdf(
+    submission_id: int,
+    student: Student = Depends(require_student_account),
+    db: Session = Depends(get_db),
+):
+    """Download the signed-in learner's marked lesson script and expected answers."""
+    submission = db.query(LessonSubmission).filter(LessonSubmission.id == submission_id).first()
+    if not submission or submission.student_id != student.student_number:
+        raise HTTPException(status_code=404, detail="Lesson submission not found")
+    lesson = db.query(Lesson).filter(Lesson.id == submission.lesson_id).first()
+    buffer = io.BytesIO()
+    document = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=2 * cm, leftMargin=2 * cm,
+                                 topMargin=2 * cm, bottomMargin=2 * cm)
+    document.build(build_lesson_submission_pdf(db, submission_id, build_pdf_stylesheet(), True))
+    buffer.seek(0)
+    safe_title = "".join(c for c in lesson.title if c.isalnum() or c in (" ", "_", "-")).strip() or "lesson"
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{safe_title}_marked_script.pdf"'},
+    )
+
+
 # ---------------------------------------------------------------------------
 # Lecturer: view and mark student submissions for a lesson.
 # ---------------------------------------------------------------------------
@@ -1999,6 +2167,31 @@ def mark_lesson_answers(submission_id: int, payload: MarkSubmissionRequest, lect
         "total_score": total,
         "fully_marked": not still_pending,
     }
+
+
+@app.get("/lecturer/lesson/submission/{submission_id}/pdf")
+def download_lesson_submission_pdf(
+    submission_id: int,
+    lecturer: Lecturer = Depends(require_lecturer_account),
+    db: Session = Depends(get_db),
+):
+    """Download a learner's marked lesson script with expected answers."""
+    submission = db.query(LessonSubmission).filter(LessonSubmission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Lesson submission not found")
+    lesson = _require_owned_lesson(db, submission.lesson_id, lecturer)
+    buffer = io.BytesIO()
+    document = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=2 * cm, leftMargin=2 * cm,
+                                 topMargin=2 * cm, bottomMargin=2 * cm)
+    document.build(build_lesson_submission_pdf(db, submission_id, build_pdf_stylesheet(), True))
+    buffer.seek(0)
+    safe_student = "".join(c for c in submission.student_name if c.isalnum() or c in (" ", "_", "-")).strip() or "student"
+    safe_title = "".join(c for c in lesson.title if c.isalnum() or c in (" ", "_", "-")).strip() or "lesson"
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{safe_title}_{safe_student}_marked_script.pdf"'},
+    )
 
 
 # ---------------------------------------------------------------------------
