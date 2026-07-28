@@ -210,6 +210,34 @@ document.querySelectorAll('[data-desk]').forEach(b=>b.addEventListener('click',(
   }
   new MutationObserver(addDirectionsButtons).observe(document.getElementById('listingFeed'), {childList: true});
 </script>
+<script>
+  // Safer contact disclosure and practical client-side filters.
+  (() => {
+    const tools = document.querySelector('.market-tools');
+    if (tools && !document.getElementById('maxRentFilter')) {
+      tools.insertAdjacentHTML('beforeend','<input id="maxRentFilter" type="number" min="0" step="100" placeholder="Maximum monthly rent (R)"><input id="roomFilter" placeholder="Room type, e.g. single"><label class="check-label"><input id="availableOnlyFilter" type="checkbox" checked> Available now only</label>');
+    }
+    function enhanceListings() {
+      document.querySelectorAll('.listing-card').forEach(card => {
+        const actions = card.querySelector('.listing-actions');
+        const contact = actions && actions.querySelector('.notice');
+        if (contact && !contact.dataset.masked) {
+          contact.dataset.masked = 'true'; contact.dataset.contact = contact.textContent.replace(/^Contact:\s*/,'');
+          const button = document.createElement('button'); button.type='button'; button.className='btn secondary contact-reveal'; button.textContent='Show contact details';
+          button.addEventListener('click',()=>{if(!sessionStorage.getItem('studentToken')&&!sessionStorage.getItem('landlordToken')){alert('Sign in as a student or landlord to view contact details.');return}button.textContent='Contact: '+contact.dataset.contact;button.disabled=true;});
+          contact.replaceWith(button);
+        }
+        const body = card.querySelector('.listing-body');
+        if (body && !body.querySelector('.market-safety')) body.insertAdjacentHTML('beforeend','<p class="moderation-note market-safety"><strong>Stay safe:</strong> View the property and confirm the landlord before paying. Discussions are public and may be moderated.</p>');
+        const discussion = card.querySelector('.discussion-head .notice'); if(discussion) discussion.textContent='Public, moderated conversation';
+      });
+    }
+    function applyMarketFilters(){const max=Number(document.getElementById('maxRentFilter')?.value||0),room=(document.getElementById('roomFilter')?.value||'').toLowerCase(),available=document.getElementById('availableOnlyFilter')?.checked;document.querySelectorAll('.listing-card').forEach(card=>{const text=card.textContent.toLowerCase(),rentText=card.querySelector('.rent')?.textContent||'',rent=Number(rentText.replace(/[^0-9]/g,''))||0,isAvailable=card.querySelector('.availability')?.classList.contains('available');card.classList.toggle('hidden',Boolean((max&&rent&&rent>max)||(room&&!text.includes(room))||(available&&!isAvailable)));});}
+    ['maxRentFilter','roomFilter','availableOnlyFilter'].forEach(id=>document.getElementById(id)?.addEventListener('input',applyMarketFilters));
+    const feed=document.getElementById('listingFeed'); if(feed)new MutationObserver(enhanceListings).observe(feed,{childList:true,subtree:true}); enhanceListings();
+  })();
+</script>
+<script src="/static/experience.js"></script>
 <script src="/static/loading.js"></script>
 <script src="/static/pwa.js"></script>
 </body>

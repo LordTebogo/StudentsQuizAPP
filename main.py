@@ -34,13 +34,14 @@ import base64
 import hashlib
 import hmac
 import secrets
+import time
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
 from itertools import permutations
 from typing import List, Optional
 
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -107,6 +108,9 @@ VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "").strip()
 VAPID_SUBJECT = os.getenv("VAPID_SUBJECT", "mailto:admin@example.com").strip()
 GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY", "").strip()
 MAX_LESSON_VIDEO_BYTES = 80 * 1024 * 1024
+ADMIN_MAX_FAILURES = int(os.getenv("ADMIN_MAX_FAILURES", "5"))
+ADMIN_LOCKOUT_SECONDS = int(os.getenv("ADMIN_LOCKOUT_SECONDS", "300"))
+_admin_pin_failures: dict[str, list[float]] = {}
 
 # Optional convenience folder: images committed into the repo ahead of time
 # (e.g. shipped alongside the code) can be referenced by filename in a quiz
@@ -685,11 +689,20 @@ def _require_owned_lesson(db: Session, lesson_id: int, lecturer: Lecturer) -> Le
     return lesson
 
 
-def require_lecturer_pin(x_lecturer_pin: Optional[str] = Header(None, alias="X-Lecturer-Pin")):
+def require_lecturer_pin(request: Request, x_lecturer_pin: Optional[str] = Header(None, alias="X-Lecturer-Pin")):
     """Dependency guarding lecturer-only routes. Send the PIN as the
     'X-Lecturer-Pin' header. Raises 401 if it's missing or wrong."""
-    if x_lecturer_pin != LECTURER_PIN:
-        raise HTTPException(status_code=401, detail="Incorrect or missing lecturer PIN")
+    client_key = request.client.host if request.client else "unknown"
+    now = time.monotonic()
+    recent = [stamp for stamp in _admin_pin_failures.get(client_key, []) if now - stamp < ADMIN_LOCKOUT_SECONDS]
+    if len(recent) >= ADMIN_MAX_FAILURES:
+        raise HTTPException(status_code=429, detail="Too many failed admin sign-in attempts. Try again in a few minutes.")
+    supplied = x_lecturer_pin or ""
+    if not hmac.compare_digest(supplied, LECTURER_PIN):
+        recent.append(now)
+        _admin_pin_failures[client_key] = recent
+        raise HTTPException(status_code=401, detail="Incorrect or missing administrator PIN")
+    _admin_pin_failures.pop(client_key, None)
     return True
 
 

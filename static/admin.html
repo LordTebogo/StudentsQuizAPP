@@ -35,8 +35,9 @@
 <div class="wrap" id="gateWrap">
   <header class="top"><div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Quiz<span>Mark</span></div><div class="brand-tagline">Administration</div></div></div><nav><a href="/static/index.html">Home</a><a href="/static/lecturer.html">Lecturer</a></nav></header>
   <h1>Admin sign-in</h1>
-  <p class="lede">Manage quizzes and video lessons from one protected workspace.</p>
-  <div class="card"><label for="pinInput">Lecturer PIN</label><input id="pinInput" type="text" inputmode="numeric" autocomplete="off" placeholder="Enter PIN"><button class="btn" id="unlockBtn">Open admin</button><div id="pinMsg"></div></div>
+  <p class="lede">Manage platform content, accounts, submissions, and moderation from one protected workspace.</p>
+  <aside class="safety-banner"><strong>Restricted access:</strong> Use the administrator PIN supplied privately by the platform owner. Failed attempts are rate-limited and the PIN is never displayed.</aside>
+  <div class="card"><label for="pinInput">Administrator PIN</label><input id="pinInput" type="password" inputmode="numeric" autocomplete="current-password" placeholder="Enter administrator PIN"><button class="btn" id="unlockBtn">Open administration</button><div id="pinMsg"></div></div>
 </div>
 
 <main class="wrap hidden" id="appWrap">
@@ -395,6 +396,7 @@ function addAdminMessageButtons() {
 new MutationObserver(addAdminMessageButtons).observe($('appWrap'), {childList:true, subtree:true});
 if (pin) unlock(pin);
 </script>
+<script src="/static/experience.js"></script>
 <script src="/static/loading.js"></script>
 <script src="/static/pwa.js"></script>
 </body>

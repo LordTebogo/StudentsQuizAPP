@@ -38,28 +38,29 @@
     <div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Quiz<span>Mark</span></div><div class="brand-tagline">Bioscientist</div></div></div>
     <nav><a href="/static/index.html">Home</a><a href="/static/lessons_lecturer.html">Video lessons</a></nav>
   </header>
-  <h1>Lecturer sign-in</h1>
-  <p class="lede">Sign in to manage only your own quizzes, modules, and student scripts.</p>
-  <div class="card">
+  <span class="kicker">Lecturer access</span>
+  <h1 id="lecturerAuthHeading">Welcome back</h1>
+  <p class="lede" id="lecturerAuthIntro">Sign in to manage your assigned modules, quizzes, lessons, and student scripts.</p>
+  <div class="auth-switch" aria-label="Choose lecturer access mode"><button class="active" id="showLecturerSignIn" type="button">Sign in</button><button id="showLecturerRegister" type="button">Create account</button></div>
+  <section class="card" id="lecturerSignInCard">
+    <h2>Lecturer sign-in</h2>
     <label for="emailInput">Email</label>
     <input type="text" id="emailInput" autocomplete="email" placeholder="you@example.com">
     <label for="passwordInput">Password</label>
     <input type="password" id="passwordInput" autocomplete="current-password" placeholder="Your password">
     <button class="btn" id="unlockBtn">Sign in</button>
+    <p class="auth-help"><a href="/static/trust.html#support">Forgot your password?</a> Contact your administrator without sharing your password.</p>
     <div id="pinMsg"></div>
-  </div>
-  <div class="card">
+  </section>
+  <section class="card hidden" id="lecturerRegisterCard">
     <h2>Create lecturer profile</h2>
-    <p class="muted">New profiles are activated immediately. Module assignment controls which content you can manage.</p>
+    <p class="required-note">Create your account with the essentials. An administrator assigns the modules you may manage.</p>
     <label for="registerName">Full name</label><input id="registerName" type="text" placeholder="Full name">
-    <label for="registerEmail">Email</label><input id="registerEmail" type="text" placeholder="you@example.com">
+    <label for="registerEmail">Email</label><input id="registerEmail" type="email" autocomplete="email" placeholder="you@example.com">
     <label for="registerPassword">Password</label><input id="registerPassword" type="password" placeholder="At least 8 characters">
-    <label for="registerPhone">Phone</label><input id="registerPhone" type="text" placeholder="Optional">
-    <label for="registerInstitution">Institution</label><input id="registerInstitution" type="text" placeholder="School or university">
-    <label for="registerBio">Professional bio</label><textarea id="registerBio" placeholder="Your tutoring background and subjects"></textarea>
-    <label for="registerImage">Profile image</label><input id="registerImage" type="file" accept="image/*">
-    <button class="btn secondary" id="registerBtn">Create lecturer account</button><div id="registerMsg"></div>
-  </div>
+    <details><summary>Optional professional details</summary><label for="registerPhone">Phone (optional)</label><input id="registerPhone" type="tel" autocomplete="tel" placeholder="Phone number"><label for="registerInstitution">Institution (optional)</label><input id="registerInstitution" type="text" placeholder="School or university"><label for="registerBio">Professional bio (optional)</label><textarea id="registerBio" placeholder="Your tutoring background and subjects"></textarea><label for="registerImage">Profile image (optional)</label><input id="registerImage" type="file" accept="image/*"></details>
+    <button class="btn" id="registerBtn">Create lecturer account</button><p class="auth-help">After registration, sign in and contact an administrator if your module assignment is not yet visible.</p><div id="registerMsg"></div>
+  </section>
 </div>
 
 <!-- Main lecturer app, hidden until the PIN is verified -->
@@ -153,6 +154,19 @@ const $ = (id) => document.getElementById(id);
 let currentQuizId = null;
 let currentSubmissionId = null;
 let LECTURER_TOKEN = sessionStorage.getItem('lecturerToken') || null;
+function showLecturerAuth(mode) {
+  const registering = mode === 'register';
+  $('lecturerSignInCard').classList.toggle('hidden', registering);
+  $('lecturerRegisterCard').classList.toggle('hidden', !registering);
+  $('showLecturerSignIn').classList.toggle('active', !registering);
+  $('showLecturerRegister').classList.toggle('active', registering);
+  $('lecturerAuthHeading').textContent = registering ? 'Join QuizMark' : 'Welcome back';
+  $('lecturerAuthIntro').textContent = registering ? 'Create a lecturer profile, then sign in to begin teaching.' : 'Sign in to manage your assigned modules, quizzes, lessons, and student scripts.';
+  history.replaceState(null, '', registering ? '#register' : location.pathname);
+}
+$('showLecturerSignIn').addEventListener('click', () => showLecturerAuth('signin'));
+$('showLecturerRegister').addEventListener('click', () => showLecturerAuth('register'));
+if (location.hash === '#register') showLecturerAuth('register');
 
 // Always display times in South African time (SAST, UTC+2), regardless of
 // the viewing device's own timezone/locale settings.
@@ -588,6 +602,7 @@ $('downloadOnePdfBtn').addEventListener('click', () => {
   downloadPdf(`/lecturer/submission/${currentSubmissionId}/pdf`, `submission_${currentSubmissionId}_answers.pdf`, $('gradingMsg'));
 });
 </script>
+<script src="/static/experience.js"></script>
 <script src="/static/loading.js"></script>
 <script src="/static/pwa.js"></script>
 </body>

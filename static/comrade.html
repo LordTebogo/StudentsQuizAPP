@@ -33,7 +33,8 @@
 
     <details class="card president-desk hidden" id="presidentDesk" open><summary><span class="desk-symbol">&#9998;</span> Publish an SRC announcement <span class="desk-hint">official channel</span></summary><form class="desk-form" id="announcementForm"><textarea id="announcement" maxlength="2000" required placeholder="Write the announcement for the university community"></textarea><div><button class="btn" type="submit">Publish announcement</button><p class="desk-status" id="deskStatus" aria-live="polite"></p></div></form></details>
 
-    <section aria-labelledby="announcementTitle"><div class="feed-head"><div><span class="kicker">Official channel</span><h2 id="announcementTitle">Campus announcements</h2></div><span id="feedCount"></span></div><div id="feed" aria-live="polite"><div class="empty-state">Loading announcements...</div></div></section>
+    <aside class="safety-banner"><strong>Community standard:</strong> Official announcements are identified by their SRC party profile. Student replies must remain respectful, relevant, and free of private information. Content may be moderated or removed. <a href="/static/trust.html#support">Report a concern</a>.</aside>
+    <section aria-labelledby="announcementTitle"><div class="feed-head"><div><span class="kicker">Official channel</span><h2 id="announcementTitle">Campus announcements</h2></div><span id="feedCount"></span></div><div id="feed" aria-live="polite"><div class="loading-skeleton" aria-label="Loading announcements"></div></div></section>
   </main>
   <script>
     const studentToken = sessionStorage.getItem('studentToken'); let srcToken = sessionStorage.getItem('srcToken'); let srcProfile = null; let comradeMembers = [];
@@ -68,6 +69,7 @@
     if(location.hash==='#srcAccess'||location.hash==='#srcRegister'){byId('srcAccess').open=true;setTimeout(()=>{byId('srcAccess').scrollIntoView({behavior:'smooth',block:'start'});if(location.hash==='#srcRegister')byId('srcRegisterForm').querySelector('input').focus();},0);}
     (async()=>{await hydrateSrc();await loadMembers();await loadPosts();})();
   </script>
+<script src="/static/experience.js"></script>
 <script src="/static/loading.js"></script>
 </body>
 </html>

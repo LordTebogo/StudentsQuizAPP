@@ -125,7 +125,7 @@ document.addEventListener("DOMContentLoaded", () => {
         installPrompt = null;
         button.classList.add("hidden");
       } else if (hint) {
-        hint.textContent = "Use your browser menu and choose Install app or Add to Home Screen.";
+        hint.textContent = "Use your browser menu and choose Add to Home Screen. QuizMark still needs an internet connection for current learning content.";
       }
     });
   }

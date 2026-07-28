@@ -56,7 +56,7 @@
 <div class="wrap" id="welcome">
   <header class="top">
     <div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Quiz<span>Mark</span></div><div class="brand-tagline">Bioscientist</div></div></div>
-    <nav><div class="student-home-actions" id="studentHomeActions"><button class="home-message-button" id="homeMessagesBtn" type="button" aria-label="Open messages">✉<span class="home-message-count hidden" id="homeMessageCount">0</span></button><span class="home-profile-name" id="homeStudentName"></span><img class="home-profile-avatar" id="homeStudentAvatar" src="/branding/logo" alt="Student profile picture"></div><button class="install-app-btn" id="installAppBtn" type="button">Install app</button></nav>
+    <nav><div class="student-home-actions" id="studentHomeActions"><button class="home-message-button" id="homeMessagesBtn" type="button" aria-label="Open messages">✉<span class="home-message-count hidden" id="homeMessageCount">0</span></button><span class="home-profile-name" id="homeStudentName"></span><img class="home-profile-avatar" id="homeStudentAvatar" src="/branding/logo" alt="Student profile picture"></div><button class="install-app-btn" id="installAppBtn" type="button" title="Add QuizMark to your home screen for faster, full-screen access">Install QuizMark</button></nav>
   </header>
 
   <span class="kicker">Your learning space</span>
@@ -75,7 +75,20 @@
   <p class="muted" id="adminEntry">Administrator? <a href="/static/admin.html">Open the protected admin workspace</a>.</p>
 </div>
 <footer class="site-footer"><strong>QuizMark by Bioscientist</strong><div>A focused learning platform with connected campus services.</div><nav><a href="/static/trust.html#privacy">Privacy</a><a href="/static/trust.html#terms">Terms</a><a href="/static/trust.html#support">Support &amp; account recovery</a></nav></footer>
-<p class="install-hint" id="installHint" aria-live="polite"></p>
+<p class="install-hint" id="installHint" aria-live="polite">Install for faster access and a full-screen app experience. Online access is still required for current content.</p>
+<script>
+  if (sessionStorage.getItem('studentToken')) {
+    const portal = document.getElementById('studentPortal');
+    const grid = portal && portal.querySelector('.role-grid');
+    if (grid && !document.getElementById('studentNextStep')) {
+      const next = document.createElement('div');
+      next.id = 'studentNextStep'; next.className = 'dashboard-priority';
+      next.innerHTML = '<span class="kicker">Recommended next step</span><h3>Check your modules and unfinished quizzes</h3><p>Start with assigned work, then review results and new lessons.</p><a class="btn" href="/static/student.html">Continue learning</a><span class="progress-pill">Progress saved to your account</span>';
+      grid.before(next);
+    }
+  }
+</script>
+<script src="/static/experience.js"></script>
 <script src="/static/loading.js"></script>
 <script src="/static/pwa.js"></script>
 <script>
