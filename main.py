@@ -86,7 +86,7 @@ from models import (
     Student,
     PushSubscription,
     StudentModule,
-    Landlord, Accommodation, AccommodationComment,
+    Landlord, Accommodation, AccommodationComment, MarketAdvert,
     SrcPresident,
     ComradePost, ComradeReply, ComradeSrcReply,
 )
@@ -347,6 +347,13 @@ class SrcPasswordChange(BaseModel):
 class AdminSrcPresidentUpdate(BaseModel):
     approved: Optional[bool] = None
     active: Optional[bool] = None
+
+
+class AdminMarketAdvertUpdate(BaseModel):
+    status: Optional[str] = None
+    is_featured: Optional[bool] = None
+    starts_at: Optional[str] = None
+    expires_at: Optional[str] = None
 
 
 class CommentCreate(BaseModel):
@@ -3263,6 +3270,172 @@ def create_accommodation_comment(listing_id: int, payload: AccommodationCommentC
     comment = AccommodationComment(accommodation_id=listing_id, parent_id=payload.parent_id, author_student_id=student.id if student else None, author_landlord_id=landlord.id if landlord else None, author_name=landlord.full_name if landlord else ("Anonymous student" if payload.is_anonymous else student.full_name), content=content, is_anonymous=bool(payload.is_anonymous) if student else False, created_at=datetime.now(timezone.utc).isoformat())
     db.add(comment); db.commit()
     return {"ok": True, "id": comment.id}
+
+
+def _advert_payload(item: MarketAdvert, owner_name: str = "") -> dict:
+    return {
+        "id": item.id, "business_name": item.business_name, "headline": item.headline,
+        "description": item.description, "category": item.category, "campus": item.campus or "",
+        "contact": item.contact or "", "website_url": item.website_url or "",
+        "placement": item.placement, "image_url": item.image_url, "starts_at": item.starts_at,
+        "expires_at": item.expires_at, "status": item.status, "is_featured": item.is_featured,
+        "impressions": item.impressions or 0, "clicks": item.clicks or 0,
+        "created_at": item.created_at, "updated_at": item.updated_at, "owner_name": owner_name,
+    }
+
+
+def _advert_owner(db: Session, student_token: Optional[str], landlord_token: Optional[str]):
+    if landlord_token:
+        owner = db.query(Landlord).filter(Landlord.id == _landlord_id_from_token(landlord_token)).first()
+        if not owner or not owner.active:
+            raise HTTPException(status_code=403, detail="Your landlord account is inactive")
+        return None, owner
+    if student_token:
+        owner = db.query(Student).filter(Student.id == _student_id_from_token(student_token)).first()
+        if not owner or not owner.active or not owner.approved:
+            raise HTTPException(status_code=403, detail="An active, approved student account is required")
+        return owner, None
+    raise HTTPException(status_code=401, detail="Sign in as a student or landlord to submit an advert")
+
+
+def _clean_advert_dates(starts_at: str, expires_at: str) -> tuple[Optional[str], Optional[str]]:
+    def clean(value: str) -> Optional[str]:
+        if not value.strip():
+            return None
+        try:
+            return datetime.fromisoformat(value.strip().replace("Z", "+00:00")).date().isoformat()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Advert dates must be valid dates")
+    start, end = clean(starts_at), clean(expires_at)
+    if start and end and end < start:
+        raise HTTPException(status_code=400, detail="The advert end date must be after its start date")
+    return start, end
+
+
+@app.get("/marketing/adverts")
+def list_market_adverts(placement: str = "", db: Session = Depends(get_db)):
+    today = datetime.now(timezone.utc).date().isoformat()
+    query = db.query(MarketAdvert).filter(
+        MarketAdvert.status == "approved",
+        (MarketAdvert.starts_at.is_(None)) | (MarketAdvert.starts_at <= today),
+        (MarketAdvert.expires_at.is_(None)) | (MarketAdvert.expires_at >= today),
+    )
+    if placement in {"feed", "spotlight"}:
+        query = query.filter(MarketAdvert.placement == placement)
+    rows = query.order_by(MarketAdvert.is_featured.desc(), MarketAdvert.created_at.desc()).all()
+    for item in rows:
+        item.impressions = (item.impressions or 0) + 1
+    db.commit()
+    return [_advert_payload(item) for item in rows]
+
+
+@app.post("/marketing/adverts")
+async def create_market_advert(
+    business_name: str = Form(...), headline: str = Form(...), description: str = Form(...),
+    category: str = Form(...), campus: str = Form(""), contact: str = Form(""), website_url: str = Form(""),
+    placement: str = Form("spotlight"), starts_at: str = Form(""), expires_at: str = Form(""),
+    image: Optional[UploadFile] = File(None), x_student_token: Optional[str] = Header(None, alias="X-Student-Token"),
+    x_landlord_token: Optional[str] = Header(None, alias="X-Landlord-Token"), db: Session = Depends(get_db),
+):
+    student, landlord = _advert_owner(db, x_student_token, x_landlord_token)
+    if not business_name.strip() or not headline.strip() or not description.strip() or not category.strip():
+        raise HTTPException(status_code=400, detail="Add a business name, headline, description and category")
+    if len(description.strip()) > 1200:
+        raise HTTPException(status_code=400, detail="Advert descriptions can be up to 1,200 characters")
+    if placement not in {"feed", "spotlight"}:
+        raise HTTPException(status_code=400, detail="Choose feed or spotlight placement")
+    start, end = _clean_advert_dates(starts_at, expires_at)
+    image_url = None
+    if image and image.filename:
+        if not (image.content_type or "").startswith("image/"):
+            raise HTTPException(status_code=400, detail="Please choose a valid advert image")
+        image_bytes = await image.read()
+        if len(image_bytes) > 8 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="Advert images must be 8 MB or smaller")
+        image_url = upload_image_bytes(image_bytes, folder="market_adverts")
+    now = datetime.now(timezone.utc).isoformat()
+    item = MarketAdvert(
+        owner_student_id=student.id if student else None, owner_landlord_id=landlord.id if landlord else None,
+        business_name=business_name.strip()[:160], headline=headline.strip()[:180], description=description.strip(),
+        category=category.strip()[:80], campus=campus.strip()[:120], contact=contact.strip()[:160],
+        website_url=website_url.strip()[:500], placement=placement, image_url=image_url,
+        starts_at=start, expires_at=end, status="pending", is_featured=False, impressions=0, clicks=0,
+        created_at=now, updated_at=now,
+    )
+    db.add(item); db.commit(); db.refresh(item)
+    return {"ok": True, "message": "Advert submitted for review", "advert": _advert_payload(item)}
+
+
+@app.get("/marketing/my-adverts")
+def my_market_adverts(
+    x_student_token: Optional[str] = Header(None, alias="X-Student-Token"),
+    x_landlord_token: Optional[str] = Header(None, alias="X-Landlord-Token"), db: Session = Depends(get_db),
+):
+    student, landlord = _advert_owner(db, x_student_token, x_landlord_token)
+    query = db.query(MarketAdvert).filter(
+        MarketAdvert.owner_student_id == student.id if student else MarketAdvert.owner_landlord_id == landlord.id
+    )
+    return [_advert_payload(item) for item in query.order_by(MarketAdvert.created_at.desc()).all()]
+
+
+@app.put("/marketing/adverts/{advert_id}/pause")
+def pause_market_advert(
+    advert_id: int, x_student_token: Optional[str] = Header(None, alias="X-Student-Token"),
+    x_landlord_token: Optional[str] = Header(None, alias="X-Landlord-Token"), db: Session = Depends(get_db),
+):
+    student, landlord = _advert_owner(db, x_student_token, x_landlord_token)
+    query = db.query(MarketAdvert).filter(MarketAdvert.id == advert_id)
+    query = query.filter(MarketAdvert.owner_student_id == student.id) if student else query.filter(MarketAdvert.owner_landlord_id == landlord.id)
+    item = query.first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Advert not found")
+    item.status = "paused"; item.updated_at = datetime.now(timezone.utc).isoformat(); db.commit()
+    return {"ok": True}
+
+
+@app.post("/marketing/adverts/{advert_id}/click")
+def record_market_advert_click(advert_id: int, db: Session = Depends(get_db)):
+    item = db.query(MarketAdvert).filter(MarketAdvert.id == advert_id, MarketAdvert.status == "approved").first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Advert not found")
+    item.clicks = (item.clicks or 0) + 1; db.commit()
+    return {"ok": True}
+
+
+@app.get("/admin/market-adverts")
+def admin_market_adverts(_pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    rows = db.query(MarketAdvert).order_by(MarketAdvert.created_at.desc()).all()
+    student_ids = {item.owner_student_id for item in rows if item.owner_student_id}
+    landlord_ids = {item.owner_landlord_id for item in rows if item.owner_landlord_id}
+    students = {item.id: item.full_name for item in db.query(Student).filter(Student.id.in_(student_ids)).all()} if student_ids else {}
+    landlords = {item.id: item.full_name for item in db.query(Landlord).filter(Landlord.id.in_(landlord_ids)).all()} if landlord_ids else {}
+    return [_advert_payload(item, students.get(item.owner_student_id, "") or landlords.get(item.owner_landlord_id, "")) for item in rows]
+
+
+@app.put("/admin/market-adverts/{advert_id}")
+def admin_update_market_advert(advert_id: int, payload: AdminMarketAdvertUpdate, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    item = db.query(MarketAdvert).filter(MarketAdvert.id == advert_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Advert not found")
+    if payload.status is not None:
+        if payload.status not in {"pending", "approved", "rejected", "paused"}:
+            raise HTTPException(status_code=400, detail="Invalid advert status")
+        item.status = payload.status
+    if payload.is_featured is not None:
+        item.is_featured = payload.is_featured
+    if payload.starts_at is not None or payload.expires_at is not None:
+        item.starts_at, item.expires_at = _clean_advert_dates(payload.starts_at or "", payload.expires_at or "")
+    item.updated_at = datetime.now(timezone.utc).isoformat(); db.commit()
+    return {"ok": True, "advert": _advert_payload(item)}
+
+
+@app.delete("/admin/market-adverts/{advert_id}")
+def admin_delete_market_advert(advert_id: int, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    item = db.query(MarketAdvert).filter(MarketAdvert.id == advert_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Advert not found")
+    db.delete(item); db.commit()
+    return {"ok": True}
 
 
 @app.post("/src/register")

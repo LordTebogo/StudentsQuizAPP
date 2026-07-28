@@ -171,6 +171,32 @@ class AccommodationComment(Base):
     created_at = Column(String, nullable=False)
 
 
+class MarketAdvert(Base):
+    """A moderated campus advert submitted by a student or landlord."""
+    __tablename__ = "market_adverts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_student_id = Column(Integer, ForeignKey("students.id", ondelete="SET NULL"), index=True)
+    owner_landlord_id = Column(Integer, ForeignKey("landlords.id", ondelete="SET NULL"), index=True)
+    business_name = Column(String, nullable=False)
+    headline = Column(String, nullable=False)
+    description = Column(Text, nullable=False)
+    category = Column(String, nullable=False)
+    campus = Column(String)
+    contact = Column(String)
+    website_url = Column(Text)
+    placement = Column(String, nullable=False, default="spotlight")
+    image_url = Column(Text)
+    starts_at = Column(String)
+    expires_at = Column(String)
+    status = Column(String, nullable=False, default="pending")
+    is_featured = Column(Boolean, nullable=False, default=False)
+    impressions = Column(Integer, nullable=False, default=0)
+    clicks = Column(Integer, nullable=False, default=0)
+    created_at = Column(String, nullable=False)
+    updated_at = Column(String, nullable=False)
+
+
 # ---------------------------------------------------------------------------
 # Student community
 # ---------------------------------------------------------------------------
