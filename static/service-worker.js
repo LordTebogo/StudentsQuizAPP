@@ -1,4 +1,4 @@
-const CACHE_NAME = "nucleocampus-static-v3";
+const CACHE_NAME = "nucleocampus-static-v5";
 const APP_SHELL = [
   "/static/index.html",
   "/static/student.html",
@@ -8,6 +8,8 @@ const APP_SHELL = [
   "/static/admin.html",
   "/static/comrade.html",
   "/static/style.css",
+  "/static/experience.js",
+  "/static/loading.js",
   "/static/pwa.js",
   "/static/manifest.webmanifest",
   "/branding/logo"
@@ -16,6 +18,10 @@ const APP_SHELL = [
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)));
   self.skipWaiting();
+});
+
+self.addEventListener("message", event => {
+  if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
 });
 
 self.addEventListener("activate", event => {
