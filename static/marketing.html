@@ -215,7 +215,7 @@ document.querySelectorAll('[data-desk]').forEach(b=>b.addEventListener('click',(
   (() => {
     const tools = document.querySelector('.market-tools');
     if (tools && !document.getElementById('maxRentFilter')) {
-      tools.insertAdjacentHTML('beforeend','<input id="maxRentFilter" type="number" min="0" step="100" placeholder="Maximum monthly rent (R)"><input id="roomFilter" placeholder="Room type, e.g. single"><label class="check-label"><input id="availableOnlyFilter" type="checkbox" checked> Available now only</label>');
+      tools.insertAdjacentHTML('beforeend','<div class="market-filter-row"><input id="maxRentFilter" type="number" min="0" step="100" placeholder="Maximum monthly rent (R)"><input id="roomFilter" placeholder="Room type, e.g. single"><label class="check-label"><input id="availableOnlyFilter" type="checkbox" checked> Available now only</label></div>');
     }
     function enhanceListings() {
       document.querySelectorAll('.listing-card').forEach(card => {
@@ -234,7 +234,7 @@ document.querySelectorAll('[data-desk]').forEach(b=>b.addEventListener('click',(
     }
     function applyMarketFilters(){const max=Number(document.getElementById('maxRentFilter')?.value||0),room=(document.getElementById('roomFilter')?.value||'').toLowerCase(),available=document.getElementById('availableOnlyFilter')?.checked;document.querySelectorAll('.listing-card').forEach(card=>{const text=card.textContent.toLowerCase(),rentText=card.querySelector('.rent')?.textContent||'',rent=Number(rentText.replace(/[^0-9]/g,''))||0,isAvailable=card.querySelector('.availability')?.classList.contains('available');card.classList.toggle('hidden',Boolean((max&&rent&&rent>max)||(room&&!text.includes(room))||(available&&!isAvailable)));});}
     ['maxRentFilter','roomFilter','availableOnlyFilter'].forEach(id=>document.getElementById(id)?.addEventListener('input',applyMarketFilters));
-    const feed=document.getElementById('listingFeed'); if(feed)new MutationObserver(enhanceListings).observe(feed,{childList:true,subtree:true}); enhanceListings();
+    const feed=document.getElementById('listingFeed'); if(feed)new MutationObserver(enhanceListings).observe(feed,{childList:true}); enhanceListings();
   })();
 </script>
 <script src="/static/experience.js"></script>
