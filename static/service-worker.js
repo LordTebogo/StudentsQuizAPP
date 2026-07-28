@@ -1,4 +1,4 @@
-const CACHE_NAME = "quizmark-static-v3";
+const CACHE_NAME = "nucleocampus-static-v3";
 const APP_SHELL = [
   "/static/index.html",
   "/static/student.html",
@@ -43,12 +43,12 @@ self.addEventListener("fetch", event => {
 self.addEventListener("push", event => {
   let payload = {};
   try { payload = event.data ? event.data.json() : {}; } catch (_) { payload = {}; }
-  const title = payload.title || "QuizMark";
+  const title = payload.title || "NucleoCampus";
   const options = {
-    body: payload.body || "You have a new QuizMark update.",
+    body: payload.body || "You have a new NucleoCampus update.",
     icon: "/branding/logo",
     badge: "/branding/logo",
-    tag: payload.tag || "quizmark-update",
+    tag: payload.tag || "nucleocampus-update",
     renotify: true,
     data: { url: payload.url || "/static/student.html" },
   };

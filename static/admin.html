@@ -9,7 +9,7 @@
 <link rel="icon" type="image/png" href="/branding/logo">
 <link rel="apple-touch-icon" href="/branding/logo">
 <link rel="manifest" href="/static/manifest.webmanifest">
-<title>Admin — QuizMark</title>
+<title>Admin — NucleoCampus</title>
 <link rel="stylesheet" href="/static/style.css">
 <style>
   .card { position: relative; }
@@ -33,7 +33,7 @@
 </head>
 <body>
 <div class="wrap" id="gateWrap">
-  <header class="top"><div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Quiz<span>Mark</span></div><div class="brand-tagline">Administration</div></div></div><nav><a href="/static/index.html">Home</a><a href="/static/lecturer.html">Lecturer</a></nav></header>
+  <header class="top"><div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Nucleo<span>Campus</span></div><div class="brand-tagline">Administration</div></div></div><nav><a href="/static/index.html">Home</a><a href="/static/lecturer.html">Lecturer</a></nav></header>
   <h1>Admin sign-in</h1>
   <p class="lede">Manage platform content, accounts, submissions, and moderation from one protected workspace.</p>
   <aside class="safety-banner"><strong>Restricted access:</strong> Use the administrator PIN supplied privately by the platform owner. Failed attempts are rate-limited and the PIN is never displayed.</aside>
@@ -41,7 +41,7 @@
 </div>
 
 <main class="wrap hidden" id="appWrap">
-  <header class="top"><div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Quiz<span>Mark</span></div><div class="brand-tagline">Content control</div></div></div><nav><a href="/static/index.html">Home</a><a href="/static/lecturer.html">Lecturer</a><a href="#" id="lockBtn">Lock</a></nav></header>
+  <header class="top"><div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Nucleo<span>Campus</span></div><div class="brand-tagline">Content control</div></div></div><nav><a href="/static/index.html">Home</a><a href="/static/lecturer.html">Lecturer</a><a href="#" id="lockBtn">Lock</a></nav></header>
   <h1>Content studio</h1>
   <p class="lede">Create, edit, or remove quizzes and video lessons. Editing is deliberately locked after students have submitted work, preserving their results.</p>
 
@@ -96,7 +96,7 @@
     <div class="admin-grid">
       <div>
         <h3>Fun Page</h3>
-        <label for="officialFunText">Official Fun Page comment</label><textarea id="officialFunText" maxlength="1500" placeholder="A notice from QuizMark Admin…"></textarea>
+        <label for="officialFunText">Official Fun Page comment</label><textarea id="officialFunText" maxlength="1500" placeholder="A notice from NucleoCampus Admin…"></textarea>
         <button class="btn" id="postOfficialFunBtn">Post official comment</button><div id="officialFunMsg"></div>
         <div id="funModerationList" class="admin-list"></div>
       </div>
@@ -294,7 +294,7 @@ function selectSrcPresident(id, profiles) {
 function renderModerationItem(item, area) {
   const pinAction = item.is_pinned ? 'Unpin' : 'Pin';
   const kind = item.kind || 'lesson';
-  const title = area === 'fun' ? (item.is_official ? 'QuizMark Admin' : item.author_name) : `${item.lesson_title} · ${item.author_name}`;
+  const title = area === 'fun' ? (item.is_official ? 'NucleoCampus Admin' : item.author_name) : `${item.lesson_title} · ${item.author_name}`;
   const badge = item.is_pinned ? '<span class="badge pending">Pinned</span>' : (item.is_official ? '<span class="badge done">Official</span>' : '');
   return `<div class="q"><div class="qmarks">${badge}</div><div class="qtext">${escapeHtml(title)}</div><div>${escapeHtml(item.content || item.comment_text)}</div><p class="muted">${escapeHtml(item.created_at)}</p><button class="row-download-btn" data-moderate-area="${area}" data-moderate-kind="${kind}" data-moderate-id="${item.id}" data-moderate-action="pin">${pinAction}</button> <button class="row-download-btn" data-moderate-area="${area}" data-moderate-kind="${kind}" data-moderate-id="${item.id}" data-moderate-action="delete">Delete</button></div>`;
 }

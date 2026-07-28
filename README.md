@@ -204,7 +204,7 @@ Supported: any common image format a browser can display (png, jpg, gif, svg, we
 
 ## 8. App logo
 
-Drop a file named **`image.png`** into the same folder as `main.py` (the app's working directory) **and commit it to your repo** — since Render redeploys pull from git each time, a committed file survives redeploys just fine (unlike a runtime upload). It'll automatically appear in the header of every page, shown small (34×34px, scaled to fit) next to "QuizMark / Bioscientist". No configuration needed — the app checks for it on every page load and just hides the logo slot if it isn't there. To change the "Bioscientist" tagline text, edit the `.brand-tagline` text in each page's `<header>` (`static/index.html`, `static/lecturer.html`, `static/student.html`).
+Drop a file named **`image.png`** into the same folder as `main.py` (the app's working directory) **and commit it to your repo** — since Render redeploys pull from git each time, a committed file survives redeploys just fine (unlike a runtime upload). It'll automatically appear in the header of every page, shown small (34×34px, scaled to fit) next to "NucleoCampus / Bioscientist". No configuration needed — the app checks for it on every page load and just hides the logo slot if it isn't there. To change the "Bioscientist" tagline text, edit the `.brand-tagline` text in each page's `<header>` (`static/index.html`, `static/lecturer.html`, `static/student.html`).
 
 ## 9. Downloading marked answers as a PDF
 

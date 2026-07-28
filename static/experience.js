@@ -1,6 +1,12 @@
 (function () {
   const body = document.body;
   if (!body) return;
+  body.classList.add('nucleocampus-ui');
+  document.querySelectorAll('.brand').forEach(brand => {
+    brand.innerHTML = 'Nucleo<span>Campus</span>';
+    brand.setAttribute('aria-label', 'NucleoCampus');
+  });
+  if (!document.title.includes('NucleoCampus')) document.title += ' — NucleoCampus';
   const main = document.querySelector('main, .wrap, .market-wrap');
   if (main && !main.id) main.id = 'main-content';
   if (main) {

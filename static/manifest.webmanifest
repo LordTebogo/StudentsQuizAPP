@@ -1,7 +1,7 @@
 {
-  "name": "QuizMark Learning",
-  "short_name": "QuizMark",
-  "description": "Quizzes and video lessons for students and lecturers.",
+  "name": "NucleoCampus Learning",
+  "short_name": "NucleoCampus",
+  "description": "Learning and campus life, connected.",
   "start_url": "/static/index.html",
   "scope": "/static/",
   "display": "standalone",

@@ -37,7 +37,7 @@ async function setupStudentPushNotifications() {
   button.type = "button";
   button.id = "notificationToggle";
   button.className = "notification-toggle";
-  button.title = "Manage QuizMark notifications on this device";
+  button.title = "Manage NucleoCampus notifications on this device";
   const accountActions = document.getElementById("studentHomeActions");
   (accountActions || navigation).appendChild(button);
 
@@ -61,7 +61,7 @@ async function setupStudentPushNotifications() {
     button.disabled = true;
     try {
       if (subscription) {
-        if (!window.confirm("Turn off QuizMark notifications on this device?")) return;
+        if (!window.confirm("Turn off NucleoCampus notifications on this device?")) return;
         await fetch("/student/notifications/subscribe", {
           method: "DELETE",
           headers: { "Content-Type": "application/json", "X-Student-Token": studentToken },
@@ -111,7 +111,7 @@ window.addEventListener("appinstalled", () => {
   const button = document.getElementById("installAppBtn");
   const hint = document.getElementById("installHint");
   if (button) button.remove();
-  if (hint) hint.textContent = "QuizMark is installed on this device.";
+  if (hint) hint.textContent = "NucleoCampus is installed on this device.";
 });
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -126,7 +126,7 @@ document.addEventListener("DOMContentLoaded", () => {
         installPrompt = null;
         button.classList.add("hidden");
       } else if (hint) {
-        hint.textContent = "Use your browser menu and choose Add to Home Screen. QuizMark still needs an internet connection for current learning content.";
+        hint.textContent = "Use your browser menu and choose Add to Home Screen. NucleoCampus still needs an internet connection for current learning content.";
       }
     });
   }

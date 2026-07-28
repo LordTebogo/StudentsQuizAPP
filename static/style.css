@@ -1,5 +1,5 @@
 /* =====================================================================
-   QuizMark — Neon Campus
+   NucleoCampus — Neon Campus
    A cinematic, high-contrast interface with calm typography and luminous
    accents. Designed to work across quiz, lesson, lecturer and student views.
    ===================================================================== */
@@ -28,6 +28,52 @@
   --font-body: "Manrope", "Segoe UI", sans-serif;
   --font-mono: "DM Mono", Consolas, monospace;
 }
+
+/* NucleoCampus identity -------------------------------------------------- */
+.nucleocampus-ui {
+  --cyan: #5ee7e2;
+  --cyan-deep: #13b8b2;
+  --violet: #8b7cf6;
+  --violet-deep: #6654e8;
+  --green: #7df7b5;
+  background:
+    radial-gradient(circle at 9% 8%, rgba(94,231,226,.18), transparent 25rem),
+    radial-gradient(circle at 91% 18%, rgba(139,124,246,.2), transparent 29rem),
+    radial-gradient(circle at 50% 100%, rgba(125,247,181,.08), transparent 32rem),
+    linear-gradient(145deg,#050912 0%,#091326 50%,#090b1a 100%);
+}
+.nucleocampus-ui::before { opacity:.22; background-size:56px 56px; }
+.nucleocampus-ui header.top { border-color:rgba(94,231,226,.2); border-radius:24px; background:rgba(7,15,29,.76); box-shadow:0 18px 55px rgba(0,0,0,.22); }
+.nucleocampus-ui .brand-group { position:relative; }
+.nucleocampus-ui .brand-group::after { content:""; position:absolute; left:30px; top:2px; width:12px; height:12px; border:1px solid rgba(125,247,181,.8); border-radius:50%; box-shadow:16px 19px 0 -3px rgba(139,124,246,.9); pointer-events:none; }
+.nucleocampus-ui .brand-logo { padding:3px; border-color:rgba(94,231,226,.5)!important; border-radius:14px!important; background:linear-gradient(145deg,rgba(94,231,226,.12),rgba(139,124,246,.12)); }
+.nucleocampus-ui .brand { font-size:1.24rem; letter-spacing:-.055em; }
+.nucleocampus-ui .brand span { color:var(--cyan); }
+.nucleocampus-ui .brand-tagline { color:#91a7c5; letter-spacing:.16em; }
+.nucleocampus-ui header.top nav a[aria-current="page"] { color:#06151a; background:linear-gradient(115deg,var(--cyan),var(--green)); }
+.nucleocampus-ui .card { border-radius:24px; border-color:rgba(168,198,234,.14); background:linear-gradient(145deg,rgba(18,34,58,.86),rgba(9,18,34,.9)); }
+.nucleocampus-ui .card::after { width:72px; background:linear-gradient(90deg,var(--cyan),var(--green),var(--violet)); }
+.nucleocampus-ui .role-card { min-height:190px; border-radius:24px; background:linear-gradient(145deg,rgba(20,39,64,.94),rgba(9,20,38,.94)); }
+.nucleocampus-ui .role-card::before { border-color:rgba(94,231,226,.25); box-shadow:0 0 0 20px rgba(94,231,226,.035),0 0 0 40px rgba(139,124,246,.03); }
+.nucleocampus-ui .role-card:hover { border-color:rgba(94,231,226,.55); transform:translateY(-5px); }
+.role-icon { position:absolute; right:22px; top:20px; display:grid; place-items:center; width:46px; height:46px; color:var(--cyan); font-size:1.4rem; border:1px solid rgba(94,231,226,.26); border-radius:15px; background:rgba(94,231,226,.07); box-shadow:inset 0 0 20px rgba(94,231,226,.05); }
+.role-src .role-icon { color:#c4baff; border-color:rgba(139,124,246,.35); background:rgba(139,124,246,.09); }
+.role-lecturer .role-icon { color:#7df7b5; border-color:rgba(125,247,181,.3); background:rgba(125,247,181,.08); }
+.public-intro { position:relative; min-height:260px; padding:42px clamp(22px,5vw,52px); margin-bottom:24px; overflow:hidden; border:1px solid rgba(94,231,226,.2); border-radius:30px; background:linear-gradient(120deg,rgba(13,35,59,.9),rgba(24,21,62,.76)); }
+.public-intro h1 { max-width:11ch; margin-top:10px; font-size:clamp(3rem,7vw,5.7rem); line-height:.92; }
+.public-intro .lede { margin:20px 0 0; font-size:1.08rem; }
+.public-intro .product-story { display:none; }
+.nucleo-orbit { position:absolute; right:7%; top:50%; width:210px; height:210px; border:1px solid rgba(94,231,226,.25); border-radius:50%; transform:translateY(-50%); box-shadow:inset 0 0 70px rgba(94,231,226,.05),0 0 70px rgba(139,124,246,.08); }
+.nucleo-orbit::before,.nucleo-orbit::after { content:""; position:absolute; inset:24px; border:1px solid rgba(139,124,246,.3); border-radius:50%; transform:rotate(58deg) scaleY(.42); }
+.nucleo-orbit::after { transform:rotate(-58deg) scaleY(.42); }
+.nucleo-orbit b { position:absolute; inset:68px; display:grid; place-items:center; color:#07131d; font:800 1.35rem var(--font-display); border-radius:50%; background:linear-gradient(135deg,var(--cyan),var(--green)); box-shadow:0 0 40px rgba(94,231,226,.35); }
+.nucleo-orbit span { position:absolute; width:11px; height:11px; border-radius:50%; background:var(--cyan); box-shadow:0 0 15px var(--cyan); animation:nucleoFloat 4s ease-in-out infinite; }
+.nucleo-orbit span:nth-child(1){left:11px;top:88px}.nucleo-orbit span:nth-child(2){right:28px;top:26px;animation-delay:-1.3s;background:var(--violet);box-shadow:0 0 15px var(--violet)}.nucleo-orbit span:nth-child(3){right:22px;bottom:27px;animation-delay:-2.4s;background:var(--green);box-shadow:0 0 15px var(--green)}
+@keyframes nucleoFloat { 50% { transform:scale(1.45); opacity:.55; } }
+.nucleocampus-ui .btn { border-radius:12px; background:linear-gradient(115deg,var(--cyan),var(--green)); }
+.nucleocampus-ui .btn.secondary { color:var(--cyan); border-color:rgba(94,231,226,.35); background:rgba(94,231,226,.06); }
+.nucleocampus-ui .site-footer { border-top-color:rgba(94,231,226,.16); }
+@media(max-width:720px){.public-intro{min-height:350px;padding:30px 22px}.public-intro>.kicker,.public-intro>h1,.public-intro>.lede{position:relative;z-index:1}.public-intro h1{font-size:clamp(2.8rem,13vw,4rem)}.public-intro .lede{max-width:18ch}.nucleo-orbit{width:105px;height:105px;right:-15px;top:14px;bottom:auto;transform:none;opacity:.45}.nucleo-orbit::before,.nucleo-orbit::after{inset:14px}.nucleo-orbit b{inset:34px;font-size:.76rem}.nucleo-orbit span{width:8px;height:8px}.nucleo-orbit span:nth-child(1){left:4px;top:46px}.nucleo-orbit span:nth-child(2){right:12px;top:9px}.nucleo-orbit span:nth-child(3){right:8px;bottom:12px}.role-icon{width:40px;height:40px;right:17px;top:16px}.nucleocampus-ui .role-card{padding:22px}}
 
 * { box-sizing: border-box; }
 

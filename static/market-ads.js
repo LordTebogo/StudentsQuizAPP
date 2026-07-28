@@ -61,7 +61,7 @@
     if (!side || document.getElementById('advertDesk')) return;
     const desk = document.createElement('section');
     desk.className = 'landlord-desk advert-desk'; desk.id = 'advertDesk';
-    desk.innerHTML = `<span class="market-kicker">Campus promotion</span><h2>Advertise on QuizMark</h2>
+    desk.innerHTML = `<span class="market-kicker">Campus promotion</span><h2>Advertise on NucleoCampus</h2>
       <p class="notice">Student businesses, services and events can apply. Every advert is reviewed before it appears.</p>
       <button class="btn" type="button" id="openAdvertForm">Create an advert</button>
       <div id="advertFormWrap" class="hidden"><form id="advertForm">

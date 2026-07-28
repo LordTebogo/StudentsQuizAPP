@@ -9,7 +9,7 @@
 <link rel="icon" type="image/png" href="/branding/logo">
 <link rel="apple-touch-icon" href="/branding/logo">
 <link rel="manifest" href="/static/manifest.webmanifest">
-<title>Lecturer — Quiz App</title>
+<title>Lecturer — NucleoCampus</title>
 <link rel="stylesheet" href="/static/style.css">
 <style>
   .lecturer-workbench { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(280px, .75fr); gap: 22px; align-items: start; }
@@ -35,7 +35,7 @@
 <!-- Lecturer account gate -->
 <div class="wrap" id="gateWrap">
   <header class="top">
-    <div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Quiz<span>Mark</span></div><div class="brand-tagline">Bioscientist</div></div></div>
+    <div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Nucleo<span>Campus</span></div><div class="brand-tagline">Bioscientist</div></div></div>
     <nav><a href="/static/index.html">Home</a><a href="/static/lessons_lecturer.html">Video lessons</a></nav>
   </header>
   <span class="kicker">Lecturer access</span>
@@ -66,7 +66,7 @@
 <!-- Main lecturer app, hidden until the PIN is verified -->
 <div class="wrap hidden" id="appWrap">
   <header class="top">
-    <div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Quiz<span>Mark</span></div><div class="brand-tagline">Bioscientist</div></div></div>
+    <div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Nucleo<span>Campus</span></div><div class="brand-tagline">Bioscientist</div></div></div>
     <nav><a href="/static/index.html">Home</a><a href="/static/lessons_lecturer.html">Video lessons</a><a href="#" id="lockBtn">Lock</a></nav>
   </header>
 
@@ -160,7 +160,7 @@ function showLecturerAuth(mode) {
   $('lecturerRegisterCard').classList.toggle('hidden', !registering);
   $('showLecturerSignIn').classList.toggle('active', !registering);
   $('showLecturerRegister').classList.toggle('active', registering);
-  $('lecturerAuthHeading').textContent = registering ? 'Join QuizMark' : 'Welcome back';
+  $('lecturerAuthHeading').textContent = registering ? 'Join NucleoCampus' : 'Welcome back';
   $('lecturerAuthIntro').textContent = registering ? 'Create a lecturer profile, then sign in to begin teaching.' : 'Sign in to manage your assigned modules, quizzes, lessons, and student scripts.';
   history.replaceState(null, '', registering ? '#register' : location.pathname);
 }
