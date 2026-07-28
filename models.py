@@ -105,6 +105,7 @@ class DirectMessage(Base):
     recipient_type = Column(String, nullable=False)   # student or lecturer
     recipient_id = Column(Integer, nullable=False, index=True)
     content = Column(Text, nullable=False)
+    is_anonymous = Column(Boolean, nullable=False, default=False)
     read_at = Column(String)
     created_at = Column(String, nullable=False)
 

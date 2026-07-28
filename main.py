@@ -249,6 +249,19 @@ def ensure_comrade_identity_schema():
 
 ensure_comrade_identity_schema()
 
+
+def ensure_direct_message_privacy_schema():
+    """Add anonymous support without disturbing existing message history."""
+    if "direct_messages" not in inspect(engine).get_table_names():
+        return
+    columns = {column["name"] for column in inspect(engine).get_columns("direct_messages")}
+    if "is_anonymous" not in columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE direct_messages ADD COLUMN is_anonymous BOOLEAN DEFAULT FALSE"))
+
+
+ensure_direct_message_privacy_schema()
+
 app = FastAPI(title="Quiz + Video Lessons App")
 
 # Wide-open CORS since this app has no per-user accounts; the PIN gates the
@@ -289,6 +302,7 @@ class DirectMessageCreate(BaseModel):
     recipient_type: str
     recipient_id: int
     content: str
+    is_anonymous: bool = False
 
 
 class PushSubscriptionCreate(BaseModel):
@@ -303,6 +317,11 @@ class PushSubscriptionDelete(BaseModel):
 class AdminBroadcastMessage(BaseModel):
     content: str
     module_codes: List[str] = []
+
+
+class LecturerBroadcastMessage(BaseModel):
+    content: str
+    module_code: str
 
 
 class ModuleSelection(BaseModel):
@@ -2695,9 +2714,12 @@ def _message_person(db: Session, kind: str, person_id: Optional[int]) -> str:
     return person.full_name if person else "Unknown account"
 
 
-def _message_dict(db: Session, message: DirectMessage):
-    return {"id": message.id, "sender_type": message.sender_type, "sender_id": message.sender_id,
-            "sender_name": _message_person(db, message.sender_type, message.sender_id),
+def _message_dict(db: Session, message: DirectMessage, viewer_type: str = "", viewer_id: Optional[int] = None):
+    anonymous = bool(getattr(message, "is_anonymous", False) and message.sender_type == "student")
+    viewing_own = viewer_type == "student" and viewer_id == message.sender_id
+    sender_name = "You (anonymous)" if anonymous and viewing_own else "Anonymous student" if anonymous else _message_person(db, message.sender_type, message.sender_id)
+    return {"id": message.id, "sender_type": message.sender_type, "sender_id": message.sender_id if not anonymous or viewing_own else None,
+            "sender_name": sender_name, "is_anonymous": anonymous,
             "recipient_type": message.recipient_type, "recipient_id": message.recipient_id,
             "recipient_name": _message_person(db, message.recipient_type, message.recipient_id),
             "content": message.content, "read_at": message.read_at, "created_at": message.created_at}
@@ -2744,14 +2766,20 @@ def _notify_students_by_push(db: Session, student_ids: List[int], title: str, bo
 def _create_direct_message(db: Session, sender_type: str, sender_id: Optional[int], payload: DirectMessageCreate):
     recipient_type = payload.recipient_type.strip().lower()
     content = payload.content.strip()
-    if recipient_type not in {"student", "lecturer"} or not content or len(content) > 2000:
+    if recipient_type not in {"student", "lecturer", "admin"} or not content or len(content) > 2000:
         raise HTTPException(status_code=400, detail="Choose a recipient and enter a message of up to 2,000 characters")
-    model = Student if recipient_type == "student" else Lecturer
-    recipient = db.query(model).filter(model.id == payload.recipient_id).first()
-    if not recipient or not recipient.approved or not recipient.active:
-        raise HTTPException(status_code=404, detail="That recipient is not available")
+    if recipient_type == "admin":
+        recipient = None
+        recipient_id = 0
+    else:
+        model = Student if recipient_type == "student" else Lecturer
+        recipient = db.query(model).filter(model.id == payload.recipient_id).first()
+        if not recipient or not recipient.approved or not recipient.active:
+            raise HTTPException(status_code=404, detail="That recipient is not available")
+        recipient_id = recipient.id
     message = DirectMessage(sender_type=sender_type, sender_id=sender_id, recipient_type=recipient_type,
-                            recipient_id=recipient.id, content=content,
+                            recipient_id=recipient_id, content=content,
+                            is_anonymous=bool(payload.is_anonymous and sender_type == "student"),
                             created_at=datetime.now(timezone.utc).isoformat())
     db.add(message); db.commit(); db.refresh(message)
     if recipient_type == "student":
@@ -2763,7 +2791,7 @@ def _create_direct_message(db: Session, sender_type: str, sender_id: Optional[in
             "/static/student.html",
             f"message-{message.id}",
         )
-    return _message_dict(db, message)
+    return _message_dict(db, message, sender_type, sender_id)
 
 
 def _inbox(db: Session, kind: str, person_id: int):
@@ -2778,7 +2806,7 @@ def _inbox(db: Session, kind: str, person_id: int):
         ((DirectMessage.recipient_type == kind) & (DirectMessage.recipient_id == person_id)) |
         ((DirectMessage.sender_type == kind) & (DirectMessage.sender_id == person_id))
     ).order_by(DirectMessage.created_at.desc()).all()
-    return [_message_dict(db, row) for row in rows]
+    return [_message_dict(db, row, kind, person_id) for row in rows]
 
 
 @app.get("/notifications/config")
@@ -2832,14 +2860,20 @@ def unsubscribe_student_notifications(
 
 @app.get("/student/message-lecturers")
 def student_message_lecturers(student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
-    return [{"id": item.id, "full_name": item.full_name} for item in db.query(Lecturer).filter(Lecturer.approved.is_(True), Lecturer.active.is_(True)).order_by(Lecturer.full_name).all()]
+    module_codes = {item.module_code for item in student.modules}
+    rows = db.query(Lecturer).join(LecturerModule).filter(
+        Lecturer.approved.is_(True), Lecturer.active.is_(True), LecturerModule.module_code.in_(module_codes)
+    ).distinct().order_by(Lecturer.full_name).all() if module_codes else []
+    return [{"id": item.id, "full_name": item.full_name,
+             "module_codes": [module.module_code for module in item.modules if module.module_code in module_codes]} for item in rows]
 
 
 @app.get("/lecturer/message-students")
 def lecturer_message_students(lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db)):
+    assigned = {item.module_code for item in lecturer.modules}
     return [{"id": item.id, "full_name": item.full_name, "student_number": item.student_number,
-             "module_codes": [module.module_code for module in item.modules]}
-            for item in db.query(Student).filter(Student.approved.is_(True), Student.active.is_(True)).order_by(Student.full_name).all()]
+             "module_codes": [module.module_code for module in item.modules if module.module_code in assigned]}
+            for item in db.query(Student).join(StudentModule).filter(Student.approved.is_(True), Student.active.is_(True), StudentModule.module_code.in_(assigned)).distinct().order_by(Student.full_name).all()] if assigned else []
 
 
 @app.get("/lecturer/students")
@@ -2872,8 +2906,14 @@ def lecturer_unread_messages(lecturer: Lecturer = Depends(require_lecturer_accou
 
 @app.post("/student/messages")
 def student_send_message(payload: DirectMessageCreate, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
-    if payload.recipient_type.strip().lower() != "lecturer":
-        raise HTTPException(status_code=400, detail="Students can message lecturers only")
+    recipient_type = payload.recipient_type.strip().lower()
+    if recipient_type not in {"lecturer", "admin"}:
+        raise HTTPException(status_code=400, detail="Students can message an administrator or assigned lecturer")
+    if recipient_type == "lecturer":
+        student_codes = {item.module_code for item in student.modules}
+        allowed = db.query(LecturerModule).filter(LecturerModule.lecturer_id == payload.recipient_id, LecturerModule.module_code.in_(student_codes)).first() if student_codes else None
+        if not allowed:
+            raise HTTPException(status_code=403, detail="You can message lecturers assigned to your modules only")
     return _create_direct_message(db, "student", student.id, payload)
 
 
@@ -2881,12 +2921,33 @@ def student_send_message(payload: DirectMessageCreate, student: Student = Depend
 def lecturer_send_message(payload: DirectMessageCreate, lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db)):
     if payload.recipient_type.strip().lower() != "student":
         raise HTTPException(status_code=400, detail="Lecturers can message students only")
+    assigned = {item.module_code for item in lecturer.modules}
+    student_codes = {item.module_code for item in db.query(StudentModule).filter(StudentModule.student_id == payload.recipient_id).all()}
+    if not assigned.intersection(student_codes):
+        raise HTTPException(status_code=403, detail="You can message students enrolled in your modules only")
     return _create_direct_message(db, "lecturer", lecturer.id, payload)
+
+
+@app.post("/lecturer/messages/broadcast")
+def lecturer_broadcast_message(payload: LecturerBroadcastMessage, lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db)):
+    content, module_code = payload.content.strip(), payload.module_code.strip().upper()
+    assigned = {item.module_code for item in lecturer.modules}
+    if module_code not in assigned:
+        raise HTTPException(status_code=403, detail="Choose one of your assigned modules")
+    if not content or len(content) > 2000:
+        raise HTTPException(status_code=400, detail="Enter a message of up to 2,000 characters")
+    recipients = db.query(Student).join(StudentModule).filter(Student.approved.is_(True), Student.active.is_(True), StudentModule.module_code == module_code).distinct().all()
+    now = datetime.now(timezone.utc).isoformat()
+    for student in recipients:
+        db.add(DirectMessage(sender_type="lecturer", sender_id=lecturer.id, recipient_type="student", recipient_id=student.id, content=content, is_anonymous=False, created_at=now))
+    db.commit()
+    _notify_students_by_push(db, [student.id for student in recipients], "New module message", f"A new message was sent to {module_code} students.", "/static/student.html", f"module-message-{module_code}-{now}")
+    return {"ok": True, "recipient_count": len(recipients), "module_code": module_code}
 
 
 @app.get("/admin/messages")
 def admin_messages(_pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
-    return [_message_dict(db, item) for item in db.query(DirectMessage).order_by(DirectMessage.created_at.desc()).all()]
+    return [_message_dict(db, item, "admin", None) for item in db.query(DirectMessage).order_by(DirectMessage.created_at.desc()).all()]
 
 
 @app.post("/admin/messages")

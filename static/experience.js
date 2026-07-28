@@ -45,4 +45,17 @@
       nav.appendChild(primary);
     }
   });
+  const messagingAssets = {
+    '/static/student.html': '/static/student-messaging.js',
+    '/static/lecturer.html': '/static/lecturer-messaging.js',
+    '/static/admin.html': '/static/admin-messaging.js',
+  };
+  const messagingScript = messagingAssets[location.pathname];
+  if (messagingScript) {
+    const stylesheet = document.createElement('link');
+    stylesheet.rel = 'stylesheet'; stylesheet.href = '/static/messaging.css';
+    document.head.appendChild(stylesheet);
+    const script = document.createElement('script'); script.src = messagingScript;
+    document.body.appendChild(script);
+  }
 })();
