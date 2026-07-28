@@ -142,7 +142,7 @@ document.querySelectorAll('[data-desk]').forEach(b=>b.addEventListener('click',(
   const accommodationForm = document.getElementById('listingForm');
   const mapPicker = document.createElement('section');
   mapPicker.className = 'map-picker';
-  mapPicker.innerHTML = `<h4>Exact map location (optional)</h4><p class="notice">Click the map where the accommodation is located. Students will receive a directions button, not your private address.</p><input type="hidden" name="latitude" id="listingLatitude"><input type="hidden" name="longitude" id="listingLongitude"><div class="map-canvas" id="locationMap"><div class="map-fallback" id="mapFallback">Preparing Google Maps location picker...</div></div><p class="map-location-note" id="mapLocationNote">No map point selected.</p>`;
+  mapPicker.innerHTML = `<h4>Exact map location (optional)</h4><p class="notice">Click the map where the accommodation is located. Students receive directions to the pinned point, not a written private address.</p><div class="listing-actions"><button class="btn secondary" type="button" id="useCurrentLocation">Use my current location</button><button class="btn secondary" type="button" id="clearMapLocation">Clear map point</button></div><input type="hidden" name="latitude" id="listingLatitude"><input type="hidden" name="longitude" id="listingLongitude"><div class="map-canvas" id="locationMap"><div class="map-fallback" id="mapFallback">Preparing Google Maps location picker...</div></div><p class="map-location-note" id="mapLocationNote">No map point selected.</p>`;
   const imageField = accommodationForm.querySelector('label.notice');
   accommodationForm.insertBefore(mapPicker, imageField);
   const latitudeInput = document.getElementById('listingLatitude');
@@ -153,8 +153,12 @@ document.querySelectorAll('[data-desk]').forEach(b=>b.addEventListener('click',(
     const lat = Number(position.lat()).toFixed(6);
     const lng = Number(position.lng()).toFixed(6);
     latitudeInput.value = lat; longitudeInput.value = lng;
-    if (!locationMarker) locationMarker = new google.maps.Marker({map: locationMap, draggable: true});
+    if (!locationMarker) {
+      locationMarker = new google.maps.Marker({map: locationMap, draggable: true});
+      locationMarker.addListener('dragend', event => setListingLocation(event.latLng));
+    }
     locationMarker.setPosition({lat: Number(lat), lng: Number(lng)});
+    locationMap.panTo({lat: Number(lat), lng: Number(lng)});
     mapNote.textContent = `Map point selected: ${lat}, ${lng}`;
   }
   function showMapFallback(message) {
@@ -185,6 +189,20 @@ document.querySelectorAll('[data-desk]').forEach(b=>b.addEventListener('click',(
     if (locationMarker) locationMarker.setMap(null);
     locationMarker = null; mapNote.textContent = 'No map point selected.';
   }, 0));
+  document.getElementById('clearMapLocation').addEventListener('click', () => {
+    latitudeInput.value = ''; longitudeInput.value = '';
+    if (locationMarker) locationMarker.setMap(null);
+    locationMarker = null; mapNote.textContent = 'No map point selected.';
+  });
+  document.getElementById('useCurrentLocation').addEventListener('click', () => {
+    if (!navigator.geolocation) { mapNote.textContent = 'Location is not supported by this browser.'; return; }
+    mapNote.textContent = 'Requesting your current location...';
+    navigator.geolocation.getCurrentPosition(position => {
+      if (!locationMap || !window.google?.maps) { mapNote.textContent = 'Wait for the map to finish loading, then try again.'; return; }
+      const point = new google.maps.LatLng(position.coords.latitude, position.coords.longitude);
+      setListingLocation(point); locationMap.setZoom(16);
+    }, () => { mapNote.textContent = 'Location permission was denied or unavailable. Click the map instead.'; }, {enableHighAccuracy: true, timeout: 10000});
+  });
   let locationPickerStarted = false;
   function maybeStartLocationPicker() {
     if (locationPickerStarted || document.getElementById('landlordPanel').classList.contains('hidden')) return;
