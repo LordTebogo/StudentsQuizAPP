@@ -33,6 +33,18 @@
   #welcome .notification-toggle { order:4; margin:0; white-space:nowrap; }
   #welcome .install-app-btn { order:2; margin-left:10px; white-space:nowrap; }
   @media(max-width:1040px){#welcome .home-profile-name{display:none}#welcome .student-home-actions{gap:6px;margin-left:8px;padding-left:9px}#welcome .top nav a{padding-inline:6px;font-size:.66rem}}
+  #welcome .top nav { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; row-gap:10px; }
+  #welcome .primary-nav-links { grid-column:1/-1; grid-row:2; display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:4px; padding-top:10px; border-top:1px solid rgba(148,163,184,.12); }
+  #welcome .primary-nav-links a { padding:6px 10px; }
+  #welcome .student-home-actions { grid-column:2; grid-row:1; margin:0; padding:0; border:0; }
+  #welcome .install-app-btn { grid-column:2; grid-row:1; margin:0; }
+  #welcome.dashboard-mode .public-intro { display:none; }
+  #welcome.dashboard-mode .top { margin-bottom:28px; }
+  #welcome.dashboard-mode #studentPortal, #welcome.dashboard-mode #lecturerPortal { padding:28px; }
+  #studentNextStep { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:8px 24px; padding:18px 20px; }
+  #studentNextStep .next-copy h3, #studentNextStep .next-copy p { margin-bottom:5px; }
+  #studentNextStep .next-actions { display:flex; flex-direction:column; align-items:flex-end; gap:8px; }
+  #studentNextStep .next-actions .btn { margin:0; }
   #guestChoices .role-card:first-child { order:3; }
   .market-role-card { position:relative; overflow:hidden; isolation:isolate; background:radial-gradient(circle at 82% 20%,rgba(192,132,252,.34),transparent 36%),linear-gradient(135deg,#11264a,#38205c); }
   .market-role-card::before { content:''; position:absolute; inset:0; z-index:-2; opacity:0; background:center/cover no-repeat var(--market-image); transform:scale(1.05); transition:opacity .7s ease, transform 4.5s ease; }
@@ -49,6 +61,12 @@
     #welcome .brand-tagline { font-size:.58rem; }
     #welcome nav { width:100%; margin-left:0; display:flex; align-items:center; justify-content:flex-start; flex-wrap:wrap; gap:5px; }
     #welcome .student-home-actions { width:100%; margin:7px 0 0; padding:10px 0 0; border-left:0; border-top:1px solid rgba(103,232,249,.2); }
+    #welcome .top nav { grid-template-columns:1fr; }
+    #welcome .primary-nav-links { grid-column:1; grid-row:2; justify-content:flex-start; width:100%; overflow-x:auto; flex-wrap:nowrap; padding-bottom:3px; scrollbar-width:none; }
+    #welcome .primary-nav-links::-webkit-scrollbar { display:none; }
+    #welcome .student-home-actions, #welcome .install-app-btn { grid-column:1; grid-row:1; justify-self:start; }
+    #studentNextStep { grid-template-columns:1fr; }
+    #studentNextStep .next-actions { align-items:flex-start; }
     #welcome .install-app-btn { min-height:40px; padding:0 12px; font-size:.62rem; letter-spacing:.08em; }
     .home-message-button, .home-profile-avatar { width:40px; height:40px; }
     .home-profile-menu { top:48px; right:0; width:164px; padding:6px; }
@@ -70,10 +88,7 @@
     <nav><div class="student-home-actions" id="studentHomeActions"><button class="home-message-button" id="homeMessagesBtn" type="button" aria-label="Open messages">✉<span class="home-message-count hidden" id="homeMessageCount">0</span></button><span class="home-profile-name" id="homeStudentName"></span><img class="home-profile-avatar" id="homeStudentAvatar" src="/branding/logo" alt="Student profile picture"></div><button class="install-app-btn" id="installAppBtn" type="button" title="Add QuizMark to your home screen for faster, full-screen access">Install QuizMark</button></nav>
   </header>
 
-  <span class="kicker">Your learning space</span>
-  <h1>Welcome to QuizMark</h1>
-  <p class="lede">Choose your role to sign in. New here? Create your profile, then sign in straight away.</p>
-  <p class="product-story"><strong>One Bioscientist platform for learning and campus life.</strong> Students take quizzes, watch lessons, submit work and receive results; lecturers create and assess course content. Community, SRC and market spaces extend that experience beyond the classroom.</p>
+  <section class="public-intro"><span class="kicker">Your learning space</span><h1>Welcome to QuizMark</h1><p class="lede">Choose your role to sign in. New here? Create your profile, then sign in straight away.</p><p class="product-story"><strong>One Bioscientist platform for learning and campus life.</strong> Learn, teach and connect through one private campus workspace.</p></section>
   <div class="role-grid" id="guestChoices">
     <section class="role-card"><span class="kicker">SRC president</span><h2>Lead &amp; announce</h2><p>Create your verified party profile, share official announcements, and join the civic conversation.</p><a class="btn" href="/static/comrade.html#srcAccess">SRC president sign in</a><a class="btn secondary" href="/static/comrade.html#srcRegister">Create SRC account</a></section>
     <section class="role-card"><span class="kicker">Student</span><h2>Learn, submit &amp; connect</h2><p>Quizzes, video lessons, scripts and the student community — all in one private workspace.</p><a class="btn" href="/static/student.html">Student sign in</a><a class="btn secondary" href="/static/student.html#register">Create student account</a></section>
@@ -88,13 +103,16 @@
 <footer class="site-footer"><strong>QuizMark by Bioscientist</strong><div>A focused learning platform with connected campus services.</div><nav><a href="/static/trust.html#privacy">Privacy</a><a href="/static/trust.html#terms">Terms</a><a href="/static/trust.html#support">Support &amp; account recovery</a></nav></footer>
 <p class="install-hint" id="installHint" aria-live="polite">Install for faster access and a full-screen app experience. Online access is still required for current content.</p>
 <script>
-  if (sessionStorage.getItem('studentToken')) {
+  const homeHasStudent = sessionStorage.getItem('studentToken');
+  const homeHasLecturer = sessionStorage.getItem('lecturerToken');
+  if (homeHasStudent || homeHasLecturer) document.getElementById('welcome').classList.add('dashboard-mode');
+  if (homeHasStudent) {
     const portal = document.getElementById('studentPortal');
     const grid = portal && portal.querySelector('.role-grid');
     if (grid && !document.getElementById('studentNextStep')) {
       const next = document.createElement('div');
       next.id = 'studentNextStep'; next.className = 'dashboard-priority';
-      next.innerHTML = '<span class="kicker">Recommended next step</span><h3>Check your modules and unfinished quizzes</h3><p>Start with assigned work, then review results and new lessons.</p><a class="btn" href="/static/student.html">Continue learning</a><span class="progress-pill">Progress saved to your account</span>';
+      next.innerHTML = '<div class="next-copy"><span class="kicker">Recommended next step</span><h3>Check your modules and unfinished quizzes</h3><p>Continue where you left off or review your latest results.</p></div><div class="next-actions"><a class="btn" href="/static/student.html">Continue learning</a><span class="progress-pill">Progress saved</span></div>';
       grid.before(next);
     }
   }

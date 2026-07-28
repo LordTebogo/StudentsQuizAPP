@@ -32,5 +32,11 @@
     [...nav.querySelectorAll('a')].forEach(a => {
       if (new URL(a.href, location.href).pathname === location.pathname) a.setAttribute('aria-current', 'page');
     });
+    if (nav.closest('#welcome') && !nav.querySelector('.primary-nav-links')) {
+      const primary = document.createElement('div');
+      primary.className = 'primary-nav-links';
+      [...nav.children].filter(element => element.tagName === 'A').forEach(link => primary.appendChild(link));
+      nav.appendChild(primary);
+    }
   });
 })();
