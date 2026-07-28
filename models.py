@@ -417,6 +417,19 @@ class LessonSubmission(Base):
         "LessonAnswer", back_populates="submission", cascade="all, delete-orphan",
     )
 
+
+class LessonView(Base):
+    """Aggregated viewing activity for one student and one lesson video."""
+    __tablename__ = "lesson_views"
+    __table_args__ = (UniqueConstraint("lesson_id", "student_account_id", name="lesson_student_view_unique"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    lesson_id = Column(Integer, ForeignKey("lessons.id", ondelete="CASCADE"), nullable=False, index=True)
+    student_account_id = Column(Integer, ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True)
+    first_viewed_at = Column(String, nullable=False)
+    last_viewed_at = Column(String, nullable=False)
+    view_count = Column(Integer, nullable=False, default=1)
+
 class LessonAnswer(Base):
     __tablename__ = "lesson_answers"
 

@@ -76,6 +76,7 @@ from models import (
     LessonComment,
     LessonQuestion,
     LessonSubmission,
+    LessonView,
     Lecturer,
     LecturerModule,
     FunPost,
@@ -1914,7 +1915,34 @@ def list_student_lessons(
 @app.get("/lecturer/lessons")
 def list_my_lessons(lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db)):
     rows = db.query(Lesson).filter(Lesson.lecturer_id == lecturer.id).order_by(Lesson.id.desc()).all()
-    return [{"id": l.id, "title": l.title, "description": l.description, "module_code": l.module_code, "created_at": l.created_at} for l in rows]
+    lesson_ids = [lesson.id for lesson in rows]
+    analytics = {}
+    if lesson_ids:
+        counts = db.query(
+            LessonView.lesson_id,
+            func.count(LessonView.id),
+            func.coalesce(func.sum(LessonView.view_count), 0),
+        ).filter(LessonView.lesson_id.in_(lesson_ids)).group_by(LessonView.lesson_id).all()
+        analytics = {lesson_id: {"unique_viewers": viewers, "video_starts": starts} for lesson_id, viewers, starts in counts}
+    return [{"id": l.id, "title": l.title, "description": l.description, "module_code": l.module_code,
+             "created_at": l.created_at, **analytics.get(l.id, {"unique_viewers": 0, "video_starts": 0})} for l in rows]
+
+
+@app.post("/student/lessons/{lesson_id}/view")
+def record_lesson_view(lesson_id: int, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+    lesson = db.query(Lesson).filter(Lesson.id == lesson_id).first()
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    now = datetime.now(timezone.utc).isoformat()
+    view = db.query(LessonView).filter(LessonView.lesson_id == lesson_id, LessonView.student_account_id == student.id).first()
+    if view:
+        view.last_viewed_at = now
+        view.view_count = (view.view_count or 0) + 1
+    else:
+        view = LessonView(lesson_id=lesson_id, student_account_id=student.id, first_viewed_at=now, last_viewed_at=now, view_count=1)
+        db.add(view)
+    db.commit()
+    return {"ok": True}
 
 
 @app.get("/modules")

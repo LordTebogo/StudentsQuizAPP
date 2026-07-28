@@ -58,4 +58,8 @@
     const script = document.createElement('script'); script.src = messagingScript;
     document.body.appendChild(script);
   }
+  if (location.pathname.endsWith('/lessons_student.html') || location.pathname.endsWith('/lessons_lecturer.html')) {
+    const insights = document.createElement('script'); insights.src = '/static/lesson-insights.js';
+    document.body.appendChild(insights);
+  }
 })();
