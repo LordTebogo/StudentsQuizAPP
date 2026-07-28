@@ -23,6 +23,16 @@
   @media(max-width:620px){.home-profile-name{display:none}.student-home-actions{gap:7px}.home-inbox{right:8px;top:74px}}
   .home-profile-menu { position:absolute; z-index:21; top:54px; right:0; width:180px; padding:8px; border:1px solid rgba(103,232,249,.35); border-radius:15px; background:rgba(7,14,31,.98); box-shadow:0 24px 60px rgba(0,0,0,.42); }
   .home-profile-menu button { width:100%; margin:0; padding:11px; border:0; border-radius:10px; background:transparent; color:var(--text); text-align:left; cursor:pointer; } .home-profile-menu button:hover { background:rgba(103,232,249,.12); color:#67e8f9; }
+  #welcome .top { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:center; }
+  #welcome .top nav { display:flex; align-items:center; justify-content:flex-end; flex-wrap:nowrap; min-width:0; gap:2px; }
+  #welcome .top nav > a { order:1; white-space:nowrap; }
+  #welcome .student-home-actions { order:2; flex:0 0 auto; flex-wrap:nowrap; margin-left:12px; padding-left:14px; border-left:1px solid rgba(103,232,249,.2); }
+  #welcome .home-profile-avatar { order:1; }
+  #welcome .home-profile-name { order:2; }
+  #welcome .home-message-button { order:3; }
+  #welcome .notification-toggle { order:4; margin:0; white-space:nowrap; }
+  #welcome .install-app-btn { order:2; margin-left:10px; white-space:nowrap; }
+  @media(max-width:1040px){#welcome .home-profile-name{display:none}#welcome .student-home-actions{gap:6px;margin-left:8px;padding-left:9px}#welcome .top nav a{padding-inline:6px;font-size:.66rem}}
   #guestChoices .role-card:first-child { order:3; }
   .market-role-card { position:relative; overflow:hidden; isolation:isolate; background:radial-gradient(circle at 82% 20%,rgba(192,132,252,.34),transparent 36%),linear-gradient(135deg,#11264a,#38205c); }
   .market-role-card::before { content:''; position:absolute; inset:0; z-index:-2; opacity:0; background:center/cover no-repeat var(--market-image); transform:scale(1.05); transition:opacity .7s ease, transform 4.5s ease; }
@@ -33,11 +43,12 @@
   @keyframes marketPulse { 50% { opacity:.28; transform:scale(.7); } }
   @media (max-width:620px) {
     #welcome { width:min(100% - 20px, 520px); padding-top:12px; }
-    #welcome .top { min-height:0; padding:14px 16px; align-items:center; gap:10px; }
+    #welcome .top { grid-template-columns:1fr; min-height:0; padding:14px 16px; align-items:center; gap:12px; }
     #welcome .brand-logo { width:42px; height:42px; }
     #welcome .brand { font-size:1.35rem; }
     #welcome .brand-tagline { font-size:.58rem; }
-    #welcome nav { margin-left:auto; display:flex; align-items:center; gap:7px; }
+    #welcome nav { width:100%; margin-left:0; display:flex; align-items:center; justify-content:flex-start; flex-wrap:wrap; gap:5px; }
+    #welcome .student-home-actions { width:100%; margin:7px 0 0; padding:10px 0 0; border-left:0; border-top:1px solid rgba(103,232,249,.2); }
     #welcome .install-app-btn { min-height:40px; padding:0 12px; font-size:.62rem; letter-spacing:.08em; }
     .home-message-button, .home-profile-avatar { width:40px; height:40px; }
     .home-profile-menu { top:48px; right:0; width:164px; padding:6px; }

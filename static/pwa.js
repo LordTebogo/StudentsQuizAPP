@@ -38,7 +38,8 @@ async function setupStudentPushNotifications() {
   button.id = "notificationToggle";
   button.className = "notification-toggle";
   button.title = "Manage QuizMark notifications on this device";
-  navigation.appendChild(button);
+  const accountActions = document.getElementById("studentHomeActions");
+  (accountActions || navigation).appendChild(button);
 
   const registration = await navigator.serviceWorker.ready;
   let subscription = await registration.pushManager.getSubscription();
