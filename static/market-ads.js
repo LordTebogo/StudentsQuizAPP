@@ -14,7 +14,7 @@
     const link = safeLink(ad.website_url) || (ad.contact ? `https://wa.me/${ad.contact.replace(/\D/g, '')}` : '');
     return `<article class="market-advert ${compact ? 'compact' : ''}" data-market-ad="${ad.id}">
       ${ad.image_url ? `<img src="${esc(ad.image_url)}" alt="${esc(ad.business_name)} advert">` : '<div class="advert-art">✦</div>'}
-      <div class="advert-copy"><div class="advert-label">Sponsored · ${esc(ad.category)}</div><h3>${esc(ad.headline)}</h3>
+      <div class="advert-copy"><div class="advert-label">${ad.is_featured ? 'Featured · ' : ''}Sponsored · ${esc(ad.category)}</div><h3>${esc(ad.headline)}</h3>
       <p>${esc(ad.description)}</p><div class="advert-meta">${esc(ad.business_name)}${ad.campus ? ` · ${esc(ad.campus)}` : ''}</div>
       ${link ? `<a class="btn secondary advert-cta" href="${esc(link)}" target="_blank" rel="noopener" data-ad-click="${ad.id}">${ad.website_url ? 'Visit business' : 'Contact advertiser'}</a>` : ''}</div></article>`;
   };
