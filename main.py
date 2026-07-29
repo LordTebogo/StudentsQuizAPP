@@ -35,6 +35,7 @@ import hashlib
 import hmac
 import secrets
 import time
+import tempfile
 import urllib.request
 import zipfile
 from datetime import datetime, timedelta, timezone
@@ -95,6 +96,10 @@ from models import (
     ComradePost, ComradeReply, ComradeSrcReply,
 )
 from cloudinary_utils import upload_image_bytes, upload_video_bytes
+
+# Matplotlib is loaded lazily for equation rendering. Give it a writable
+# cache in local and cloud environments where the default home may be read-only.
+os.environ.setdefault("MPLCONFIGDIR", os.path.join(tempfile.gettempdir(), "nucleocampus-matplotlib"))
 
 # Lecturer-only areas (uploading quizzes, viewing/marking submissions) require
 # this PIN. It's sent as a header (X-Lecturer-Pin) on those requests.
@@ -944,6 +949,47 @@ def _pdf_escape(text: Optional[str]) -> str:
     return (text or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+def _looks_like_math_answer(text: str) -> bool:
+    """MathLive stores structured answers as LaTeX; normal text stays plain."""
+    return bool(re.search(r"\\[A-Za-z]+|[_^][{]", text))
+
+
+def _math_answer_image(latex: str) -> Optional[RLImage]:
+    """Render one MathLive LaTeX line to a sharp transparent PNG flowable."""
+    try:
+        from matplotlib.mathtext import math_to_image
+        cleaned = latex.strip().replace(r"\mleft", r"\left").replace(r"\mright", r"\right")
+        cleaned = re.sub(r"\\placeholder\{[^}]*\}", r"\\square", cleaned)
+        output = io.BytesIO()
+        math_to_image(f"${cleaned}$", output, format="png", dpi=180)
+        output.seek(0)
+        with PILImage.open(output) as image:
+            pixel_width, pixel_height = image.size
+        output.seek(0)
+        scale = min(72 / 180, (14 * cm) / max(pixel_width, 1))
+        rendered = RLImage(output, width=max(pixel_width * scale, 0.4 * cm), height=max(pixel_height * scale, 0.35 * cm))
+        rendered.hAlign = "LEFT"
+        return rendered
+    except Exception:
+        return None
+
+
+def _append_pdf_answer(flow: list, label: str, answer_text: str, style):
+    """Add a text answer as a paragraph or a MathLive answer as real notation."""
+    if not _looks_like_math_answer(answer_text):
+        flow.append(Paragraph(f"<b>{_pdf_escape(label)}:</b> {_pdf_escape(answer_text).replace(chr(10), '<br/>')}", style))
+        return
+    flow.append(Paragraph(f"<b>{_pdf_escape(label)}:</b>", style))
+    for line in (line for line in answer_text.splitlines() if line.strip()):
+        equation = _math_answer_image(line)
+        if equation:
+            flow.append(equation)
+            flow.append(Spacer(1, 0.08 * cm))
+        else:
+            # Preserve the answer if an unusual command cannot be rendered.
+            flow.append(Paragraph(_pdf_escape(line), style))
+
+
 SAST = timezone(timedelta(hours=2))  # South African Standard Time, no daylight saving
 
 
@@ -1095,7 +1141,7 @@ def build_submission_pdf(db: Session, submission_id: int, styles, include_expect
                 pass  # if the image can't be fetched, just skip it rather than fail the whole PDF
 
         answer_text = a.answer_text or "(no answer given)"
-        flow.append(Paragraph(f"<b>Student's answer:</b> {_pdf_escape(answer_text)}", styles["Answer"]))
+        _append_pdf_answer(flow, "Student's answer", answer_text, styles["Answer"])
 
         if include_expected_answers and q.type in ("mcq", "short") and q.correct_answer:
             flow.append(Paragraph(f"<b>Expected answer:</b> {_pdf_escape(q.correct_answer)}", styles["Expected"]))
@@ -1219,10 +1265,7 @@ def build_lesson_submission_pdf(
             styles["Question"],
         ))
         _append_pdf_question_image(flow, question.image_url)
-        flow.append(Paragraph(
-            f"<b>Student's answer:</b> {_pdf_escape(answer.answer_text or '(no answer given)')}",
-            styles["Answer"],
-        ))
+        _append_pdf_answer(flow, "Student's answer", answer.answer_text or "(no answer given)", styles["Answer"])
         if include_expected_answers and question.type in ("mcq", "short") and question.correct_answer:
             flow.append(Paragraph(
                 f"<b>Expected answer:</b> {_pdf_escape(question.correct_answer)}",
