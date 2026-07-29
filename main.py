@@ -36,6 +36,7 @@ import hmac
 import secrets
 import time
 import urllib.request
+import zipfile
 from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
 from itertools import permutations
@@ -61,6 +62,8 @@ from reportlab.platypus import (
     Spacer,
 )
 from PIL import Image as PILImage
+from pypdf import PdfReader, PdfWriter
+import pymupdf
 try:
     from pywebpush import WebPushException, webpush
 except ImportError:  # The app stays usable while push dependencies are being installed.
@@ -4047,6 +4050,142 @@ def admin_delete_lesson_comment(comment_id: int, _pin_ok: bool = Depends(require
     delete_thread(comment)
     db.commit()
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Shared student / lecturer PDF tools
+# ---------------------------------------------------------------------------
+DOCUMENT_TOOL_MAX_BYTES = 25 * 1024 * 1024
+_rapid_ocr_engine = None
+
+
+def require_document_tool_user(
+    x_student_token: Optional[str] = Header(None, alias="X-Student-Token"),
+    x_lecturer_token: Optional[str] = Header(None, alias="X-Lecturer-Token"),
+    db: Session = Depends(get_db),
+) -> str:
+    """Allow either approved account type without weakening their other routes."""
+    if x_student_token:
+        student = db.query(Student).filter(Student.id == _student_id_from_token(x_student_token)).first()
+        if student and student.active and student.approved:
+            return "student"
+    if x_lecturer_token:
+        lecturer = db.query(Lecturer).filter(Lecturer.id == _lecturer_id_from_token(x_lecturer_token)).first()
+        if lecturer and lecturer.active and lecturer.approved:
+            return "lecturer"
+    raise HTTPException(status_code=401, detail="Sign in as a student or lecturer to use document tools")
+
+
+async def _document_bytes(upload: UploadFile) -> bytes:
+    data = await upload.read(DOCUMENT_TOOL_MAX_BYTES + 1)
+    if not data:
+        raise HTTPException(status_code=400, detail=f"{upload.filename or 'The file'} is empty")
+    if len(data) > DOCUMENT_TOOL_MAX_BYTES:
+        raise HTTPException(status_code=413, detail=f"{upload.filename or 'The file'} is larger than 25 MB")
+    return data
+
+
+def _download(data: bytes, media_type: str, filename: str) -> StreamingResponse:
+    return StreamingResponse(io.BytesIO(data), media_type=media_type, headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
+
+@app.post("/document-tools/merge")
+async def merge_pdf_files(files: List[UploadFile] = File(...), _user: str = Depends(require_document_tool_user)):
+    if len(files) < 2 or len(files) > 20:
+        raise HTTPException(status_code=400, detail="Choose between 2 and 20 PDF files")
+    writer = PdfWriter()
+    try:
+        for upload in files:
+            data = await _document_bytes(upload)
+            if not data.startswith(b"%PDF"):
+                raise HTTPException(status_code=400, detail=f"{upload.filename or 'A selected file'} is not a PDF")
+            reader = PdfReader(io.BytesIO(data))
+            if reader.is_encrypted:
+                raise HTTPException(status_code=400, detail=f"{upload.filename or 'A PDF'} is password protected")
+            for page in reader.pages:
+                writer.add_page(page)
+        output = io.BytesIO(); writer.write(output)
+        return _download(output.getvalue(), "application/pdf", "merged-document.pdf")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="One of the PDFs is damaged or unsupported") from exc
+
+
+@app.post("/document-tools/convert")
+async def convert_document(file: UploadFile = File(...), target: str = Form(...), _user: str = Depends(require_document_tool_user)):
+    data = await _document_bytes(file)
+    if target == "image-to-pdf":
+        try:
+            image = PILImage.open(io.BytesIO(data)); image.load()
+            if image.mode not in ("RGB", "L"):
+                background = PILImage.new("RGB", image.size, "white")
+                if image.mode == "RGBA": background.paste(image, mask=image.getchannel("A"))
+                else: background.paste(image.convert("RGB"))
+                image = background
+            elif image.mode != "RGB": image = image.convert("RGB")
+            output = io.BytesIO(); image.save(output, "PDF", resolution=150)
+            return _download(output.getvalue(), "application/pdf", "converted-image.pdf")
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail="Choose a valid JPG, PNG, WEBP, BMP or TIFF picture") from exc
+    if target == "pdf-to-images":
+        if not data.startswith(b"%PDF"):
+            raise HTTPException(status_code=400, detail="PDF to pictures requires a PDF file")
+        try:
+            document = pymupdf.open(stream=data, filetype="pdf")
+            if document.page_count > 50:
+                raise HTTPException(status_code=400, detail="PDF conversion is limited to 50 pages")
+            output = io.BytesIO()
+            with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
+                for number, page in enumerate(document, 1):
+                    pixmap = page.get_pixmap(dpi=160, colorspace=pymupdf.csRGB, alpha=False)
+                    archive.writestr(f"page-{number:03d}.png", pixmap.tobytes("png"))
+            document.close()
+            return _download(output.getvalue(), "application/zip", "pdf-pages.zip")
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail="The PDF is damaged, encrypted or unsupported") from exc
+    raise HTTPException(status_code=400, detail="Choose a supported conversion")
+
+
+@app.post("/document-tools/ocr")
+async def ocr_document(file: UploadFile = File(...), source_type: str = Form(...), _user: str = Depends(require_document_tool_user)):
+    if source_type not in {"picture", "scanned-pdf"}:
+        raise HTTPException(status_code=400, detail="Choose Picture or Scanned PDF")
+    data = await _document_bytes(file)
+    try:
+        global _rapid_ocr_engine
+        if _rapid_ocr_engine is None:
+            from rapidocr import RapidOCR
+            _rapid_ocr_engine = RapidOCR()
+        engine = _rapid_ocr_engine
+        images = []
+        if source_type == "scanned-pdf":
+            if not data.startswith(b"%PDF"):
+                raise HTTPException(status_code=400, detail="Scanned PDF mode requires a PDF file")
+            document = pymupdf.open(stream=data, filetype="pdf")
+            if document.page_count > 20:
+                raise HTTPException(status_code=400, detail="OCR is limited to 20 PDF pages at a time")
+            images = [(index + 1, page.get_pixmap(dpi=220, colorspace=pymupdf.csRGB, alpha=False).tobytes("png")) for index, page in enumerate(document)]
+            document.close()
+        else:
+            if data.startswith(b"%PDF"):
+                raise HTTPException(status_code=400, detail="This is a PDF. Select Scanned PDF instead of Picture")
+            PILImage.open(io.BytesIO(data)).verify()
+            images = [(1, data)]
+        pages = []
+        for page_number, image_bytes in images:
+            result = engine(image_bytes)
+            lines = list(result.txts or ()) if result else []
+            heading = f"--- Page {page_number} ---\n" if source_type == "scanned-pdf" else ""
+            pages.append(heading + "\n".join(lines))
+        text_output = "\n\n".join(pages).strip() or "No readable text was detected."
+        return _download(text_output.encode("utf-8"), "text/plain; charset=utf-8", "ocr-text.txt")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="OCR could not read this file. Use a clear, upright picture or scanned PDF") from exc
 
 
 @app.get("/")
