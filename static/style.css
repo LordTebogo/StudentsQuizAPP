@@ -202,7 +202,20 @@ textarea { min-height: 110px; resize: vertical; }
 .math-toolbar.hidden { display: none; }
 .math-symbol { min-height: 42px; border: 1px solid rgba(148,163,184,.22); border-radius: 9px; background: rgba(15,27,48,.9); color: #edfaff; cursor: pointer; font: 600 1.02rem Georgia, "Times New Roman", serif; }
 .math-symbol:hover, .math-symbol:focus-visible { border-color: var(--cyan); background: rgba(34,211,238,.15); transform: translateY(-1px); }
-.quiz-math-field { display: block; width: 100%; min-height: 82px; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: rgba(6,14,29,.75); color: var(--text); font-size: 1.22rem; box-sizing: border-box; overflow-x: auto; }
+.quiz-math-field {
+  display: block; width: 100%; min-height: 82px; padding: 16px;
+  border: 1px solid var(--border); border-radius: 12px;
+  background: rgba(6,14,29,.75); color: #edfaff;
+  font-size: 1.22rem; box-sizing: border-box; overflow-x: auto;
+  color-scheme: dark;
+  --caret-color: #67e8f9;
+  --selection-background-color: #155e75;
+  --selection-color: #ffffff;
+  --contains-highlight-background-color: rgba(34,211,238,.20);
+  --placeholder-color: #8190aa;
+  --smart-fence-color: #67e8f9;
+  --smart-fence-opacity: 1;
+}
 .short-math-answer .quiz-math-field { min-height: 58px; }
 .quiz-math-field:focus-within { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(103,232,249,.14), 0 0 20px rgba(34,211,238,.08); }
 .math-hint { margin: 7px 2px 0; color: #8190aa; font-size: .78rem; line-height: 1.4; }
