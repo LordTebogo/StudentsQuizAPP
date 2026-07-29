@@ -243,7 +243,7 @@ document.querySelectorAll('[data-desk]').forEach(b=>b.addEventListener('click',(
         if (contact && !contact.dataset.masked) {
           contact.dataset.masked = 'true'; contact.dataset.contact = contact.textContent.replace(/^Contact:\s*/,'');
           const button = document.createElement('button'); button.type='button'; button.className='btn secondary contact-reveal'; button.textContent='Show contact details';
-          button.addEventListener('click',()=>{if(!sessionStorage.getItem('studentToken')&&!sessionStorage.getItem('landlordToken')){alert('Sign in as a student or landlord to view contact details.');return}button.textContent='Contact: '+contact.dataset.contact;button.disabled=true;});
+          button.addEventListener('click',()=>{button.textContent='Contact: '+contact.dataset.contact;button.disabled=true;});
           contact.replaceWith(button);
         }
         const body = card.querySelector('.listing-body');
