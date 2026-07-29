@@ -196,8 +196,10 @@ textarea { min-height: 110px; resize: vertical; }
 /* Visual equation composer used by written quiz answers. */
 .math-answer { margin-top: 18px; }
 .math-answer-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; color: var(--muted); font-size: .86rem; font-weight: 700; }
-.math-tools-toggle { border: 1px solid rgba(103,232,249,.32); border-radius: 999px; padding: 7px 13px; background: rgba(34,211,238,.08); color: var(--cyan); cursor: pointer; font-weight: 750; }
-.math-tools-toggle:hover, .math-tools-toggle[aria-expanded="true"] { background: rgba(34,211,238,.17); border-color: var(--cyan); }
+.answer-mode-toggle { border: 1px solid rgba(103,232,249,.5); border-radius: 999px; padding: 9px 15px; background: rgba(34,211,238,.1); color: var(--cyan); cursor: pointer; font-weight: 750; }
+.answer-mode-toggle:hover, .answer-mode-toggle[aria-pressed="true"] { background: rgba(34,211,238,.19); border-color: var(--cyan); color: #d8fcff; }
+.plain-answer { margin-top: 0; }
+.math-mode-panel.hidden { display: none; }
 .math-toolbar { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 7px; margin-bottom: 9px; padding: 10px; border: 1px solid rgba(103,232,249,.18); border-radius: 13px; background: rgba(5,12,25,.62); }
 .math-toolbar.hidden { display: none; }
 .math-symbol { min-height: 42px; border: 1px solid rgba(148,163,184,.22); border-radius: 9px; background: rgba(15,27,48,.9); color: #edfaff; cursor: pointer; font: 600 1.02rem Georgia, "Times New Roman", serif; }
