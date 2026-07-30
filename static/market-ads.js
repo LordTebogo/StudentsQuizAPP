@@ -10,6 +10,45 @@
     return data;
   };
   const safeLink = value => /^https?:\/\//i.test(value || '') ? value : (value ? `https://${value}` : '');
+  function installMarketAuthDialog() {
+    if (document.getElementById('marketAuthDialog')) return;
+    const dialog = document.createElement('dialog');
+    dialog.id = 'marketAuthDialog'; dialog.className = 'market-auth-dialog';
+    dialog.innerHTML = `<div class="market-auth-step" data-auth-step="start"><span class="market-kicker">Account required</span><h2>Sign in to continue</h2><p>Your account keeps transport listings reviewed and connected to a verified provider.</p><div class="market-auth-actions"><button class="btn" type="button" data-auth-next>Sign in</button><button class="btn secondary" type="button" data-auth-cancel>Cancel</button></div></div><div class="market-auth-step hidden" data-auth-step="role"><button class="market-auth-back" type="button" data-auth-back>← Back</button><span class="market-kicker">Choose account type</span><h2>How are you signing in?</h2><p>Select the account that you use on NucleoCampus.</p><div class="market-role-grid"><button type="button" data-auth-role="student"><strong>Student</strong><span>Use your student account</span></button><button type="button" data-auth-role="landlord"><strong>Landlord</strong><span>Manage residences and listings</span></button><button type="button" data-auth-role="business"><strong>Businessman</strong><span>Publish transport or delivery services</span></button></div><button class="btn secondary market-auth-cancel" type="button" data-auth-cancel>Cancel</button></div>`;
+    document.body.appendChild(dialog);
+    const showStep = name => dialog.querySelectorAll('[data-auth-step]').forEach(step => step.classList.toggle('hidden', step.dataset.authStep !== name));
+    const close = () => { if (dialog.open) dialog.close(); else dialog.removeAttribute('open'); showStep('start'); };
+    dialog.querySelector('[data-auth-next]').addEventListener('click', () => showStep('role'));
+    dialog.querySelector('[data-auth-back]').addEventListener('click', () => showStep('start'));
+    dialog.querySelectorAll('[data-auth-cancel]').forEach(button => button.addEventListener('click', close));
+    dialog.addEventListener('cancel', event => { event.preventDefault(); close(); });
+    dialog.addEventListener('click', event => { if (event.target === dialog) close(); });
+    dialog.querySelectorAll('[data-auth-role]').forEach(button => button.addEventListener('click', () => {
+      const role = button.dataset.authRole;
+      if (role === 'student') { window.location.href = '/static/student.html'; return; }
+      close();
+      if (typeof setDesk === 'function') setDesk('login');
+      const providerDesk = document.querySelector('.market-side > .landlord-desk');
+      const email = document.getElementById('landlordEmail');
+      const heading = providerDesk?.querySelector('h2');
+      if (role === 'business') {
+        if (email) email.placeholder = 'Business email';
+        if (heading) heading.textContent = 'Business provider sign-in';
+        const providerType = document.getElementById('providerType'); if (providerType) providerType.value = 'transport';
+      } else {
+        if (email) email.placeholder = 'Landlord email';
+        if (heading) heading.textContent = 'Residence provider sign-in';
+      }
+      providerDesk?.scrollIntoView({behavior:'smooth', block:'start'});
+      window.setTimeout(() => email?.focus(), 450);
+    }));
+  }
+  function showMarketAuthDialog() {
+    installMarketAuthDialog();
+    const dialog = document.getElementById('marketAuthDialog');
+    dialog.querySelectorAll('[data-auth-step]').forEach(step => step.classList.toggle('hidden', step.dataset.authStep !== 'start'));
+    if (typeof dialog.showModal === 'function') dialog.showModal(); else dialog.setAttribute('open', '');
+  }
   const advertCard = (ad, compact = false) => {
     const link = safeLink(ad.website_url) || (ad.contact ? `https://wa.me/${ad.contact.replace(/\D/g, '')}` : '');
     return `<article class="market-advert ${compact ? 'compact' : ''}" data-market-ad="${ad.id}">
@@ -112,8 +151,7 @@
     const wrap = desk.querySelector('#advertFormWrap');
     const open = () => {
       if (!studentToken() && !landlordToken()) {
-        alert('Sign in as a student or landlord first.');
-        document.querySelector('.landlord-desk')?.scrollIntoView({behavior:'smooth'}); return;
+        showMarketAuthDialog(); return;
       }
       wrap.classList.remove('hidden'); desk.querySelector('#openAdvertForm').classList.add('hidden');
     };
@@ -143,6 +181,7 @@
     const pause = event.target.closest('.pause-advert'); if (pause && confirm('Pause this advert?')) { await api(`/marketing/adverts/${pause.dataset.id}/pause`, {method:'PUT', headers:authHeaders()}); loadMyAds(); loadPublicAds(); }
   });
   function init() {
+    installMarketAuthDialog();
     installAdvertDesk();
     ensureTransportSection();
     const first = document.querySelector('.market-side .ad-card');
