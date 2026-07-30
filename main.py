@@ -27,6 +27,7 @@ Deploy on Render with:
 """
 
 import io
+import asyncio
 import json
 import os
 import re
@@ -43,7 +44,7 @@ from difflib import SequenceMatcher
 from itertools import permutations
 from typing import List, Optional
 
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -71,7 +72,7 @@ except ImportError:  # The app stays usable while push dependencies are being in
     WebPushException = Exception
     webpush = None
 
-from database import Base, engine, get_db
+from database import Base, SessionLocal, engine, get_db
 from models import (
     Answer,
     DirectMessage,
@@ -4229,6 +4230,112 @@ async def ocr_document(file: UploadFile = File(...), source_type: str = Form(...
         raise
     except Exception as exc:
         raise HTTPException(status_code=400, detail="OCR could not read this file. Use a clear, upright picture or scanned PDF") from exc
+
+
+# ---------------------------------------------------------------------------
+# Ephemeral WebRTC live lessons (signalling only - no media is stored)
+# ---------------------------------------------------------------------------
+_live_rooms: dict[str, dict[str, dict]] = {}
+LIVE_ROOM_LIMIT = 12
+
+
+@app.get("/live/ice-config")
+def live_lesson_ice_config():
+    servers = [{"urls": "stun:stun.l.google.com:19302"}]
+    turn_url = os.getenv("TURN_URL", "").strip()
+    if turn_url:
+        servers.append({"urls": turn_url, "username": os.getenv("TURN_USERNAME", ""), "credential": os.getenv("TURN_CREDENTIAL", "")})
+    return {"iceServers": servers}
+
+
+async def _live_broadcast(room: dict[str, dict], message: dict, exclude: Optional[str] = None):
+    sends = [member["socket"].send_json(message) for peer_id, member in room.items() if peer_id != exclude]
+    if sends:
+        await asyncio.gather(*sends, return_exceptions=True)
+
+
+@app.websocket("/ws/live/{room_code}")
+async def live_lesson_socket(websocket: WebSocket, room_code: str):
+    room_code = re.sub(r"[^A-Z0-9_-]", "", room_code.upper())[:32]
+    if len(room_code) < 4:
+        await websocket.close(code=1008, reason="Invalid room code")
+        return
+    await websocket.accept()
+    peer_id = secrets.token_urlsafe(8)
+    role = ""; display_name = ""; joined = False
+    try:
+        auth = await asyncio.wait_for(websocket.receive_json(), timeout=10)
+        token = str(auth.get("token", "")); role = str(auth.get("role", ""))
+        db = SessionLocal()
+        try:
+            if role == "student":
+                account = db.query(Student).filter(Student.id == _student_id_from_token(token)).first()
+                valid = bool(account and account.active and account.approved)
+            elif role == "lecturer":
+                account = db.query(Lecturer).filter(Lecturer.id == _lecturer_id_from_token(token)).first()
+                valid = bool(account and account.active and account.approved)
+            else:
+                valid = False; account = None
+            if not valid:
+                await websocket.send_json({"type": "error", "message": "Your account cannot join this live lesson"})
+                await websocket.close(code=1008)
+                return
+            display_name = account.full_name[:100]
+        finally:
+            db.close()
+
+        room = _live_rooms.get(room_code)
+        if room is None:
+            if role != "lecturer":
+                await websocket.send_json({"type": "error", "message": "This live lesson has not started yet"})
+                await websocket.close(code=1008)
+                return
+            room = _live_rooms.setdefault(room_code, {})
+        if len(room) >= LIVE_ROOM_LIMIT:
+            await websocket.send_json({"type": "error", "message": "This live lesson is full"})
+            await websocket.close(code=1008)
+            return
+
+        participants = [{"id": existing_id, "name": member["name"], "role": member["role"]} for existing_id, member in room.items()]
+        room[peer_id] = {"socket": websocket, "name": display_name, "role": role}
+        joined = True
+        await websocket.send_json({"type": "welcome", "selfId": peer_id, "room": room_code, "participants": participants})
+        await _live_broadcast(room, {"type": "peer-joined", "id": peer_id, "name": display_name, "role": role}, exclude=peer_id)
+
+        while True:
+            message = await websocket.receive_json()
+            kind = message.get("type")
+            if kind not in {"offer", "answer", "ice"}:
+                continue
+            target = str(message.get("target", ""))
+            if target not in room:
+                continue
+            relay = {"type": kind, "from": peer_id}
+            if kind in {"offer", "answer"}:
+                relay["sdp"] = message.get("sdp")
+            else:
+                relay["candidate"] = message.get("candidate")
+            await room[target]["socket"].send_json(relay)
+    except (WebSocketDisconnect, asyncio.TimeoutError, ValueError, HTTPException):
+        pass
+    finally:
+        room = _live_rooms.get(room_code)
+        if joined and room:
+            room.pop(peer_id, None)
+            await _live_broadcast(room, {"type": "peer-left", "id": peer_id, "name": display_name})
+            if role == "lecturer" and not any(member["role"] == "lecturer" for member in room.values()):
+                await _live_broadcast(room, {"type": "room-ended"})
+                for member in list(room.values()):
+                    try: await member["socket"].close(code=1000)
+                    except Exception: pass
+                room.clear()
+            if not room:
+                _live_rooms.pop(room_code, None)
+        elif not joined:
+            try:
+                await websocket.close(code=1008)
+            except Exception:
+                pass
 
 
 @app.get("/")
