@@ -4290,6 +4290,46 @@ def live_lesson_ice_config():
     return {"iceServers": servers}
 
 
+@app.get("/admin/live-sessions")
+async def admin_live_sessions(_pin_ok: bool = Depends(require_lecturer_pin)):
+    """Return current LiveKit room metadata only; no lesson media is accessed or stored."""
+    livekit_url = os.getenv("LIVEKIT_URL", "").strip()
+    api_key = os.getenv("LIVEKIT_API_KEY", "").strip()
+    api_secret = os.getenv("LIVEKIT_API_SECRET", "").strip()
+    if not all((livekit_url, api_key, api_secret)):
+        return {"active_rooms": 0, "participants": 0, "rooms": [], "configured": False}
+    try:
+        from livekit import api
+        async with api.LiveKitAPI(livekit_url, api_key, api_secret) as livekit:
+            response = await livekit.room.list_rooms(api.ListRoomsRequest())
+        def room_started_at(room):
+            timestamp = room.creation_time
+            if not timestamp:
+                return None
+            if timestamp > 10_000_000_000:
+                timestamp /= 1000
+            return datetime.fromtimestamp(timestamp, timezone.utc).isoformat()
+        rooms = [
+            {
+                "code": room.name,
+                "participants": room.num_participants,
+                "publishers": room.num_publishers,
+                "started_at": room_started_at(room),
+            }
+            for room in response.rooms
+            if room.num_participants > 0
+        ]
+        rooms.sort(key=lambda item: item["started_at"] or "", reverse=True)
+        return {
+            "active_rooms": len(rooms),
+            "participants": sum(item["participants"] for item in rooms),
+            "rooms": rooms,
+            "configured": True,
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Could not read current live classroom activity") from exc
+
+
 async def _live_broadcast(room: dict[str, dict], message: dict, exclude: Optional[str] = None):
     sends = [member["socket"].send_json(message) for peer_id, member in room.items() if peer_id != exclude]
     if sends:
