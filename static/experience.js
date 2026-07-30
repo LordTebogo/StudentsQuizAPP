@@ -1,4 +1,10 @@
 (function () {
+  if (!document.querySelector('link[href="/static/product.css"]')) {
+    const productStyles = document.createElement('link');
+    productStyles.rel = 'stylesheet';
+    productStyles.href = '/static/product.css';
+    document.head.appendChild(productStyles);
+  }
   const body = document.body;
   if (!body) return;
   body.classList.add('nucleocampus-ui');
