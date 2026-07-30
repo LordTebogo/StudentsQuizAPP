@@ -4239,6 +4239,48 @@ _live_rooms: dict[str, dict[str, dict]] = {}
 LIVE_ROOM_LIMIT = 12
 
 
+@app.post("/live/token")
+async def live_lesson_token(
+    room_code: str = Form(...),
+    x_student_token: Optional[str] = Header(None, alias="X-Student-Token"),
+    x_lecturer_token: Optional[str] = Header(None, alias="X-Lecturer-Token"),
+    db: Session = Depends(get_db),
+):
+    """Issue a short-lived SFU room token; video, audio and chat are not persisted here."""
+    livekit_url = os.getenv("LIVEKIT_URL", "").strip()
+    api_key = os.getenv("LIVEKIT_API_KEY", "").strip()
+    api_secret = os.getenv("LIVEKIT_API_SECRET", "").strip()
+    if not all((livekit_url, api_key, api_secret)):
+        raise HTTPException(status_code=503, detail="Live lessons need LIVEKIT_URL, LIVEKIT_API_KEY and LIVEKIT_API_SECRET configuration")
+    code = re.sub(r"[^A-Z0-9_-]", "", room_code.upper())[:32]
+    if len(code) < 4:
+        raise HTTPException(status_code=400, detail="Enter a valid room code")
+    if x_lecturer_token:
+        account = db.query(Lecturer).filter(Lecturer.id == _lecturer_id_from_token(x_lecturer_token)).first()
+        role = "lecturer"
+        valid = bool(account and account.active and account.approved)
+    elif x_student_token:
+        account = db.query(Student).filter(Student.id == _student_id_from_token(x_student_token)).first()
+        role = "student"
+        valid = bool(account and account.active and account.approved)
+    else:
+        account = None; role = ""; valid = False
+    if not valid:
+        raise HTTPException(status_code=403, detail="Your approved student or lecturer account is required")
+    try:
+        from livekit import api
+        identity = f"{role}-{account.id}-{secrets.token_urlsafe(5)}"
+        access = (api.AccessToken(api_key, api_secret)
+            .with_identity(identity)
+            .with_name(account.full_name[:100])
+            .with_attributes({"role": role})
+            .with_grants(api.VideoGrants(room_join=True, room=code, can_publish=True, can_subscribe=True, can_publish_data=True))
+            .with_room_config(api.RoomConfiguration(max_participants=100, empty_timeout=600, departure_timeout=30)))
+        return {"token": access.to_jwt(), "url": livekit_url, "room": code, "role": role, "name": account.full_name, "capacity": 100}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Could not prepare the live lesson") from exc
+
+
 @app.get("/live/ice-config")
 def live_lesson_ice_config():
     servers = [{"urls": "stun:stun.l.google.com:19302"}]
