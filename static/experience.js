@@ -24,8 +24,13 @@
   }
   const studentToken = sessionStorage.getItem('studentToken');
   const lecturerToken = sessionStorage.getItem('lecturerToken');
-  const activeRole = lecturerToken ? 'lecturer' : studentToken ? 'student' : 'public';
-  const roleLinks = activeRole === 'lecturer' ? [
+  const adminPin = sessionStorage.getItem('lecturerPin');
+  const activeRole = location.pathname.endsWith('/admin.html') && adminPin ? 'admin' : lecturerToken ? 'lecturer' : studentToken ? 'student' : 'public';
+  const activeSessionKey = activeRole === 'admin' ? 'lecturerPin' : activeRole + 'Token';
+  const roleLinks = activeRole === 'admin' ? [
+    ['/static/admin.html#adminOverview', 'Overview'], ['/static/admin.html#adminContent', 'Content'],
+    ['/static/admin.html#adminPeople', 'Users'], ['/static/admin.html#marketAdvertAdmin', 'Approvals'],
+  ] : activeRole === 'lecturer' ? [
     ['/static/index.html', 'Overview'], ['/static/lecturer.html', 'Quizzes'],
     ['/static/lessons_lecturer.html', 'Lessons'], ['/static/live_lesson.html', 'Live classroom'],
   ] : activeRole === 'student' ? [
@@ -36,13 +41,21 @@
     ['/static/index.html', 'Home'], ['/static/student.html', 'Students'],
     ['/static/lecturer.html', 'Lecturers'], ['/static/marketing.html', 'Market'],
   ];
-  const moreLinks = activeRole === 'lecturer' ? [
+  const moreLinks = activeRole === 'admin' ? [
+    ['/static/admin.html#liveMonitorCard','Live sessions'], ['/static/admin.html#adminScripts','Submissions'],
+    ['/static/admin.html#adminModeration','Moderation'], ['/static/trust.html#support','Support'],
+  ] : activeRole === 'lecturer' ? [
     ['/static/pdf_tools.html', 'PDF tools'], ['/static/fun.html', 'Community'],
     ['/static/comrade.html', 'SRC'], ['/static/marketing.html', 'Market'],
   ] : activeRole === 'student' ? [
     ['/static/comrade.html', 'SRC'], ['/static/marketing.html', 'Market'],
     ['/static/pdf_tools.html', 'PDF tools'],
   ] : [['/static/fun.html', 'Community'], ['/static/comrade.html', 'SRC']];
+  function toggleMobileMenu(open) {
+    let sheet=document.querySelector('.mobile-more-sheet'),scrim=document.querySelector('.mobile-more-scrim');
+    if(!sheet){scrim=document.createElement('button');scrim.type='button';scrim.className='mobile-more-scrim';scrim.setAttribute('aria-label','Close menu');sheet=document.createElement('section');sheet.className='mobile-more-sheet';sheet.setAttribute('aria-label','More navigation');const all=[...moreLinks];if(activeRole!=='public')all.push([activeRole==='admin'?'/static/admin.html':activeRole==='lecturer'?'/static/lecturer.html':'/static/student.html',activeRole==='admin'?'Administration overview':'Profile & settings'],['/static/trust.html#support','Help & support']);sheet.innerHTML='<div class="mobile-sheet-handle"></div><div class="mobile-sheet-head"><strong>More</strong><button type="button" aria-label="Close menu">×</button></div><nav></nav>';const list=sheet.querySelector('nav');all.forEach(([href,label])=>{const a=document.createElement('a');a.href=href;a.textContent=label;list.appendChild(a)});if(activeRole!=='public'){const signout=document.createElement('button');signout.type='button';signout.className='mobile-signout';signout.textContent=activeRole==='admin'?'Lock administration':'Sign out';signout.addEventListener('click',()=>{sessionStorage.removeItem(activeSessionKey);sessionStorage.removeItem('activeRole');location.href=activeRole==='admin'?'/static/admin.html':'/static/index.html'});list.appendChild(signout)}document.body.append(scrim,sheet);scrim.addEventListener('click',()=>toggleMobileMenu(false));sheet.querySelector('.mobile-sheet-head button').addEventListener('click',()=>toggleMobileMenu(false))}
+    const shouldOpen=open===undefined?!sheet.classList.contains('open'):open;sheet.classList.toggle('open',shouldOpen);scrim.classList.toggle('open',shouldOpen);document.body.classList.toggle('menu-open',shouldOpen);
+  }
 
   document.querySelectorAll('header.top nav').forEach(nav => {
     nav.classList.add('experience-nav');
@@ -62,6 +75,7 @@
     });
     const more = document.createElement('details'); more.className = 'nav-more';
     more.innerHTML = '<summary>More</summary><div class="nav-more-menu"></div>';
+    more.querySelector('summary').addEventListener('click',event=>{if(matchMedia('(max-width:820px)').matches){event.preventDefault();more.removeAttribute('open');toggleMobileMenu(true)}});
     const menu = more.querySelector('.nav-more-menu');
     moreLinks.forEach(([href, label]) => { const link=document.createElement('a'); link.href=href; link.textContent=label; menu.appendChild(link); });
     if (activeRole !== 'public') {
@@ -69,8 +83,8 @@
       profile.addEventListener('click', () => {
         const existing = document.querySelector('.account-sheet'); if (existing) { existing.remove(); return; }
         const sheet=document.createElement('div'); sheet.className='account-sheet';
-        sheet.innerHTML=`<strong>${activeRole==='lecturer'?'Lecturer':'Student'} account</strong><a href="${activeRole==='lecturer'?'/static/lecturer.html':'/static/student.html'}">Profile & settings</a><a href="/static/trust.html#support">Help & support</a><button type="button">Sign out</button>`;
-        sheet.querySelector('button').addEventListener('click',()=>{sessionStorage.removeItem(activeRole+'Token');sessionStorage.removeItem('activeRole');location.href='/static/index.html'});
+        sheet.innerHTML=`<strong>${activeRole==='admin'?'Administrator':activeRole==='lecturer'?'Lecturer':'Student'} account</strong><a href="${activeRole==='admin'?'/static/admin.html':activeRole==='lecturer'?'/static/lecturer.html':'/static/student.html'}">${activeRole==='admin'?'Administration overview':'Profile & settings'}</a><a href="/static/trust.html#support">Help & support</a><button type="button">${activeRole==='admin'?'Lock administration':'Sign out'}</button>`;
+        sheet.querySelector('button').addEventListener('click',()=>{sessionStorage.removeItem(activeSessionKey);sessionStorage.removeItem('activeRole');location.href=activeRole==='admin'?'/static/admin.html':'/static/index.html'});
         document.body.appendChild(sheet);
       });
       menu.appendChild(profile);
@@ -82,7 +96,7 @@
     const mobile = document.createElement('nav'); mobile.className='mobile-tabbar'; mobile.setAttribute('aria-label','Primary mobile navigation');
     const mobileLinks = activeRole === 'lecturer' ? roleLinks : roleLinks.slice(0,4);
     mobileLinks.forEach(([href,label])=>{const a=document.createElement('a');a.href=href;a.textContent=label;if(new URL(a.href,location.href).pathname===location.pathname)a.setAttribute('aria-current','page');mobile.appendChild(a)});
-    const moreButton=document.createElement('button');moreButton.type='button';moreButton.textContent='More';moreButton.addEventListener('click',()=>document.querySelector('header.top .nav-more')?.setAttribute('open',''));mobile.appendChild(moreButton);document.body.appendChild(mobile);
+    const moreButton=document.createElement('button');moreButton.type='button';moreButton.textContent='More';moreButton.setAttribute('aria-haspopup','dialog');moreButton.addEventListener('click',()=>toggleMobileMenu());mobile.appendChild(moreButton);document.body.appendChild(mobile);
   }
 
   const studentPortal = document.getElementById('studentPortal');
@@ -105,9 +119,20 @@
     const app=document.getElementById('appWrap');
     if(!document.querySelector('.workflow-nav')){const results=[...app.querySelectorAll('.card')].find(card=>card.querySelector('h2')?.textContent.includes('My results'));if(results)results.id='studentResults';const tabs=document.createElement('nav');tabs.className='workflow-nav';tabs.setAttribute('aria-label','Student workspace sections');tabs.innerHTML='<a href="#moduleCard">Quizzes</a><a href="#studentResults">Results</a><a href="#studentBottomMessages">Messages</a><a href="#studentModulePicker">My modules</a>';app.querySelector('.lede')?.after(tabs)}
   }
+  if (location.pathname.endsWith('/admin.html') && document.getElementById('appWrap')) {
+    const app=document.getElementById('appWrap'),heading=app.querySelector('h1'),lede=app.querySelector('.lede');if(heading)heading.id='adminOverview';
+    const findCard=text=>[...app.querySelectorAll('.card')].find(card=>card.querySelector('h2')?.textContent.includes(text));
+    const quizCard=findCard('Quizzes');if(quizCard?.parentElement)quizCard.parentElement.id='adminContent';const people=findCard('Lecturer management');if(people)people.id='adminPeople';const scripts=findCard('All student scripts');if(scripts)scripts.id='adminScripts';const moderation=findCard('Community moderation');if(moderation)moderation.id='adminModeration';
+    if(lede&&!document.getElementById('adminDashboard')){const dashboard=document.createElement('section');dashboard.id='adminDashboard';dashboard.className='admin-dashboard';dashboard.innerHTML='<div class="admin-stat"><span>Live now</span><strong id="dashLive">0</strong><small>active classrooms</small></div><div class="admin-stat"><span>Approvals</span><strong id="dashApprovals">—</strong><small>adverts awaiting review</small></div><div class="admin-stat"><span>Students</span><strong id="dashStudents">—</strong><small>registered accounts</small></div><div class="admin-stat"><span>Content</span><strong id="dashContent">—</strong><small>quizzes and lessons</small></div>';lede.after(dashboard);const update=()=>{const live=document.getElementById('activeLiveCount')?.textContent||'0',pending=[...document.querySelectorAll('[data-admin-ad] .status-chip')].filter(e=>e.textContent.trim()==='pending').length,students=studentAdminRows?.length||document.querySelectorAll('#studentList .account-row').length,content=document.querySelectorAll('#quizList .admin-list-item,#lessonList .admin-list-item').length;document.getElementById('dashLive').textContent=live;document.getElementById('dashApprovals').textContent=String(pending);document.getElementById('dashStudents').textContent=String(students);document.getElementById('dashContent').textContent=String(content)};new MutationObserver(update).observe(app,{childList:true,subtree:true});update()}
+    if(!document.getElementById('adminActivity')){const activity=document.createElement('section');activity.id='adminActivity';activity.className='card admin-activity';activity.innerHTML='<span class="kicker">Accountability</span><h2>Recent activity</h2><p class="muted">Actions taken in this administrator session.</p><div id="adminActivityList" class="admin-list"><p class="muted">No actions yet.</p></div>';app.appendChild(activity);const render=()=>{const rows=JSON.parse(sessionStorage.getItem('adminSessionActivity')||'[]');document.getElementById('adminActivityList').innerHTML=rows.length?rows.map(row=>`<div class="activity-row"><strong>${row.action}</strong><span>${row.time}</span></div>`).join(''):'<p class="muted">No actions yet.</p>'};app.addEventListener('click',event=>{const button=event.target.closest('button');if(!button||button.classList.contains('card-toggle')||button.id==='refreshLiveSessionsBtn')return;const label=button.textContent.trim().replace(/\s+/g,' ').slice(0,80);if(!label)return;const rows=JSON.parse(sessionStorage.getItem('adminSessionActivity')||'[]');rows.unshift({action:label,time:new Date().toLocaleString()});sessionStorage.setItem('adminSessionActivity',JSON.stringify(rows.slice(0,20)));render()});render()}
+    const searchable=[['quizList','Search quizzes'],['lessonList','Search lessons'],['lecturerList','Search lecturers'],['adminScriptsList','Search submissions']];searchable.forEach(([id,placeholder])=>{const list=document.getElementById(id);if(!list||document.querySelector(`[data-search-for="${id}"]`))return;const input=document.createElement('input');input.type='search';input.className='admin-inline-search';input.dataset.searchFor=id;input.placeholder=placeholder;input.setAttribute('aria-label',placeholder);list.before(input);const apply=()=>{const query=input.value.trim().toLowerCase();[...list.children].forEach(row=>row.classList.toggle('hidden',Boolean(query&&!row.textContent.toLowerCase().includes(query))))};input.addEventListener('input',apply);new MutationObserver(apply).observe(list,{childList:true})});
+  }
   if (location.pathname.endsWith('/marketing.html')) {
-    const labels={campusFilter:'Campus or university',listingSearch:'Search accommodation',maxRentFilter:'Maximum monthly rent',roomTypeFilter:'Room type'};
+    const labels={campusFilter:'Campus or university',maxRentFilter:'Maximum monthly rent',roomFilter:'Room type'};
     Object.entries(labels).forEach(([id,text])=>{const input=document.getElementById(id);if(!input||input.previousElementSibling?.classList.contains('field-name'))return;const label=document.createElement('label');label.className='field-name';label.htmlFor=id;label.textContent=text;input.before(label)});
+    const tools=document.querySelector('.market-tools'),feed=document.getElementById('listingFeed');
+    if(tools&&!tools.closest('.market-filter-panel')){const panel=document.createElement('section');panel.className='market-filter-panel';panel.innerHTML='<div class="market-filter-head"><div><span class="market-kicker">Find accommodation</span><h2>Search and filter</h2></div><button type="button" class="filter-collapse" aria-expanded="true">Hide filters</button></div><div class="market-filter-fields"></div>';tools.before(panel);panel.querySelector('.market-filter-fields').appendChild(tools);panel.querySelector('.filter-collapse').addEventListener('click',event=>{const collapsed=panel.classList.toggle('filters-collapsed');event.currentTarget.setAttribute('aria-expanded',String(!collapsed));event.currentTarget.textContent=collapsed?'Show filters':'Hide filters'})}
+    if(feed&&!document.querySelector('.market-results-head')){const head=document.createElement('div');head.className='market-results-head';head.innerHTML='<div><span id="marketResultCount">Loading places…</span><small>Verified landlord-managed listings</small></div><label>Sort by<select id="marketSort"><option value="recommended">Recommended</option><option value="price-low">Price: low to high</option><option value="price-high">Price: high to low</option><option value="name">Name</option></select></label>';feed.before(head);const update=()=>{const cards=[...feed.querySelectorAll('.listing-card')],visible=cards.filter(card=>!card.classList.contains('hidden'));document.getElementById('marketResultCount').textContent=`${visible.length} ${visible.length===1?'place':'places'} found`;cards.forEach(card=>{if(card.querySelector('.listing-facts'))return;const location=card.querySelector('.location')?.textContent.split('·').map(part=>part.trim()).filter(Boolean)||[];if(location.length){const facts=document.createElement('div');facts.className='listing-facts';facts.innerHTML=location.slice(0,3).map(value=>`<span>${value.replace(/[<>&]/g,'')}</span>`).join('');card.querySelector('.listing-meta')?.after(facts)}})};const sort=()=>{const mode=document.getElementById('marketSort').value,cards=[...feed.querySelectorAll('.listing-card')];cards.sort((a,b)=>{if(mode==='name')return(a.querySelector('h2')?.textContent||'').localeCompare(b.querySelector('h2')?.textContent||'');const price=card=>Number((card.querySelector('.rent')?.textContent||'').replace(/[^0-9]/g,''))||Number.MAX_SAFE_INTEGER;if(mode==='price-low')return price(a)-price(b);if(mode==='price-high')return price(b)-price(a);return 0});cards.forEach(card=>feed.appendChild(card));update()};document.getElementById('marketSort').addEventListener('change',sort);new MutationObserver(update).observe(feed,{childList:true,subtree:true,attributes:true,attributeFilter:['class']});update()}
   }
   const messagingAssets = {
     '/static/student.html': '/static/student-messaging.js',

@@ -38,8 +38,15 @@
 
   document.addEventListener('click', event => {
     if (!(event.target instanceof Element)) return;
+    const navigation = event.target.closest('a[href]');
+    if (navigation && !navigation.getAttribute('href').startsWith('#') && !navigation.hasAttribute('download')) {
+      navigation.classList.add('is-navigating');
+      navigation.setAttribute('aria-busy', 'true');
+    }
     const control = event.target.closest('button, .module-card, .lesson-list-item, [role="button"]');
     if (!control || control.disabled || control.dataset.noLoading !== undefined) return;
+    control.classList.add('button-pending');
+    window.setTimeout(() => control.classList.remove('button-pending'), 700);
     clickedControl = control;
     queueMicrotask(() => {
       if (clickedControl === control) clickedControl = null;
