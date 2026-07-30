@@ -4290,6 +4290,39 @@ def live_lesson_ice_config():
     return {"iceServers": servers}
 
 
+@app.post("/live/{room_code}/participants/{identity}/mute")
+async def lecturer_mute_live_participant(
+    room_code: str,
+    identity: str,
+    track_sid: str = Form(...),
+    x_lecturer_token: Optional[str] = Header(None, alias="X-Lecturer-Token"),
+    db: Session = Depends(get_db),
+):
+    lecturer = db.query(Lecturer).filter(Lecturer.id == _lecturer_id_from_token(x_lecturer_token or "")).first()
+    if not lecturer or not lecturer.active or not lecturer.approved:
+        raise HTTPException(status_code=403, detail="An approved lecturer account is required")
+    code = re.sub(r"[^A-Z0-9_-]", "", room_code.upper())[:32]
+    if len(code) < 4 or not identity or not track_sid:
+        raise HTTPException(status_code=400, detail="Invalid live participant or room")
+    livekit_url = os.getenv("LIVEKIT_URL", "").strip()
+    api_key = os.getenv("LIVEKIT_API_KEY", "").strip()
+    api_secret = os.getenv("LIVEKIT_API_SECRET", "").strip()
+    if not all((livekit_url, api_key, api_secret)):
+        raise HTTPException(status_code=503, detail="Live classroom moderation is not configured")
+    try:
+        from livekit import api
+        async with api.LiveKitAPI(livekit_url, api_key, api_secret) as livekit:
+            await livekit.room.mute_published_track(api.MuteRoomTrackRequest(
+                room=code,
+                identity=identity,
+                track_sid=track_sid,
+                muted=True,
+            ))
+        return {"muted": True, "identity": identity}
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Could not mute this participant") from exc
+
+
 @app.get("/admin/live-sessions")
 async def admin_live_sessions(_pin_ok: bool = Depends(require_lecturer_pin)):
     """Return current LiveKit room metadata only; no lesson media is accessed or stored."""
