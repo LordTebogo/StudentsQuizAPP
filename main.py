@@ -329,6 +329,10 @@ class DirectMessageCreate(BaseModel):
     is_anonymous: bool = False
 
 
+class ProviderBroadcastMessage(BaseModel):
+    content: str
+
+
 class PushSubscriptionCreate(BaseModel):
     endpoint: str
     keys: dict[str, str]
@@ -2798,6 +2802,9 @@ def _message_person(db: Session, kind: str, person_id: Optional[int]) -> str:
     if kind == "src_president":
         president = db.query(SrcPresident).filter(SrcPresident.id == person_id).first()
         return f"{president.party_name} SRC president" if president else "Former SRC president"
+    if kind == "landlord":
+        provider = db.query(Landlord).filter(Landlord.id == person_id).first()
+        return (provider.business_name or provider.full_name) if provider else "Former marketplace provider"
     model = Student if kind == "student" else Lecturer
     person = db.query(model).filter(model.id == person_id).first()
     return person.full_name if person else "Unknown account"
@@ -2855,15 +2862,16 @@ def _notify_students_by_push(db: Session, student_ids: List[int], title: str, bo
 def _create_direct_message(db: Session, sender_type: str, sender_id: Optional[int], payload: DirectMessageCreate):
     recipient_type = payload.recipient_type.strip().lower()
     content = payload.content.strip()
-    if recipient_type not in {"student", "lecturer", "admin"} or not content or len(content) > 2000:
+    if recipient_type not in {"student", "lecturer", "landlord", "admin"} or not content or len(content) > 2000:
         raise HTTPException(status_code=400, detail="Choose a recipient and enter a message of up to 2,000 characters")
     if recipient_type == "admin":
         recipient = None
         recipient_id = 0
     else:
-        model = Student if recipient_type == "student" else Lecturer
+        model = Student if recipient_type == "student" else Lecturer if recipient_type == "lecturer" else Landlord
         recipient = db.query(model).filter(model.id == payload.recipient_id).first()
-        if not recipient or not recipient.approved or not recipient.active:
+        approved = True if recipient_type == "landlord" else bool(recipient and recipient.approved)
+        if not recipient or not approved or not recipient.active:
             raise HTTPException(status_code=404, detail="That recipient is not available")
         recipient_id = recipient.id
     message = DirectMessage(sender_type=sender_type, sender_id=sender_id, recipient_type=recipient_type,
@@ -2996,14 +3004,47 @@ def lecturer_unread_messages(lecturer: Lecturer = Depends(require_lecturer_accou
 @app.post("/student/messages")
 def student_send_message(payload: DirectMessageCreate, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
     recipient_type = payload.recipient_type.strip().lower()
-    if recipient_type not in {"lecturer", "admin"}:
-        raise HTTPException(status_code=400, detail="Students can message an administrator or assigned lecturer")
+    if recipient_type not in {"lecturer", "landlord", "admin"}:
+        raise HTTPException(status_code=400, detail="Students can message an administrator, assigned lecturer or marketplace provider")
     if recipient_type == "lecturer":
         student_codes = {item.module_code for item in student.modules}
         allowed = db.query(LecturerModule).filter(LecturerModule.lecturer_id == payload.recipient_id, LecturerModule.module_code.in_(student_codes)).first() if student_codes else None
         if not allowed:
             raise HTTPException(status_code=403, detail="You can message lecturers assigned to your modules only")
     return _create_direct_message(db, "student", student.id, payload)
+
+
+@app.get("/marketing/provider/messages")
+def provider_messages(landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
+    return _inbox(db, "landlord", landlord.id)
+
+
+@app.post("/marketing/provider/messages")
+def provider_send_message(payload: DirectMessageCreate, landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
+    recipient_type = payload.recipient_type.strip().lower()
+    if recipient_type not in {"student", "landlord"}:
+        raise HTTPException(status_code=400, detail="Providers can reply to students or other marketplace providers")
+    if recipient_type == "landlord" and payload.recipient_id == landlord.id:
+        raise HTTPException(status_code=400, detail="Choose another provider")
+    return _create_direct_message(db, "landlord", landlord.id, payload)
+
+
+@app.post("/marketing/provider/messages/broadcast")
+def provider_broadcast_message(payload: ProviderBroadcastMessage, landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
+    content = payload.content.strip()
+    if not content or len(content) > 2000:
+        raise HTTPException(status_code=400, detail="Enter a message of up to 2,000 characters")
+    student_ids = {row[0] for row in db.query(DirectMessage.sender_id).filter(
+        DirectMessage.sender_type == "student", DirectMessage.recipient_type == "landlord",
+        DirectMessage.recipient_id == landlord.id, DirectMessage.sender_id.is_not(None)
+    ).distinct().all()}
+    students = db.query(Student).filter(Student.id.in_(student_ids), Student.approved.is_(True), Student.active.is_(True)).all() if student_ids else []
+    now = datetime.now(timezone.utc).isoformat()
+    for student in students:
+        db.add(DirectMessage(sender_type="landlord", sender_id=landlord.id, recipient_type="student", recipient_id=student.id, content=content, is_anonymous=False, created_at=now))
+    db.commit()
+    _notify_students_by_push(db, [student.id for student in students], "Marketplace provider update", "A provider you contacted sent an update.", "/static/marketing.html", f"provider-broadcast-{landlord.id}-{now}")
+    return {"ok": True, "recipient_count": len(students)}
 
 
 @app.post("/lecturer/messages")
@@ -3230,7 +3271,7 @@ def _accommodation_payload(item: Accommodation, landlord: Landlord) -> dict:
     directions_url = None
     if item.latitude is not None and item.longitude is not None:
         directions_url = f"https://www.google.com/maps/dir/?api=1&destination={item.latitude},{item.longitude}"
-    return {"id": item.id, "title": item.title, "campus": item.campus, "area": item.area, "monthly_rent": item.monthly_rent, "bedrooms": item.bedrooms or "", "description": item.description, "contact": item.contact or landlord.phone, "image_url": item.image_url, "latitude": item.latitude, "longitude": item.longitude, "directions_url": directions_url, "is_available": item.is_available, "created_at": item.created_at, "landlord": {"name": landlord.full_name, "business_name": landlord.business_name or "", "profile_image_url": landlord.profile_image_url}}
+    return {"id": item.id, "title": item.title, "campus": item.campus, "area": item.area, "monthly_rent": item.monthly_rent, "bedrooms": item.bedrooms or "", "description": item.description, "contact": item.contact or landlord.phone, "image_url": item.image_url, "latitude": item.latitude, "longitude": item.longitude, "directions_url": directions_url, "is_available": item.is_available, "created_at": item.created_at, "landlord": {"id": landlord.id, "name": landlord.full_name, "business_name": landlord.business_name or "", "profile_image_url": landlord.profile_image_url}}
 
 
 def _accommodation_coordinates(latitude: str, longitude: str) -> tuple[Optional[float], Optional[float]]:
@@ -3433,6 +3474,7 @@ def _advert_payload(item: MarketAdvert, owner_name: str = "") -> dict:
         "expires_at": item.expires_at, "status": item.status, "is_featured": item.is_featured,
         "impressions": item.impressions or 0, "clicks": item.clicks or 0,
         "created_at": item.created_at, "updated_at": item.updated_at, "owner_name": owner_name,
+        "provider_id": item.owner_landlord_id,
     }
 
 
