@@ -131,6 +131,7 @@ class Landlord(Base):
     id = Column(Integer, primary_key=True, index=True)
     full_name = Column(String, nullable=False)
     business_name = Column(String)
+    provider_type = Column(String, nullable=False, default="residence")
     email = Column(String, nullable=False, unique=True, index=True)
     phone = Column(String, nullable=False)
     profile_image_url = Column(Text)

@@ -238,6 +238,20 @@ def ensure_accommodation_location_schema():
 ensure_accommodation_location_schema()
 
 
+def ensure_market_provider_type_schema():
+    """Allow the existing provider account to serve residences or transport."""
+    if "landlords" not in inspect(engine).get_table_names():
+        return
+    columns = {column["name"] for column in inspect(engine).get_columns("landlords")}
+    if "provider_type" not in columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE landlords ADD COLUMN provider_type VARCHAR(32) DEFAULT 'residence'"))
+            conn.execute(text("UPDATE landlords SET provider_type = 'residence' WHERE provider_type IS NULL OR provider_type = ''"))
+
+
+ensure_market_provider_type_schema()
+
+
 def ensure_comrade_identity_schema():
     """Link new announcements to the verified SRC profile that created them."""
     if "comrade_posts" not in inspect(engine).get_table_names():
@@ -3209,7 +3223,7 @@ FUN_STICKERS = {
 # ---------------------------------------------------------------------------
 
 def _landlord_profile(landlord: Landlord) -> dict:
-    return {"id": landlord.id, "full_name": landlord.full_name, "business_name": landlord.business_name or "", "email": landlord.email, "phone": landlord.phone, "profile_image_url": landlord.profile_image_url}
+    return {"id": landlord.id, "full_name": landlord.full_name, "business_name": landlord.business_name or "", "provider_type": landlord.provider_type or "residence", "email": landlord.email, "phone": landlord.phone, "profile_image_url": landlord.profile_image_url}
 
 
 def _accommodation_payload(item: Accommodation, landlord: Landlord) -> dict:
@@ -3235,20 +3249,22 @@ def _accommodation_coordinates(latitude: str, longitude: str) -> tuple[Optional[
 
 
 @app.post("/marketing/landlords/register")
-async def register_landlord(full_name: str = Form(...), business_name: str = Form(""), email: str = Form(...), phone: str = Form(...), password: str = Form(...), confirm_password: str = Form(...), profile_image: Optional[UploadFile] = File(None), db: Session = Depends(get_db)):
+async def register_landlord(full_name: str = Form(...), business_name: str = Form(""), provider_type: str = Form("residence"), email: str = Form(...), phone: str = Form(...), password: str = Form(...), confirm_password: str = Form(...), profile_image: Optional[UploadFile] = File(None), db: Session = Depends(get_db)):
     email = email.strip().lower()
     if not full_name.strip() or not phone.strip() or "@" not in email or len(password) < 8:
         raise HTTPException(status_code=400, detail="Provide your name, contact number, valid email, and a password of at least 8 characters")
     if password != confirm_password:
         raise HTTPException(status_code=400, detail="The password confirmation does not match")
+    if provider_type not in {"residence", "transport"}:
+        raise HTTPException(status_code=400, detail="Choose accommodation or transport provider")
     if db.query(Landlord).filter(Landlord.email == email).first():
-        raise HTTPException(status_code=409, detail="A landlord profile already uses this email")
+        raise HTTPException(status_code=409, detail="A provider profile already uses this email")
     image_url = None
     if profile_image and profile_image.filename:
         if not (profile_image.content_type or "").startswith("image/"):
             raise HTTPException(status_code=400, detail="Please choose a valid profile image")
         image_url = upload_image_bytes(await profile_image.read(), folder="landlord_profiles")
-    landlord = Landlord(full_name=full_name.strip()[:160], business_name=business_name.strip()[:160], email=email, phone=phone.strip()[:60], profile_image_url=image_url, password_hash=_password_hash(password), active=True, created_at=datetime.now(timezone.utc).isoformat())
+    landlord = Landlord(full_name=full_name.strip()[:160], business_name=business_name.strip()[:160], provider_type=provider_type, email=email, phone=phone.strip()[:60], profile_image_url=image_url, password_hash=_password_hash(password), active=True, created_at=datetime.now(timezone.utc).isoformat())
     db.add(landlord); db.commit()
     return {"ok": True, "token": _issue_landlord_token(landlord.id), "profile": _landlord_profile(landlord)}
 
@@ -3257,7 +3273,7 @@ async def register_landlord(full_name: str = Form(...), business_name: str = For
 def landlord_login(payload: LandlordLogin, db: Session = Depends(get_db)):
     landlord = db.query(Landlord).filter(Landlord.email == payload.email.strip().lower()).first()
     if not landlord or not _password_matches(payload.password, landlord.password_hash):
-        raise HTTPException(status_code=401, detail="Incorrect landlord email or password")
+        raise HTTPException(status_code=401, detail="Incorrect provider email or password")
     if not landlord.active:
         raise HTTPException(status_code=403, detail="This landlord profile is inactive")
     return {"token": _issue_landlord_token(landlord.id), "profile": _landlord_profile(landlord)}
