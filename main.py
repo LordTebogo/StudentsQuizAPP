@@ -4242,6 +4242,7 @@ LIVE_ROOM_LIMIT = 12
 @app.post("/live/token")
 async def live_lesson_token(
     room_code: str = Form(...),
+    screen_only: bool = Form(False),
     x_student_token: Optional[str] = Header(None, alias="X-Student-Token"),
     x_lecturer_token: Optional[str] = Header(None, alias="X-Lecturer-Token"),
     db: Session = Depends(get_db),
@@ -4269,12 +4270,13 @@ async def live_lesson_token(
         raise HTTPException(status_code=403, detail="Your approved student or lecturer account is required")
     try:
         from livekit import api
-        identity = f"{role}-{account.id}-{secrets.token_urlsafe(5)}"
+        participant_role = "screen" if screen_only else role
+        identity = f"{participant_role}-{account.id}-{secrets.token_urlsafe(5)}"
         access = (api.AccessToken(api_key, api_secret)
             .with_identity(identity)
-            .with_name(account.full_name[:100])
-            .with_attributes({"role": role})
-            .with_grants(api.VideoGrants(room_join=True, room=code, can_publish=True, can_subscribe=True, can_publish_data=True))
+            .with_name((account.full_name + (" screen" if screen_only else ""))[:100])
+            .with_attributes({"role": participant_role})
+            .with_grants(api.VideoGrants(room_join=True, room=code, can_publish=True, can_subscribe=not screen_only, can_publish_data=not screen_only))
             .with_room_config(api.RoomConfiguration(max_participants=100, empty_timeout=600, departure_timeout=30)))
         return {"token": access.to_jwt(), "url": livekit_url, "room": code, "role": role, "name": account.full_name, "capacity": 100}
     except Exception as exc:
