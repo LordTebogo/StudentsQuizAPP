@@ -245,6 +245,8 @@ async function tryUnlock(email, password) {
       body: JSON.stringify({ email, password }),
     });
     LECTURER_TOKEN = result.token;
+    sessionStorage.removeItem('studentToken');
+    sessionStorage.setItem('activeRole', 'lecturer');
     sessionStorage.setItem('lecturerToken', result.token);
     window.location.href = '/static/index.html';
   } catch (err) {

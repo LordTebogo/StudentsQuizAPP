@@ -103,8 +103,10 @@
 <footer class="site-footer"><strong>NucleoCampus</strong><div>Learning lives here.</div><nav><a href="/static/trust.html#privacy">Privacy</a><a href="/static/trust.html#terms">Terms</a><a href="/static/trust.html#support">Support</a></nav></footer>
 <p class="install-hint" id="installHint" aria-live="polite">Install for faster access and a full-screen app experience. Online access is still required for current content.</p>
 <script>
-  const homeHasStudent = sessionStorage.getItem('studentToken');
-  const homeHasLecturer = sessionStorage.getItem('lecturerToken');
+  let homeHasStudent = sessionStorage.getItem('studentToken');
+  let homeHasLecturer = sessionStorage.getItem('lecturerToken');
+  const preferredRole = sessionStorage.getItem('activeRole');
+  if (homeHasStudent && homeHasLecturer) { if (preferredRole === 'student') { sessionStorage.removeItem('lecturerToken'); homeHasLecturer = null; } else { sessionStorage.removeItem('studentToken'); homeHasStudent = null; sessionStorage.setItem('activeRole','lecturer'); } }
   if (homeHasStudent || homeHasLecturer) document.getElementById('welcome').classList.add('dashboard-mode');
   if (homeHasStudent) {
     const portal = document.getElementById('studentPortal');

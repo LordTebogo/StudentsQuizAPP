@@ -168,11 +168,10 @@ async function tryUnlock(email, password) {
   try {
     const login = await api('/lecturers/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
     LECTURER_TOKEN = login.token;
+    sessionStorage.removeItem('studentToken');
+    sessionStorage.setItem('activeRole', 'lecturer');
     sessionStorage.setItem('lecturerToken', login.token);
-    $('gateWrap').classList.add('hidden');
-    $('appWrap').classList.remove('hidden');
-    loadModules();
-    loadLessons();
+    window.location.reload();
   } catch (err) {
     sessionStorage.removeItem('lecturerToken');
     showMsg(msgBox, err.message, 'error');
