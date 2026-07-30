@@ -76,6 +76,7 @@ from database import Base, SessionLocal, engine, get_db
 from models import (
     Answer,
     DirectMessage,
+    DirectMessageBlock,
     Lesson,
     LessonAnswer,
     LessonComment,
@@ -331,6 +332,13 @@ class DirectMessageCreate(BaseModel):
 
 class ProviderBroadcastMessage(BaseModel):
     content: str
+    recipient_ids: List[int]
+    audience: str = "selected"
+
+
+class MessageBlockRequest(BaseModel):
+    target_type: str
+    target_id: int
 
 
 class PushSubscriptionCreate(BaseModel):
@@ -2818,7 +2826,20 @@ def _message_dict(db: Session, message: DirectMessage, viewer_type: str = "", vi
             "sender_name": sender_name, "is_anonymous": anonymous,
             "recipient_type": message.recipient_type, "recipient_id": message.recipient_id,
             "recipient_name": _message_person(db, message.recipient_type, message.recipient_id),
-            "content": message.content, "read_at": message.read_at, "created_at": message.created_at}
+            "content": message.content, "read_at": message.read_at,
+            "unread": bool(message.read_at is None and message.recipient_type == viewer_type and message.recipient_id == viewer_id),
+            "created_at": message.created_at}
+
+
+def _message_pair_blocked(db: Session, sender_type: str, sender_id: Optional[int], recipient_type: str, recipient_id: int) -> bool:
+    if sender_id is None:
+        return False
+    return db.query(DirectMessageBlock).filter(
+        ((DirectMessageBlock.blocker_type == sender_type) & (DirectMessageBlock.blocker_id == sender_id) &
+         (DirectMessageBlock.blocked_type == recipient_type) & (DirectMessageBlock.blocked_id == recipient_id)) |
+        ((DirectMessageBlock.blocker_type == recipient_type) & (DirectMessageBlock.blocker_id == recipient_id) &
+         (DirectMessageBlock.blocked_type == sender_type) & (DirectMessageBlock.blocked_id == sender_id))
+    ).first() is not None
 
 
 def _push_enabled() -> bool:
@@ -2874,6 +2895,8 @@ def _create_direct_message(db: Session, sender_type: str, sender_id: Optional[in
         if not recipient or not approved or not recipient.active:
             raise HTTPException(status_code=404, detail="That recipient is not available")
         recipient_id = recipient.id
+    if _message_pair_blocked(db, sender_type, sender_id, recipient_type, recipient_id):
+        raise HTTPException(status_code=403, detail="Private messaging is blocked between these accounts")
     message = DirectMessage(sender_type=sender_type, sender_id=sender_id, recipient_type=recipient_type,
                             recipient_id=recipient_id, content=content,
                             is_anonymous=bool(payload.is_anonymous and sender_type == "student"),
@@ -3016,7 +3039,23 @@ def student_send_message(payload: DirectMessageCreate, student: Student = Depend
 
 @app.get("/marketing/provider/messages")
 def provider_messages(landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
-    return _inbox(db, "landlord", landlord.id)
+    rows = db.query(DirectMessage).filter(
+        ((DirectMessage.recipient_type == "landlord") & (DirectMessage.recipient_id == landlord.id)) |
+        ((DirectMessage.sender_type == "landlord") & (DirectMessage.sender_id == landlord.id))
+    ).order_by(DirectMessage.created_at.desc()).all()
+    return [_message_dict(db, row, "landlord", landlord.id) for row in rows]
+
+
+@app.post("/marketing/provider/messages/read/{student_id}")
+def provider_mark_thread_read(student_id: int, landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
+    rows = db.query(DirectMessage).filter(DirectMessage.sender_type == "student", DirectMessage.sender_id == student_id,
+        DirectMessage.recipient_type == "landlord", DirectMessage.recipient_id == landlord.id, DirectMessage.read_at.is_(None)).all()
+    now = datetime.now(timezone.utc).isoformat()
+    for row in rows:
+        row.read_at = now
+    if rows:
+        db.commit()
+    return {"ok": True, "read_count": len(rows)}
 
 
 @app.post("/marketing/provider/messages")
@@ -3034,17 +3073,71 @@ def provider_broadcast_message(payload: ProviderBroadcastMessage, landlord: Land
     content = payload.content.strip()
     if not content or len(content) > 2000:
         raise HTTPException(status_code=400, detail="Enter a message of up to 2,000 characters")
-    student_ids = {row[0] for row in db.query(DirectMessage.sender_id).filter(
-        DirectMessage.sender_type == "student", DirectMessage.recipient_type == "landlord",
-        DirectMessage.recipient_id == landlord.id, DirectMessage.sender_id.is_not(None)
-    ).distinct().all()}
+    if payload.audience not in {"unread", "read", "selected"}:
+        raise HTTPException(status_code=400, detail="Choose unread, read or selected contacts")
+    incoming = db.query(DirectMessage).filter(DirectMessage.sender_type == "student", DirectMessage.recipient_type == "landlord",
+        DirectMessage.recipient_id == landlord.id, DirectMessage.sender_id.is_not(None)).all()
+    allowed = {}
+    for message in incoming:
+        state = allowed.setdefault(message.sender_id, {"read": False, "unread": False})
+        state["unread" if message.read_at is None else "read"] = True
+    requested = set(payload.recipient_ids)
+    student_ids = {student_id for student_id, state in allowed.items() if student_id in requested and (payload.audience == "selected" or state[payload.audience]) and not _message_pair_blocked(db, "landlord", landlord.id, "student", student_id)}
     students = db.query(Student).filter(Student.id.in_(student_ids), Student.approved.is_(True), Student.active.is_(True)).all() if student_ids else []
     now = datetime.now(timezone.utc).isoformat()
     for student in students:
         db.add(DirectMessage(sender_type="landlord", sender_id=landlord.id, recipient_type="student", recipient_id=student.id, content=content, is_anonymous=False, created_at=now))
+    if payload.audience == "unread":
+        for message in incoming:
+            if message.sender_id in student_ids and message.read_at is None:
+                message.read_at = now
     db.commit()
     _notify_students_by_push(db, [student.id for student in students], "Marketplace provider update", "A provider you contacted sent an update.", "/static/marketing.html", f"provider-broadcast-{landlord.id}-{now}")
     return {"ok": True, "recipient_count": len(students)}
+
+
+def _set_message_block(db: Session, blocker_type: str, blocker_id: int, payload: MessageBlockRequest, blocked: bool):
+    target_type = payload.target_type.strip().lower()
+    if target_type not in {"student", "landlord"} or payload.target_id <= 0 or (target_type == blocker_type and payload.target_id == blocker_id):
+        raise HTTPException(status_code=400, detail="Choose a valid account to block")
+    row = db.query(DirectMessageBlock).filter(DirectMessageBlock.blocker_type == blocker_type, DirectMessageBlock.blocker_id == blocker_id,
+        DirectMessageBlock.blocked_type == target_type, DirectMessageBlock.blocked_id == payload.target_id).first()
+    if blocked and not row:
+        db.add(DirectMessageBlock(blocker_type=blocker_type, blocker_id=blocker_id, blocked_type=target_type, blocked_id=payload.target_id, created_at=datetime.now(timezone.utc).isoformat()))
+    if not blocked and row:
+        db.delete(row)
+    db.commit()
+    return {"ok": True, "blocked": blocked}
+
+
+@app.get("/marketing/provider/message-blocks")
+def provider_message_blocks(landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
+    return [{"target_type": row.blocked_type, "target_id": row.blocked_id} for row in db.query(DirectMessageBlock).filter(DirectMessageBlock.blocker_type == "landlord", DirectMessageBlock.blocker_id == landlord.id).all()]
+
+
+@app.post("/marketing/provider/message-blocks")
+def provider_block_message_account(payload: MessageBlockRequest, landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
+    return _set_message_block(db, "landlord", landlord.id, payload, True)
+
+
+@app.delete("/marketing/provider/message-blocks")
+def provider_unblock_message_account(payload: MessageBlockRequest, landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
+    return _set_message_block(db, "landlord", landlord.id, payload, False)
+
+
+@app.get("/student/message-blocks")
+def student_message_blocks(student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+    return [{"target_type": row.blocked_type, "target_id": row.blocked_id} for row in db.query(DirectMessageBlock).filter(DirectMessageBlock.blocker_type == "student", DirectMessageBlock.blocker_id == student.id).all()]
+
+
+@app.post("/student/message-blocks")
+def student_block_message_account(payload: MessageBlockRequest, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+    return _set_message_block(db, "student", student.id, payload, True)
+
+
+@app.delete("/student/message-blocks")
+def student_unblock_message_account(payload: MessageBlockRequest, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+    return _set_message_block(db, "student", student.id, payload, False)
 
 
 @app.post("/lecturer/messages")

@@ -173,6 +173,19 @@ class AccommodationComment(Base):
     created_at = Column(String, nullable=False)
 
 
+class DirectMessageBlock(Base):
+    """A one-way block between two private-message accounts."""
+    __tablename__ = "direct_message_blocks"
+    __table_args__ = (UniqueConstraint("blocker_type", "blocker_id", "blocked_type", "blocked_id", name="direct_message_block_unique"),)
+
+    id = Column(Integer, primary_key=True)
+    blocker_type = Column(String, nullable=False)
+    blocker_id = Column(Integer, nullable=False, index=True)
+    blocked_type = Column(String, nullable=False)
+    blocked_id = Column(Integer, nullable=False, index=True)
+    created_at = Column(String, nullable=False)
+
+
 class MarketAdvert(Base):
     """A moderated campus advert submitted by a student or landlord."""
     __tablename__ = "market_adverts"
