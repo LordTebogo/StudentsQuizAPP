@@ -22,6 +22,37 @@
   let publicAds = [];
   let spotlightIndex = 0;
   let feedObserver;
+  const isTransportAd = ad => /transport|ride|taxi|uber|shuttle|courier|delivery/i.test(`${ad.category || ''} ${ad.headline || ''} ${ad.description || ''}`);
+  function ensureTransportSection() {
+    if (document.getElementById('transportServices')) return document.getElementById('transportServices');
+    const feed = document.getElementById('listingFeed');
+    if (!feed) return null;
+    const section = document.createElement('section');
+    section.id = 'transportServices'; section.className = 'transport-services';
+    section.innerHTML = `<div class="transport-heading"><div><span class="market-kicker">Move around campus</span><h2>Transport & delivery</h2><p>Find reviewed ride, shuttle, courier and delivery services serving students.</p></div><button class="btn secondary promote-trigger transport-promote" type="button">List your transport service</button></div><div id="transportServiceList" class="transport-service-list"></div><button id="moreTransportServices" class="btn secondary transport-more hidden" type="button">Show more transport services</button>`;
+    const accommodationMore = document.querySelector('.mobile-listings-more');
+    (accommodationMore || feed).insertAdjacentElement('afterend', section);
+    section.querySelector('#moreTransportServices').addEventListener('click', event => {
+      const expanded = section.classList.toggle('show-all-transport');
+      event.currentTarget.textContent = expanded ? 'Show fewer transport services' : 'Show more transport services';
+    });
+    return section;
+  }
+  function renderTransportServices() {
+    const section = ensureTransportSection();
+    if (!section) return;
+    const list = section.querySelector('#transportServiceList');
+    const more = section.querySelector('#moreTransportServices');
+    const services = publicAds.filter(isTransportAd);
+    if (!services.length) {
+      list.innerHTML = '<div class="transport-empty"><strong>Transport providers can join this section</strong><p>Drivers, campus shuttles, couriers and delivery services can submit a reviewed listing.</p><button class="btn secondary promote-trigger transport-promote" type="button">Add a transport service</button></div>';
+      more.classList.add('hidden'); return;
+    }
+    list.innerHTML = services.map((ad, index) => `<div class="transport-service ${index > 1 ? 'transport-extra' : ''}">${advertCard(ad, true)}</div>`).join('');
+    section.classList.remove('show-all-transport');
+    more.classList.toggle('hidden', services.length <= 2);
+    more.textContent = `Show ${Math.max(services.length - 2, 0)} more transport service${services.length === 3 ? '' : 's'}`;
+  }
   function renderSpotlight() {
     const slots = document.querySelectorAll('.market-side .ad-card');
     if (!slots.length) return;
@@ -53,7 +84,7 @@
   }
   async function loadPublicAds() {
     try { publicAds = await api('/marketing/adverts'); } catch (_) { publicAds = []; }
-    renderSpotlight(); insertFeedAds();
+    renderSpotlight(); insertFeedAds(); renderTransportServices();
   }
 
   function installAdvertDesk() {
@@ -68,7 +99,7 @@
         <input name="business_name" placeholder="Business or event name" maxlength="160" required>
         <input name="headline" placeholder="Short, catchy headline" maxlength="180" required>
         <textarea name="description" placeholder="What are you offering?" maxlength="1200" required></textarea>
-        <select name="category" required><option value="">Choose category</option><option>Student service</option><option>Food & delivery</option><option>Tutoring</option><option>Event</option><option>Technology</option><option>Beauty & lifestyle</option><option>Other</option></select>
+        <select name="category" required><option value="">Choose category</option><option>Ride & transport</option><option>Delivery & courier</option><option>Campus shuttle</option><option>Student service</option><option>Food & delivery</option><option>Tutoring</option><option>Event</option><option>Technology</option><option>Beauty & lifestyle</option><option>Other</option></select>
         <input name="campus" placeholder="Campus or area">
         <input name="contact" placeholder="WhatsApp or contact number">
         <input name="website_url" placeholder="Website or social link (optional)">
@@ -88,7 +119,7 @@
     };
     desk.querySelector('#openAdvertForm').addEventListener('click', open);
     desk.querySelector('#cancelAdvertForm').addEventListener('click', () => { wrap.classList.add('hidden'); desk.querySelector('#openAdvertForm').classList.remove('hidden'); });
-    document.addEventListener('click', event => { if (event.target.closest('.promote-trigger')) { event.preventDefault(); desk.scrollIntoView({behavior:'smooth'}); open(); } });
+    document.addEventListener('click', event => { if (event.target.closest('.promote-trigger')) { event.preventDefault(); if(event.target.closest('.transport-promote'))desk.querySelector('[name="category"]').value='Ride & transport'; desk.scrollIntoView({behavior:'smooth'}); open(); } });
     desk.querySelector('#advertForm').addEventListener('submit', async event => {
       event.preventDefault(); const message = desk.querySelector('#advertMessage'); message.textContent = 'Submitting advert…';
       try {
@@ -113,6 +144,7 @@
   });
   function init() {
     installAdvertDesk();
+    ensureTransportSection();
     const first = document.querySelector('.market-side .ad-card');
     if (first) first.innerHTML = '<div class="ad-symbol">✦</div><small>FEED AD SPACE</small><h3>Reach students where they browse</h3><p class="muted">Approved campus offers can appear naturally between accommodation listings.</p><button class="btn secondary promote-trigger" type="button">Promote here</button>';
     const feed = document.getElementById('listingFeed');
