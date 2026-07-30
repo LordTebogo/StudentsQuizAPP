@@ -199,7 +199,13 @@ function renderList(target, items, kind) {
   $(target).querySelectorAll('[data-id]').forEach(button => button.addEventListener('click', () => edit(kind, button.dataset.id)));
 }
 async function loadLists() {
-  try { const [quizzes, lessons] = await Promise.all([api('/admin/quizzes'), api('/admin/lessons')]); renderList('quizList', quizzes, 'quiz'); renderList('lessonList', lessons, 'lesson'); loadLiveSessions(); loadLecturers(); loadStudents(); loadSrcPresidents(); loadAdminScripts(); loadCommunityModeration(lessons); }
+  try {
+    const [quizzes, lessons] = await Promise.all([api('/admin/quizzes'), api('/admin/lessons')]);
+    renderList('quizList', quizzes, 'quiz'); renderList('lessonList', lessons, 'lesson');
+    loadLiveSessions();
+    const secondaryLoads = [loadLecturers, loadStudents, loadSrcPresidents, loadAdminScripts, () => loadCommunityModeration(lessons)];
+    secondaryLoads.forEach((load, index) => window.setTimeout(load, 80 + (index * 120)));
+  }
   catch (err) { showMsg($('editorMsg'), `Could not load content: ${err.message}`, 'error'); }
 }
 async function loadLiveSessions() {
