@@ -253,6 +253,20 @@ def ensure_market_provider_type_schema():
 ensure_market_provider_type_schema()
 
 
+def ensure_market_gallery_schema():
+    """Add multi-image galleries while keeping legacy single images."""
+    for table in ("accommodations", "market_adverts"):
+        if table not in inspect(engine).get_table_names():
+            continue
+        columns = {column["name"] for column in inspect(engine).get_columns(table)}
+        if "image_urls" not in columns:
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN image_urls TEXT"))
+
+
+ensure_market_gallery_schema()
+
+
 def ensure_comrade_identity_schema():
     """Link new announcements to the verified SRC profile that created them."""
     if "comrade_posts" not in inspect(engine).get_table_names():
@@ -3364,7 +3378,34 @@ def _accommodation_payload(item: Accommodation, landlord: Landlord) -> dict:
     directions_url = None
     if item.latitude is not None and item.longitude is not None:
         directions_url = f"https://www.google.com/maps/dir/?api=1&destination={item.latitude},{item.longitude}"
-    return {"id": item.id, "title": item.title, "campus": item.campus, "area": item.area, "monthly_rent": item.monthly_rent, "bedrooms": item.bedrooms or "", "description": item.description, "contact": item.contact or landlord.phone, "image_url": item.image_url, "latitude": item.latitude, "longitude": item.longitude, "directions_url": directions_url, "is_available": item.is_available, "created_at": item.created_at, "landlord": {"id": landlord.id, "name": landlord.full_name, "business_name": landlord.business_name or "", "profile_image_url": landlord.profile_image_url}}
+    image_urls = _market_image_urls(item)
+    return {"id": item.id, "title": item.title, "campus": item.campus, "area": item.area, "monthly_rent": item.monthly_rent, "bedrooms": item.bedrooms or "", "description": item.description, "contact": item.contact or landlord.phone, "image_url": image_urls[0] if image_urls else None, "image_urls": image_urls, "latitude": item.latitude, "longitude": item.longitude, "directions_url": directions_url, "is_available": item.is_available, "created_at": item.created_at, "landlord": {"id": landlord.id, "name": landlord.full_name, "business_name": landlord.business_name or "", "profile_image_url": landlord.profile_image_url}}
+
+
+def _market_image_urls(item) -> List[str]:
+    try:
+        urls = json.loads(item.image_urls or "[]")
+    except (TypeError, json.JSONDecodeError):
+        urls = []
+    urls = [str(url) for url in urls if str(url).startswith(("http://", "https://"))]
+    if not urls and item.image_url:
+        urls = [item.image_url]
+    return urls
+
+
+async def _upload_market_images(files: List[UploadFile], limit: int, folder: str, max_bytes: int) -> List[str]:
+    chosen = [file for file in files if file and file.filename]
+    if len(chosen) > limit:
+        raise HTTPException(status_code=400, detail=f"Choose no more than {limit} images")
+    uploaded = []
+    for file in chosen:
+        if not (file.content_type or "").startswith("image/"):
+            raise HTTPException(status_code=400, detail="Please choose image files only")
+        image_bytes = await file.read()
+        if len(image_bytes) > max_bytes:
+            raise HTTPException(status_code=400, detail=f"Each image must be {max_bytes // (1024 * 1024)} MB or smaller")
+        uploaded.append(upload_image_bytes(image_bytes, folder=folder))
+    return uploaded
 
 
 def _accommodation_coordinates(latitude: str, longitude: str) -> tuple[Optional[float], Optional[float]]:
@@ -3449,7 +3490,7 @@ def landlord_listings(landlord: Landlord = Depends(require_landlord_account), db
 
 
 @app.post("/marketing/listings")
-async def create_accommodation(title: str = Form(...), campus: str = Form(...), area: str = Form(...), monthly_rent: str = Form(""), bedrooms: str = Form(""), description: str = Form(...), contact: str = Form(""), latitude: str = Form(""), longitude: str = Form(""), image: Optional[UploadFile] = File(None), landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
+async def create_accommodation(title: str = Form(...), campus: str = Form(...), area: str = Form(...), monthly_rent: str = Form(""), bedrooms: str = Form(""), description: str = Form(...), contact: str = Form(""), latitude: str = Form(""), longitude: str = Form(""), images: Optional[List[UploadFile]] = File(None), image: Optional[UploadFile] = File(None), landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
     if not title.strip() or not campus.strip() or not area.strip() or not description.strip():
         raise HTTPException(status_code=400, detail="Add a title, campus, area, and description")
     if len(description.strip()) > 2500:
@@ -3461,21 +3502,15 @@ async def create_accommodation(title: str = Form(...), campus: str = Form(...), 
     if rent is not None and rent < 0:
         raise HTTPException(status_code=400, detail="Monthly rent cannot be negative")
     lat, lng = _accommodation_coordinates(latitude, longitude)
-    image_url = None
-    if image and image.filename:
-        if not (image.content_type or "").startswith("image/"):
-            raise HTTPException(status_code=400, detail="Please choose a valid accommodation image")
-        image_bytes = await image.read()
-        if len(image_bytes) > 10 * 1024 * 1024:
-            raise HTTPException(status_code=400, detail="Accommodation images must be 10 MB or smaller")
-        image_url = upload_image_bytes(image_bytes, folder="accommodation_listings")
-    item = Accommodation(landlord_id=landlord.id, title=title.strip()[:180], campus=campus.strip()[:120], area=area.strip()[:160], monthly_rent=rent, bedrooms=bedrooms.strip()[:80], description=description.strip(), contact=contact.strip()[:160], image_url=image_url, latitude=lat, longitude=lng, is_available=True, created_at=datetime.now(timezone.utc).isoformat())
+    files = list(images or []) + ([image] if image and image.filename else [])
+    image_urls = await _upload_market_images(files, 3, "accommodation_listings", 10 * 1024 * 1024)
+    item = Accommodation(landlord_id=landlord.id, title=title.strip()[:180], campus=campus.strip()[:120], area=area.strip()[:160], monthly_rent=rent, bedrooms=bedrooms.strip()[:80], description=description.strip(), contact=contact.strip()[:160], image_url=image_urls[0] if image_urls else None, image_urls=json.dumps(image_urls), latitude=lat, longitude=lng, is_available=True, created_at=datetime.now(timezone.utc).isoformat())
     db.add(item); db.commit()
     return {"ok": True, "listing": _accommodation_payload(item, landlord)}
 
 
 @app.put("/marketing/listings/{listing_id}")
-async def update_accommodation(listing_id: int, title: str = Form(...), campus: str = Form(...), area: str = Form(...), monthly_rent: str = Form(""), bedrooms: str = Form(""), description: str = Form(...), contact: str = Form(""), latitude: str = Form(""), longitude: str = Form(""), is_available: bool = Form(True), image: Optional[UploadFile] = File(None), landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
+async def update_accommodation(listing_id: int, title: str = Form(...), campus: str = Form(...), area: str = Form(...), monthly_rent: str = Form(""), bedrooms: str = Form(""), description: str = Form(...), contact: str = Form(""), latitude: str = Form(""), longitude: str = Form(""), is_available: bool = Form(True), images: Optional[List[UploadFile]] = File(None), image: Optional[UploadFile] = File(None), landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
     item = db.query(Accommodation).filter(Accommodation.id == listing_id, Accommodation.landlord_id == landlord.id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Accommodation listing not found")
@@ -3493,13 +3528,10 @@ async def update_accommodation(listing_id: int, title: str = Form(...), campus: 
     item.title, item.campus, item.area = title.strip()[:180], campus.strip()[:120], area.strip()[:160]
     item.monthly_rent, item.bedrooms, item.description = rent, bedrooms.strip()[:80], description.strip()[:2500]
     item.contact, item.latitude, item.longitude, item.is_available = contact.strip()[:160], lat, lng, is_available
-    if image and image.filename:
-        if not (image.content_type or "").startswith("image/"):
-            raise HTTPException(status_code=400, detail="Please choose a valid accommodation image")
-        image_bytes = await image.read()
-        if len(image_bytes) > 10 * 1024 * 1024:
-            raise HTTPException(status_code=400, detail="Accommodation images must be 10 MB or smaller")
-        item.image_url = upload_image_bytes(image_bytes, folder="accommodation_listings")
+    files = list(images or []) + ([image] if image and image.filename else [])
+    if any(file and file.filename for file in files):
+        image_urls = await _upload_market_images(files, 3, "accommodation_listings", 10 * 1024 * 1024)
+        item.image_url, item.image_urls = image_urls[0], json.dumps(image_urls)
     db.commit()
     return {"ok": True, "listing": _accommodation_payload(item, landlord)}
 
@@ -3559,11 +3591,12 @@ def create_accommodation_comment(listing_id: int, payload: AccommodationCommentC
 
 
 def _advert_payload(item: MarketAdvert, owner_name: str = "") -> dict:
+    image_urls = _market_image_urls(item)
     return {
         "id": item.id, "business_name": item.business_name, "headline": item.headline,
         "description": item.description, "category": item.category, "campus": item.campus or "",
         "contact": item.contact or "", "website_url": item.website_url or "",
-        "placement": item.placement, "image_url": item.image_url, "starts_at": item.starts_at,
+        "placement": item.placement, "image_url": image_urls[0] if image_urls else None, "image_urls": image_urls, "starts_at": item.starts_at,
         "expires_at": item.expires_at, "status": item.status, "is_featured": item.is_featured,
         "impressions": item.impressions or 0, "clicks": item.clicks or 0,
         "created_at": item.created_at, "updated_at": item.updated_at, "owner_name": owner_name,
@@ -3621,7 +3654,7 @@ async def create_market_advert(
     business_name: str = Form(...), headline: str = Form(...), description: str = Form(...),
     category: str = Form(...), campus: str = Form(""), contact: str = Form(""), website_url: str = Form(""),
     placement: str = Form("spotlight"), starts_at: str = Form(""), expires_at: str = Form(""),
-    image: Optional[UploadFile] = File(None), x_student_token: Optional[str] = Header(None, alias="X-Student-Token"),
+    images: Optional[List[UploadFile]] = File(None), image: Optional[UploadFile] = File(None), x_student_token: Optional[str] = Header(None, alias="X-Student-Token"),
     x_landlord_token: Optional[str] = Header(None, alias="X-Landlord-Token"), db: Session = Depends(get_db),
 ):
     student, landlord = _advert_owner(db, x_student_token, x_landlord_token)
@@ -3632,20 +3665,16 @@ async def create_market_advert(
     if placement not in {"feed", "spotlight"}:
         raise HTTPException(status_code=400, detail="Choose feed or spotlight placement")
     start, end = _clean_advert_dates(starts_at, expires_at)
-    image_url = None
-    if image and image.filename:
-        if not (image.content_type or "").startswith("image/"):
-            raise HTTPException(status_code=400, detail="Please choose a valid advert image")
-        image_bytes = await image.read()
-        if len(image_bytes) > 8 * 1024 * 1024:
-            raise HTTPException(status_code=400, detail="Advert images must be 8 MB or smaller")
-        image_url = upload_image_bytes(image_bytes, folder="market_adverts")
+    files = list(images or []) + ([image] if image and image.filename else [])
+    transport_service = bool(re.search(r"transport|ride|taxi|uber|shuttle|courier|delivery", category, re.IGNORECASE))
+    image_limit = 2 if transport_service else 1
+    image_urls = await _upload_market_images(files, image_limit, "market_adverts", 8 * 1024 * 1024)
     now = datetime.now(timezone.utc).isoformat()
     item = MarketAdvert(
         owner_student_id=student.id if student else None, owner_landlord_id=landlord.id if landlord else None,
         business_name=business_name.strip()[:160], headline=headline.strip()[:180], description=description.strip(),
         category=category.strip()[:80], campus=campus.strip()[:120], contact=contact.strip()[:160],
-        website_url=website_url.strip()[:500], placement=placement, image_url=image_url,
+        website_url=website_url.strip()[:500], placement=placement, image_url=image_urls[0] if image_urls else None, image_urls=json.dumps(image_urls),
         starts_at=start, expires_at=end, status="pending", is_featured=False, impressions=0, clicks=0,
         created_at=now, updated_at=now,
     )

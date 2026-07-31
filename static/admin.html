@@ -173,8 +173,13 @@ async function unlock(value) {
     const res = await fetch('/lecturer/verify-pin', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({pin:value}) });
     if (!res.ok) throw new Error();
     pin = value; sessionStorage.setItem('lecturerPin', pin);
-    if (!adminBootHasPin) { window.location.href='/static/admin.html#adminOverview'; return; }
-    $('gateWrap').classList.add('hidden'); $('appWrap').classList.remove('hidden'); loadLists();
+    $('gateWrap').classList.add('hidden'); $('appWrap').classList.remove('hidden');
+    if (!adminBootHasPin) {
+      history.replaceState(null, '', '/static/admin.html#adminOverview');
+      window.location.reload();
+      return;
+    }
+    loadLists();
   } catch (_) { showMsg($('pinMsg'), 'Incorrect PIN.', 'error'); }
 }
 function openEditor(kind, item = null) {

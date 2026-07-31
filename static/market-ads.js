@@ -10,6 +10,7 @@
     return data;
   };
   const safeLink = value => /^https?:\/\//i.test(value || '') ? value : (value ? `https://${value}` : '');
+  const galleryMarkup = (images, title) => { const rows=(images||[]).filter(Boolean);if(!rows.length)return'<div class="advert-art">✦</div>';return `<div class="market-gallery" data-gallery-title="${esc(title)}" data-gallery-index="0">${rows.map((url,index)=>`<button class="market-slide ${index?'':'active'}" type="button" data-gallery-view="${index}" aria-label="View image ${index+1} of ${rows.length}"><img src="${esc(url)}" alt="${esc(title)} image ${index+1}" loading="lazy"></button>`).join('')}${rows.length>1?'<button class="gallery-nav previous" type="button" data-gallery-move="-1" aria-label="Previous image">‹</button><button class="gallery-nav next" type="button" data-gallery-move="1" aria-label="Next image">›</button>':''}<span class="gallery-count">1 / ${rows.length}</span><button class="gallery-view" type="button" data-gallery-view="0">View photos</button></div>` };
   function installMarketAuthDialog() {
     if (document.getElementById('marketAuthDialog')) return;
     const dialog = document.createElement('dialog');
@@ -53,7 +54,7 @@
   const advertCard = (ad, compact = false) => {
     const link = safeLink(ad.website_url) || (ad.contact ? `https://wa.me/${ad.contact.replace(/\D/g, '')}` : '');
     return `<article class="market-advert ${compact ? 'compact' : ''}" data-market-ad="${ad.id}">
-      ${ad.image_url ? `<img src="${esc(ad.image_url)}" alt="${esc(ad.business_name)} advert">` : '<div class="advert-art">✦</div>'}
+      ${galleryMarkup(ad.image_urls?.length ? ad.image_urls : (ad.image_url ? [ad.image_url] : []), ad.business_name)}
       <div class="advert-copy"><div class="advert-label">${ad.is_featured ? 'Featured · ' : ''}Sponsored · ${esc(ad.category)}</div><h3>${esc(ad.headline)}</h3>
       <p>${esc(ad.description)}</p><div class="advert-meta">${esc(ad.business_name)}${ad.campus ? ` · ${esc(ad.campus)}` : ''}</div>
       <div class="advert-actions">${ad.provider_id ? `<button class="btn secondary provider-message-trigger" type="button" data-provider-message="${ad.provider_id}" data-provider-name="${esc(ad.business_name)}">Private message</button>` : ''}${link ? `<a class="btn secondary advert-cta" href="${esc(link)}" target="_blank" rel="noopener" data-ad-click="${ad.id}">${ad.website_url ? 'Visit business' : 'Contact advertiser'}</a>` : ''}</div></div></article>`;
@@ -145,7 +146,7 @@
         <input name="website_url" placeholder="Website or social link (optional)">
         <label class="notice">Placement<select name="placement"><option value="spotlight">Business spotlight</option><option value="feed">Between market listings</option></select></label>
         <div class="advert-date-row"><label>Start date<input name="starts_at" type="date"></label><label>End date<input name="expires_at" type="date"></label></div>
-        <label class="notice">Poster or business image<input name="image" type="file" accept="image/*"></label>
+        <label class="notice">Service images (up to 2 for transport)<input name="images" type="file" accept="image/*" multiple data-max-files="2"></label>
         <button class="btn" type="submit">Submit for review</button><button class="btn secondary" type="button" id="cancelAdvertForm">Cancel</button>
       </form></div><div id="advertMessage"></div><div id="myAdvertList" class="manage-list"></div>`;
     side.appendChild(desk);
@@ -167,6 +168,7 @@
         event.target.reset(); wrap.classList.add('hidden'); desk.querySelector('#openAdvertForm').classList.remove('hidden'); await loadMyAds();
       } catch (error) { message.innerHTML = `<div class="error">${esc(error.message)}</div>`; }
     });
+    const advertImages=desk.querySelector('[name="images"]');advertImages.addEventListener('change',()=>{const category=desk.querySelector('[name="category"]').value,transport=/transport|ride|taxi|uber|shuttle|courier|delivery/i.test(category),limit=transport?2:1;if(advertImages.files.length>limit){alert(`Choose no more than ${limit} image${limit===1?'':'s'} for this service.`);advertImages.value=''}});
     loadMyAds();
   }
   async function loadMyAds() {
