@@ -6,9 +6,9 @@
   <title>Comrade Page &mdash; NucleoCampus</title>
   <link rel="stylesheet" href="/static/style.css">
   <style>
-    .comrade-hero { position:relative; overflow:hidden; display:grid; grid-template-columns:minmax(0,1.25fr) minmax(240px,.75fr); gap:28px; margin:30px 0 24px; padding:36px; border:1px solid rgba(111,228,255,.28); border-radius:28px; background:linear-gradient(125deg,#102148 0%,#0c1733 54%,#301953 100%); }
+    .comrade-hero { position:relative; overflow:hidden; margin:20px 0 16px; padding:20px 24px; border:1px solid rgba(111,228,255,.28); border-radius:20px; background:linear-gradient(125deg,#102148 0%,#0c1733 54%,#301953 100%); }
     .comrade-hero::after { content:"CIVIC"; position:absolute; right:-12px; bottom:-62px; color:rgba(255,255,255,.055); font:900 8.8rem/1 system-ui; letter-spacing:-.1em; pointer-events:none; }
-    .comrade-hero > * { position:relative; z-index:1; }.comrade-hero h1 { margin:7px 0 10px; font-size:clamp(2.55rem,6vw,4.9rem); letter-spacing:-.065em; }.comrade-hero .lede { max-width:680px; margin:0; }
+    .comrade-hero > * { position:relative; z-index:1; }.comrade-hero h1 { margin:4px 0; font-size:clamp(2.2rem,5vw,3.6rem); letter-spacing:-.055em; }.comrade-hero .lede { max-width:680px; margin:0; }
     .civic-note { align-self:center; padding:19px; border:1px solid rgba(202,176,255,.3); border-radius:18px; color:#e6ddff; background:rgba(7,13,34,.54); font-size:.92rem; line-height:1.65; }.civic-note strong { display:block; margin-bottom:5px; color:#70e7ff; letter-spacing:.1em; font-size:.72rem; text-transform:uppercase; }
     .src-access,.src-dashboard,.president-desk { margin-bottom:24px; padding:0; overflow:hidden; }.src-access summary,.src-dashboard summary,.president-desk summary { display:flex; align-items:center; gap:13px; padding:20px 24px; cursor:pointer; list-style:none; font-weight:750; font-size:1.08rem; }.src-access summary::-webkit-details-marker,.src-dashboard summary::-webkit-details-marker,.president-desk summary::-webkit-details-marker { display:none; }
     .desk-symbol { display:grid; place-items:center; width:32px; height:32px; border-radius:10px; color:#061221; background:linear-gradient(135deg,#70e7ff,#b990ff); font-size:1.1rem; }.desk-hint { margin-left:auto; color:var(--muted,#a8b6d4); font:.72rem/1.2 ui-monospace,monospace; letter-spacing:.08em; text-transform:uppercase; }
@@ -22,7 +22,7 @@
 <body>
   <main class="wrap">
     <header class="top"><div class="brand-group"><img class="brand-logo" src="/branding/logo" alt=""><div class="brand-text"><div class="brand">Nucleo<span>Campus</span></div><div class="brand-tagline">Campus community</div></div></div><nav><a href="/static/index.html">Home</a><a href="/static/fun.html">Fun Page</a></nav></header>
-    <section class="comrade-hero"><div><span class="kicker">Campus civic space</span><h1>Comrade Page</h1><p class="lede">Official SRC and party announcements, with room for the campus conversation underneath.</p></div><aside class="civic-note"><strong>Open to the campus</strong>Everyone can read announcements. Approved students can add a named response, keeping the conversation constructive and accountable.</aside></section>
+    <section class="comrade-hero"><div><span class="kicker">Campus civic space</span><h1>Comrade Page</h1><p class="lede">Official SRC and party announcements.</p></div></section>
 
     <details class="card src-access" id="srcAccess"><summary><span class="desk-symbol">&#128100;</span> SRC president access <span class="desk-hint">create or sign in</span></summary><div class="account-grid">
       <form class="account-panel" id="srcLoginForm"><h3>Sign in</h3><p>Use the password you created for your SRC profile.</p><input id="srcLoginEmail" type="email" required placeholder="SRC email"><input id="srcLoginPassword" type="password" required autocomplete="current-password" placeholder="Password"><button class="btn" type="submit">Sign in to SRC desk</button><p class="desk-status" id="srcLoginStatus" aria-live="polite"></p></form>
