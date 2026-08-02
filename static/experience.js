@@ -1,4 +1,21 @@
 (function () {
+  const friendlyPaths = {
+    '/static/index.html': '/',
+    '/static/student.html': '/students',
+    '/static/lecturer.html': '/lecturers',
+    '/static/lessons_student.html': '/students/lessons',
+    '/static/lessons_lecturer.html': '/lecturers/lessons',
+    '/static/live_lesson.html': '/live',
+    '/static/fun.html': '/community',
+    '/static/comrade.html': '/src',
+    '/static/marketing.html': '/market',
+    '/static/admin.html': '/admin',
+    '/static/pdf_tools.html': '/tools/pdf',
+    '/static/trust.html': '/trust',
+  };
+  const legacyPaths = Object.fromEntries(Object.entries(friendlyPaths).map(([legacy, friendly]) => [friendly, legacy]));
+  const pagePath = legacyPaths[location.pathname] || location.pathname;
+  const cleanPath = path => friendlyPaths[path] || path;
   if (!document.querySelector('link[href="/static/product.css"]')) {
     const productStyles = document.createElement('link');
     productStyles.rel = 'stylesheet';
@@ -25,7 +42,7 @@
   const studentToken = sessionStorage.getItem('studentToken');
   const lecturerToken = sessionStorage.getItem('lecturerToken');
   const adminPin = sessionStorage.getItem('lecturerPin');
-  const activeRole = location.pathname.endsWith('/admin.html') && adminPin ? 'admin' : lecturerToken ? 'lecturer' : studentToken ? 'student' : 'public';
+  const activeRole = pagePath.endsWith('/admin.html') && adminPin ? 'admin' : lecturerToken ? 'lecturer' : studentToken ? 'student' : 'public';
   const activeSessionKey = activeRole === 'admin' ? 'lecturerPin' : activeRole + 'Token';
   const roleLinks = activeRole === 'admin' ? [
     ['/static/admin.html#adminOverview', 'Overview'], ['/static/admin.html#adminContent', 'Content'],
@@ -63,14 +80,14 @@
       let primary=nav.querySelector('.primary-nav-links');
       if(!primary){primary=document.createElement('div');primary.className='primary-nav-links';nav.appendChild(primary)}
       primary.replaceChildren();
-      roleLinks.forEach(([href,label])=>{const link=document.createElement('a');link.href=href;link.textContent=label;if(new URL(link.href,location.href).pathname===location.pathname)link.setAttribute('aria-current','page');primary.appendChild(link)});
+      roleLinks.forEach(([href,label])=>{const link=document.createElement('a');link.href=href;link.textContent=label;if(cleanPath(new URL(link.href,location.href).pathname)===cleanPath(location.pathname))link.setAttribute('aria-current','page');primary.appendChild(link)});
       const more=document.createElement('a');more.href=activeRole==='lecturer'?'/static/lecturer.html#lecturerMessagesCard':'/static/marketing.html';more.textContent=activeRole==='lecturer'?'Messages':'More';primary.appendChild(more);
       return;
     }
     nav.replaceChildren();
     roleLinks.forEach(([href, label]) => {
       const link = document.createElement('a'); link.href = href; link.textContent = label;
-      if (new URL(link.href, location.href).pathname === location.pathname) link.setAttribute('aria-current', 'page');
+      if (cleanPath(new URL(link.href, location.href).pathname) === cleanPath(location.pathname)) link.setAttribute('aria-current', 'page');
       nav.appendChild(link);
     });
     const more = document.createElement('details'); more.className = 'nav-more';
@@ -95,7 +112,7 @@
   if (activeRole !== 'public' && !document.querySelector('.mobile-tabbar')) {
     const mobile = document.createElement('nav'); mobile.className='mobile-tabbar'; mobile.setAttribute('aria-label','Primary mobile navigation');
     const mobileLinks = activeRole === 'lecturer' ? roleLinks : roleLinks.slice(0,4);
-    mobileLinks.forEach(([href,label])=>{const a=document.createElement('a');a.href=href;a.textContent=label;if(new URL(a.href,location.href).pathname===location.pathname)a.setAttribute('aria-current','page');mobile.appendChild(a)});
+    mobileLinks.forEach(([href,label])=>{const a=document.createElement('a');a.href=href;a.textContent=label;if(cleanPath(new URL(a.href,location.href).pathname)===cleanPath(location.pathname))a.setAttribute('aria-current','page');mobile.appendChild(a)});
     const moreButton=document.createElement('button');moreButton.type='button';moreButton.textContent='More';moreButton.setAttribute('aria-haspopup','dialog');moreButton.addEventListener('click',()=>toggleMobileMenu());mobile.appendChild(moreButton);document.body.appendChild(mobile);
   }
 
@@ -107,19 +124,19 @@
   if (lecturerPortal && !document.getElementById('lecturerStatusGrid')) {
     const status=document.createElement('div');status.id='lecturerStatusGrid';status.className='status-grid';status.innerHTML='<a href="/static/lecturer.html"><span>Assess</span><strong>Submissions</strong><small>Review student work</small></a><a href="/static/live_lesson.html"><span>Teach</span><strong>Live classroom</strong><small>Start or rejoin a room</small></a><a href="/static/lecturer.html#lecturerMessagesCard"><span>Support</span><strong>Messages</strong><small>Answer students</small></a>';lecturerPortal.querySelector('.role-grid')?.before(status);
   }
-  if (location.pathname.endsWith('/lecturer.html') && document.getElementById('appWrap')) {
+  if (pagePath.endsWith('/lecturer.html') && document.getElementById('appWrap')) {
     const app=document.getElementById('appWrap'), workbench=app.querySelector('.lecturer-workbench');
     if(workbench&&!document.querySelector('.workflow-nav')){const tabs=document.createElement('nav');tabs.className='workflow-nav';tabs.setAttribute('aria-label','Lecturer workspace sections');tabs.innerHTML='<a href="#quizCreate">Create quiz</a><a href="#quizLibrary">Quiz library</a><a href="#submissionsCard">Submissions</a><a href="#lecturerMessagesCard">Messages</a><a href="#myStudentsList">Students</a>';const cards=workbench.querySelectorAll('.card');if(cards[0])cards[0].id='quizCreate';if(cards[1])cards[1].id='quizLibrary';workbench.before(tabs)}
   }
-  if (location.pathname.endsWith('/lessons_lecturer.html') && document.getElementById('appWrap')) {
+  if (pagePath.endsWith('/lessons_lecturer.html') && document.getElementById('appWrap')) {
     const app=document.getElementById('appWrap'),cards=[...app.querySelectorAll(':scope > .card')];
     if(cards.length&&!document.querySelector('.workflow-nav')){const tabs=document.createElement('nav');tabs.className='workflow-nav';tabs.setAttribute('aria-label','Lesson workspace sections');tabs.innerHTML='<a href="#lessonCreate">Create lesson</a><a href="#lessonLibrary">Lesson library</a><a href="#submissionsCard">Student answers</a>';cards[0].id='lessonCreate';if(cards[1])cards[1].id='lessonLibrary';app.querySelector('.lede')?.after(tabs)}
   }
-  if (location.pathname.endsWith('/student.html') && document.getElementById('appWrap')) {
+  if (pagePath.endsWith('/student.html') && document.getElementById('appWrap')) {
     const app=document.getElementById('appWrap');
     if(!document.querySelector('.workflow-nav')){const results=[...app.querySelectorAll('.card')].find(card=>card.querySelector('h2')?.textContent.includes('My results'));if(results)results.id='studentResults';const tabs=document.createElement('nav');tabs.className='workflow-nav';tabs.setAttribute('aria-label','Student workspace sections');tabs.innerHTML='<a href="#moduleCard">Quizzes</a><a href="#studentResults">Results</a><a href="#studentBottomMessages">Messages</a><a href="#studentModulePicker">My modules</a>';app.querySelector('.lede')?.after(tabs)}
   }
-  if (location.pathname.endsWith('/admin.html') && document.getElementById('appWrap')) {
+  if (pagePath.endsWith('/admin.html') && document.getElementById('appWrap')) {
     const app=document.getElementById('appWrap'),heading=app.querySelector('h1'),lede=app.querySelector('.lede');if(heading)heading.id='adminOverview';
     const findCard=text=>[...app.querySelectorAll('.card')].find(card=>card.querySelector('h2')?.textContent.includes(text));
     const quizCard=findCard('Quizzes');if(quizCard?.parentElement)quizCard.parentElement.id='adminContent';const people=findCard('Lecturer management');if(people)people.id='adminPeople';const scripts=findCard('All student scripts');if(scripts)scripts.id='adminScripts';const moderation=findCard('Community moderation');if(moderation)moderation.id='adminModeration';
@@ -127,7 +144,7 @@
     if(!document.getElementById('adminActivity')){const activity=document.createElement('section');activity.id='adminActivity';activity.className='card admin-activity';activity.innerHTML='<span class="kicker">Accountability</span><h2>Recent activity</h2><p class="muted">Actions taken in this administrator session.</p><div id="adminActivityList" class="admin-list"><p class="muted">No actions yet.</p></div>';app.appendChild(activity);const render=()=>{const rows=JSON.parse(sessionStorage.getItem('adminSessionActivity')||'[]');document.getElementById('adminActivityList').innerHTML=rows.length?rows.map(row=>`<div class="activity-row"><strong>${row.action}</strong><span>${row.time}</span></div>`).join(''):'<p class="muted">No actions yet.</p>'};app.addEventListener('click',event=>{const button=event.target.closest('button');if(!button||button.classList.contains('card-toggle')||button.id==='refreshLiveSessionsBtn')return;const label=button.textContent.trim().replace(/\s+/g,' ').slice(0,80);if(!label)return;const rows=JSON.parse(sessionStorage.getItem('adminSessionActivity')||'[]');rows.unshift({action:label,time:new Date().toLocaleString()});sessionStorage.setItem('adminSessionActivity',JSON.stringify(rows.slice(0,20)));render()});render()}
     const searchable=[['quizList','Search quizzes'],['lessonList','Search lessons'],['lecturerList','Search lecturers'],['adminScriptsList','Search submissions']];searchable.forEach(([id,placeholder])=>{const list=document.getElementById(id);if(!list||document.querySelector(`[data-search-for="${id}"]`))return;const input=document.createElement('input');input.type='search';input.className='admin-inline-search';input.dataset.searchFor=id;input.placeholder=placeholder;input.setAttribute('aria-label',placeholder);list.before(input);const apply=()=>{const query=input.value.trim().toLowerCase();[...list.children].forEach(row=>row.classList.toggle('hidden',Boolean(query&&!row.textContent.toLowerCase().includes(query))))};input.addEventListener('input',apply);new MutationObserver(apply).observe(list,{childList:true})});
   }
-  if (location.pathname.endsWith('/marketing.html')) {
+  if (pagePath.endsWith('/marketing.html')) {
     const labels={campusFilter:'Campus or university',maxRentFilter:'Maximum monthly rent',roomFilter:'Room type'};
     Object.entries(labels).forEach(([id,text])=>{const input=document.getElementById(id);if(!input||input.previousElementSibling?.classList.contains('field-name'))return;const label=document.createElement('label');label.className='field-name';label.htmlFor=id;label.textContent=text;input.before(label)});
     const tools=document.querySelector('.market-tools'),feed=document.getElementById('listingFeed');
@@ -139,7 +156,7 @@
     '/static/lecturer.html': '/static/lecturer-messaging.js',
     '/static/admin.html': '/static/admin-messaging.js',
   };
-  const messagingScript = messagingAssets[location.pathname];
+  const messagingScript = messagingAssets[pagePath];
   if (messagingScript) {
     const stylesheet = document.createElement('link');
     stylesheet.rel = 'stylesheet'; stylesheet.href = '/static/messaging.css';
@@ -147,8 +164,15 @@
     const script = document.createElement('script'); script.src = messagingScript;
     document.body.appendChild(script);
   }
-  if (location.pathname.endsWith('/lessons_student.html') || location.pathname.endsWith('/lessons_lecturer.html')) {
+  if (pagePath.endsWith('/lessons_student.html') || pagePath.endsWith('/lessons_lecturer.html')) {
     const insights = document.createElement('script'); insights.src = '/static/lesson-insights.js';
     document.body.appendChild(insights);
   }
+  document.querySelectorAll('a[href]').forEach(link => {
+    const target = new URL(link.getAttribute('href'), location.href);
+    if (target.origin !== location.origin || !friendlyPaths[target.pathname]) return;
+    link.href = `${friendlyPaths[target.pathname]}${target.search}${target.hash}`;
+  });
+  const friendlyPath = friendlyPaths[location.pathname];
+  if (friendlyPath) history.replaceState(history.state, '', `${friendlyPath}${location.search}${location.hash}`);
 })();

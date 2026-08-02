@@ -1,4 +1,4 @@
-const CACHE_NAME = "nucleocampus-static-v6";
+const CACHE_NAME = "nucleocampus-static-v7";
 const APP_SHELL = [
   "/",
   "/students",
