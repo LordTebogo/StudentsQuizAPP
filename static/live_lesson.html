@@ -54,8 +54,59 @@ function renderTranscriptEntry(entry){transcriptPane.querySelector('.muted')?.re
 function addTranscriptEntry(entry){if(!entry?.text)return;const cleanEntry={id:entry.id||crypto.randomUUID?.()||`${Date.now()}-${Math.random()}`,name:String(entry.name||'Participant').slice(0,100),role:entry.role==='lecturer'?'lecturer':'student',time:String(entry.time||new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})).slice(0,30),text:String(entry.text).trim().slice(0,5000)};if(!cleanEntry.text||transcriptEntries.some(item=>item.id===cleanEntry.id))return;transcriptEntries.push(cleanEntry);renderTranscriptEntry(cleanEntry);if(roomCode)sessionStorage.setItem(`nucleoTranscript:${roomCode}`,JSON.stringify(transcriptEntries.slice(-2000)))}
 async function publishTranscript(text){const entry={type:'transcript',id:crypto.randomUUID?.()||`${Date.now()}-${Math.random()}`,name:currentSpeakerName,role,time:new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}),text};addTranscriptEntry(entry);if(room)await room.localParticipant.publishData(new TextEncoder().encode(JSON.stringify(entry)),{reliable:true,topic:'class-chat'})}
 function setTranscriptButton(active){$('listenTranscriptBtn').textContent=active?'Stop my transcript':'Start my transcript';$('listenTranscriptBtn').classList.toggle('is-active',active)}
-function startSpeechTranscript(Recognition){if(!speechTranscriptRequested)return;const recognition=new Recognition();speechRecognition=recognition;recognition.continuous=true;recognition.interimResults=true;recognition.lang=document.documentElement.lang||navigator.language||'en-ZA';let caption=document.getElementById('captionLive');if(!caption){caption=document.createElement('div');caption.id='captionLive';caption.className='caption-live hidden';document.body.appendChild(caption)}recognition.onstart=()=>{lastSpeechError='';setTranscriptButton(true);$('deviceFeedback').textContent='Live transcription is listening to your microphone.'};recognition.onresult=event=>{speechTranscriptRetries=0;lastSpeechError='';let interim='';for(let index=event.resultIndex;index<event.results.length;index++){const words=event.results[index][0].transcript.trim();if(event.results[index].isFinal&&words)publishTranscript(words);else interim+=words+' '}caption.textContent=interim;caption.classList.toggle('hidden',!interim)};recognition.onerror=event=>{lastSpeechError=event.error||'unknown';if(lastSpeechError==='aborted'&&!speechTranscriptRequested)return;const messages={'not-allowed':'Microphone permission is blocked. Allow microphone access in the browser address bar, then try again.','service-not-allowed':'Your browser has disabled its speech-recognition service. Enable speech services or use current Chrome or Edge.','audio-capture':'No working microphone was found. Check the selected microphone and browser permission.','language-not-supported':'Your browser speech service does not support the selected language.','network':'The browser speech service lost its network connection. Reconnecting…','no-speech':'No speech was detected. Still listening…','aborted':'Transcription stopped.'};$('deviceFeedback').textContent=messages[lastSpeechError]||`Transcription stopped (${lastSpeechError}). Try again.`;if(['not-allowed','service-not-allowed','audio-capture','language-not-supported'].includes(lastSpeechError))speechTranscriptRequested=false};recognition.onend=()=>{if(speechRecognition===recognition)speechRecognition=null;caption.classList.add('hidden');if(speechTranscriptRequested&&['','network','no-speech'].includes(lastSpeechError)){speechTranscriptRetries=lastSpeechError==='network'?speechTranscriptRetries+1:0;if(speechTranscriptRetries<3){clearTimeout(speechTranscriptRestartTimer);speechTranscriptRestartTimer=setTimeout(()=>startSpeechTranscript(Recognition),1000);return}}if(speechTranscriptRequested&&speechTranscriptRetries>=3){speechTranscriptRequested=false;$('deviceFeedback').textContent='Speech recognition could not reconnect. Check your internet connection, then start the transcript again.'}setTranscriptButton(false)};try{recognition.start()}catch(error){speechRecognition=null;speechTranscriptRequested=false;setTranscriptButton(false);$('deviceFeedback').textContent='Transcription could not start. Check microphone permission and try again.'}}
-function toggleSpeechTranscript(){if(speechTranscriptRequested||speechRecognition){speechTranscriptRequested=false;clearTimeout(speechTranscriptRestartTimer);speechRecognition?.stop();setTranscriptButton(false);$('deviceFeedback').textContent='Transcription stopped.';return}const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;if(!Recognition){$('deviceFeedback').textContent='Live transcription is not supported by this browser. Use a current Chrome or Edge browser.';return}speechTranscriptRequested=true;speechTranscriptRetries=0;lastSpeechError='';startSpeechTranscript(Recognition)}
+function speechLanguages(){return [...new Set([document.documentElement.lang,navigator.language,'en-ZA','en-US'].filter(Boolean))]}
+function stopSpeechTranscript(message='Transcription stopped.'){
+  speechTranscriptRequested=false;
+  clearTimeout(speechTranscriptRestartTimer);
+  speechRecognition?.stop();
+  setTranscriptButton(false);
+  $('deviceFeedback').textContent=message;
+}
+function startSpeechTranscript(Recognition){
+  if(!speechTranscriptRequested)return;
+  const recognition=new Recognition(),languages=speechLanguages();
+  speechRecognition=recognition;
+  // Short sessions are more reliable than continuous cloud recognition and are
+  // restarted automatically below while the participant keeps transcription on.
+  recognition.continuous=false;
+  recognition.interimResults=true;
+  recognition.maxAlternatives=1;
+  recognition.lang=languages[Math.min(speechTranscriptRetries,languages.length-1)];
+  let caption=document.getElementById('captionLive');
+  if(!caption){caption=document.createElement('div');caption.id='captionLive';caption.className='caption-live hidden';document.body.appendChild(caption)}
+  recognition.onstart=()=>{lastSpeechError='';setTranscriptButton(true);$('deviceFeedback').textContent=`Live transcription is listening (${recognition.lang}).`};
+  recognition.onresult=event=>{speechTranscriptRetries=0;lastSpeechError='';let interim='';for(let index=event.resultIndex;index<event.results.length;index++){const words=event.results[index][0].transcript.trim();if(event.results[index].isFinal&&words)publishTranscript(words);else interim+=words+' '}caption.textContent=interim;caption.classList.toggle('hidden',!interim)};
+  recognition.onerror=event=>{
+    lastSpeechError=event.error||'unknown';
+    if(lastSpeechError==='aborted'&&!speechTranscriptRequested)return;
+    const messages={'not-allowed':'Microphone permission is blocked. Allow it in the browser address bar, then try again.','service-not-allowed':'Speech recognition is disabled by this browser. Enable speech services or use current Chrome or Edge.','audio-capture':'The selected microphone is unavailable. Choose a working microphone and try again.','language-not-supported':'That speech language is unavailable. Trying another language…','network':'The browser speech service is temporarily unavailable. Reconnecting…','no-speech':'Listening…','aborted':'Transcription stopped.'};
+    $('deviceFeedback').textContent=messages[lastSpeechError]||`Transcription stopped (${lastSpeechError}). Try again.`;
+    if(['not-allowed','service-not-allowed','audio-capture'].includes(lastSpeechError))speechTranscriptRequested=false;
+  };
+  recognition.onend=()=>{
+    if(speechRecognition===recognition)speechRecognition=null;
+    caption.classList.add('hidden');
+    if(!speechTranscriptRequested){setTranscriptButton(false);return}
+    if(['network','language-not-supported'].includes(lastSpeechError))speechTranscriptRetries+=1;
+    else if(lastSpeechError!=='no-speech')speechTranscriptRetries=0;
+    if(speechTranscriptRetries>=6){stopSpeechTranscript('The browser speech service is unavailable. Check that Edge or Chrome speech services are allowed, then try again.');return}
+    const delay=lastSpeechError==='network'?Math.min(8000,750*Math.pow(2,speechTranscriptRetries)):350;
+    clearTimeout(speechTranscriptRestartTimer);
+    speechTranscriptRestartTimer=setTimeout(()=>startSpeechTranscript(Recognition),delay);
+  };
+  try{recognition.start()}catch(_){speechRecognition=null;clearTimeout(speechTranscriptRestartTimer);speechTranscriptRestartTimer=setTimeout(()=>startSpeechTranscript(Recognition),700)}
+}
+async function toggleSpeechTranscript(){
+  if(speechTranscriptRequested||speechRecognition){stopSpeechTranscript();return}
+  const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!Recognition){$('deviceFeedback').textContent='Live transcription is not supported by this browser. Use a current Chrome or Edge browser.';return}
+  if(!window.isSecureContext){$('deviceFeedback').textContent='Transcription requires a secure HTTPS connection.';return}
+  try{
+    const check=await navigator.mediaDevices.getUserMedia({audio:true});
+    check.getTracks().forEach(track=>track.stop());
+  }catch(_){$('deviceFeedback').textContent='Microphone access is blocked. Allow it in the browser address bar, then try again.';return}
+  speechTranscriptRequested=true;speechTranscriptRetries=0;lastSpeechError='';setTranscriptButton(true);$('deviceFeedback').textContent='Starting transcription…';startSpeechTranscript(Recognition)
+}
 async function endAndDownloadTranscript(){const button=$('downloadTranscriptBtn');button.disabled=true;button.textContent='Preparing PDF…';try{speechRecognition?.stop();const body=new FormData();body.append('transcript_json',JSON.stringify(transcriptEntries));const response=await fetch(`/live/${encodeURIComponent(roomCode)}/transcript.pdf`,{method:'POST',headers:{'X-Lecturer-Token':lecturerToken},body});if(!response.ok){const error=await response.json().catch(()=>({}));throw new Error(error.detail||'Could not create the transcript PDF')}const blob=await response.blob(),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=`live-lesson-${roomCode}-transcript.pdf`;link.click();setTimeout(()=>URL.revokeObjectURL(url),30000);sessionStorage.removeItem(`nucleoTranscript:${roomCode}`);sessionStorage.removeItem('nucleoActiveMeeting');await room?.disconnect();location.href='/static/lecturer.html'}catch(error){$('deviceFeedback').textContent=error.message;button.disabled=false;button.textContent='Finish & download PDF'}}
 $('copyInvite').onclick=async()=>{await navigator.clipboard.writeText(`${location.origin}/static/live_lesson.html?room=${encodeURIComponent(roomCode)}`);$('copyInvite').textContent='Copied'};$('leaveCall').onclick=async()=>{speechRecognition?.stop();sessionStorage.removeItem('nucleoActiveMeeting');await room?.disconnect();location.href=role==='lecturer'?'/static/lecturer.html':'/static/student.html'};
 const savedMeeting=(()=>{try{return JSON.parse(sessionStorage.getItem('nucleoActiveMeeting')||'null')}catch(_){return null}})();if(savedMeeting&&savedMeeting.room&&savedMeeting.role===role){$('roomCode').value=savedMeeting.room;$('joinIntro').textContent='Reconnecting you to your live classroom…';setTimeout(()=>join(Boolean(savedMeeting.camera)),0)}
