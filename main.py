@@ -4685,9 +4685,65 @@ async def live_lesson_socket(websocket: WebSocket, room_code: str):
                 pass
 
 
-@app.get("/")
-def root():
-    return RedirectResponse(url="/static/index.html")
+FRONTEND_PAGES = {
+    "/": "index.html",
+    "/students": "student.html",
+    "/lecturers": "lecturer.html",
+    "/students/lessons": "lessons_student.html",
+    "/lecturers/lessons": "lessons_lecturer.html",
+    "/live": "live_lesson.html",
+    "/community": "fun.html",
+    "/src": "comrade.html",
+    "/market": "marketing.html",
+    "/admin": "admin.html",
+    "/tools/pdf": "pdf_tools.html",
+    "/trust": "trust.html",
+}
+
+
+def _frontend_page(filename: str):
+    def serve_page():
+        return FileResponse(os.path.join("static", filename))
+
+    return serve_page
+
+
+def _legacy_frontend_redirect(friendly_path: str):
+    def redirect(request: Request):
+        destination = friendly_path
+        if request.url.query:
+            destination += f"?{request.url.query}"
+        return RedirectResponse(url=destination, status_code=308)
+
+    return redirect
+
+
+@app.get("/service-worker.js", include_in_schema=False)
+def service_worker():
+    return FileResponse(
+        os.path.join("static", "service-worker.js"),
+        media_type="application/javascript",
+    )
+
+
+# Give each screen a readable public URL while preserving old bookmarks.
+# These routes must be registered before the catch-all /static file mount.
+for friendly_path, filename in FRONTEND_PAGES.items():
+    route_name = filename.removesuffix(".html")
+    app.add_api_route(
+        friendly_path,
+        _frontend_page(filename),
+        methods=["GET"],
+        name=f"frontend_{route_name}",
+        include_in_schema=False,
+    )
+    app.add_api_route(
+        f"/static/{filename}",
+        _legacy_frontend_redirect(friendly_path),
+        methods=["GET"],
+        name=f"legacy_frontend_{route_name}",
+        include_in_schema=False,
+    )
 
 
 # ---------------------------------------------------------------------------

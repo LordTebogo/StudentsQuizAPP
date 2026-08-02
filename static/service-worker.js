@@ -1,12 +1,12 @@
-const CACHE_NAME = "nucleocampus-static-v5";
+const CACHE_NAME = "nucleocampus-static-v6";
 const APP_SHELL = [
-  "/static/index.html",
-  "/static/student.html",
-  "/static/lecturer.html",
-  "/static/lessons_student.html",
-  "/static/lessons_lecturer.html",
-  "/static/admin.html",
-  "/static/comrade.html",
+  "/",
+  "/students",
+  "/lecturers",
+  "/students/lessons",
+  "/lecturers/lessons",
+  "/admin",
+  "/src",
   "/static/style.css",
   "/static/experience.js",
   "/static/loading.js",
@@ -36,13 +36,15 @@ self.addEventListener("activate", event => {
 self.addEventListener("fetch", event => {
   if (event.request.method !== "GET") return;
   const url = new URL(event.request.url);
-  if (url.origin !== self.location.origin || (url.pathname !== "/branding/logo" && !url.pathname.startsWith("/static/"))) return;
+  if (url.origin !== self.location.origin) return;
+  const isAppResource = event.request.mode === "navigate" || url.pathname === "/branding/logo" || url.pathname.startsWith("/static/");
+  if (!isAppResource) return;
   event.respondWith(
     fetch(event.request).then(response => {
       const copy = response.clone();
       caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
       return response;
-    }).catch(() => caches.match(event.request).then(cached => cached || caches.match("/static/index.html")))
+    }).catch(() => caches.match(event.request).then(cached => cached || caches.match("/")))
   );
 });
 
@@ -56,14 +58,14 @@ self.addEventListener("push", event => {
     badge: "/branding/logo",
     tag: payload.tag || "nucleocampus-update",
     renotify: true,
-    data: { url: payload.url || "/static/student.html" },
+    data: { url: payload.url || "/students" },
   };
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
 self.addEventListener("notificationclick", event => {
   event.notification.close();
-  const destination = new URL(event.notification.data?.url || "/static/student.html", self.location.origin).href;
+  const destination = new URL(event.notification.data?.url || "/students", self.location.origin).href;
   event.waitUntil(clients.matchAll({ type: "window", includeUncontrolled: true }).then(windows => {
     const existing = windows.find(client => client.url.startsWith(self.location.origin));
     return existing ? existing.focus() : clients.openWindow(destination);
