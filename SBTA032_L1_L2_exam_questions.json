@@ -1,0 +1,315 @@
+{
+  "title": "SBTA032 Examination Practice - Introduction and Innate Immunity",
+  "questions": [
+    {
+      "type": "mcq",
+      "question": "SECTION A: TRUE OR FALSE (1 mark) - Innate immunity is an antigen-specific immune response.",
+      "options": ["True", "False"],
+      "answer": "False",
+      "marks": 1
+    },
+    {
+      "type": "mcq",
+      "question": "SECTION A: TRUE OR FALSE (1 mark) - Innate immunity relies on components that are already formed before infection.",
+      "options": ["True", "False"],
+      "answer": "True",
+      "marks": 1
+    },
+    {
+      "type": "mcq",
+      "question": "SECTION A: TRUE OR FALSE (1 mark) - Innate immunity develops a stronger memory response after repeated exposure to the same pathogen.",
+      "options": ["True", "False"],
+      "answer": "False",
+      "marks": 1
+    },
+    {
+      "type": "mcq",
+      "question": "SECTION A: TRUE OR FALSE (1 mark) - Tissue macrophages can recruit neutrophils to an infected site.",
+      "options": ["True", "False"],
+      "answer": "True",
+      "marks": 1
+    },
+    {
+      "type": "mcq",
+      "question": "SECTION A: TRUE OR FALSE (1 mark) - Disease is defined as the ability of a pathogen to enter a host and multiply.",
+      "options": ["True", "False"],
+      "answer": "False",
+      "marks": 1
+    },
+    {
+      "type": "mcq",
+      "question": "SECTION A: TRUE OR FALSE (1 mark) - Naturally acquired passive immunity usually provides immediate but short-term protection.",
+      "options": ["True", "False"],
+      "answer": "True",
+      "marks": 1
+    },
+    {
+      "type": "mcq",
+      "question": "SECTION A: TRUE OR FALSE (1 mark) - Adaptive immunity is the first line of host defence and has no memory.",
+      "options": ["True", "False"],
+      "answer": "False",
+      "marks": 1
+    },
+    {
+      "type": "mcq",
+      "question": "SECTION A: TRUE OR FALSE (1 mark) - PAMPs are conserved microbial components detected by pattern-recognition molecules.",
+      "options": ["True", "False"],
+      "answer": "True",
+      "marks": 1
+    },
+    {
+      "type": "mcq",
+      "question": "SECTION A: TRUE OR FALSE (1 mark) - DAMPs may be released from necrotic cells and contribute to tissue damage.",
+      "options": ["True", "False"],
+      "answer": "True",
+      "marks": 1
+    },
+    {
+      "type": "mcq",
+      "question": "SECTION A: TRUE OR FALSE (1 mark) - Recognition of a pathogen by PRRs can promote cytokine and chemokine production.",
+      "options": ["True", "False"],
+      "answer": "True",
+      "marks": 1
+    },
+    {
+      "type": "mcq",
+      "question": "SECTION A: TRUE OR FALSE (1 mark) - Squamous epithelium of the skin acts as a physical barrier.",
+      "options": ["True", "False"],
+      "answer": "True",
+      "marks": 1
+    },
+    {
+      "type": "mcq",
+      "question": "SECTION A: TRUE OR FALSE (1 mark) - Peristalsis is a chemical defence mechanism of mucous membranes.",
+      "options": ["True", "False"],
+      "answer": "False",
+      "marks": 1
+    },
+    {
+      "type": "mcq",
+      "question": "SECTION A: TRUE OR FALSE (1 mark) - Hydrochloric acid contributes to innate defence by producing a low pH in the stomach.",
+      "options": ["True", "False"],
+      "answer": "True",
+      "marks": 1
+    },
+    {
+      "type": "mcq",
+      "question": "SECTION A: TRUE OR FALSE (1 mark) - Normal flora can protect the host by competing with pathogens for nutrients and colonisation sites.",
+      "options": ["True", "False"],
+      "answer": "True",
+      "marks": 1
+    },
+    {
+      "type": "mcq",
+      "question": "SECTION A: TRUE OR FALSE (1 mark) - The complement system can be activated only through the classical pathway.",
+      "options": ["True", "False"],
+      "answer": "False",
+      "marks": 1
+    },
+    {
+      "type": "mcq",
+      "question": "SECTION A: TRUE OR FALSE (1 mark) - Lactoferrin and transferrin restrict bacterial growth by competing for iron.",
+      "options": ["True", "False"],
+      "answer": "True",
+      "marks": 1
+    },
+    {
+      "type": "mcq",
+      "question": "SECTION A: TRUE OR FALSE (1 mark) - The principal function of neutrophils is antigen presentation to T lymphocytes.",
+      "options": ["True", "False"],
+      "answer": "False",
+      "marks": 1
+    },
+    {
+      "type": "mcq",
+      "question": "SECTION A: TRUE OR FALSE (1 mark) - Natural killer cells can kill virus-infected cells and altered self cells.",
+      "options": ["True", "False"],
+      "answer": "True",
+      "marks": 1
+    },
+    {
+      "type": "mcq",
+      "question": "SECTION A: TRUE OR FALSE (1 mark) - Eosinophils are important in defence against certain parasites.",
+      "options": ["True", "False"],
+      "answer": "True",
+      "marks": 1
+    },
+    {
+      "type": "mcq",
+      "question": "SECTION A: TRUE OR FALSE (1 mark) - Blood monocytes are precursors of tissue macrophages.",
+      "options": ["True", "False"],
+      "answer": "True",
+      "marks": 1
+    },
+    {
+      "type": "mcq",
+      "question": "SECTION B: SINGLE BEST ANSWER (2 marks) - Which statement best defines immunology?",
+      "options": [
+        "The study of immune-system components and functions in defence against infection",
+        "The study of microbial metabolism only",
+        "The study of inherited blood groups only",
+        "The study of drug absorption and excretion"
+      ],
+      "answer": "The study of immune-system components and functions in defence against infection",
+      "marks": 2
+    },
+    {
+      "type": "mcq",
+      "question": "SECTION B: SINGLE BEST ANSWER (2 marks) - Which antibody pattern is expected during a secondary response to a previously encountered antigen?",
+      "options": [
+        "A rapid rise in IgG with little or no rise in IgM",
+        "A rapid rise in IgM with no IgG production",
+        "An equal immediate rise in all five immunoglobulin classes",
+        "No antibody production because innate immunity prevents it"
+      ],
+      "answer": "A rapid rise in IgG with little or no rise in IgM",
+      "marks": 2
+    },
+    {
+      "type": "mcq",
+      "question": "SECTION B: SINGLE BEST ANSWER (2 marks) - Loss of self-tolerance most directly results in which immune-system disorder?",
+      "options": ["Autoimmunity", "Immunodeficiency", "Natural passive immunity", "Clonal expansion"],
+      "answer": "Autoimmunity",
+      "marks": 2
+    },
+    {
+      "type": "mcq",
+      "question": "SECTION B: SINGLE BEST ANSWER (2 marks) - Immunoglobulin classes are distinguished mainly by structural differences in which region?",
+      "options": [
+        "Constant regions of heavy chains",
+        "Variable regions of light chains only",
+        "Antigen-binding sites only",
+        "Disulfide bonds between light chains only"
+      ],
+      "answer": "Constant regions of heavy chains",
+      "marks": 2
+    },
+    {
+      "type": "mcq",
+      "question": "SECTION B: SINGLE BEST ANSWER (2 marks) - Which innate immune cell captures antigen and presents it to T lymphocytes?",
+      "options": ["Dendritic cell", "Erythrocyte", "Platelet", "Basophil"],
+      "answer": "Dendritic cell",
+      "marks": 2
+    },
+    {
+      "type": "mcq",
+      "question": "SECTION B: SINGLE BEST ANSWER (2 marks) - Which cell is located in mucous membranes and connective tissue and degranulates to release histamine?",
+      "options": ["Mast cell", "Neutrophil", "Monocyte", "Natural killer cell"],
+      "answer": "Mast cell",
+      "marks": 2
+    },
+    {
+      "type": "mcq",
+      "question": "SECTION B: SINGLE BEST ANSWER (2 marks) - Which membrane marker is associated with neutrophils in the lecture material?",
+      "options": ["CD66", "CD4", "CD8", "CD19"],
+      "answer": "CD66",
+      "marks": 2
+    },
+    {
+      "type": "mcq",
+      "question": "SECTION B: SINGLE BEST ANSWER (2 marks) - Which substance is listed as a component of primary azurophilic neutrophil granules?",
+      "options": ["Myeloperoxidase", "Haemoglobin", "Immunoglobulin D", "Surfactant"],
+      "answer": "Myeloperoxidase",
+      "marks": 2
+    },
+    {
+      "type": "mcq",
+      "question": "SECTION B: SINGLE BEST ANSWER (2 marks) - Which combination represents mechanical innate defences?",
+      "options": [
+        "Desquamation and mucociliary clearance",
+        "Antibody secretion and clonal expansion",
+        "IgG production and affinity maturation",
+        "T-cell activation and immunological memory"
+      ],
+      "answer": "Desquamation and mucociliary clearance",
+      "marks": 2
+    },
+    {
+      "type": "mcq",
+      "question": "SECTION B: SINGLE BEST ANSWER (2 marks) - Which complement effect makes a microorganism easier for a phagocyte to engulf?",
+      "options": ["Opsonisation", "Isotype switching", "Self-tolerance", "Desquamation"],
+      "answer": "Opsonisation",
+      "marks": 2
+    },
+    {
+      "type": "short",
+      "question": "SECTION C: SHORT ANSWER (2 marks) - Give the term for a microorganism capable of causing infection or disease.",
+      "answer": "Pathogen",
+      "marks": 2
+    },
+    {
+      "type": "short",
+      "question": "SECTION C: SHORT ANSWER (2 marks) - Which immunoglobulin rises first during a primary antibody response?",
+      "answer": "IgM",
+      "marks": 2
+    },
+    {
+      "type": "short",
+      "question": "SECTION C: SHORT ANSWER (2 marks) - Which immunoglobulin rises rapidly during a secondary antibody response?",
+      "answer": "IgG",
+      "marks": 2
+    },
+    {
+      "type": "short",
+      "question": "SECTION C: SHORT ANSWER (2 marks) - Give the abbreviation for receptors that detect conserved microbial patterns.",
+      "answer": "PRRs",
+      "marks": 2
+    },
+    {
+      "type": "short",
+      "question": "SECTION C: SHORT ANSWER (2 marks) - Give the abbreviation for conserved microbial structures recognised by innate immunity.",
+      "answer": "PAMPs",
+      "marks": 2
+    },
+    {
+      "type": "short",
+      "question": "SECTION C: SHORT ANSWER (2 marks) - Which circulating leukocyte develops into a tissue macrophage?",
+      "answer": "Monocyte",
+      "marks": 2
+    },
+    {
+      "type": "short",
+      "question": "SECTION C: SHORT ANSWER (2 marks) - Name the principal phagocytic cell of innate immunity.",
+      "answer": "Neutrophil",
+      "marks": 2
+    },
+    {
+      "type": "short",
+      "question": "SECTION C: SHORT ANSWER (2 marks) - Which mediator is released when mast cells degranulate?",
+      "answer": "Histamine",
+      "marks": 2
+    },
+    {
+      "type": "short",
+      "question": "SECTION C: SHORT ANSWER (2 marks) - Name the enzyme in tears and saliva that breaks down bacterial cell walls.",
+      "answer": "Lysozyme",
+      "marks": 2
+    },
+    {
+      "type": "short",
+      "question": "SECTION C: SHORT ANSWER (2 marks) - Give the term for marking a foreign organism to enhance phagocytosis.",
+      "answer": "Opsonisation",
+      "marks": 2
+    },
+    {
+      "type": "long",
+      "question": "SECTION D: STRUCTURED QUESTION (10 marks) - Compare innate and adaptive immunity with respect to specificity, speed of response, memory, major cellular components and major humoral components.",
+      "marks": 10
+    },
+    {
+      "type": "long",
+      "question": "SECTION D: STRUCTURED QUESTION (10 marks) - Distinguish naturally acquired active immunity from naturally acquired passive immunity. Include the route of acquisition, whether the recipient produces an immune response, the speed of protection and the expected duration. Relate your answer to the primary and secondary antibody responses.",
+      "marks": 10
+    },
+    {
+      "type": "long",
+      "question": "SECTION D: STRUCTURED QUESTION (10 marks) - Describe the mechanical, chemical and biological barriers of innate immunity. Give relevant examples from the skin, gastrointestinal tract, respiratory tract, tears or saliva, and normal flora, and explain how each limits infection.",
+      "marks": 10
+    },
+    {
+      "type": "long",
+      "question": "SECTION D: APPLIED QUESTION (10 marks) - A student cuts the skin and bacteria enter the tissue. Trace the innate immune response from recognition of the pathogen to inflammation and removal of the bacteria. In your answer, include PAMPs, PRRs, cytokines or chemokines, vascular changes, neutrophil recruitment, phagocytosis, intracellular killing and one role of complement.",
+      "marks": 10
+    }
+  ]
+}

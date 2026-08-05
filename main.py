@@ -89,6 +89,7 @@ from models import (
     FunOfficialPost,
     Question,
     Quiz,
+    QuizDraft,
     Submission,
     Student,
     PushSubscription,
@@ -109,7 +110,15 @@ os.environ.setdefault("MPLCONFIGDIR", os.path.join(tempfile.gettempdir(), "nucle
 # For anything beyond a small trusted class, move this to an environment
 # variable too (os.getenv("LECTURER_PIN", "90435")) so it isn't baked into
 # the deployed code.
-LECTURER_PIN = os.getenv("LECTURER_PIN", "90435")
+def _clean_secret_setting(name: str, default: str) -> str:
+    """Normalise dashboard-entered secrets without ever logging their value."""
+    value = os.getenv(name, default).strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        value = value[1:-1].strip()
+    return value or default
+
+
+LECTURER_PIN = _clean_secret_setting("LECTURER_PIN", "90435")
 LECTURER_SESSION_SECRET = os.getenv("LECTURER_SESSION_SECRET", LECTURER_PIN)
 STUDENT_SESSION_SECRET = os.getenv("STUDENT_SESSION_SECRET", LECTURER_SESSION_SECRET)
 SRC_SESSION_SECRET = os.getenv("SRC_SESSION_SECRET", STUDENT_SESSION_SECRET)
@@ -325,6 +334,10 @@ class StudentAnswer(BaseModel):
 class QuizSubmission(BaseModel):
     student_id: str
     student_name: str
+    answers: List[StudentAnswer]
+
+
+class QuizDraftSave(BaseModel):
     answers: List[StudentAnswer]
 
 
@@ -785,7 +798,7 @@ def require_lecturer_pin(request: Request, x_lecturer_pin: Optional[str] = Heade
 @app.post("/lecturer/verify-pin")
 def verify_pin(payload: PinCheck):
     """Used by the lecturer login screen to check a PIN before unlocking the UI."""
-    if payload.pin != LECTURER_PIN:
+    if not hmac.compare_digest(payload.pin.strip(), LECTURER_PIN):
         raise HTTPException(status_code=401, detail="Incorrect PIN")
     return {"ok": True}
 
@@ -1554,6 +1567,71 @@ def get_quiz(quiz_id: int, db: Session = Depends(get_db)):
 
 
 # ---------------------------------------------------------------------------
+# Student: save and resume an unfinished quiz
+# ---------------------------------------------------------------------------
+
+@app.get("/student/quiz/{quiz_id}/draft")
+def get_quiz_draft(quiz_id: int, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+    if not db.query(Quiz.id).filter(Quiz.id == quiz_id).first():
+        raise HTTPException(status_code=404, detail="Quiz not found")
+    draft = db.query(QuizDraft).filter(
+        QuizDraft.quiz_id == quiz_id,
+        QuizDraft.student_id == student.id,
+    ).first()
+    if not draft:
+        return {"answers": [], "updated_at": None}
+    try:
+        answers = json.loads(draft.answers_json)
+    except (TypeError, json.JSONDecodeError):
+        answers = []
+    return {"answers": answers, "updated_at": draft.updated_at}
+
+
+@app.put("/student/quiz/{quiz_id}/draft")
+def save_quiz_draft(quiz_id: int, payload: QuizDraftSave, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+    question_ids = {
+        question_id for (question_id,) in db.query(Question.id).filter(Question.quiz_id == quiz_id).all()
+    }
+    if not question_ids:
+        raise HTTPException(status_code=404, detail="Quiz not found")
+    answers = []
+    seen = set()
+    for item in payload.answers:
+        if item.question_id not in question_ids or item.question_id in seen:
+            continue
+        seen.add(item.question_id)
+        answers.append({"question_id": item.question_id, "answer": item.answer[:20000]})
+    now = datetime.now(timezone.utc).isoformat()
+    draft = db.query(QuizDraft).filter(
+        QuizDraft.quiz_id == quiz_id,
+        QuizDraft.student_id == student.id,
+    ).first()
+    if draft:
+        draft.answers_json = json.dumps(answers)
+        draft.updated_at = now
+    else:
+        draft = QuizDraft(
+            quiz_id=quiz_id,
+            student_id=student.id,
+            answers_json=json.dumps(answers),
+            updated_at=now,
+        )
+        db.add(draft)
+    db.commit()
+    return {"saved": True, "updated_at": now}
+
+
+@app.delete("/student/quiz/{quiz_id}/draft")
+def delete_quiz_draft(quiz_id: int, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+    db.query(QuizDraft).filter(
+        QuizDraft.quiz_id == quiz_id,
+        QuizDraft.student_id == student.id,
+    ).delete(synchronize_session=False)
+    db.commit()
+    return {"deleted": True}
+
+
+# ---------------------------------------------------------------------------
 # Student: submit answers -> auto-mark mcq & short, leave long ungraded
 # ---------------------------------------------------------------------------
 
@@ -1610,6 +1688,10 @@ def submit_quiz(quiz_id: int, submission: QuizSubmission, student: Student = Dep
     new_submission.total_score = auto_score
     new_submission.max_score = max_score
     new_submission.fully_marked = not has_long_pending
+    db.query(QuizDraft).filter(
+        QuizDraft.quiz_id == quiz_id,
+        QuizDraft.student_id == student.id,
+    ).delete(synchronize_session=False)
     db.commit()
 
     return {

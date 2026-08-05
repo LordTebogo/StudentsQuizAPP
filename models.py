@@ -310,6 +310,9 @@ class Quiz(Base):
     submissions = relationship(
         "Submission", back_populates="quiz", cascade="all, delete-orphan",
     )
+    drafts = relationship(
+        "QuizDraft", back_populates="quiz", cascade="all, delete-orphan",
+    )
     lecturer = relationship("Lecturer", back_populates="quizzes")
 
 
@@ -351,6 +354,20 @@ class Submission(Base):
     answers = relationship(
         "Answer", back_populates="submission", cascade="all, delete-orphan",
     )
+
+
+class QuizDraft(Base):
+    """A student's server-side, resumable quiz attempt."""
+    __tablename__ = "quiz_drafts"
+    __table_args__ = (UniqueConstraint("quiz_id", "student_id", name="quiz_draft_student_unique"),)
+
+    id = Column(Integer, primary_key=True)
+    quiz_id = Column(Integer, ForeignKey("quizzes.id", ondelete="CASCADE"), nullable=False, index=True)
+    student_id = Column(Integer, ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True)
+    answers_json = Column(Text, nullable=False, default="[]")
+    updated_at = Column(String, nullable=False)
+
+    quiz = relationship("Quiz", back_populates="drafts")
 
 
 class Answer(Base):
