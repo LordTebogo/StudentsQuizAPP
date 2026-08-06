@@ -54,6 +54,7 @@ class Lecturer(Base):
     modules = relationship("LecturerModule", back_populates="lecturer", cascade="all, delete-orphan")
     quizzes = relationship("Quiz", back_populates="lecturer")
     lessons = relationship("Lesson", back_populates="lecturer")
+    quiz_builder_drafts = relationship("LecturerQuizDraft", back_populates="lecturer", cascade="all, delete-orphan")
 
 
 class LecturerModule(Base):
@@ -65,6 +66,21 @@ class LecturerModule(Base):
     module_code = Column(String, nullable=False, index=True)
 
     lecturer = relationship("Lecturer", back_populates="modules")
+
+
+class LecturerQuizDraft(Base):
+    """An unpublished quiz being assembled in the lecturer quiz builder."""
+    __tablename__ = "lecturer_quiz_drafts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    lecturer_id = Column(Integer, ForeignKey("lecturers.id", ondelete="CASCADE"), nullable=False, index=True)
+    title = Column(String, nullable=False)
+    module_code = Column(String, nullable=False, default="")
+    questions_json = Column(Text, nullable=False, default="[]")
+    created_at = Column(String, nullable=False)
+    updated_at = Column(String, nullable=False)
+
+    lecturer = relationship("Lecturer", back_populates="quiz_builder_drafts")
 
 
 class Student(Base):

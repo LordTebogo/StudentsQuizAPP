@@ -1,0 +1,4 @@
+type,question,option_a,option_b,option_c,option_d,correct_answer,marks,image_url
+mcq,Which structure contains DNA?,Nucleus,Ribosome,Cell membrane,Cytoplasm,A,1,
+short,What molecule carries genetic information?,DNA,,,,DNA,2,
+long,Explain how DNA replication maintains genetic continuity.,,,,,,10,

@@ -78,6 +78,7 @@ from models import (
     DirectMessage,
     DirectMessageBlock,
     Lesson,
+    LecturerQuizDraft,
     LessonAnswer,
     LessonComment,
     LessonQuestion,
@@ -98,6 +99,7 @@ from models import (
     SrcPresident,
     ComradePost, ComradeReply, ComradeSrcReply,
 )
+from quiz_spreadsheet import QuizSpreadsheetError, parse_quiz_spreadsheet
 from cloudinary_utils import upload_image_bytes, upload_video_bytes
 
 # Matplotlib is loaded lazily for equation rendering. Give it a writable
@@ -1360,6 +1362,172 @@ def build_pdf_stylesheet():
 # ===========================================================================
 # QUIZZES
 # ===========================================================================
+
+
+def _lecturer_draft_payload(draft: LecturerQuizDraft) -> dict:
+    try:
+        questions = json.loads(draft.questions_json)
+    except (TypeError, json.JSONDecodeError):
+        questions = []
+    return {
+        "id": draft.id,
+        "title": draft.title,
+        "module_code": draft.module_code,
+        "questions": questions,
+        "created_at": draft.created_at,
+        "updated_at": draft.updated_at,
+    }
+
+
+def _draft_questions_json(questions: List[AdminQuestionInput]) -> str:
+    return json.dumps([question.model_dump() for question in questions])
+
+
+@app.get("/lecturer/quiz-drafts")
+def lecturer_quiz_drafts(
+    lecturer: Lecturer = Depends(require_lecturer_account),
+    db: Session = Depends(get_db),
+):
+    rows = (
+        db.query(LecturerQuizDraft)
+        .filter(LecturerQuizDraft.lecturer_id == lecturer.id)
+        .order_by(LecturerQuizDraft.updated_at.desc())
+        .all()
+    )
+    summaries = []
+    for draft in rows:
+        draft_payload = _lecturer_draft_payload(draft)
+        summaries.append({
+            "id": draft.id,
+            "title": draft.title,
+            "module_code": draft.module_code,
+            "question_count": len(draft_payload["questions"]),
+            "updated_at": draft.updated_at,
+        })
+    return summaries
+
+
+@app.get("/lecturer/quiz-drafts/{draft_id}")
+def lecturer_get_quiz_draft(
+    draft_id: int,
+    lecturer: Lecturer = Depends(require_lecturer_account),
+    db: Session = Depends(get_db),
+):
+    draft = db.query(LecturerQuizDraft).filter(
+        LecturerQuizDraft.id == draft_id,
+        LecturerQuizDraft.lecturer_id == lecturer.id,
+    ).first()
+    if not draft:
+        raise HTTPException(status_code=404, detail="Quiz draft not found")
+    return _lecturer_draft_payload(draft)
+
+
+@app.post("/lecturer/quiz-drafts")
+def lecturer_create_quiz_draft(
+    payload: AdminQuizInput,
+    lecturer: Lecturer = Depends(require_lecturer_account),
+    db: Session = Depends(get_db),
+):
+    module_code = _require_module_access(db, lecturer, payload.module_code) if payload.module_code.strip() else ""
+    now = datetime.utcnow().isoformat() + "Z"
+    draft = LecturerQuizDraft(
+        lecturer_id=lecturer.id,
+        title=payload.title.strip() or "Untitled quiz",
+        module_code=module_code,
+        questions_json=_draft_questions_json(payload.questions),
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(draft)
+    db.commit()
+    db.refresh(draft)
+    return _lecturer_draft_payload(draft)
+
+
+@app.put("/lecturer/quiz-drafts/{draft_id}")
+def lecturer_update_quiz_draft(
+    draft_id: int,
+    payload: AdminQuizInput,
+    lecturer: Lecturer = Depends(require_lecturer_account),
+    db: Session = Depends(get_db),
+):
+    draft = db.query(LecturerQuizDraft).filter(
+        LecturerQuizDraft.id == draft_id,
+        LecturerQuizDraft.lecturer_id == lecturer.id,
+    ).first()
+    if not draft:
+        raise HTTPException(status_code=404, detail="Quiz draft not found")
+    draft.title = payload.title.strip() or "Untitled quiz"
+    draft.module_code = _require_module_access(db, lecturer, payload.module_code) if payload.module_code.strip() else ""
+    draft.questions_json = _draft_questions_json(payload.questions)
+    draft.updated_at = datetime.utcnow().isoformat() + "Z"
+    db.commit()
+    return _lecturer_draft_payload(draft)
+
+
+@app.delete("/lecturer/quiz-drafts/{draft_id}")
+def lecturer_delete_quiz_draft(
+    draft_id: int,
+    lecturer: Lecturer = Depends(require_lecturer_account),
+    db: Session = Depends(get_db),
+):
+    draft = db.query(LecturerQuizDraft).filter(
+        LecturerQuizDraft.id == draft_id,
+        LecturerQuizDraft.lecturer_id == lecturer.id,
+    ).first()
+    if not draft:
+        raise HTTPException(status_code=404, detail="Quiz draft not found")
+    db.delete(draft)
+    db.commit()
+    return {"ok": True}
+
+
+@app.post("/lecturer/quiz-builder/image")
+async def lecturer_quiz_builder_image(
+    image: UploadFile = File(...),
+    lecturer: Lecturer = Depends(require_lecturer_account),
+):
+    if not image.filename or not (image.content_type or "").startswith("image/"):
+        raise HTTPException(status_code=400, detail="Choose a valid question image")
+    content = await image.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="The selected image is empty")
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Question images must be 10 MB or smaller")
+    return {
+        "image_url": upload_image_bytes(content, folder=f"quiz_builder/{lecturer.id}"),
+        "filename": os.path.basename(image.filename),
+    }
+
+
+@app.post("/lecturer/quiz/import-spreadsheet")
+async def lecturer_import_quiz_spreadsheet(
+    file: UploadFile = File(...),
+    _lecturer: Lecturer = Depends(require_lecturer_account),
+):
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Quiz spreadsheets must be 5 MB or smaller")
+    try:
+        questions = parse_quiz_spreadsheet(file.filename or "", content)
+    except QuizSpreadsheetError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"questions": questions, "num_questions": len(questions)}
+
+
+@app.get("/lecturer/quizzes/{quiz_id}")
+def lecturer_get_quiz_for_builder(
+    quiz_id: int,
+    lecturer: Lecturer = Depends(require_lecturer_account),
+    db: Session = Depends(get_db),
+):
+    quiz = _require_owned_quiz(db, quiz_id, lecturer)
+    return {
+        "id": quiz.id,
+        "title": quiz.title,
+        "module_code": quiz.module_code,
+        "questions": [_admin_question_dict(question) for question in quiz.questions],
+    }
 
 # ---------------------------------------------------------------------------
 # Lecturer: upload a quiz from a JSON file (optionally with image files)

@@ -157,7 +157,7 @@ download their own scripts. The password chosen at registration remains their
 password unless the administrator resets it.
 
 Quizzes are now organised by a **module code**, just like video lessons. When
-a lecturer uploads a quiz, they enter a code such as `BIO101`. Students open
+a lecturer builds a quiz, they choose an assigned code such as `BIO101`. Students open
 `/static/student.html`, choose their module, and see all quizzes for that
 module — no quiz ID is needed. A link such as
 `/static/student.html?module=BIO101` opens a module directly.
@@ -172,10 +172,36 @@ Content with student submissions cannot be edited; create a new version
 instead. Deleting content also deletes its related submissions (and, for
 lessons, public comments), so use it carefully.
 
-## 7. Adding images to questions
+## 7. Creating quizzes without JSON
+
+The Lecturer page now opens with a visual quiz builder. A lecturer enters a
+title, chooses one of their assigned modules, and adds multiple-choice,
+short-answer, or long-answer questions with ordinary form fields. Questions
+can be reordered, duplicated, removed, assigned marks, and given an optional
+image. The complete quiz can be previewed in the student layout before it is
+published.
+
+Unpublished work can be saved as an account-owned draft and reopened later.
+An existing quiz can also be duplicated into the builder to make a new
+version without changing the original or its submissions.
+
+For bulk entry, download `static/quiz-import-template.csv`, complete it in
+Excel or another spreadsheet program, and import either the resulting `.csv`
+or `.xlsx` file. The importer validates every row and places the questions in
+the visual builder for review before publishing. The expected columns are:
+`type`, `question`, `option_a` through `option_f`, `correct_answer`, `marks`,
+and `image_url`. For MCQs, `correct_answer` may contain the full option text
+or its letter (for example, `A`).
+
+The original JSON upload remains under **Advanced options** for existing
+files and technical users.
+
+## 8. Adding images to questions
 
 Any question (mcq, short, or long) can show an image — a diagram, a photo, a graph, etc.
-In the quiz JSON, add an `"image"` field to the question:
+In the visual builder, choose an image directly on the relevant question.
+The image is uploaded when the draft is saved or the quiz is published. For
+advanced JSON imports, add an `"image"` field to the question:
 
 ```json
 {
@@ -202,11 +228,11 @@ A ready-to-try example is included: `sample_with_image/quiz_with_image.json` + `
 
 Supported: any common image format a browser can display (png, jpg, gif, svg, webp, etc.).
 
-## 8. App logo
+## 9. App logo
 
 Drop a file named **`image.png`** into the same folder as `main.py` (the app's working directory) **and commit it to your repo** — since Render redeploys pull from git each time, a committed file survives redeploys just fine (unlike a runtime upload). It'll automatically appear in the header of every page, shown small (34×34px, scaled to fit) next to "NucleoCampus / Bioscientist". No configuration needed — the app checks for it on every page load and just hides the logo slot if it isn't there. To change the "Bioscientist" tagline text, edit the `.brand-tagline` text in each page's `<header>` (`static/index.html`, `static/lecturer.html`, `static/student.html`).
 
-## 9. Downloading marked answers as a PDF
+## 10. Downloading marked answers as a PDF
 
 On the Lecturer page, once you've opened a quiz's submissions:
 
@@ -223,9 +249,10 @@ immediately after submitting or from **My results & scripts** later. Their PDF
 contains their responses, marks, score, question images, and expected answers
 for MCQ and short-answer questions.
 
-## 10. Quiz JSON format
+## 11. Quiz JSON format (advanced)
 
-Upload a file shaped like `sample_quiz.json` from the Lecturer page:
+Open **Advanced options** on the Lecturer page and upload a file shaped like
+`sample_quiz.json`:
 
 ```json
 {
@@ -245,7 +272,7 @@ Short-answer responses are limited to **two words**. Marking is
 case-insensitive, accepts either word order (for example, `DNA replication`
 and `replication DNA`), and accepts small spelling variations.
 
-## 11. Video lessons
+## 12. Video lessons
 
 A second, separate feature alongside quizzes: the lecturer uploads a video
 with comprehension questions attached, and students watch + answer them.
@@ -300,11 +327,11 @@ listed publicly at `GET /lessons`, so the student lessons page shows a
 browsable list — no link required, though sharing a direct link
 (`lessons_student.html?lesson=ID`) still works and jumps straight to that lesson.
 
-## 12. Typical flow (using the frontend)
+## 13. Typical flow (using the frontend)
 
-1. **Lecturer** opens `http://<ip>:8000/static/lecturer.html`, enters the PIN
-   (90435), enters a module code, and uploads the quiz JSON file. The page
-   shows a shareable link like
+1. **Lecturer** opens `http://<ip>:8000/static/lecturer.html`, signs in,
+   creates a quiz in the visual builder (or imports a spreadsheet), previews
+   it, and publishes. The page shows a shareable link like
    `http://<ip>:8000/static/student.html?module=BIO101`.
 2. **Lecturer** shares that module link with the class.
 3. **Students** open the link (or choose a module on the Student page), select
@@ -330,6 +357,10 @@ frontend at all — see the endpoint list below. Lecturer-only routes (marked
 below) need an `X-Lecturer-Pin: 90435` header.
 
 - `POST /quiz/upload` — upload quiz (multipart file) — **lecturer PIN required**
+- `GET` / `POST /lecturer/quiz-drafts` and `GET` / `PUT` / `DELETE /lecturer/quiz-drafts/{draft_id}` — manage account-owned builder drafts
+- `POST /lecturer/quiz/import-spreadsheet` — validate CSV/XLSX questions for the visual builder
+- `POST /lecturer/quiz-builder/image` — preserve a builder image in a saved draft
+- `GET /lecturer/quizzes/{quiz_id}` — load an owned quiz for duplication
 - `GET /quizzes` — list all quizzes — **lecturer PIN required**
 - `GET /quiz/{quiz_id}` — fetch quiz for a student (no answers included)
 - `POST /quiz/{quiz_id}/submit` — student submits answers

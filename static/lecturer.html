@@ -12,6 +12,7 @@
 <link rel="manifest" href="/static/manifest.webmanifest">
 <title>Lecturer — NucleoCampus</title>
 <link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/quiz-builder.css">
 <style>
   .lecturer-workbench { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(280px, .75fr); gap: 22px; align-items: start; }
   .lecturer-workbench .card { margin-bottom: 0; }
@@ -76,25 +77,41 @@
   <div class="card"><div class="profile-strip"><img id="profileImage" class="profile-avatar hidden" alt="Lecturer profile image"><div id="profileSummary" class="muted"></div><button class="btn secondary" id="editProfileBtn">Edit profile</button></div></div>
   <div class="card hidden" id="profileCard"><h2>My lecturer profile</h2><label for="profileName">Full name</label><input id="profileName" type="text"><label for="profilePhone">Phone</label><input id="profilePhone" type="text"><label for="profileInstitution">Institution</label><input id="profileInstitution" type="text"><label for="profileBio">Professional bio</label><textarea id="profileBio"></textarea><label for="profileUpload">Profile image</label><input id="profileUpload" type="file" accept="image/*"><button class="btn" id="saveProfileBtn">Save profile</button><div id="profileMsg"></div></div>
 
-  <div class="lecturer-workbench">
-  <!-- Upload -->
-  <div class="card">
-    <h2>1. Upload a quiz</h2>
-    <label for="moduleCode">Module code</label>
-    <input type="text" id="moduleCode" placeholder="e.g. BIO101" autocomplete="off">
-    <label for="quizFile">Quiz JSON file</label>
-    <input type="file" id="quizFile" accept="application/json">
-    <label for="quizImages">Question images (optional)</label>
-    <input type="file" id="quizImages" accept="image/*" multiple>
-    <p class="muted">If any question in the JSON has an <code>"image"</code> field (e.g. <code>"image": "diagram1.png"</code>), select that image file here too — filenames must match exactly. You can select multiple images at once.</p>
-    <button class="btn" id="uploadBtn">Upload quiz</button>
-    <div id="uploadMsg"></div>
-    <div id="shareBox" class="hidden">
-      <label>Share this with students</label>
-      <code class="share-link" id="shareLink"></code>
-    </div>
-  </div>
+  <section class="card quiz-builder-card" id="quizBuilderCard">
+    <div class="quiz-builder-heading"><div><span class="kicker">Visual quiz builder</span><h2>1. Create a quiz</h2><p class="muted">Build questions with ordinary form fields, preview the student view, then publish.</p></div><button class="btn secondary" id="newQuizBuilderBtn" type="button">New quiz</button></div>
 
+    <div class="quiz-builder-meta">
+      <div><label for="builderQuizTitle">Quiz title</label><input id="builderQuizTitle" type="text" maxlength="200" placeholder="e.g. Cell Biology: Week 1"></div>
+      <div><label for="builderModuleCode">Assigned module</label><select id="builderModuleCode"><option value="">Loading assigned modules…</option></select></div>
+    </div>
+
+    <div class="quiz-builder-tools">
+      <section class="builder-tool-panel"><span class="kicker">Drafts</span><label for="quizDraftSelect">Continue a saved draft</label><select id="quizDraftSelect"><option value="">No saved drafts</option></select><div class="account-actions"><button class="btn secondary" id="loadQuizDraftBtn" type="button">Load draft</button><button class="btn secondary" id="saveQuizDraftBtn" type="button">Save as draft</button><button class="btn secondary danger-action" id="deleteQuizDraftBtn" type="button">Delete draft</button></div><small id="quizDraftStatus" class="muted">Drafts are saved to your lecturer account.</small></section>
+      <section class="builder-tool-panel"><span class="kicker">Bulk import</span><label for="quizSpreadsheetFile">Excel or CSV question sheet</label><input id="quizSpreadsheetFile" type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"><div class="account-actions"><button class="btn secondary" id="importSpreadsheetBtn" type="button">Import into builder</button><a class="btn secondary" href="/static/quiz-import-template.csv" download>Download template</a></div><small class="muted">Review imported questions here before publishing.</small></section>
+    </div>
+
+    <div class="question-builder-header"><div><span class="kicker">Questions</span><strong id="builderQuestionCount">0 questions</strong></div><button class="btn secondary" id="addQuestionBtn" type="button">+ Add question</button></div>
+    <div class="question-builder-list" id="quizQuestionsBuilder"></div>
+
+    <div class="quiz-builder-footer"><div><strong id="builderTotalMarks">0 total marks</strong><small class="muted">Multiple choice and short answers are marked automatically. Long answers wait for lecturer marking.</small></div><div class="account-actions"><button class="btn secondary" id="previewQuizBtn" type="button">Preview</button><button class="btn" id="publishQuizBtn" type="button">Publish quiz</button></div></div>
+    <div id="builderMsg" aria-live="polite"></div>
+
+    <details class="advanced-quiz-import">
+      <summary>Advanced options: import the original JSON format</summary>
+      <p class="muted">This remains available for technical users and existing quiz files.</p>
+      <label for="moduleCode">Module code</label>
+      <select id="moduleCode"><option value="">Choose a module</option></select>
+      <label for="quizFile">Quiz JSON file</label>
+      <input type="file" id="quizFile" accept="application/json,.json">
+      <label for="quizImages">Question images referenced by the JSON (optional)</label>
+      <input type="file" id="quizImages" accept="image/*" multiple>
+      <button class="btn secondary" id="uploadBtn" type="button">Import and publish JSON</button>
+      <div id="uploadMsg"></div>
+    </details>
+    <div id="shareBox" class="hidden"><label>Share this with students</label><code class="share-link" id="shareLink"></code></div>
+  </section>
+
+  <div class="lecturer-workbench">
   <!-- Existing quizzes -->
   <div class="card">
     <h2>2. Choose a quiz to review</h2>
@@ -102,10 +119,13 @@
     <select id="quizSelect"><option value="">Loading quizzes…</option></select>
     <div class="account-actions">
       <button class="btn secondary" id="refreshQuizzesBtn">Refresh quiz list</button>
+      <button class="btn secondary" id="duplicateQuizBtn" type="button">Duplicate in builder</button>
       <button class="btn" id="loadStudentsBtn" disabled>See students who took this quiz</button>
     </div>
     <p class="muted" id="quizReviewStatus" aria-live="polite">Choose a quiz, then load its student submissions.</p>
   </div>
+
+  <div class="card"><span class="kicker">Quick guide</span><h2>Quiz-building checklist</h2><ol class="builder-checklist"><li>Add a clear title and choose your assigned module.</li><li>Add questions, answers, marks, and optional images.</li><li>Save a draft or preview the student view.</li><li>Publish when the quiz is ready.</li></ol></div>
 
   </div>
 
@@ -147,6 +167,8 @@
     <div id="gradingMsg"></div>
   </div>
 </div><!-- /appWrap -->
+
+<dialog class="quiz-preview-dialog" id="quizPreviewDialog"><div class="quiz-preview-head"><div><span class="kicker">Student view</span><h2 id="quizPreviewTitle">Quiz preview</h2><p class="muted" id="quizPreviewMeta"></p></div><button class="btn secondary" id="closeQuizPreviewBtn" type="button">Close</button></div><div id="quizPreviewQuestions"></div></dialog>
 
 <script>
 const $ = (id) => document.getElementById(id);
@@ -192,9 +214,10 @@ async function api(path, options = {}, needsAuth = false) {
   return data;
 }
 
-function showMsg(el, text, kind) {
-  el.innerHTML = `<div class="msg ${kind}">${text}</div>`;
-}
+    function showMsg(el, text, kind) {
+      if (!el) return;
+      el.innerHTML = `<div class="msg ${kind}">${text}</div>`;
+    }
 
 function applyProfile(profile) {
   $('profileSummary').textContent = `${profile.full_name} · ${profile.institution || 'Lecturer'} · Assigned modules: ${profile.module_codes.join(', ') || 'None yet'}`;
@@ -604,6 +627,7 @@ $('downloadOnePdfBtn').addEventListener('click', () => {
 });
 </script>
 <script src="/static/experience.js"></script>
+<script src="/static/quiz-builder.js"></script>
 <script src="/static/loading.js"></script>
 <script src="/static/pwa.js"></script>
 </body>
