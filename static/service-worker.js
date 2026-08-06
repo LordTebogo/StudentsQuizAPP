@@ -1,4 +1,4 @@
-const CACHE_NAME = "nucleocampus-static-v7";
+const CACHE_NAME = "nucleocampus-static-v8";
 const APP_SHELL = [
   "/",
   "/students",
@@ -12,6 +12,11 @@ const APP_SHELL = [
   "/static/loading.js",
   "/static/pwa.js",
   "/static/manifest.webmanifest",
+  "/favicon.ico",
+  "/static/icons/favicon-96x96.png",
+  "/static/icons/apple-touch-icon.png",
+  "/static/icons/icon-192x192.png",
+  "/static/icons/icon-512x512.png",
   "/branding/logo"
 ];
 
@@ -37,7 +42,7 @@ self.addEventListener("fetch", event => {
   if (event.request.method !== "GET") return;
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
-  const isAppResource = event.request.mode === "navigate" || url.pathname === "/branding/logo" || url.pathname.startsWith("/static/");
+  const isAppResource = event.request.mode === "navigate" || url.pathname === "/favicon.ico" || url.pathname === "/branding/logo" || url.pathname.startsWith("/static/");
   if (!isAppResource) return;
   event.respondWith(
     fetch(event.request).then(response => {
@@ -54,8 +59,8 @@ self.addEventListener("push", event => {
   const title = payload.title || "NucleoCampus";
   const options = {
     body: payload.body || "You have a new NucleoCampus update.",
-    icon: "/branding/logo",
-    badge: "/branding/logo",
+    icon: "/static/icons/icon-192x192.png",
+    badge: "/static/icons/favicon-96x96.png",
     tag: payload.tag || "nucleocampus-update",
     renotify: true,
     data: { url: payload.url || "/students" },

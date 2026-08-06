@@ -146,6 +146,7 @@ os.makedirs(IMAGE_LIBRARY_DIR, exist_ok=True)
 # header. Optional — the app works fine without it. Because this is a
 # repo-committed file (not a runtime upload), it survives Render redeploys.
 LOGO_PATH = "image.png"
+FAVICON_PATH = os.path.join("static", "icons", "favicon.ico")
 
 # Create tables on startup if they don't exist yet (equivalent of the old
 # init_db()). For schema changes after the first deploy, prefer a proper
@@ -953,6 +954,15 @@ def get_logo():
     if not os.path.isfile(LOGO_PATH):
         raise HTTPException(status_code=404, detail="No logo uploaded (add image.png to the app folder)")
     return FileResponse(LOGO_PATH, media_type="image/png")
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def get_favicon():
+    return FileResponse(
+        FAVICON_PATH,
+        media_type="image/x-icon",
+        headers={"Cache-Control": "public, max-age=604800"},
+    )
 
 
 # ---------------------------------------------------------------------------
