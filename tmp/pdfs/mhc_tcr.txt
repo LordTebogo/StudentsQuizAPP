@@ -1,0 +1,390 @@
+
+===== PAGE 1 =====
+THE T-CELL 
+RECEPTOR
+SBTA032
+1
+
+===== PAGE 2 =====
+ 
+T-cell receptors… TCR
+One T-cell has one type of TCR.
+One T-cell has one TCR with a wholly unique specificity.
+One T-cell has as many as 100,000 identical TCR’s.
+2
+
+===== PAGE 3 =====
+A T-cell receptor is a heterodimer.
+A heterodimer is made from two different protomers.
+T-cell heterodimers are either:
+•   (alpha•beta)
+•    (gamma•delta)
+3
+
+===== PAGE 4 =====
+T Cell Receptor
+Immunology – 8th Edition, Figure 5.1
+The T cell receptor for antigen (TCR) has two chains are 
+called alpha and beta or gamma and delta and each has a 
+constant and a variable portion. This process takes place in 
+the thymus. 
+
+
+===== PAGE 5 =====
+What do T-cell receptors do?
+Two things:
+* Respond to MHC
+* Respond to Ag
+TCRs see one histotope (MHC) and many, many types 
+of processed antigens.
+Implication:  There is some constancy and huge 
+amounts of variety.  
+5
+
+===== PAGE 6 =====
+Ig is bivalent.
+TCR is mono-
+valent.
+Lots of immuno-
+globulin folds
+(domains) present.
+    variable component
+    constant 
+component
+Tm component.
+ Short “CT’s” 
+Comparing B-cell receptor (Ig) and 
+T-cell receptor
+6
+
+===== PAGE 7 =====
+T Cell Receptor
+Kuby Immunology – 7th Edition, Figure 3.30
+
+
+===== PAGE 8 =====
+Ig structure
+How Ig differs from TCR
+(notice any differences??) 
+8
+
+===== PAGE 9 =====
+The Germline DNA rearrangements…
+9
+
+===== PAGE 10 =====
+T Cells
+• T cells have to be present at the site of interaction with 
+antigen they do not secrete their receptors (vs. Ig) 
+• Thymus: T cells mature (function)
+• Importance of T cells: experiment- neonatal mice 
+thymectomised- had wasting syndrome (chronic 
+infections)
+• Transplant of genetically-identical thymus- normal, could 
+fight infection
+NB: T cells only see antigenic determinants shown to 
+them by special antigen presenting molecules on the 
+surfaces of other cells and they do not recognize free 
+antigen.
+
+===== PAGE 11 =====
+1. Cytotoxic T cells (CTL) kill virus-infected cells.
+• Are identified by the surface marker CD8 (CD8+ T-cells)
+• Control intracellular pathogens such as viruses and bacteria
+• Require cell to cell contact to bind antigen
+ 
+• Bind only antigen presented on the surface of cells
+• 2 ways to kill infected cells: APOPTOSIS
+• Engage the ‘death receptor’ Fas (CD95) on the target (CTLs 
+bear the Fas ligand, CD95L), this activates apoptosis pathway
+• Secrete the contents of “lytic granules” contain proteases called 
+granzymes, and other proteins called perforins  that allow 
+granzymes to enter into the target cell.
+• http://www.hhmi.org/biointeractive/ctl-killing-target-cell
+T-cell Subsets and Functions
+
+===== PAGE 12 =====
+2. Helper T cells (Th) provide “help” for cytotoxic T cells and B cells. 
+• Are identified by the surface marker CD4 (CD4+ T-cells).
+• Also require cell to cell contact to bind antigen.
+• Bind only processed antigen
+• Secrete cytokines and chemokines.
+T-cell Subsets and Functions
+12
+
+===== PAGE 13 =====
+3. Types of Helper T cells (Th) 
+Type 1 helper T cells (TH1)- activate macrophages that have phagocytosed bacteria 
+(manage to survive within the macrophages)
+Type 2 helper T cells (TH2)- help B cells to activate antibody production
+Type 17 helper T cells (TH17)-  produce cytokine 17, enhance neutrophil action early 
+in adaptive immunity 
+Regulatory T cell (Treg)- majority are CD4 positive , they inhibit some aspect of the 
+immune response. 
+T-cell Subsets and Functions
+13
+
+===== PAGE 14 =====
+Memory T Cells
+After a response to antigen:
+•Rapid expansion of the relevant T cell clones (clonal 
+expansion/proliferation) 
+•The number of T cells quickly declines (effector cells 
+function or effect their effect on infected cells and die)
+•About 5% of the maximum amount are left a couple of 
+weeks after infection (immune response against 
+pathogen) or immunization. 
+•These are memory cells, which have some of the 
+attributes of stem cells, in that they replace themselves, 
+as well as rapidly differentiating into effector cells when 
+re-exposed to low antigen concentrations.
+
+===== PAGE 15 =====
+B and T-cell receptors do not recognize 
+the entire antigen
+• CD8+ T-cells usually bind 9 to 10 amino acid sequences
+• CD4+ T-cells usually bind larger amino acid sequences.  Length is 
+less clear ~12 to 14.
+• B-cell receptors can interact with intact antigens, but only bind small 
+stretches of either linear or continuous sequences.
+15
+
+===== PAGE 16 =====
+L V
+AnchorAnchor
+T-cell recognition sequences
+* Anchor sequences bind to the MHC.
+MHC – peptide binding
+16
+
+===== PAGE 17 =====
+Peptide sequences effect MHC binding 
+and TCR recognition:
+Binds MHC And TCR
+L V
+G V
+Loss or decrease In MHC binding
+17
+
+===== PAGE 18 =====
+ANTIGEN 
+PROCESSING 
+AND  
+PRESENTATI
+ON 
+
+===== PAGE 19 =====
+ANTIGEN PRESENTATION
+• Ag recogniton by T cells REQUIRES presentaton by 
+MHC on a cell membrane (MHC restricton)
+Pathways for Ag presentaton:
+a) Class I MHC associates with pepties from 
+endogenous Ag’s
+b) Class II MHC associates with pepties from 
+exogenous Ag’s
+
+===== PAGE 20 =====
+Antigen Specificity:
+Is determined by interactions between cellular 
+receptors (T-cell receptor and B cell receptor 
+complex), antigen and human leukocyte antigens 
+(HLA) 
+
+===== PAGE 21 =====
+Human Leukocyte Antigens 
+(HLA):
+They are a group of proteins encoded within the major 
+histocompatibility complex (MHC) on chromosome
+6 in humans.
+They are the proteins that the body uses to identify self.
+They “Present” antigens for recognition by B- and T-cells.
+There is variation between individuals and between ethnic
+groups, the variation is quite extensive.
+
+===== PAGE 22 =====
+Class I antigens are found on all nucleated cells.
+HLA-A, HLA-B, HLA-C
+These present endogenous (from within the cell) antigens.
+CD8+ T cells recognize antigen when presented by and on
+ HLA Class I molecules
+Human Leukocyte Antigens 
+(HLA):
+
+===== PAGE 23 =====
+Class II antigens:  Are primarily on antigen presenting cells 
+(macrophages, dendritic cells and B cells)
+Presented as HLA-DR, HLA-DP, HLA-DQ
+These present exogenous (from outside the cell) antigens
+CD4+ T cells recognize antigen when presented on and by  
+MHC Class II molecules
+ 
+Human Leukocyte Antigens (HLA):
+
+===== PAGE 24 =====
+Human Leukocyte Antigens 
+(HLA):
+Each HLA allele encodes a surface protein that has
+molecule has its own distinct requirements for peptide 
+binding.
+For example, HLA-A*0201 prefers to bind to leucine and 
+valine, while HLA-A*0301 prefers to bind to leucine and 
+lysine.
+Therefore, a person’s constellation of HLA molecules
+will determine which portions of a pathogen will be
+presented to the immune system.
+
+===== PAGE 25 =====
+General Structure of MHC I and MHC II
+Kuby Immunology – 8th Edition, Overview Figure 7-1
+
+
+===== PAGE 26 =====
+Distinctions between MHC I and MHC II
+• Most cells (target cells) can 
+present Ag with MHC I to TC’s
+• Nearly all nucleatei cells infectei 
+by MO/virus, or abnormal 
+proteins proiucei by cancer 
+cells, aging cells, or by allogeneic 
+cells from transplants
+• Associaton with MHC I requires 
+replicaton of foreign entty (i.e., 
+abnormal protein synth) within 
+the target cell
+• Only APC’s can present Ag with MHC II 
+to TH’s
+• APC’s are of 2 categories:
+• Professional APC’s
+• Non-professional APC’s
+• Associaton with MHC II ioes not 
+require replicaton of entty within 
+target cells
+• Phagocytosis is important in Ag-
+processing
+        MHC I           MHC II
+*APC=Antigen presenting cells
+* TC’s= cytotoxic T cells (CD8)
+* TH’s= Helper T cells (CD4)
+
+===== PAGE 27 =====
+Antigen processing and presentation
+Courtesy:
+Immunopedia
+
+===== PAGE 28 =====
+Ag is processed through 2 separate 
+pathways:
+*MHC I interacts w/ peptides from cytosolic degradation 
+(within the cell)
+*MHC II interacts w/ peptides from endocytic 
+degradation (after antigen brought from outside 
+cell)
+
+
+===== PAGE 29 =====
+ CYTOSOLIC and ENDOCYTIC 
+pathways
+1. The 2 pathways above do not refer to antigens that 
+are ENDOGENOUS  or EXOGENOUS
+2. Cytosolic in this instance refers to the place within 
+a cell where the antigen is generated. For example: 
+Endogenous antigens
+From our defnition are antigens from within the cell, 
+therefore cytosolic means within the cytosol of the 
+cell, meaning inside the cell.
+3. Endocytic in this context, means after the antigens 
+have been brought in from outside, they end up in 
+the endosomes (the early,  late and lysomes) 
+within which antigens are broken down then get 
+attached to the MHC class II    
+
+===== PAGE 30 =====
+Processing Endogenous Ag: 
+the Cytosolic pathway
+• Cellular proteins are constantly regulatei; most have 
+a brief half-life ani are “turnei over”… the same 
+holis true for eniogenous Ag’s!
+• Processing of eniogenous Ag involves 3 actvites:
+• Peptie generaton from proteolysis
+• Transport to ER
+• Peptie biniing to MHC I
+
+===== PAGE 31 =====
+Endogenous Ag processing…
+    peptide generation
+• Proteins targetei for lysis 
+combine with a small protein 
+ ubiquitn
+• Ubiquitn-protein complex  is 
+iegraiei by a proteosome
+• Specifc proteosomes generate 
+pepties which can bini to 
+MHC I
+
+===== PAGE 32 =====
+Endogenous Ag processing…
+    transport to ER
+• Pepties from proteolysis 
+bini to a “transporter 
+protein assoc w/ Ag 
+processing” (TAP)
+• TAP is a heteroiimer 
+which uses ATP to help 
+transport pepties (8-10 
+aa’s) to lumen of ER
+• Usually basic aa’s @ COOH 
+eni of peptie chain
+
+===== PAGE 33 =====
+Endogenous Ag processing…
+peptide binding to MHC I
+• MHC I assembly occurs w/ the 
+aii of chaperone proteins to 
+promote foliing (calnexin + MHC 
+I α chain)
+• Tapasin + calretculin brings 
+TAP/ peptie close to MHC 
+assembly
+• Allows MHC I to bini to pepties
+• MHC I-Ag exits ER to Golgi to 
+plasma membrane
+
+===== PAGE 34 =====
+Assembly and stabilization of MHC I – 
+Ag complex
+
+
+===== PAGE 35 =====
+Processing of Exogenous Ag’s:
+the Endocytic pathway
+• Exogenous Ag’s are typically phagocytiei/ eniocytiei 
+by macrophages ani APC’s
+• Foreign Ag is iegraiei within eniocytc vacuole of eniocytc 
+pathway.  The pathway incluies:
+• Early eniosomes (pH 6-6.5)
+• Late eniosomes or eniolysosome (pH 5-6)
+• Lysomes (pH 4.5 – 5)
+• Ag is iegraiei into 13-18 aa polypepties which bini to MHC II
+• Eventually eniocytc vacuole returns to Plasma Membrane  
+recycling   surface receptors
+
+===== PAGE 36 =====
+Processing of Exogenous Ag’s:
+the Endocytic pathway
+
+
+===== PAGE 37 =====
+Processing of Exogenous Ag’s:
+manufacture of MHC II
+• w/i ER, α and β chains of MHC II combine w/ a protein – “the invariant chain” (Ii, 
+CD74)
+• the invariant chain (IC) binds to MHC @peptide binding cleft + then exits the ER to Golgi 
+apparatus
+• as proteolytic activity continues, the IC is degraded to a small fragment (CLIP*)
+• another MHC II (HLA-DM (found in endosomes)) substitutes Ag for CLIP w/i lysosome
+• MHC II – Ag complex is transported to the membrane
+*CLIP = class II associated invariant chain peptide
+
+===== PAGE 38 =====
+Comparison of Ag-processing 
+pathways

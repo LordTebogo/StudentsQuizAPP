@@ -1824,6 +1824,18 @@ def list_student_quizzes_by_module(
 # Student: fetch a quiz (answers hidden)
 # ---------------------------------------------------------------------------
 
+def _shuffled_answer_options(options: list) -> list:
+    """Return a fresh option order while preserving the stored answer values."""
+    original = list(options or [])
+    shuffled = list(original)
+    if len(shuffled) > 1:
+        secrets.SystemRandom().shuffle(shuffled)
+        # A valid random shuffle can occasionally reproduce the source order.
+        # Rotate once in that case so every new quiz load visibly changes it.
+        if shuffled == original:
+            shuffled = shuffled[1:] + shuffled[:1]
+    return shuffled
+
 @app.get("/quiz/{quiz_id}")
 def get_quiz(quiz_id: int, db: Session = Depends(get_db)):
     quiz = db.query(Quiz).filter(Quiz.id == quiz_id).first()
@@ -1840,7 +1852,7 @@ def get_quiz(quiz_id: int, db: Session = Depends(get_db)):
             "image_url": q.image_url,
         }
         if q.type == "mcq":
-            item["options"] = json.loads(q.options_json)
+            item["options"] = _shuffled_answer_options(json.loads(q.options_json))
         out_questions.append(item)
 
     return {
@@ -1893,7 +1905,7 @@ def reveal_fun_quiz_answer(
         "correct_answer": (question.similar_correct_answer if similar else question.correct_answer) or "",
         "explanation": question.explanation or "The lecturer has not added an explanation yet.",
         "similar_question": "" if similar else (question.similar_question or ""),
-        "similar_options": [] if similar else (json.loads(question.similar_options_json) if question.similar_options_json else []),
+        "similar_options": [] if similar else (_shuffled_answer_options(json.loads(question.similar_options_json)) if question.similar_options_json else []),
         "has_similar": False if similar else bool(question.similar_question and question.similar_correct_answer),
     }
 

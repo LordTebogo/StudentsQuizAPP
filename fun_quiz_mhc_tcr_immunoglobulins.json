@@ -1,0 +1,301 @@
+{
+  "title": "Fun Quiz: TCR, MHC and Immunoglobulins",
+  "is_fun": true,
+  "fun_level": "challenger",
+  "questions": [
+    {
+      "type": "mcq",
+      "question": "What is the usual structural description of a T-cell receptor?",
+      "options": [
+        "A heterodimer made of alpha-beta or gamma-delta chains",
+        "A pentamer made of five identical heavy chains",
+        "A single secreted light chain",
+        "A homodimer found only in serum"
+      ],
+      "answer": "A heterodimer made of alpha-beta or gamma-delta chains",
+      "marks": 1,
+      "explanation": "A T-cell receptor is a heterodimer. Its two different chains are usually alpha and beta, or gamma and delta. Each chain contains variable and constant regions.",
+      "similar_question": "Which pair can form the two chains of a T-cell receptor?",
+      "similar_options": [
+        "Alpha and beta",
+        "Mu and epsilon",
+        "Kappa and lambda together",
+        "C3 and C5"
+      ],
+      "similar_correct_answer": "Alpha and beta"
+    },
+    {
+      "type": "mcq",
+      "question": "How do T cells normally recognize antigen?",
+      "options": [
+        "As processed peptide presented by MHC on a cell surface",
+        "As free soluble antigen in blood",
+        "Only after the antigen binds an antibody",
+        "By secreting T-cell receptors into plasma"
+      ],
+      "answer": "As processed peptide presented by MHC on a cell surface",
+      "marks": 1,
+      "explanation": "T cells do not normally recognize free antigen. Their receptors recognize processed peptide together with an MHC molecule on a cell membrane, a principle called MHC restriction.",
+      "similar_question": "Which statement best demonstrates MHC restriction?",
+      "similar_options": [
+        "A TCR responds to a peptide only when it is displayed by an appropriate MHC molecule",
+        "An antibody binds a soluble toxin",
+        "A mast cell releases histamine after IgE cross-linking",
+        "A plasma cell secretes IgG"
+      ],
+      "similar_correct_answer": "A TCR responds to a peptide only when it is displayed by an appropriate MHC molecule"
+    },
+    {
+      "type": "mcq",
+      "question": "Which pairing is correct for the MHC class I pathway?",
+      "options": [
+        "Endogenous peptide - MHC I - CD8 T cell",
+        "Exogenous peptide - MHC I - CD4 T cell",
+        "Endogenous peptide - MHC II - CD8 T cell",
+        "Free antigen - MHC I - B cell"
+      ],
+      "answer": "Endogenous peptide - MHC I - CD8 T cell",
+      "marks": 1,
+      "explanation": "MHC class I molecules are expressed on nearly all nucleated cells and usually present peptides generated within the cell. These complexes are recognized by CD8 cytotoxic T cells.",
+      "similar_question": "A virus-infected nucleated cell displays a viral peptide to a cytotoxic T cell. Which molecule most likely presents it?",
+      "similar_options": [
+        "MHC class I",
+        "MHC class II",
+        "Secreted IgA",
+        "Membrane IgD"
+      ],
+      "similar_correct_answer": "MHC class I"
+    },
+    {
+      "type": "mcq",
+      "question": "Which pairing is correct for the MHC class II pathway?",
+      "options": [
+        "Exogenous peptide - antigen-presenting cell - CD4 T cell",
+        "Endogenous peptide - every red blood cell - CD8 T cell",
+        "Free antigen - plasma cell - CD8 T cell",
+        "Cytosolic peptide - mast cell - B cell"
+      ],
+      "answer": "Exogenous peptide - antigen-presenting cell - CD4 T cell",
+      "marks": 1,
+      "explanation": "MHC class II is mainly expressed by professional antigen-presenting cells such as dendritic cells, macrophages and B cells. It presents peptides derived from material taken up from outside the cell to CD4 helper T cells.",
+      "similar_question": "Which cell is a professional antigen-presenting cell that can display peptide on MHC class II?",
+      "similar_options": [
+        "Dendritic cell",
+        "Mature red blood cell",
+        "Platelet",
+        "Skeletal muscle fibre only"
+      ],
+      "similar_correct_answer": "Dendritic cell"
+    },
+    {
+      "type": "mcq",
+      "question": "What is the main role of TAP during endogenous antigen processing?",
+      "options": [
+        "Transport peptides from the cytosol into the endoplasmic reticulum",
+        "Degrade invariant chain into CLIP",
+        "Carry MHC class II from lysosomes to the nucleus",
+        "Cross-link IgE on mast cells"
+      ],
+      "answer": "Transport peptides from the cytosol into the endoplasmic reticulum",
+      "marks": 1,
+      "explanation": "TAP is an ATP-dependent heterodimeric transporter associated with antigen processing. It moves proteasome-generated peptides into the ER, where suitable peptides can bind assembling MHC class I molecules.",
+      "similar_question": "Where do proteasome-generated peptides go to bind newly assembled MHC class I molecules?",
+      "similar_options": [
+        "The endoplasmic reticulum",
+        "The extracellular fluid",
+        "The nucleus",
+        "The early phagosome only"
+      ],
+      "similar_correct_answer": "The endoplasmic reticulum"
+    },
+    {
+      "type": "mcq",
+      "question": "What prevents peptides from binding prematurely to the MHC class II groove in the endoplasmic reticulum?",
+      "options": [
+        "Invariant chain",
+        "TAP",
+        "Perforin",
+        "IgM J chain"
+      ],
+      "answer": "Invariant chain",
+      "marks": 1,
+      "explanation": "Invariant chain, also called Ii or CD74, occupies the MHC class II peptide-binding groove during assembly. It is later degraded to CLIP, which is exchanged for antigenic peptide with help from HLA-DM.",
+      "similar_question": "Which molecule promotes replacement of CLIP with an antigenic peptide in an endosomal compartment?",
+      "similar_options": [
+        "HLA-DM",
+        "Calnexin",
+        "TAP",
+        "CD8"
+      ],
+      "similar_correct_answer": "HLA-DM"
+    },
+    {
+      "type": "mcq",
+      "question": "Which mechanism can a CD8 cytotoxic T cell use to kill an infected target cell?",
+      "options": [
+        "Release perforin and granzymes to trigger apoptosis",
+        "Secrete pentameric IgM",
+        "Produce invariant chain",
+        "Convert CLIP into TAP"
+      ],
+      "answer": "Release perforin and granzymes to trigger apoptosis",
+      "marks": 1,
+      "explanation": "Cytotoxic T cells kill target cells by inducing apoptosis. They can release perforin, which helps granzymes enter the target, or engage the Fas death receptor through Fas ligand.",
+      "similar_question": "Which receptor-ligand pair can activate an apoptotic death pathway in a cytotoxic T-cell target?",
+      "similar_options": [
+        "Fas and Fas ligand",
+        "IgA and poly-Ig receptor",
+        "TAP and ubiquitin",
+        "MHC II and invariant chain"
+      ],
+      "similar_correct_answer": "Fas and Fas ligand"
+    },
+    {
+      "type": "mcq",
+      "question": "Which immunoglobulin is the most abundant antibody class in serum?",
+      "options": [
+        "IgG",
+        "IgM",
+        "IgA",
+        "IgE"
+      ],
+      "answer": "IgG",
+      "marks": 1,
+      "explanation": "IgG accounts for about 80% of serum immunoglobulin. Important IgG activities include neutralization, opsonization, complement activation by some subclasses and placental transfer.",
+      "similar_question": "Which antibody class is especially important for protecting a fetus and newborn through placental transfer?",
+      "similar_options": [
+        "IgG",
+        "IgM",
+        "IgD",
+        "IgE"
+      ],
+      "similar_correct_answer": "IgG"
+    },
+    {
+      "type": "mcq",
+      "question": "Which description best fits secreted IgM?",
+      "options": [
+        "A pentamer that appears early in a primary immune response",
+        "A monomer that is the main antibody in tears",
+        "A dimer that crosses the placenta",
+        "A rare antibody bound mainly to mast cells"
+      ],
+      "answer": "A pentamer that appears early in a primary immune response",
+      "marks": 1,
+      "explanation": "Secreted IgM is pentameric, has high valence and is the first major antibody produced during a primary immune response. Its arrangement also makes it highly effective at activating complement.",
+      "similar_question": "Which immunoglobulin is generally more efficient than IgG at activating complement?",
+      "similar_options": [
+        "IgM",
+        "IgD",
+        "IgA",
+        "IgE"
+      ],
+      "similar_correct_answer": "IgM"
+    },
+    {
+      "type": "mcq",
+      "question": "Which immunoglobulin predominates in secretions such as milk, saliva, tears and mucus?",
+      "options": [
+        "IgA",
+        "IgG",
+        "IgD",
+        "IgE"
+      ],
+      "answer": "IgA",
+      "marks": 1,
+      "explanation": "IgA provides localized protection at mucosal surfaces and is the predominant immunoglobulin in many secretions. Secretory IgA commonly contains a J chain and secretory component acquired during epithelial transport.",
+      "similar_question": "Which process carries polymeric IgA across an epithelial cell into a secretion?",
+      "similar_options": [
+        "Transcytosis",
+        "Somatic hypermutation",
+        "Proteasomal degradation",
+        "Class I peptide loading"
+      ],
+      "similar_correct_answer": "Transcytosis"
+    },
+    {
+      "type": "mcq",
+      "question": "IgE bound to mast cells is most directly associated with which event?",
+      "options": [
+        "Immediate hypersensitivity and histamine release",
+        "Placental antibody transfer",
+        "MHC class I peptide loading",
+        "Expression of IgD on naive B cells"
+      ],
+      "answer": "Immediate hypersensitivity and histamine release",
+      "marks": 1,
+      "explanation": "IgE binds high-affinity Fc epsilon receptors on mast cells and basophils. Cross-linking of cell-bound IgE by allergen triggers degranulation and release of mediators such as histamine.",
+      "similar_question": "Cross-linking which mast-cell-bound antibody class can contribute to anaphylaxis?",
+      "similar_options": [
+        "IgE",
+        "IgD",
+        "IgA",
+        "IgM"
+      ],
+      "similar_correct_answer": "IgE"
+    },
+    {
+      "type": "mcq",
+      "question": "During immunoglobulin class switching, what changes?",
+      "options": [
+        "The heavy-chain constant region changes while antigen specificity is retained",
+        "The light-chain variable region is replaced and specificity is lost",
+        "The entire V(D)J region is deleted",
+        "The B cell changes into a T cell"
+      ],
+      "answer": "The heavy-chain constant region changes while antigen specificity is retained",
+      "marks": 1,
+      "explanation": "Class-switch recombination replaces the heavy-chain constant region, allowing the antibody to gain a different effector class such as IgG, IgA or IgE. The rearranged variable region is preserved, so antigen specificity does not change.",
+      "similar_question": "A B-cell clone switches from IgM to IgG. What should remain the same?",
+      "similar_options": [
+        "Its antigen-binding specificity",
+        "Its heavy-chain constant region",
+        "Its secretory location in every tissue",
+        "Its requirement to express only IgM"
+      ],
+      "similar_correct_answer": "Its antigen-binding specificity"
+    },
+    {
+      "type": "mcq",
+      "question": "Which statement correctly distinguishes V(D)J recombination from class-switch recombination?",
+      "options": [
+        "V(D)J recombination requires RAG proteins, whereas class switching does not",
+        "Class switching creates the first variable region in a pro-B cell",
+        "V(D)J recombination occurs only after repeated antigen exposure",
+        "Both processes always change antigen specificity"
+      ],
+      "answer": "V(D)J recombination requires RAG proteins, whereas class switching does not",
+      "marks": 1,
+      "explanation": "V(D)J recombination builds the variable-region exon during antigen-independent B-cell development and requires RAG1/RAG2. Class-switch recombination occurs after activation, targets switch regions and changes the heavy-chain constant region without requiring RAG proteins.",
+      "similar_question": "Where does V(D)J recombination normally occur as part of antigen-independent B-cell development?",
+      "similar_options": [
+        "Bone marrow",
+        "Germinal centre only",
+        "Blood plasma",
+        "Thymic medulla only"
+      ],
+      "similar_correct_answer": "Bone marrow"
+    },
+    {
+      "type": "mcq",
+      "question": "What is the difference between antibody affinity and avidity?",
+      "options": [
+        "Affinity is one binding-site interaction; avidity is the combined strength of multiple interactions",
+        "Affinity applies only to IgM; avidity applies only to IgG",
+        "Affinity measures antibody concentration; avidity measures complement concentration",
+        "They are two names for exactly the same measurement"
+      ],
+      "answer": "Affinity is one binding-site interaction; avidity is the combined strength of multiple interactions",
+      "marks": 1,
+      "explanation": "Affinity describes the strength between one antigen-binding site and one ligand or epitope. Avidity describes the overall strength produced when a multivalent antibody makes multiple simultaneous contacts with a multivalent antigen.",
+      "similar_question": "A pentameric IgM binds through several sites at once. Which term best describes the total strength of all those contacts?",
+      "similar_options": [
+        "Avidity",
+        "Affinity only",
+        "Isotype switching",
+        "Allelic exclusion"
+      ],
+      "similar_correct_answer": "Avidity"
+    }
+  ]
+}

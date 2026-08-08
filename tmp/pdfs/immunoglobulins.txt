@@ -1,0 +1,424 @@
+
+===== PAGE 1 =====
+IMMUNOGLOBULINS
+(Antibodies, B cell receptor)
+2
+SBTA032
+
+===== PAGE 2 =====
+[NO EXTRACTABLE TEXT]
+
+===== PAGE 3 =====
+Antibody Classes And Biological 
+Activities
+ IgG
+ Most abundant immunoglobin 80% of serum Ig
+ ~10mg/mL
+ IgG1,2,3,4 (decreasing serum concentration)
+ IgG1, IgG3 and IgG4 cross placenta
+ IgG3 Most effective complement activator
+ IgG1 and IgG3 High affinity for FcR on phagocytic cells, good for 
+opsonization
+
+===== PAGE 4 =====
+Subtypes of IgG
+
+
+===== PAGE 5 =====
+ IgM
+ 5-10% of serum immunoglobulin
+ 1.5mg/mL
+ mIgM  expressed on B-cells as BCR
+ Pentameric version is secreted
+ First Ig (immunoglobulin) of primary immune response
+ High valence Ig 
+ More efficient than IgG in complement activation
+
+
+===== PAGE 6 =====
+ IgA
+ 10-15% of serum IgG
+ Predominant Ig in secretions
+ Milk, saliva, tears, mucus
+ 5-15 g of IgA released in secretions!!!!
+ Secretions, as dimer or tetramer+J-chain polyptetide + 
+secretory component (Poly IgR)
+
+
+===== PAGE 7 =====
+IgA Antibody Transport Across Cell 
+(Transcytosis)
+
+
+===== PAGE 8 =====
+ IgE
+ Very low serum concentration, 0.3g/mL
+ Participate in immediate hypersensitivities reactions. eg. Asthma, 
+anaphylaxis, 
+ Binds Mast Cells and Blood Basophils thru FcR 
+ Binding causes degranulation (histamine Release)
+
+===== PAGE 9 =====
+Cross-Linkage of Bound IgE Antibody 
+With Allergen Causes
+IgE is rare.
+IgE functions against 
+parasites.
+In the absence of  para-
+sites, IgE responds to 
+allergens.
+
+===== PAGE 10 =====
+ IgD 
+ Expressed on B-cell Surface
+ There is no other Biological effector activity known for the Ig
+ Low serum concentrations, ~30g/mL
+
+===== PAGE 11 =====
+Hinges vs domains…
+ Hinges contribute to 
+flexibility.  They contain 
+cysteine and proline.  
+Cysteine provides interchain 
+linkage. Proline cannot be 
+incorporated into secondary 
+structure.
+ Immunoglobulins without 
+hinge regions have an extra 
+domain.
+
+
+===== PAGE 12 =====
+IMPORTANT
+ One B-cell makes one type of antibody.  
+(More exactly, one B-cell makes one idiotype.)
+ This equation is the basis of monoclonal antibodies
+ Ig’s first appear on the surface of B-cells; there, they are 
+selected.
+ The B-cells mature to plasma cells and secrete antibodies with 
+the same specificity (i. e., same idiotypic identity; same antigen 
+specificity.)
+
+===== PAGE 13 =====
+Immunoglobulin classes and biological activities
+Structure IgG IgM IgA IgD IgE
+% of Total 
+serum 
+antibody
+80% 5-10% 10-15% 0.2% 0.002%
+Location Blood, 
+lymph, 
+intestine
+Blood, 
+lymph, B-
+cell surface
+Secretion-
+tears, 
+saliva, 
+mucus, 
+milk
+Blood, 
+lymph, B-
+cell surface
+Bound to 
+mast and 
+basophill 
+cells
+M.Wt. 150,000 970,000 405,000 175,000 190,000
+Complemen
+t fixation
+yes yes No No No
+Placental 
+transfer
+yes No No No No
+Known 
+function
+Enhance 
+phagocytosis, 
+neutralize 
+toxin and virus, 
+protect foetus 
+and new born
+First Ab 
+produced in 
+response to 
+initial 
+infection
+Localized 
+protection on 
+mucosal 
+surface
+Serum 
+function is not 
+known
+Allergic 
+reaction
+
+===== PAGE 14 =====
+Primary response vs. Secondary 
+response
+
+
+===== PAGE 15 =====
+ Genetic basis of Ig production
+Light (L) chains genes
+Kappa (k) chain – genes located on chromosome 2 - V, J and 
+C segments
+   
+Lambda (l) chain – encoded in similar complex of genes on 
+chromosome 22
+
+===== PAGE 16 =====
+Genes encoding Heavy (H) chains
+ The process is more complicated
+ localized on chromosome 14
+ V, D, J, C segments (genes encoding individual segments contain more 
+regions compared with L chains)
+ during completion of V/D/J exons, gene rearrangement occurs
+
+===== PAGE 17 =====
+Development of B lymphocytes
+ Lymphoid progenitor → pro-B cells
+ During maturation from pro-B cells into pre-B cells: Ig genes of 
+the heavy chain recombine; pre-B cells express pre-BCR
+ During maturation from pre-B cells into B cells: Ig genes of the light 
+chain recombine
+ Immature B cells express membrane IgM
+ Mature B cells express membrane IgM and IgD = BCR and are 
+able to respond to antigen in peripheral lymphoid tissues
+
+===== PAGE 18 =====
+Membrane associated vs. secreted Ig: 
+Differential mRNA splicing
+
+
+===== PAGE 19 =====
+Mechanisms contributing to antibody 
+diversity:
+ chance recombination
+ imprecise joining of V, D, J genes
+ N-region additions (up to 15 nucleotides added)
+ extensive mutations involving variable-region genes after antigen 
+exposure
+
+===== PAGE 20 =====
+Isotype switching
+ during the immune response, plasma cells switch from producing IgM 
+to IgG or to another Ig class (IgA, IgE)
+ the switch involves a change in the H-chain constant domains (CH)
+ no change in antigen-binding specificity !
+ (no alteration in the L chain or in the variable portion of H chain)
+
+===== PAGE 21 =====
+Other Ig isotypes (IgG, IgA, IgE) are generated by a second 
+type of somatic DNA recombination called Class-Switch 
+Recombination (CSR)
+ A “Switch site” located 5’ to each CH segment targets the 
+recombination machinery. 
+Note: DNA recombination is occurring.  Once a B cell has switched to 
+make IgG, it can no longer make IgM.   (However, its siblings can.)
+
+===== PAGE 22 =====
+Cytokines (interleukins) direct class 
+switching.
+T cells can determine the type of Ig produced by a B cells by the type of cytokines 
+they secrete.
+
+===== PAGE 23 =====
+Allelic exclusion
+ once the process of rearrangement on one of chromosomes is 
+successful, then all attempts on second chromosome are stopped
+ the same rule governs both for H- and L-chains
+ every single B cell produces only one type of H- and one type of L-
+chain
+
+===== PAGE 24 =====
+Clonal restriction
+ each B cell expresses identical copies of an antibody that is specific for 
+single epitope 
+ when a B cell divides, the chromosomes in its progeny cells bear the 
+selected allelic genes, and these genes do not undergo any further V/J 
+or V/D/J rearrangements
+ immunoglobulins produced by given B cell and its progeny are identical 
+in epitope specificity and in k- or l-chain isotype
+Clonal expansion
+ proliferation of lymphocytes activated by interaction with an antigen
+ all lymphocytes of the generated clone have the identical antigenic 
+specificity
+
+===== PAGE 25 =====
+Relationship between Heavy-chain isotypes 
+and constant regions in HC DNA
+Note: Isotype names are called: M, A, D, G, E. Constant regions exons are called by 
+corresponding Greek symbols:       (mu, alpha, delta, gamma, 
+epsilon)
+Antibody Isotypes
+
+===== PAGE 26 =====
+[NO EXTRACTABLE TEXT]
+
+===== PAGE 27 =====
+Ig heavy-chain gene
+promoter enhancer
+V D J J J CH1 CH2 CH3 CH4
+Leader exon
+M1 M2S
+Variable domain exon Constant domain exons
+
+===== PAGE 28 =====
+Ig heavy-chain gene
+promoter enhancer
+V DJ J J
+Switch 
+sequence
+CH1 CH2 CH3 CH4
+Leader exon
+M1M2S
+V DJCH1CH2CH3CH4 V DJCH1CH2CH3CH4
+Secreted form mRNA Membrane-associated form mRNA
+Note: mRNA processing, not DNA recombination is occurring.  Both secreted and membrane 
+forms of Ig HC can be made by the same B cell.
+
+===== PAGE 29 =====
+Expression of IgD: Regulated transcriptional 
+termination & RNA splicing
+V D J J J CH1 CH2 CH3 CH4 Cd1 Cd2 Cd3 Cd4
+AAAAAA
+V D J J J CH1 CH2 CH3 CH4 Cd1 Cd2 Cd3 Cd4
+AAAAAA
+m chain exons d chain exons
+V D J CH1 CH2 CH3 CH4
+V D J Cd1 Cd2 Cd3 Cd4
+Note: mRNA processing, not DNA recombination is occurring.  Both IgM and IgD 
+can be made by the same B cell.
+
+===== PAGE 30 =====
+Antigen encounter drives B cell 
+maturation
+“Naïve” B cell
+(IgM, IgD 
+membrane 
+Form only)
+“Activated” B cell
+(secreted IgM and other isotypes:
+IgA, IgG, IgE)
+Proliferation
+Antibody secretion
+Class switch
+
+===== PAGE 31 =====
+V(D)J Rearrangement
+VH gene segments
+First 96 aa’s of Ig HC
+DH gene segments
+3-6 aa’s HC
+JH gene segments
+10-12 aa’s HC
+CH exons
+Gene
+rearrangement
+Variable domain
+exon Constant domain
+exons
+
+===== PAGE 32 =====
+DNA rearrangements that occur during 
+VDJ recombination and class switching 
+ can activate proto-oncogenes
+
+===== PAGE 33 =====
+Isotype switching
+ during the immune response, plasma cells switch from producing IgM 
+to IgG or to another Ig class (IgA, IgE)
+ the switch involves a change in the H-chain constant domains (CH)
+ no change in antigen-binding specificity !
+ (no alteration in the L chain or in the variable portion of H chain)
+
+===== PAGE 34 =====
+Genetic Events in 
+Ig Gene Expression
+ V(D)J recombination*
+ Transcription
+ Regulated polyadenylation 
+and RNA splicing
+ Class switch recombination*
+ Somatic hypermutation*
+ * these involve alterations 
+in the antibody genes
+
+
+===== PAGE 35 =====
+As a result of V(D)J recombination every mature B cell expresses a 
+unique antibody.  Encounter with an antigen leads to clonal expansion 
+of B cells with a particular specificity.
+
+===== PAGE 36 =====
+Comparison of V(D)J recombination and class 
+switch recombination (CSR)
+ V(D)J recombination occurs as part of antigen-independent development in 
+primary lymphoid organs (bone marrow).  CSR occurs as part of antigen-
+dependent development in secondary lymphoid organs (lymph node, spleen).
+ V(D)J requires RAG1 or RAG2.  CSR does not. 
+ V(D)J recombination is targeted precisely (Recombination Signal Sequences). 
+ CSR occurs within simple repetitive DNA sequence (switch sequence).
+ Both require Ku70, Ku80, & DNA-PK (dsDNA repair pathway).
+
+===== PAGE 37 =====
+Phases of humoral immune responses
+
+
+===== PAGE 38 =====
+Humoral immune response 
+ The recognition of antigen by specific Ig on the surface of naive B 
+lymphocyte
+ The binding of antigen cross-links Ig receptors of specific B cells and 
+then activation signals are delivered inside the B cell; 
+ Clonal expansion of B cell and secretion of low levels of IgM
+
+===== PAGE 39 =====
+Humoral immune response
+ Protein antigens activate antigen-specific T helper cells which 
+stimulate B cell; antigen presentation of these antigens to T helper 
+cells is required
+ T helper cells express CD40L on their surface and secrete cytokines 
+→ proliferation and differentiation of antigen-specific B cells, isotype 
+switching
+ Affinity maturation = affinity of antibodies for protein antigens 
+increases with prolonged or repeated exposure to the antigens (B 
+cells migrate into follicles and form germinal centers 
+ →  proliferate rapidly and their Ig V genes undergo extensive somatic 
+mutations; at the same time, the antigen complexed with secreted 
+antibody is displayed by FDC (follicular dendritic cells) 
+ → B cells that recognize the antigen with high affinity are selected to 
+survive)
+
+===== PAGE 40 =====
+Affinity maturation occurs because of somatic 
+hypermutation and B cell selection in the germinal center
+
+
+===== PAGE 41 =====
+Primary immune response
+ First antigen exposure
+ The amounts of antibody produced is smaller
+2 types of antigens:
+ T-dependent – help from antigen-specific T helper cells is 
+required; protein antigens
+ T-independent – antibody production is induced directly, without 
+the involvement of T helper cells; typically polysaccharides, lipids
+
+===== PAGE 42 =====
+Secondary immune response
+ Subsequent antigen exposure
+ Higher amount of antibodies is produced
+ With protein antigens, secondary responses show increased isotype 
+switching and affinity maturation (= production of antibodies with 
+increased affinity to antigen)
+ Memory cells involvement
+
+===== PAGE 43 =====
+Affinity and avidity of antibodies
+ affinity = the strength of the binding between a single binding site of a 
+molecule (e.g. antibody) and a ligand
+ avidity  = expresses the strength of interaction of polyvalent antibody 
+with a polyvalent antigen
