@@ -220,6 +220,7 @@ class MarketAdvert(Base):
     placement = Column(String, nullable=False, default="spotlight")
     image_url = Column(Text)
     image_urls = Column(Text)
+    video_url = Column(Text)
     starts_at = Column(String)
     expires_at = Column(String)
     status = Column(String, nullable=False, default="pending")

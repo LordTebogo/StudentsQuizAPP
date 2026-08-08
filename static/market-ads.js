@@ -142,11 +142,12 @@
         <textarea name="description" placeholder="What are you offering?" maxlength="1200" required></textarea>
         <select name="category" required><option value="">Choose category</option><option>Ride & transport</option><option>Delivery & courier</option><option>Campus shuttle</option><option>Student service</option><option>Food & delivery</option><option>Tutoring</option><option>Event</option><option>Technology</option><option>Beauty & lifestyle</option><option>Other</option></select>
         <input name="campus" placeholder="Campus or area">
-        <input name="contact" placeholder="WhatsApp or contact number">
-        <input name="website_url" placeholder="Website or social link (optional)">
+        <input name="contact" placeholder="WhatsApp number (required if there is no website)">
+        <input name="website_url" placeholder="Website or social link (required if there is no WhatsApp)">
         <label class="notice">Placement<select name="placement"><option value="spotlight">Business spotlight</option><option value="feed">Between market listings</option></select></label>
         <div class="advert-date-row"><label>Start date<input name="starts_at" type="date"></label><label>End date<input name="expires_at" type="date"></label></div>
         <label class="notice">Service images (up to 2 for transport)<input name="images" type="file" accept="image/*" multiple data-max-files="2"></label>
+        <label class="notice">Short advert video (optional, up to 40 MB)<input name="video" type="file" accept="video/mp4,video/webm,video/quicktime"></label>
         <button class="btn" type="submit">Submit for review</button><button class="btn secondary" type="button" id="cancelAdvertForm">Cancel</button>
       </form></div><div id="advertMessage"></div><div id="myAdvertList" class="manage-list"></div>`;
     side.appendChild(desk);

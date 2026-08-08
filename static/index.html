@@ -54,6 +54,30 @@
   .market-role-card .market-pulse { display:inline-flex; align-items:center; gap:6px; color:#d9bcff; font:700 .66rem var(--font-mono,monospace); letter-spacing:.08em; text-transform:uppercase; }
   .market-role-card .market-pulse::before { content:''; width:7px; height:7px; border-radius:99px; background:#d9bcff; box-shadow:0 0 14px #d9bcff; animation:marketPulse 1.5s infinite; }
   @keyframes marketPulse { 50% { opacity:.28; transform:scale(.7); } }
+  .home-ad-belt { margin-top:22px; overflow:hidden; border:1px solid rgba(103,232,249,.28); border-radius:24px; background:linear-gradient(120deg,rgba(8,25,47,.96),rgba(31,20,62,.94)); box-shadow:0 20px 50px rgba(0,0,0,.2); }
+  .home-ad-head { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:13px 16px; border-bottom:1px solid rgba(148,163,184,.16); }
+  .home-ad-label { display:flex; align-items:center; gap:9px; color:#a9bbd3; font:700 .66rem var(--font-mono,monospace); letter-spacing:.09em; text-transform:uppercase; }
+  .home-ad-label::before { content:'Sponsored'; padding:4px 7px; border-radius:999px; background:rgba(103,232,249,.13); color:#67e8f9; }
+  .home-ad-controls { display:flex; align-items:center; gap:7px; }
+  .home-ad-control { display:grid; place-items:center; width:34px; height:34px; margin:0; padding:0; border:1px solid rgba(103,232,249,.32); border-radius:50%; background:rgba(5,14,30,.58); color:#dffbff; cursor:pointer; }
+  .home-ad-control:hover, .home-ad-control:focus-visible { border-color:#67e8f9; color:#67e8f9; outline:none; }
+  .home-ad-count { min-width:48px; color:#9fb1ca; font:.66rem var(--font-mono,monospace); text-align:center; }
+  .home-ad-viewport { overflow:hidden; }
+  .home-ad-track { display:flex; transition:transform .55s cubic-bezier(.22,.78,.25,1); }
+  .home-ad-slide { min-width:100%; display:grid; grid-template-columns:minmax(260px,42%) minmax(0,1fr); min-height:230px; cursor:pointer; }
+  .home-ad-slide:focus-visible { outline:2px solid #67e8f9; outline-offset:-4px; }
+  .home-ad-media { position:relative; min-height:230px; overflow:hidden; background:radial-gradient(circle at 45% 45%,rgba(192,132,252,.32),transparent 55%),#101c34; }
+  .home-ad-media img, .home-ad-media video { width:100%; height:100%; min-height:230px; max-height:290px; display:block; object-fit:cover; }
+  .home-ad-media video { background:#020714; }
+  .home-ad-fallback { display:grid; place-items:center; height:100%; min-height:230px; color:#d9bcff; font-size:3rem; }
+  .home-ad-copy { display:flex; flex-direction:column; justify-content:center; align-items:flex-start; padding:28px clamp(22px,4vw,52px); }
+  .home-ad-copy h3 { margin:7px 0 9px; max-width:760px; font-size:clamp(1.45rem,2.8vw,2.35rem); line-height:1.05; letter-spacing:-.035em; }
+  .home-ad-copy p { max-width:700px; margin:0 0 13px; color:#b4c4db; line-height:1.5; }
+  .home-ad-meta { color:#dce8f7; font-size:.82rem; }
+  .home-ad-cta { margin-top:17px; }
+  .home-ad-dots { display:flex; justify-content:center; flex-wrap:wrap; gap:7px; padding:11px; border-top:1px solid rgba(148,163,184,.12); }
+  .home-ad-dot { width:7px; height:7px; margin:0; padding:0; border:0; border-radius:99px; background:rgba(148,163,184,.38); cursor:pointer; transition:width .25s ease,background .25s ease; }
+  .home-ad-dot.active { width:24px; background:#67e8f9; }
   @media (max-width:620px) {
     #welcome { width:min(100% - 20px, 520px); padding-top:12px; }
     #welcome .top { grid-template-columns:1fr; min-height:0; padding:14px 16px; align-items:center; gap:12px; }
@@ -79,6 +103,13 @@
     #studentPortal { padding:20px 16px; }
     #studentPortal h2 { font-size:1.6rem; }
     .home-inbox { position:fixed; top:82px; right:10px; width:calc(100vw - 20px); max-height:calc(100vh - 100px); border-radius:16px; }
+    .home-ad-belt { margin-top:14px; border-radius:20px; }
+    .home-ad-slide { grid-template-columns:1fr; min-height:0; }
+    .home-ad-media, .home-ad-fallback { min-height:190px; }
+    .home-ad-media img, .home-ad-media video { min-height:190px; max-height:220px; }
+    .home-ad-copy { padding:21px 20px 24px; }
+    .home-ad-copy h3 { font-size:1.55rem; }
+    .home-ad-copy p { display:-webkit-box; overflow:hidden; -webkit-box-orient:vertical; -webkit-line-clamp:3; }
   }
 </style>
 </head>
@@ -95,6 +126,11 @@
     <section class="role-card role-lecturer"><span class="role-icon" aria-hidden="true">✦</span><span class="kicker">Lecturer</span><h2>Teach with clarity</h2><p>Content, assessment and guidance.</p><a class="btn" href="/static/lecturer.html">Lecturer sign in</a><a class="btn secondary" href="/static/lecturer.html#register">Create account</a></section>
     <section class="role-card market-role-card" id="marketRoleCard"><span class="role-icon" aria-hidden="true">⌂</span><span class="kicker">Campus market</span><h2>Live closer. Grow together.</h2><p>Places, services and opportunities.</p><span class="market-pulse" id="marketPulseText">Discover what is nearby</span><br><a class="btn" href="/static/marketing.html">Explore market</a></section>
   </div>
+  <section class="home-ad-belt hidden" id="homeAdvertBelt" aria-label="Sponsored campus adverts">
+    <div class="home-ad-head"><div class="home-ad-label">Campus offers</div><div class="home-ad-controls"><button class="home-ad-control" id="homeAdPrevious" type="button" aria-label="Previous advert">&#8249;</button><span class="home-ad-count" id="homeAdCount"></span><button class="home-ad-control" id="homeAdNext" type="button" aria-label="Next advert">&#8250;</button></div></div>
+    <div class="home-ad-viewport"><div class="home-ad-track" id="homeAdTrack"></div></div>
+    <div class="home-ad-dots" id="homeAdDots" aria-label="Choose advert"></div>
+  </section>
   <section class="card hidden" id="studentPortal"><span class="kicker">Student account active</span><h2>Your student workspace</h2><p class="muted">Your quizzes, lessons, community, and private notifications in one place.</p><div class="role-grid"><a class="role-card" href="/static/student.html"><h3>Quizzes &amp; scripts</h3><p>Take assessments and download your work.</p></a><a class="role-card" href="/static/lessons_student.html"><h3>Video lessons</h3><p>Learn at your pace and answer lesson questions.</p></a><a class="role-card" href="/static/fun.html"><h3>Fun Page</h3><p>Join the campus conversation and view tags.</p></a><a class="role-card" href="/static/comrade.html"><h3>Comrade Page</h3><p>Read SRC announcements and respond thoughtfully.</p></a></div><button class="btn secondary" id="studentSignOut">Sign out</button></section>
   <aside class="home-inbox hidden" id="homeInbox"><h3>Messages &amp; mentions</h3><div id="homeInboxList"></div></aside>
   <section class="card hidden" id="lecturerPortal"><span class="kicker">Lecturer account active</span><h2>Your lecturer workspace</h2><p class="muted">Only lecturer tools are shown here.</p><div class="role-grid"><a class="role-card" href="/static/lecturer.html"><h3>Quizzes &amp; marking</h3></a><a class="role-card" href="/static/lessons_lecturer.html"><h3>Video lessons</h3></a></div><button class="btn secondary" id="lecturerSignOut">Sign out</button></section>
@@ -165,6 +201,97 @@
       showImage();
       if (images.length > 1) window.setInterval(showImage, 4200);
     } catch (_) { label.textContent = 'Fresh campus spaces'; }
+  })();
+
+  // The homepage belt uses the same reviewed, date-limited adverts as the
+  // campus market. A business website takes priority over WhatsApp.
+  (async () => {
+    const belt = document.getElementById('homeAdvertBelt');
+    const track = document.getElementById('homeAdTrack');
+    const dots = document.getElementById('homeAdDots');
+    const count = document.getElementById('homeAdCount');
+    if (!belt || !track) return;
+    const safeWebsite = value => {
+      const raw = String(value || '').trim();
+      if (!raw) return '';
+      const candidate = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+      try { const url = new URL(candidate); return /^https?:$/.test(url.protocol) ? url.href : ''; } catch (_) { return ''; }
+    };
+    const whatsAppLink = value => {
+      let digits = String(value || '').replace(/\D/g, '');
+      if (digits.startsWith('00')) digits = digits.slice(2);
+      if (digits.startsWith('0')) digits = `27${digits.slice(1)}`;
+      return digits.length >= 8 ? `https://wa.me/${digits}` : '';
+    };
+    const advertLink = advert => safeWebsite(advert.website_url) || whatsAppLink(advert.contact);
+    try {
+      const response = await fetch('/marketing/adverts');
+      if (!response.ok) return;
+      const adverts = (await response.json()).filter(advert => advertLink(advert)).slice(0, 12);
+      const slides = [];
+      adverts.forEach(advert => {
+        const media = [];
+        if (advert.video_url) media.push({type:'video', url:advert.video_url});
+        (advert.image_urls?.length ? advert.image_urls : (advert.image_url ? [advert.image_url] : [])).slice(0, 2).forEach(url => media.push({type:'image', url}));
+        (media.length ? media : [{type:'fallback', url:''}]).forEach(item => slides.push({advert, media:item}));
+      });
+      if (!slides.length) return;
+      track.innerHTML = slides.map(({advert, media}, index) => {
+        const target = advertLink(advert);
+        const hasWebsite = Boolean(safeWebsite(advert.website_url));
+        const visual = media.type === 'video'
+          ? `<video src="${escapeHome(media.url)}" muted loop playsinline preload="metadata" controls aria-label="${escapeHome(advert.business_name)} advert video"></video>`
+          : media.type === 'image'
+            ? `<img src="${escapeHome(media.url)}" alt="${escapeHome(advert.business_name)} advert" loading="${index ? 'lazy' : 'eager'}">`
+            : '<div class="home-ad-fallback" aria-hidden="true">&#10022;</div>';
+        return `<article class="home-ad-slide" data-home-ad-index="${index}" data-home-ad-id="${advert.id}" data-home-ad-target="${escapeHome(target)}" tabindex="0" role="link" aria-label="Open advert from ${escapeHome(advert.business_name)}">
+          <div class="home-ad-media">${visual}</div><div class="home-ad-copy"><span class="kicker">${escapeHome(advert.category)}</span><h3>${escapeHome(advert.headline)}</h3><p>${escapeHome(advert.description)}</p><div class="home-ad-meta"><strong>${escapeHome(advert.business_name)}</strong>${advert.campus ? ` &middot; ${escapeHome(advert.campus)}` : ''}</div><a class="btn secondary home-ad-cta" href="${escapeHome(target)}" target="_blank" rel="noopener" data-home-ad-open="${advert.id}">${hasWebsite ? 'Visit website' : 'WhatsApp advertiser'} &rarr;</a></div>
+        </article>`;
+      }).join('');
+      dots.innerHTML = slides.map((_, index) => `<button class="home-ad-dot${index ? '' : ' active'}" type="button" data-home-ad-dot="${index}" aria-label="Show advert ${index + 1}"></button>`).join('');
+      belt.classList.remove('hidden');
+      const previous = document.getElementById('homeAdPrevious');
+      const next = document.getElementById('homeAdNext');
+      let activeIndex = 0;
+      let timer;
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const show = index => {
+        activeIndex = (index + slides.length) % slides.length;
+        track.style.transform = `translateX(-${activeIndex * 100}%)`;
+        count.textContent = `${activeIndex + 1} / ${slides.length}`;
+        dots.querySelectorAll('.home-ad-dot').forEach((dot, dotIndex) => dot.classList.toggle('active', dotIndex === activeIndex));
+        track.querySelectorAll('video').forEach((video, videoIndex) => {
+          if (video.closest('.home-ad-slide')?.dataset.homeAdIndex === String(activeIndex)) video.play().catch(() => {});
+          else video.pause();
+        });
+      };
+      const stopTimer = () => window.clearInterval(timer);
+      const startTimer = () => { stopTimer(); if (slides.length > 1 && !reduceMotion) timer = window.setInterval(() => show(activeIndex + 1), 6500); };
+      const move = amount => { show(activeIndex + amount); startTimer(); };
+      previous.addEventListener('click', () => move(-1));
+      next.addEventListener('click', () => move(1));
+      dots.addEventListener('click', event => { const dot=event.target.closest('[data-home-ad-dot]'); if(dot){show(Number(dot.dataset.homeAdDot));startTimer();} });
+      const recordClick = id => fetch(`/marketing/adverts/${id}/click`, {method:'POST', keepalive:true}).catch(() => {});
+      track.addEventListener('click', event => {
+        const direct = event.target.closest('[data-home-ad-open]');
+        if (direct) { recordClick(direct.dataset.homeAdOpen); return; }
+        if (event.target.closest('video,button,a')) return;
+        const slide = event.target.closest('.home-ad-slide');
+        if (slide?.dataset.homeAdTarget) { recordClick(slide.dataset.homeAdId); window.open(slide.dataset.homeAdTarget, '_blank', 'noopener'); }
+      });
+      track.addEventListener('keydown', event => {
+        const slide = event.target.closest('.home-ad-slide');
+        if (event.target.closest('video,button,a')) return;
+        if (slide && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); recordClick(slide.dataset.homeAdId); window.open(slide.dataset.homeAdTarget, '_blank', 'noopener'); }
+      });
+      belt.addEventListener('mouseenter', stopTimer);
+      belt.addEventListener('mouseleave', startTimer);
+      belt.addEventListener('focusin', stopTimer);
+      belt.addEventListener('focusout', startTimer);
+      document.addEventListener('visibilitychange', () => document.hidden ? stopTimer() : startTimer());
+      if (slides.length === 1) { previous.classList.add('hidden'); next.classList.add('hidden'); dots.classList.add('hidden'); }
+      show(0); startTimer();
+    } catch (_) { belt.classList.add('hidden'); }
   })();
 </script>
 </body>

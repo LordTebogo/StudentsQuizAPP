@@ -279,6 +279,19 @@ def ensure_market_gallery_schema():
 ensure_market_gallery_schema()
 
 
+def ensure_market_advert_video_schema():
+    """Add optional video media to existing moderated market adverts."""
+    if "market_adverts" not in inspect(engine).get_table_names():
+        return
+    columns = {column["name"] for column in inspect(engine).get_columns("market_adverts")}
+    if "video_url" not in columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE market_adverts ADD COLUMN video_url TEXT"))
+
+
+ensure_market_advert_video_schema()
+
+
 def ensure_comrade_identity_schema():
     """Link new announcements to the verified SRC profile that created them."""
     if "comrade_posts" not in inspect(engine).get_table_names():
@@ -3856,7 +3869,8 @@ def _advert_payload(item: MarketAdvert, owner_name: str = "") -> dict:
         "id": item.id, "business_name": item.business_name, "headline": item.headline,
         "description": item.description, "category": item.category, "campus": item.campus or "",
         "contact": item.contact or "", "website_url": item.website_url or "",
-        "placement": item.placement, "image_url": image_urls[0] if image_urls else None, "image_urls": image_urls, "starts_at": item.starts_at,
+        "placement": item.placement, "image_url": image_urls[0] if image_urls else None, "image_urls": image_urls,
+        "video_url": item.video_url or None, "starts_at": item.starts_at,
         "expires_at": item.expires_at, "status": item.status, "is_featured": item.is_featured,
         "impressions": item.impressions or 0, "clicks": item.clicks or 0,
         "created_at": item.created_at, "updated_at": item.updated_at, "owner_name": owner_name,
@@ -3914,7 +3928,8 @@ async def create_market_advert(
     business_name: str = Form(...), headline: str = Form(...), description: str = Form(...),
     category: str = Form(...), campus: str = Form(""), contact: str = Form(""), website_url: str = Form(""),
     placement: str = Form("spotlight"), starts_at: str = Form(""), expires_at: str = Form(""),
-    images: Optional[List[UploadFile]] = File(None), image: Optional[UploadFile] = File(None), x_student_token: Optional[str] = Header(None, alias="X-Student-Token"),
+    images: Optional[List[UploadFile]] = File(None), image: Optional[UploadFile] = File(None),
+    video: Optional[UploadFile] = File(None), x_student_token: Optional[str] = Header(None, alias="X-Student-Token"),
     x_landlord_token: Optional[str] = Header(None, alias="X-Landlord-Token"), db: Session = Depends(get_db),
 ):
     student, landlord = _advert_owner(db, x_student_token, x_landlord_token)
@@ -3922,6 +3937,12 @@ async def create_market_advert(
         raise HTTPException(status_code=400, detail="Add a business name, headline, description and category")
     if len(description.strip()) > 1200:
         raise HTTPException(status_code=400, detail="Advert descriptions can be up to 1,200 characters")
+    website = website_url.strip()
+    contact_digits = re.sub(r"\D", "", contact)
+    if not website and len(contact_digits) < 8:
+        raise HTTPException(status_code=400, detail="Add a website or WhatsApp number so people can respond to the advert")
+    if website and not re.match(r"^(?:https?://)?[^\s]+\.[^\s]+$", website, re.IGNORECASE):
+        raise HTTPException(status_code=400, detail="Enter a valid website address, or leave it blank and add a WhatsApp number")
     if placement not in {"feed", "spotlight"}:
         raise HTTPException(status_code=400, detail="Choose feed or spotlight placement")
     start, end = _clean_advert_dates(starts_at, expires_at)
@@ -3929,12 +3950,24 @@ async def create_market_advert(
     transport_service = bool(re.search(r"transport|ride|taxi|uber|shuttle|courier|delivery", category, re.IGNORECASE))
     image_limit = 2 if transport_service else 1
     image_urls = await _upload_market_images(files, image_limit, "market_adverts", 8 * 1024 * 1024)
+    video_url = None
+    if video and video.filename:
+        if not (video.content_type or "").startswith("video/"):
+            raise HTTPException(status_code=400, detail="Please choose a valid advert video")
+        video_bytes = await video.read()
+        if len(video_bytes) > 40 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="Advert videos must be 40 MB or smaller")
+        try:
+            video_url = upload_video_bytes(video_bytes, folder="market_adverts/videos")
+        except Exception:
+            raise HTTPException(status_code=502, detail="The advert video could not be uploaded. Try a smaller MP4 file")
     now = datetime.now(timezone.utc).isoformat()
     item = MarketAdvert(
         owner_student_id=student.id if student else None, owner_landlord_id=landlord.id if landlord else None,
         business_name=business_name.strip()[:160], headline=headline.strip()[:180], description=description.strip(),
         category=category.strip()[:80], campus=campus.strip()[:120], contact=contact.strip()[:160],
-        website_url=website_url.strip()[:500], placement=placement, image_url=image_urls[0] if image_urls else None, image_urls=json.dumps(image_urls),
+        website_url=website[:500], placement=placement, image_url=image_urls[0] if image_urls else None,
+        image_urls=json.dumps(image_urls), video_url=video_url,
         starts_at=start, expires_at=end, status="pending", is_featured=False, impressions=0, clicks=0,
         created_at=now, updated_at=now,
     )

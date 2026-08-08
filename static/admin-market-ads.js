@@ -6,9 +6,10 @@
     try {
       const ads = await api('/admin/market-adverts');
       list.innerHTML = ads.length ? ads.map(ad => `<article class="moderation-item advert-review-card" data-admin-ad="${ad.id}">
-        ${ad.image_url?`<img class="advert-review-image" src="${esc(ad.image_url)}" alt="Advert preview for ${esc(ad.business_name)}">`:'<div class="advert-review-image advert-placeholder">No image</div>'}
+        ${ad.video_url?`<video class="advert-review-image" src="${esc(ad.video_url)}" controls muted playsinline aria-label="Advert video for ${esc(ad.business_name)}"></video>`:ad.image_url?`<img class="advert-review-image" src="${esc(ad.image_url)}" alt="Advert preview for ${esc(ad.business_name)}">`:'<div class="advert-review-image advert-placeholder">No media</div>'}
         <div class="advert-review-copy"><div class="advert-review-head"><div><span class="kicker">${esc(ad.category)} · ${esc(ad.placement)}</span><h3>${esc(ad.headline)}</h3></div><span class="status-chip advert-status ${esc(ad.status)}">${esc(ad.status)}</span></div>
         <p>${esc(ad.description)}</p><dl class="review-meta"><div><dt>Business</dt><dd>${esc(ad.business_name)}</dd></div><div><dt>Submitted by</dt><dd>${esc(ad.owner_name||'Unknown account')}</dd></div><div><dt>Submitted</dt><dd>${esc(ad.created_at.slice(0,10))}</dd></div><div><dt>Engagement</dt><dd>${ad.impressions} views · ${ad.clicks} clicks</dd></div></dl>
+        <p class="muted"><strong>Destination:</strong> ${esc(ad.website_url||ad.contact||'Missing')}</p>
         <div class="actions review-actions"><button class="btn approve-ad" type="button">Approve</button><button class="btn secondary reject-ad" type="button">Reject</button><button class="btn secondary feature-ad" type="button">${ad.is_featured?'Remove feature':'Feature'}</button><button class="btn danger delete-ad" type="button">Delete</button></div></div>
       </article>`).join('') : '<div class="empty-state"><strong>No advert submissions</strong><span>New adverts awaiting review will appear here.</span></div>';
     } catch (error) { list.innerHTML = `<div class="error">${esc(error.message)}</div>`; }
