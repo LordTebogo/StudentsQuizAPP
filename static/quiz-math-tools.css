@@ -1,0 +1,58 @@
+.builder-math-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin: 8px 0 2px;
+}
+
+.math-tool-toggle {
+  min-height: 34px;
+  padding: 7px 11px;
+  border: 1px solid rgba(103, 232, 249, .42);
+  border-radius: 10px;
+  background: rgba(103, 232, 249, .07);
+  color: var(--cyan);
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.math-tool-help {
+  color: var(--text-muted);
+  font-size: .72rem;
+}
+
+.builder-math-toolbar {
+  flex: 1 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(3, 7, 18, .46);
+}
+
+.builder-math-toolbar button {
+  min-width: 38px;
+  min-height: 36px;
+  padding: 6px 8px;
+  border: 1px solid rgba(148, 163, 184, .24);
+  border-radius: 9px;
+  background: rgba(14, 30, 53, .8);
+  color: var(--text);
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.builder-math-toolbar button:hover,
+.builder-math-toolbar button:focus-visible {
+  border-color: var(--cyan);
+  color: var(--cyan);
+  outline: none;
+}
+
+.question-editor .math-entry-active {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 2px rgba(103, 232, 249, .12);
+}

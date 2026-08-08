@@ -14,6 +14,31 @@
   const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `q-${Date.now()}-${Math.random().toString(16).slice(2)}`);
   const html = value => String(value ?? '').replace(/[&<>]/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[character]));
   const attr = value => String(value ?? '').replace(/[&<>"']/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]));
+  const mathSymbols = [
+    ['√','Square root'], ['∛','Cube root'], ['⁄','Fraction slash'], ['²','Squared'], ['³','Cubed'], ['ⁿ','Power'],
+    ['₁','Subscript one'], ['₂','Subscript two'], ['ₙ','Subscript n'], ['±','Plus or minus'], ['×','Multiply'], ['÷','Divide'],
+    ['=','Equals'], ['≠','Not equal'], ['≈','Approximately'], ['<','Less than'], ['>','Greater than'], ['≤','Less than or equal'], ['≥','Greater than or equal'],
+    ['∞','Infinity'], ['∑','Summation'], ['∏','Product'], ['∫','Integral'], ['∮','Contour integral'], ['∂','Partial derivative'], ['∇','Nabla'],
+    ['½','One half'], ['⅓','One third'], ['¼','One quarter'], ['|x|','Absolute value'], ['d/dx','Derivative'], ['∂/∂x','Partial derivative notation'],
+    ['lim','Limit'], ['sin','Sine'], ['cos','Cosine'], ['tan','Tangent'], ['log','Logarithm'], ['ln','Natural logarithm'],
+    ['π','Pi'], ['θ','Theta'], ['α','Alpha'], ['β','Beta'], ['γ','Gamma'], ['Δ','Delta'], ['λ','Lambda'], ['μ','Mu'], ['σ','Sigma'], ['Ω','Omega'],
+    ['→','Approaches'], ['∈','Element of'], ['∉','Not an element of'], ['⊂','Subset'], ['∪','Union'], ['∩','Intersection'], ['ℝ','Real numbers'], ['ℕ','Natural numbers'],
+    ['°','Degrees'], ['′','Prime'], ['″','Double prime'], ['·','Dot product']
+  ];
+
+  function mathToolsMarkup() {
+    return `<div class="builder-math-tools"><button class="math-tool-toggle" type="button" data-math-toggle aria-expanded="false">+ Math symbols</button><span class="math-tool-help">Select the question, an option, or the correct answer first.</span><div class="builder-math-toolbar hidden" role="toolbar" aria-label="Mathematical symbols">${mathSymbols.map(([symbol,label])=>`<button type="button" data-math-symbol="${attr(symbol)}" title="${attr(label)}" aria-label="${attr(label)}">${html(symbol)}</button>`).join('')}</div></div>`;
+  }
+
+  function installMathTools() {
+    const container = byId('quizQuestionsBuilder');
+    if (!container) return;
+    container.querySelectorAll('.question-editor').forEach(editor => {
+      if (editor.querySelector('.builder-math-tools')) return;
+      const questionInput = editor.querySelector('textarea[data-field="question"]');
+      questionInput?.insertAdjacentHTML('afterend', mathToolsMarkup());
+    });
+  }
 
   function blankQuestion(type = 'mcq') {
     return {
@@ -77,6 +102,7 @@
     const total = state.questions.reduce((sum, question) => sum + (Number(question.marks) || 0), 0);
     byId('builderQuestionCount').textContent = `${count} question${count === 1 ? '' : 's'}`;
     byId('builderTotalMarks').textContent = `${Number(total.toFixed(2))} total mark${total === 1 ? '' : 's'}`;
+    installMathTools();
   }
 
   function typeFields(question) {
@@ -353,6 +379,13 @@
     setDirty(true); updateSummary();
   });
 
+  root.addEventListener('focusin', event => {
+    if (!event.target.matches('textarea[data-field="question"], input[data-option-index], input[data-field="correct_answer"]')) return;
+    const editor = event.target.closest('.question-editor');
+    editor?.querySelectorAll('.math-entry-active').forEach(field => field.classList.remove('math-entry-active'));
+    event.target.classList.add('math-entry-active');
+  });
+
   root.addEventListener('change', event => {
     const question = questionFor(event.target);
     if (question && event.target.dataset.field === 'type') {
@@ -366,6 +399,25 @@
   });
 
   root.addEventListener('click', event => {
+    const mathToggle = event.target.closest('[data-math-toggle]');
+    if (mathToggle) {
+      const toolbar = mathToggle.closest('.builder-math-tools').querySelector('.builder-math-toolbar');
+      const open = !toolbar.classList.toggle('hidden');
+      mathToggle.setAttribute('aria-expanded', String(open));
+      mathToggle.textContent = open ? 'Hide math symbols' : '+ Math symbols';
+      return;
+    }
+    const mathButton = event.target.closest('[data-math-symbol]');
+    if (mathButton) {
+      const editor = mathButton.closest('.question-editor');
+      const target = editor.querySelector('.math-entry-active') || editor.querySelector('textarea[data-field="question"]');
+      const start = Number.isInteger(target.selectionStart) ? target.selectionStart : target.value.length;
+      const end = Number.isInteger(target.selectionEnd) ? target.selectionEnd : start;
+      target.setRangeText(mathButton.dataset.mathSymbol, start, end, 'end');
+      target.dispatchEvent(new Event('input', {bubbles:true}));
+      target.focus();
+      return;
+    }
     const button = event.target.closest('[data-action]');
     if (!button) return;
     const question = questionFor(button); if (!question) return;
