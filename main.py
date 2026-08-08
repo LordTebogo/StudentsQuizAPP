@@ -3703,8 +3703,8 @@ async def register_landlord(full_name: str = Form(...), business_name: str = For
         raise HTTPException(status_code=400, detail="Provide your name, contact number, valid email, and a password of at least 8 characters")
     if password != confirm_password:
         raise HTTPException(status_code=400, detail="The password confirmation does not match")
-    if provider_type not in {"residence", "transport"}:
-        raise HTTPException(status_code=400, detail="Choose accommodation or transport provider")
+    if provider_type not in {"residence", "transport", "sales", "other"}:
+        raise HTTPException(status_code=400, detail="Choose accommodation, transport, sales, or other provider")
     if db.query(Landlord).filter(Landlord.email == email).first():
         raise HTTPException(status_code=409, detail="A provider profile already uses this email")
     image_url = None

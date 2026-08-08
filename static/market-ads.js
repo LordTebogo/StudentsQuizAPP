@@ -10,6 +10,7 @@
     return data;
   };
   const safeLink = value => /^https?:\/\//i.test(value || '') ? value : (value ? `https://${value}` : '');
+  let pendingAuthAction = '';
   const galleryMarkup = (images, title) => { const rows=(images||[]).filter(Boolean);if(!rows.length)return'<div class="advert-art">✦</div>';return `<div class="market-gallery" data-gallery-title="${esc(title)}" data-gallery-index="0">${rows.map((url,index)=>`<button class="market-slide ${index?'':'active'}" type="button" data-gallery-view="${index}" aria-label="View image ${index+1} of ${rows.length}"><img src="${esc(url)}" alt="${esc(title)} image ${index+1}" loading="lazy"></button>`).join('')}${rows.length>1?'<button class="gallery-nav previous" type="button" data-gallery-move="-1" aria-label="Previous image">‹</button><button class="gallery-nav next" type="button" data-gallery-move="1" aria-label="Next image">›</button>':''}<span class="gallery-count">1 / ${rows.length}</span><button class="gallery-view" type="button" data-gallery-view="0">View photos</button></div>` };
   function installMarketAuthDialog() {
     if (document.getElementById('marketAuthDialog')) return;
@@ -17,11 +18,18 @@
     dialog.id = 'marketAuthDialog'; dialog.className = 'market-auth-dialog';
     dialog.innerHTML = `<div class="market-auth-step" data-auth-step="start"><span class="market-kicker">Account required</span><h2>Sign in to continue</h2><p>Your account keeps transport listings reviewed and connected to a verified provider.</p><div class="market-auth-actions"><button class="btn" type="button" data-auth-next>Sign in</button><button class="btn secondary" type="button" data-auth-cancel>Cancel</button></div></div><div class="market-auth-step hidden" data-auth-step="role"><button class="market-auth-back" type="button" data-auth-back>← Back</button><span class="market-kicker">Choose account type</span><h2>How are you signing in?</h2><p>Select the account that you use on NucleoCampus.</p><div class="market-role-grid"><button type="button" data-auth-role="student"><strong>Student</strong><span>Use your student account</span></button><button type="button" data-auth-role="landlord"><strong>Landlord</strong><span>Manage residences and listings</span></button><button type="button" data-auth-role="business"><strong>Businessman</strong><span>Publish transport or delivery services</span></button></div><button class="btn secondary market-auth-cancel" type="button" data-auth-cancel>Cancel</button></div>`;
     document.body.appendChild(dialog);
+    const providerStep = document.createElement('div');
+    providerStep.className = 'market-auth-step hidden'; providerStep.dataset.authStep = 'provider';
+    providerStep.innerHTML = `<button class="provider-auth-close" type="button" aria-label="Close account popup">&times;</button><span class="market-kicker">Provider account</span><h2>Sign in or create an account</h2><p>Continue with a provider account to submit your advert for review.</p><div id="marketProviderAuthHost"></div><div id="marketAuthMessage"></div><a class="btn secondary market-student-auth" href="/static/student.html">Use a student account instead</a>`;
+    dialog.appendChild(providerStep);
+    const providerGuest = document.getElementById('landlordGuest');
+    if (providerGuest) providerStep.querySelector('#marketProviderAuthHost').appendChild(providerGuest);
     const showStep = name => dialog.querySelectorAll('[data-auth-step]').forEach(step => step.classList.toggle('hidden', step.dataset.authStep !== name));
-    const close = () => { if (dialog.open) dialog.close(); else dialog.removeAttribute('open'); showStep('start'); };
+    const close = () => { pendingAuthAction = ''; if (dialog.open) dialog.close(); else dialog.removeAttribute('open'); showStep('start'); };
     dialog.querySelector('[data-auth-next]').addEventListener('click', () => showStep('role'));
     dialog.querySelector('[data-auth-back]').addEventListener('click', () => showStep('start'));
     dialog.querySelectorAll('[data-auth-cancel]').forEach(button => button.addEventListener('click', close));
+    providerStep.querySelector('.provider-auth-close').addEventListener('click', close);
     dialog.addEventListener('cancel', event => { event.preventDefault(); close(); });
     dialog.addEventListener('click', event => { if (event.target === dialog) close(); });
     dialog.querySelectorAll('[data-auth-role]').forEach(button => button.addEventListener('click', () => {
@@ -44,13 +52,25 @@
       window.setTimeout(() => email?.focus(), 450);
     }));
   }
-  function showMarketAuthDialog() {
+  function showMarketAuthDialog(options = {}) {
+    pendingAuthAction = options.afterAuth || '';
     installMarketAuthDialog();
     const dialog = document.getElementById('marketAuthDialog');
-    dialog.querySelectorAll('[data-auth-step]').forEach(step => step.classList.toggle('hidden', step.dataset.authStep !== 'start'));
+    const providerGuest = document.getElementById('landlordGuest');
+    providerGuest?.classList.remove('hidden');
+    if (typeof setDesk === 'function') setDesk('login');
+    const message = document.getElementById('marketAuthMessage'); if (message) message.innerHTML = '';
+    dialog.querySelectorAll('[data-auth-step]').forEach(step => step.classList.toggle('hidden', step.dataset.authStep !== 'provider'));
     if (typeof dialog.showModal === 'function') dialog.showModal(); else dialog.setAttribute('open', '');
   }
   window.showMarketAuthDialog = showMarketAuthDialog;
+  document.addEventListener('market-provider-authenticated', () => {
+    const action = pendingAuthAction;
+    const dialog = document.getElementById('marketAuthDialog');
+    if (dialog?.open) dialog.close(); else dialog?.removeAttribute('open');
+    pendingAuthAction = '';
+    if (action === 'advert') document.getElementById('openAdvertForm')?.click();
+  });
   const advertCard = (ad, compact = false) => {
     const link = safeLink(ad.website_url) || (ad.contact ? `https://wa.me/${ad.contact.replace(/\D/g, '')}` : '');
     return `<article class="market-advert ${compact ? 'compact' : ''}" data-market-ad="${ad.id}">
@@ -140,7 +160,7 @@
         <input name="business_name" placeholder="Business or event name" maxlength="160" required>
         <input name="headline" placeholder="Short, catchy headline" maxlength="180" required>
         <textarea name="description" placeholder="What are you offering?" maxlength="1200" required></textarea>
-        <select name="category" required><option value="">Choose category</option><option>Ride & transport</option><option>Delivery & courier</option><option>Campus shuttle</option><option>Student service</option><option>Food & delivery</option><option>Tutoring</option><option>Event</option><option>Technology</option><option>Beauty & lifestyle</option><option>Other</option></select>
+        <select name="category" required><option value="">Choose category</option><option>Ride & transport</option><option>Delivery & courier</option><option>Campus shuttle</option><option>Sales & retail</option><option>Student service</option><option>Food & delivery</option><option>Tutoring</option><option>Event</option><option>Technology</option><option>Beauty & lifestyle</option><option>Other</option></select>
         <input name="campus" placeholder="Campus or area">
         <input name="contact" placeholder="WhatsApp number (required if there is no website)">
         <input name="website_url" placeholder="Website or social link (required if there is no WhatsApp)">
@@ -154,7 +174,7 @@
     const wrap = desk.querySelector('#advertFormWrap');
     const open = () => {
       if (!studentToken() && !landlordToken()) {
-        showMarketAuthDialog(); return;
+        showMarketAuthDialog({afterAuth:'advert'}); return;
       }
       wrap.classList.remove('hidden'); desk.querySelector('#openAdvertForm').classList.add('hidden');
     };
