@@ -62,7 +62,10 @@ from reportlab.platypus import (
     Paragraph,
     SimpleDocTemplate,
     Spacer,
+    Table,
+    TableStyle,
 )
+from reportlab.pdfgen import canvas as pdf_canvas
 from PIL import Image as PILImage
 from pypdf import PdfReader, PdfWriter
 import pymupdf
@@ -4750,6 +4753,178 @@ def _download(data: bytes, media_type: str, filename: str) -> StreamingResponse:
     return StreamingResponse(io.BytesIO(data), media_type=media_type, headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
 
+def _validated_pdf_reader(data: bytes, label: str = "The PDF") -> PdfReader:
+    if not data.startswith(b"%PDF"):
+        raise HTTPException(status_code=400, detail=f"{label} is not a PDF")
+    try:
+        reader = PdfReader(io.BytesIO(data))
+        if reader.is_encrypted:
+            raise HTTPException(status_code=400, detail=f"{label} is password protected")
+        if len(reader.pages) > 100:
+            raise HTTPException(status_code=400, detail="Document workspace operations are limited to 100 PDF pages")
+        return reader
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"{label} is damaged or unsupported") from exc
+
+
+def _validate_office_archive(data: bytes, required_entry: str, label: str):
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            entries = archive.infolist()
+            if required_entry not in {item.filename for item in entries}:
+                raise HTTPException(status_code=400, detail=f"Choose a valid {label} file")
+            if len(entries) > 5000 or sum(item.file_size for item in entries) > 200 * 1024 * 1024:
+                raise HTTPException(status_code=400, detail=f"The {label} file expands beyond the safe processing limit")
+    except HTTPException:
+        raise
+    except zipfile.BadZipFile as exc:
+        raise HTTPException(status_code=400, detail=f"Choose a valid {label} file") from exc
+
+
+def _pdf_to_word_bytes(data: bytes) -> bytes:
+    from docx import Document
+    from docx.shared import Pt
+
+    document = pymupdf.open(stream=data, filetype="pdf")
+    if document.needs_pass or document.page_count > 100:
+        document.close()
+        raise HTTPException(status_code=400, detail="The PDF is password protected or has more than 100 pages")
+    word = Document()
+    section = word.sections[0]
+    first = document[0].rect if document.page_count else pymupdf.Rect(0, 0, 595, 842)
+    section.page_width, section.page_height = Pt(first.width), Pt(first.height)
+    section.top_margin = section.bottom_margin = section.left_margin = section.right_margin = Pt(0)
+    for index, page in enumerate(document):
+        pixmap = page.get_pixmap(dpi=144, colorspace=pymupdf.csRGB, alpha=False)
+        image = io.BytesIO(pixmap.tobytes("png"))
+        paragraph = word.add_paragraph()
+        paragraph.paragraph_format.space_before = paragraph.paragraph_format.space_after = Pt(0)
+        paragraph.add_run().add_picture(image, width=section.page_width)
+        if index < document.page_count - 1:
+            word.add_page_break()
+    document.close()
+    output = io.BytesIO(); word.save(output)
+    return output.getvalue()
+
+
+def _pdf_to_powerpoint_bytes(data: bytes) -> bytes:
+    from pptx import Presentation
+
+    document = pymupdf.open(stream=data, filetype="pdf")
+    if document.needs_pass or document.page_count > 100:
+        document.close()
+        raise HTTPException(status_code=400, detail="The PDF is password protected or has more than 100 pages")
+    deck = Presentation()
+    first = document[0].rect if document.page_count else pymupdf.Rect(0, 0, 960, 540)
+    deck.slide_width = int(first.width * 12700)
+    deck.slide_height = int(first.height * 12700)
+    blank = deck.slide_layouts[6]
+    for page in document:
+        slide = deck.slides.add_slide(blank)
+        pixmap = page.get_pixmap(dpi=144, colorspace=pymupdf.csRGB, alpha=False)
+        slide.shapes.add_picture(io.BytesIO(pixmap.tobytes("png")), 0, 0, width=deck.slide_width, height=deck.slide_height)
+    document.close()
+    output = io.BytesIO(); deck.save(output)
+    return output.getvalue()
+
+
+def _word_to_pdf_bytes(data: bytes) -> bytes:
+    from docx import Document
+    from docx.table import Table as DocxTable
+    from docx.text.paragraph import Paragraph as DocxParagraph
+    from reportlab.lib.utils import ImageReader
+
+    document = Document(io.BytesIO(data))
+    first_section = document.sections[0]
+    page_size = (first_section.page_width.pt, first_section.page_height.pt)
+    styles = getSampleStyleSheet()
+    story = []
+    for child in document.element.body.iterchildren():
+        if child.tag.endswith("}p"):
+            paragraph = DocxParagraph(child, document)
+            text_value = paragraph.text.strip()
+            if not text_value:
+                story.append(Spacer(1, 6)); continue
+            style_name = (paragraph.style.name if paragraph.style else "").lower()
+            style = styles["Title"] if "title" in style_name else styles["Heading1"] if "heading 1" in style_name else styles["Heading2"] if "heading 2" in style_name else styles["BodyText"]
+            prefix = "- " if "list" in style_name else ""
+            story.append(Paragraph(_pdf_escape(prefix + text_value).replace(chr(10), "<br/>"), style))
+        elif child.tag.endswith("}tbl"):
+            table = DocxTable(child, document)
+            rows = [[Paragraph(_pdf_escape(cell.text), styles["BodyText"]) for cell in row.cells] for row in table.rows]
+            if rows:
+                rendered = Table(rows, repeatRows=1, hAlign="LEFT")
+                rendered.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), .35, colors.HexColor("#94a3b8")), ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e2e8f0")), ("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 6), ("RIGHTPADDING", (0, 0), (-1, -1), 6), ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5)]))
+                story.extend([rendered, Spacer(1, 9)])
+    seen_images = set()
+    for relationship in document.part.rels.values():
+        if "image" not in relationship.reltype:
+            continue
+        blob = relationship.target_part.blob
+        digest = hashlib.sha256(blob).hexdigest()
+        if digest in seen_images: continue
+        seen_images.add(digest)
+        try:
+            picture = PILImage.open(io.BytesIO(blob)); width, height = picture.size
+            scale = min(450 / max(width, 1), 600 / max(height, 1), 1)
+            story.extend([RLImage(io.BytesIO(blob), width=width * scale, height=height * scale), Spacer(1, 8)])
+        except Exception:
+            continue
+    if not story:
+        raise HTTPException(status_code=400, detail="The Word document does not contain readable content")
+    output = io.BytesIO()
+    SimpleDocTemplate(output, pagesize=page_size, rightMargin=54, leftMargin=54, topMargin=54, bottomMargin=54).build(story)
+    return output.getvalue()
+
+
+def _powerpoint_to_pdf_bytes(data: bytes) -> bytes:
+    from pptx import Presentation
+    from reportlab.lib.utils import ImageReader
+    import textwrap
+
+    deck = Presentation(io.BytesIO(data))
+    if len(deck.slides) > 100:
+        raise HTTPException(status_code=400, detail="PowerPoint conversion is limited to 100 slides")
+    width, height = deck.slide_width / 12700, deck.slide_height / 12700
+    output = io.BytesIO(); canvas = pdf_canvas.Canvas(output, pagesize=(width, height))
+    for slide_number, slide in enumerate(deck.slides, 1):
+        canvas.setFillColor(colors.white); canvas.rect(0, 0, width, height, fill=1, stroke=0)
+        for shape in slide.shapes:
+            left, top, shape_width, shape_height = shape.left / 12700, shape.top / 12700, shape.width / 12700, shape.height / 12700
+            y = height - top - shape_height
+            if hasattr(shape, "image"):
+                try: canvas.drawImage(ImageReader(io.BytesIO(shape.image.blob)), left, y, shape_width, shape_height, preserveAspectRatio=True, anchor="c", mask="auto")
+                except Exception: pass
+            if getattr(shape, "has_text_frame", False) and shape.text.strip():
+                text_object = canvas.beginText(left + 4, height - top - 16)
+                font_size = 14
+                for paragraph in shape.text_frame.paragraphs:
+                    if paragraph.runs and paragraph.runs[0].font.size:
+                        font_size = max(7, min(36, paragraph.runs[0].font.size.pt))
+                    bold = bool(paragraph.runs and paragraph.runs[0].font.bold)
+                    text_object.setFont("Helvetica-Bold" if bold else "Helvetica", font_size)
+                    text_object.setLeading(font_size * 1.2)
+                    line_width = max(8, int(shape_width / max(font_size * .55, 1)))
+                    for line in textwrap.wrap(paragraph.text, line_width) or [""]:
+                        text_object.textLine(line)
+                canvas.setFillColor(colors.HexColor("#111827")); canvas.drawText(text_object)
+            if getattr(shape, "has_table", False):
+                rows = shape.table.rows; columns = shape.table.columns
+                cell_width, cell_height = shape_width / max(len(columns), 1), shape_height / max(len(rows), 1)
+                canvas.setFont("Helvetica", 8)
+                for row_index, row in enumerate(rows):
+                    for column_index, cell in enumerate(row.cells):
+                        cell_x, cell_y = left + column_index * cell_width, y + shape_height - (row_index + 1) * cell_height
+                        canvas.setStrokeColor(colors.HexColor("#94a3b8")); canvas.rect(cell_x, cell_y, cell_width, cell_height, fill=0, stroke=1)
+                        canvas.setFillColor(colors.HexColor("#111827")); canvas.drawString(cell_x + 3, cell_y + cell_height - 11, cell.text[:100])
+        canvas.setFillColor(colors.HexColor("#64748b")); canvas.setFont("Helvetica", 7); canvas.drawRightString(width - 10, 8, str(slide_number))
+        canvas.showPage()
+    canvas.save()
+    return output.getvalue()
+
+
 @app.post("/document-tools/merge")
 async def merge_pdf_files(files: List[UploadFile] = File(...), _user: str = Depends(require_document_tool_user)):
     if len(files) < 2 or len(files) > 20:
@@ -4771,6 +4946,76 @@ async def merge_pdf_files(files: List[UploadFile] = File(...), _user: str = Depe
         raise
     except Exception as exc:
         raise HTTPException(status_code=400, detail="One of the PDFs is damaged or unsupported") from exc
+
+
+@app.post("/document-tools/organize")
+async def organize_pdf_pages(files: List[UploadFile] = File(...), page_order: str = Form(...), _user: str = Depends(require_document_tool_user)):
+    if not files or len(files) > 20:
+        raise HTTPException(status_code=400, detail="Choose between 1 and 20 PDF files")
+    readers = []
+    for upload in files:
+        data = await _document_bytes(upload)
+        readers.append(_validated_pdf_reader(data, upload.filename or "A selected file"))
+    try:
+        order = json.loads(page_order)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail="The page order could not be read") from exc
+    if not isinstance(order, list) or not order or len(order) > 200:
+        raise HTTPException(status_code=400, detail="Keep between 1 and 200 pages in the output")
+    writer = PdfWriter()
+    for item in order:
+        if not isinstance(item, list) or len(item) != 2 or not all(isinstance(value, int) for value in item):
+            raise HTTPException(status_code=400, detail="The page order is invalid")
+        file_index, page_index = item
+        if file_index < 0 or file_index >= len(readers) or page_index < 0 or page_index >= len(readers[file_index].pages):
+            raise HTTPException(status_code=400, detail="A selected page no longer exists")
+        writer.add_page(readers[file_index].pages[page_index])
+    output = io.BytesIO(); writer.write(output)
+    return _download(output.getvalue(), "application/pdf", "organised-document.pdf")
+
+
+def _split_page_groups(specification: str, page_count: int) -> List[List[int]]:
+    if not specification.strip():
+        return [[index] for index in range(page_count)]
+    groups = []
+    for raw_group in specification.split(";"):
+        pages = []
+        for part in raw_group.split(","):
+            token = part.strip()
+            if not token: continue
+            if "-" in token:
+                start_text, end_text = token.split("-", 1)
+                if not start_text.isdigit() or not end_text.isdigit():
+                    raise HTTPException(status_code=400, detail="Use ranges such as 1-3; 4-6; 7,9")
+                start, end = int(start_text), int(end_text)
+                if start > end: start, end = end, start
+                pages.extend(range(start - 1, end))
+            elif token.isdigit():
+                pages.append(int(token) - 1)
+            else:
+                raise HTTPException(status_code=400, detail="Use ranges such as 1-3; 4-6; 7,9")
+        unique = list(dict.fromkeys(pages))
+        if not unique or any(index < 0 or index >= page_count for index in unique):
+            raise HTTPException(status_code=400, detail=f"Choose page numbers between 1 and {page_count}")
+        groups.append(unique)
+    if not groups or len(groups) > 100:
+        raise HTTPException(status_code=400, detail="The split contains too many output documents")
+    return groups
+
+
+@app.post("/document-tools/split")
+async def split_pdf_file(file: UploadFile = File(...), ranges: str = Form(""), _user: str = Depends(require_document_tool_user)):
+    data = await _document_bytes(file)
+    reader = _validated_pdf_reader(data)
+    groups = _split_page_groups(ranges, len(reader.pages))
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
+        for output_number, pages in enumerate(groups, 1):
+            writer = PdfWriter()
+            for page_index in pages: writer.add_page(reader.pages[page_index])
+            part = io.BytesIO(); writer.write(part)
+            archive.writestr(f"document-part-{output_number:03d}-pages-{'-'.join(str(index + 1) for index in pages)}.pdf", part.getvalue())
+    return _download(output.getvalue(), "application/zip", "split-pdf-documents.zip")
 
 
 @app.post("/document-tools/convert")
@@ -4807,6 +5052,32 @@ async def convert_document(file: UploadFile = File(...), target: str = Form(...)
             raise
         except Exception as exc:
             raise HTTPException(status_code=400, detail="The PDF is damaged, encrypted or unsupported") from exc
+    if target in {"pdf-to-word", "pdf-to-powerpoint"}:
+        _validated_pdf_reader(data)
+        try:
+            if target == "pdf-to-word":
+                return _download(_pdf_to_word_bytes(data), "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "converted-document.docx")
+            return _download(_pdf_to_powerpoint_bytes(data), "application/vnd.openxmlformats-officedocument.presentationml.presentation", "converted-presentation.pptx")
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail="The PDF could not be converted to the selected Office format") from exc
+    if target == "word-to-pdf":
+        _validate_office_archive(data, "word/document.xml", "Word DOCX")
+        try:
+            return _download(_word_to_pdf_bytes(data), "application/pdf", "word-document.pdf")
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail="The Word document is damaged or contains unsupported content") from exc
+    if target == "powerpoint-to-pdf":
+        _validate_office_archive(data, "ppt/presentation.xml", "PowerPoint PPTX")
+        try:
+            return _download(_powerpoint_to_pdf_bytes(data), "application/pdf", "powerpoint-presentation.pdf")
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail="The PowerPoint is damaged or contains unsupported content") from exc
     raise HTTPException(status_code=400, detail="Choose a supported conversion")
 
 
