@@ -88,14 +88,14 @@
   </section>
 
   <section class="card">
-    <div class="admin-editor-heading"><div><span class="kicker">Student access</span><h2>Student management</h2></div><span><button class="btn secondary" id="activateAllStudentsBtn">Activate all</button><button class="btn secondary" id="inactivateAllStudentsBtn">Inactivate all</button><button class="btn secondary" id="refreshStudentsBtn">Refresh</button></span></div>
-    <p class="muted">Select a student to manage modules or reset a password. Access controls appear immediately beneath the selected student.</p>
-    <div class="admin-list-tools"><label for="studentAdminSearch">Search students<input id="studentAdminSearch" type="search" placeholder="Name, student number or email"></label><label for="studentAdminStatus">Account status<select id="studentAdminStatus"><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="unapproved">Not approved</option></select></label></div><div class="admin-page-head"><strong id="studentResultSummary">Students</strong><div><button class="btn secondary" type="button" id="studentPrevPage">Previous</button><button class="btn secondary" type="button" id="studentNextPage">Next</button></div></div>
+    <div class="admin-editor-heading"><div><span class="kicker">Learner access</span><h2>Learner management</h2></div><span><button class="btn secondary" id="activateAllStudentsBtn">Activate all</button><button class="btn secondary" id="inactivateAllStudentsBtn">Inactivate all</button><button class="btn secondary" id="refreshStudentsBtn">Refresh</button></span></div>
+    <p class="muted">Select a learner to manage modules or reset a password. Access controls appear immediately beneath the selected learner.</p>
+    <div class="admin-list-tools"><label for="studentAdminSearch">Search learners<input id="studentAdminSearch" type="search" placeholder="Name, username or email"></label><label for="studentAdminStatus">Account status<select id="studentAdminStatus"><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="unapproved">Not approved</option></select></label></div><div class="admin-page-head"><strong id="studentResultSummary">Learners</strong><div><button class="btn secondary" type="button" id="studentPrevPage">Previous</button><button class="btn secondary" type="button" id="studentNextPage">Next</button></div></div>
     <div id="studentList" class="admin-list"></div>
-    <div id="studentAdminCard" class="hidden"><label for="studentResetPassword">New permanent password</label><input id="studentResetPassword" type="password" placeholder="At least 8 characters" autocomplete="new-password"><p class="muted">Use <strong>Save new password</strong> to change the student's sign-in password. Saving module assignments does not change it.</p><button class="btn" id="resetStudentPasswordBtn">Save new password</button><button class="btn secondary" id="saveStudentBtn">Save module assignments</button><div id="studentMsg"></div></div>
+    <div id="studentAdminCard" class="hidden"><label for="studentResetPassword">New permanent password</label><input id="studentResetPassword" type="password" placeholder="At least 8 characters" autocomplete="new-password"><p class="muted">Use <strong>Save new password</strong> to change the learner's sign-in password. Saving module assignments does not change it.</p><button class="btn" id="resetStudentPasswordBtn">Save new password</button><button class="btn secondary" id="saveStudentBtn">Save module assignments</button><div id="studentMsg"></div></div>
   </section>
 
-  <section class="card">
+  <section class="card hidden" aria-hidden="true">
     <div class="admin-editor-heading"><div><span class="kicker">Official SRC access</span><h2>SRC president management</h2></div><button class="btn secondary" id="refreshSrcPresidentsBtn">Refresh</button></div>
     <p class="muted">SRC profiles activate automatically. Select a profile to change its access or remove it.</p>
     <div id="srcPresidentList" class="admin-list"></div>
@@ -104,8 +104,8 @@
 
   <section class="card" id="allAccountsCard">
     <div class="admin-editor-heading"><div><span class="kicker">Read, update & delete</span><h2>All registered accounts</h2></div><button class="btn secondary" id="refreshAllAccountsBtn" type="button">Refresh</button></div>
-    <p class="muted">Manage every student, lecturer, SRC and marketplace account, including accommodation, transport, sales and other businesses.</p>
-    <div class="admin-list-tools"><label for="allAccountSearch">Search accounts<input id="allAccountSearch" type="search" placeholder="Name, email, business or identifier"></label><label for="allAccountType">Account type<select id="allAccountType"><option value="all">All accounts</option><option value="student">Students</option><option value="lecturer">Lecturers</option><option value="provider">Businesses and providers</option><option value="src">SRC presidents</option></select></label><label for="allAccountStatus">Status<select id="allAccountStatus"><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="unapproved">Not approved</option></select></label></div>
+    <p class="muted">Manage every learner, lecturer and marketplace account, including accommodation, transport, sales and other businesses.</p>
+    <div class="admin-list-tools"><label for="allAccountSearch">Search accounts<input id="allAccountSearch" type="search" placeholder="Name, email, business or username"></label><label for="allAccountType">Account type<select id="allAccountType"><option value="all">All accounts</option><option value="student">Learners</option><option value="lecturer">Lecturers</option><option value="provider">Businesses and providers</option></select></label><label for="allAccountStatus">Status<select id="allAccountStatus"><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="unapproved">Not approved</option></select></label></div>
     <div class="admin-page-head"><strong id="allAccountSummary">Accounts</strong></div>
     <div id="allAccountList" class="admin-list"></div>
     <div id="allAccountEditor" class="account-directory-editor hidden">
@@ -114,7 +114,7 @@
         <div><label for="allAccountName">Full name</label><input id="allAccountName" type="text"></div>
         <div><label for="allAccountEmail">Email</label><input id="allAccountEmail" type="email"></div>
         <div><label for="allAccountPhone">Phone</label><input id="allAccountPhone" type="text"></div>
-        <div id="allAccountStudentNumberField" class="hidden"><label for="allAccountStudentNumber">Student number</label><input id="allAccountStudentNumber" type="text"></div>
+        <div id="allAccountStudentNumberField" class="hidden"><label for="allAccountStudentNumber">Username</label><input id="allAccountStudentNumber" type="text"></div>
         <div id="allAccountBusinessField" class="hidden"><label for="allAccountBusiness">Business name</label><input id="allAccountBusiness" type="text"></div>
         <div id="allAccountProviderTypeField" class="hidden"><label for="allAccountProviderType">Business category</label><select id="allAccountProviderType"><option value="residence">Student accommodation</option><option value="transport">Transport or delivery</option><option value="sales">Sales</option><option value="other">Other</option></select></div>
         <div id="allAccountPartyField" class="hidden"><label for="allAccountParty">Party or organisation</label><input id="allAccountParty" type="text"></div>
@@ -351,7 +351,7 @@ function renderStudentPage() {
   const query=$('studentAdminSearch').value.trim().toLowerCase(),status=$('studentAdminStatus').value;
   const filtered=studentAdminRows.filter(item=>{const text=`${item.full_name} ${item.student_number} ${item.email||''} ${(item.module_codes||[]).join(' ')}`.toLowerCase(),matchesStatus=status==='all'||status==='active'&&(item.active&&item.approved)||status==='inactive'&&!item.active||status==='unapproved'&&(item.active&&!item.approved);return(!query||text.includes(query))&&matchesStatus});
   const pages=Math.max(1,Math.ceil(filtered.length/STUDENTS_PER_PAGE));studentAdminPage=Math.min(studentAdminPage,pages);const start=(studentAdminPage-1)*STUDENTS_PER_PAGE,students=filtered.slice(start,start+STUDENTS_PER_PAGE);
-  $('studentResultSummary').textContent=`${filtered.length} student${filtered.length===1?'':'s'} · page ${studentAdminPage} of ${pages}`;$('studentPrevPage').disabled=studentAdminPage<=1;$('studentNextPage').disabled=studentAdminPage>=pages;
+  $('studentResultSummary').textContent=`${filtered.length} learner${filtered.length===1?'':'s'} · page ${studentAdminPage} of ${pages}`;$('studentPrevPage').disabled=studentAdminPage<=1;$('studentNextPage').disabled=studentAdminPage>=pages;
   $('studentList').innerHTML=students.length?students.map(item=>`<div class="account-row ${selectedStudentId===item.id?'selected':''}"><button class="admin-list-item" data-student="${item.id}"><span><strong>${escapeHtml(item.full_name)}</strong><small>${escapeHtml(item.student_number)} · ${escapeHtml(item.email||'No email')} · ${(item.module_codes||[]).map(escapeHtml).join(', ')||'No modules assigned'}</small></span><span class="badge ${item.active&&item.approved?'done':'pending'}">${item.active?(item.approved?'Active':'Not approved'):'Inactive'}</span></button>${selectedStudentId===item.id?accessControls('students',item):''}</div>`).join(''):'<div class="empty-state"><strong>No matching students</strong><span>Change the search or account-status filter.</span></div>';
   $('studentList').querySelectorAll('[data-student]').forEach(button=>button.addEventListener('click',()=>selectStudent(button.dataset.student,studentAdminRows)));bindAccessControls($('studentList'));
 }
@@ -370,13 +370,13 @@ function selectSrcPresident(id, profiles) {
   loadSrcPresidents();
 }
 function accountTypeLabel(item) {
-  if (item.account_type === 'student') return 'Student';
+  if (item.account_type === 'student') return 'Learner';
   if (item.account_type === 'lecturer') return 'Lecturer';
   if (item.account_type === 'src') return 'SRC president';
   return ({residence:'Accommodation', transport:'Transport', sales:'Sales', other:'Other business'})[item.provider_type] || 'Business';
 }
 function accountIdentifier(item) {
-  if (item.account_type === 'student') return item.student_number || '';
+  if (item.account_type === 'student') return item.username || item.student_number || '';
   if (item.account_type === 'provider') return item.business_name || '';
   if (item.account_type === 'src') return item.party_name || '';
   return (item.module_codes || []).join(', ');
@@ -403,7 +403,7 @@ function openAllAccount(type, id) {
   selectedAllAccount = item;
   $('allAccountRole').textContent = accountTypeLabel(item); $('allAccountEditorTitle').textContent = `Edit ${item.full_name}`;
   $('allAccountName').value = item.full_name || ''; $('allAccountEmail').value = item.email || ''; $('allAccountPhone').value = item.phone || '';
-  $('allAccountStudentNumber').value = item.student_number || ''; $('allAccountBusiness').value = item.business_name || ''; $('allAccountProviderType').value = item.provider_type || 'other';
+  $('allAccountStudentNumber').value = item.username || item.student_number || ''; $('allAccountBusiness').value = item.business_name || ''; $('allAccountProviderType').value = item.provider_type || 'other';
   $('allAccountParty').value = item.party_name || ''; $('allAccountInstitution').value = item.institution || ''; $('allAccountBio').value = item.bio || '';
   $('allAccountModules').value = (item.module_codes || []).join(', '); $('allAccountModuleLimit').value = item.module_limit ?? Math.max((item.module_codes || []).length, 1);
   $('allAccountPassword').value = ''; $('allAccountActive').checked = item.active; $('allAccountApproved').checked = item.approved !== false;

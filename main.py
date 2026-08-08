@@ -581,7 +581,8 @@ class AdminStudentUpdate(BaseModel):
 
 
 class AdminStudentCreate(BaseModel):
-    student_number: str
+    username: Optional[str] = None
+    student_number: Optional[str] = None
     full_name: str
     email: str
     password: str
@@ -760,7 +761,7 @@ def require_src_president_account(
 
 
 def _student_profile(student: Student) -> dict:
-    return {"id": student.id, "student_number": student.student_number, "full_name": student.full_name,
+    return {"id": student.id, "username": student.student_number, "student_number": student.student_number, "full_name": student.full_name,
             "email": student.email, "phone": student.phone or "", "institution": student.institution or "",
             "bio": student.bio or "", "profile_image_url": student.profile_image_url,
             "approved": student.approved, "active": student.active, "module_codes": [item.module_code for item in student.modules], "created_at": student.created_at}
@@ -942,20 +943,22 @@ async def update_lecturer_me(
 
 @app.post("/students/register")
 async def register_student(
-    student_number: str = Form(...), full_name: str = Form(...), email: str = Form(...),
+    username: Optional[str] = Form(None), student_number: Optional[str] = Form(None), full_name: str = Form(...), email: str = Form(...),
     password: str = Form(...), confirm_password: str = Form(...), phone: str = Form(""),
     institution: str = Form(""), bio: str = Form(""), module_codes: str = Form(""), profile_image: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
-    student_number, email = student_number.strip().upper(), email.strip().lower()
-    if not student_number or not full_name.strip() or "@" not in email or len(password) < 8:
-        raise HTTPException(status_code=400, detail="Provide a student number, full name, valid email, and a password of at least 8 characters")
+    chosen_username, email = (username or student_number or "").strip().upper(), email.strip().lower()
+    if not re.fullmatch(r"[A-Z0-9][A-Z0-9._-]{2,39}", chosen_username):
+        raise HTTPException(status_code=400, detail="Choose a username with 3–40 letters, numbers, dots, underscores, or hyphens")
+    if not full_name.strip() or "@" not in email or len(password) < 8:
+        raise HTTPException(status_code=400, detail="Provide a full name, valid email, and a password of at least 8 characters")
     if password != confirm_password:
         raise HTTPException(status_code=400, detail="The password confirmation does not match")
-    if db.query(Student).filter((Student.student_number == student_number) | (Student.email == email)).first():
-        raise HTTPException(status_code=409, detail="A student profile already uses this student number or email")
+    if db.query(Student).filter((Student.student_number == chosen_username) | (Student.email == email)).first():
+        raise HTTPException(status_code=409, detail="An account already uses this username or email")
     image_url = upload_image_bytes(await profile_image.read(), folder="student_profiles") if profile_image and profile_image.filename else None
-    student = Student(student_number=student_number, full_name=full_name.strip(), email=email,
+    student = Student(student_number=chosen_username, full_name=full_name.strip(), email=email,
                       phone=phone.strip(), institution=institution.strip(), bio=bio.strip(), profile_image_url=image_url,
                       password_hash=_password_hash(password), approved=True, active=True,
                       created_at=datetime.utcnow().isoformat() + "Z")
@@ -970,13 +973,13 @@ def student_login(payload: StudentLogin, db: Session = Depends(get_db)):
     identifier = payload.identifier.strip()
     student = db.query(Student).filter((Student.student_number == identifier.upper()) | (Student.email == identifier.lower())).first()
     if not student:
-        raise HTTPException(status_code=401, detail="No student profile was found for this student number or email")
+        raise HTTPException(status_code=401, detail="No learner account was found for this username or email")
     if not _password_matches(payload.password, student.password_hash):
-        raise HTTPException(status_code=401, detail="Password does not match this student profile. Ask the administrator to reset it.")
+        raise HTTPException(status_code=401, detail="Password does not match this learner account. Ask the administrator to reset it.")
     if not student.active:
-        raise HTTPException(status_code=403, detail="This student profile is inactive")
+        raise HTTPException(status_code=403, detail="This learner account is inactive")
     if not student.approved:
-        raise HTTPException(status_code=403, detail="This student profile is not currently approved")
+        raise HTTPException(status_code=403, detail="This learner account is not currently approved")
     return {"token": _issue_student_token(student.id), "student": _student_profile(student)}
 
 
@@ -3107,7 +3110,7 @@ def _admin_account_record(account_type: str, account) -> dict:
         "created_at": account.created_at,
     }
     if account_type == "student":
-        base.update(student_number=account.student_number, institution=account.institution or "", bio=account.bio or "",
+        base.update(username=account.student_number, student_number=account.student_number, institution=account.institution or "", bio=account.bio or "",
                     module_codes=[item.module_code for item in account.modules])
     elif account_type == "lecturer":
         base.update(institution=account.institution or "", bio=account.bio or "", module_limit=account.module_limit,
@@ -3130,7 +3133,7 @@ def _admin_account_query(db: Session, account_type: str):
 @app.get("/admin/accounts")
 def admin_list_all_accounts(_pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
     rows = []
-    for account_type, model in (("student", Student), ("lecturer", Lecturer), ("provider", Landlord), ("src", SrcPresident)):
+    for account_type, model in (("student", Student), ("lecturer", Lecturer), ("provider", Landlord)):
         rows.extend(_admin_account_record(account_type, item) for item in db.query(model).all())
     return sorted(rows, key=lambda item: item.get("created_at") or "", reverse=True)
 
@@ -3168,10 +3171,10 @@ def admin_update_any_account(account_type: str, account_id: int, payload: AdminU
     if account_type == "student":
         if payload.student_number is not None:
             number = payload.student_number.strip().upper()
-            if not number:
-                raise HTTPException(status_code=400, detail="Student number cannot be empty")
+            if not re.fullmatch(r"[A-Z0-9][A-Z0-9._-]{2,39}", number):
+                raise HTTPException(status_code=400, detail="Choose a username with 3–40 letters, numbers, dots, underscores, or hyphens")
             if db.query(Student).filter(Student.student_number == number, Student.id != account.id).first():
-                raise HTTPException(status_code=409, detail="Another student already uses that student number")
+                raise HTTPException(status_code=409, detail="Another learner already uses that username")
             account.student_number = number
         if payload.institution is not None: account.institution = payload.institution.strip()[:200]
         if payload.bio is not None: account.bio = payload.bio.strip()
@@ -3297,11 +3300,13 @@ def admin_list_students(_pin_ok: bool = Depends(require_lecturer_pin), db: Sessi
 
 @app.post("/admin/students")
 def admin_create_student(payload: AdminStudentCreate, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
-    number, email = payload.student_number.strip().upper(), payload.email.strip().lower()
-    if not number or not payload.full_name.strip() or "@" not in email or len(payload.password) < 8:
-        raise HTTPException(status_code=400, detail="Provide a student number, full name, valid email, and a password of at least 8 characters")
+    number, email = (payload.username or payload.student_number or "").strip().upper(), payload.email.strip().lower()
+    if not re.fullmatch(r"[A-Z0-9][A-Z0-9._-]{2,39}", number):
+        raise HTTPException(status_code=400, detail="Choose a username with 3–40 letters, numbers, dots, underscores, or hyphens")
+    if not payload.full_name.strip() or "@" not in email or len(payload.password) < 8:
+        raise HTTPException(status_code=400, detail="Provide a full name, valid email, and a password of at least 8 characters")
     if db.query(Student).filter((Student.student_number == number) | (Student.email == email)).first():
-        raise HTTPException(status_code=409, detail="A student profile already uses this student number or email")
+        raise HTTPException(status_code=409, detail="A learner account already uses this username or email")
     student = Student(student_number=number, full_name=payload.full_name.strip(), email=email,
                       password_hash=_password_hash(payload.password), approved=payload.approved,
                       active=payload.active, created_at=datetime.utcnow().isoformat() + "Z")
@@ -3564,7 +3569,7 @@ def student_message_lecturers(student: Student = Depends(require_student_account
 @app.get("/lecturer/message-students")
 def lecturer_message_students(lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db)):
     assigned = {item.module_code for item in lecturer.modules}
-    return [{"id": item.id, "full_name": item.full_name, "student_number": item.student_number,
+    return [{"id": item.id, "full_name": item.full_name, "username": item.student_number, "student_number": item.student_number,
              "module_codes": [module.module_code for module in item.modules if module.module_code in assigned]}
             for item in db.query(Student).join(StudentModule).filter(Student.approved.is_(True), Student.active.is_(True), StudentModule.module_code.in_(assigned)).distinct().order_by(Student.full_name).all()] if assigned else []
 
@@ -3573,7 +3578,7 @@ def lecturer_message_students(lecturer: Lecturer = Depends(require_lecturer_acco
 def lecturer_students(lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db)):
     assigned = {item.module_code for item in lecturer.modules}
     rows = db.query(Student).join(StudentModule).filter(Student.approved.is_(True), Student.active.is_(True), StudentModule.module_code.in_(assigned)).distinct().order_by(Student.full_name).all()
-    return [{"id": item.id, "full_name": item.full_name, "student_number": item.student_number,
+    return [{"id": item.id, "full_name": item.full_name, "username": item.student_number, "student_number": item.student_number,
              "module_codes": [module.module_code for module in item.modules if module.module_code in assigned]} for item in rows]
 
 
@@ -5490,7 +5495,7 @@ FRONTEND_PAGES = {
     "/lecturers/lessons": "lessons_lecturer.html",
     "/live": "live_lesson.html",
     "/community": "fun.html",
-    "/src": "comrade.html",
+    "/src": "index.html",
     "/market": "marketing.html",
     "/admin": "admin.html",
     "/tools/pdf": "pdf_tools.html",

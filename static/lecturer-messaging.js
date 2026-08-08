@@ -8,9 +8,9 @@
     if (!response.ok) throw new Error(data.detail || 'Could not complete that request'); return data;
   };
   const time = value => { try { return new Intl.DateTimeFormat('en-ZA',{dateStyle:'medium',timeStyle:'short',timeZone:'Africa/Johannesburg'}).format(new Date(value)); } catch (_) { return value; } };
-  card.innerHTML = `<div class="admin-editor-heading"><div><span class="kicker">Student support</span><h2>Messages</h2></div><button class="btn secondary" id="refreshLecturerSupport" type="button">Refresh</button></div>
+  card.innerHTML = `<div class="admin-editor-heading"><div><span class="kicker">Learner support</span><h2>Messages</h2></div><button class="btn secondary" id="refreshLecturerSupport" type="button">Refresh</button></div>
     <div class="message-mode" role="tablist"><button class="active" type="button" data-message-mode="individual">Individual</button><button type="button" data-message-mode="module">Module group</button></div>
-    <div id="individualMessagePane"><label for="lecturerSupportStudent">Student</label><select id="lecturerSupportStudent"></select></div>
+    <div id="individualMessagePane"><label for="lecturerSupportStudent">Learner</label><select id="lecturerSupportStudent"></select></div>
     <div id="moduleMessagePane" class="hidden"><label for="lecturerSupportModule">Assigned module</label><select id="lecturerSupportModule"></select><p class="muted">Every active student enrolled in this module will receive a private copy.</p></div>
     <label for="lecturerSupportText">Message</label><textarea id="lecturerSupportText" maxlength="2000" placeholder="Write a clear message"></textarea>
     <div class="message-compose-actions"><button class="btn" id="sendLecturerSupport" type="button">Send message</button><span id="lecturerSupportMsg" aria-live="polite"></span></div>

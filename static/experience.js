@@ -7,7 +7,6 @@
     '/static/lessons_lecturer.html': '/lecturers/lessons',
     '/static/live_lesson.html': '/live',
     '/static/fun.html': '/community',
-    '/static/comrade.html': '/src',
     '/static/marketing.html': '/market',
     '/static/admin.html': '/admin',
     '/static/pdf_tools.html': '/tools/pdf',
@@ -56,7 +55,7 @@
     ['/static/lessons_student.html', 'Lessons'], ['/static/live_lesson.html', 'Live'],
     ['/static/fun.html', 'Community'],
   ] : [
-    ['/static/index.html', 'Home'], ['/static/student.html', 'Students'],
+    ['/static/index.html', 'Home'], ['/static/student.html', 'Learners'],
     ['/static/lecturer.html', 'Lecturers'], ['/static/marketing.html', 'Market'],
   ];
   const moreLinks = activeRole === 'admin' ? [
@@ -64,11 +63,10 @@
     ['/static/admin.html#adminModeration','Moderation'], ['/static/trust.html#support','Support'],
   ] : activeRole === 'lecturer' ? [
     ['/static/pdf_tools.html', 'PDF tools'], ['/static/fun.html', 'Community'],
-    ['/static/comrade.html', 'SRC'], ['/static/marketing.html', 'Market'],
+    ['/static/marketing.html', 'Market'],
   ] : activeRole === 'student' ? [
-    ['/static/comrade.html', 'SRC'], ['/static/marketing.html', 'Market'],
-    ['/static/pdf_tools.html', 'PDF tools'],
-  ] : [['/static/fun.html', 'Community'], ['/static/comrade.html', 'SRC']];
+    ['/static/marketing.html', 'Market'], ['/static/pdf_tools.html', 'PDF tools'],
+  ] : [['/static/fun.html', 'Community']];
   function toggleMobileMenu(open) {
     let sheet=document.querySelector('.mobile-more-sheet'),scrim=document.querySelector('.mobile-more-scrim');
     if(!sheet){scrim=document.createElement('button');scrim.type='button';scrim.className='mobile-more-scrim';scrim.setAttribute('aria-label','Close menu');sheet=document.createElement('section');sheet.className='mobile-more-sheet';sheet.setAttribute('aria-label','More navigation');const all=[...moreLinks];if(activeRole!=='public')all.push([activeRole==='admin'?'/static/admin.html':activeRole==='lecturer'?'/static/lecturer.html':'/static/student.html',activeRole==='admin'?'Administration overview':'Profile & settings'],['/static/trust.html#support','Help & support']);sheet.innerHTML='<div class="mobile-sheet-handle"></div><div class="mobile-sheet-head"><strong>More</strong><button type="button" aria-label="Close menu">×</button></div><nav></nav>';const list=sheet.querySelector('nav');all.forEach(([href,label])=>{const a=document.createElement('a');a.href=href;a.textContent=label;list.appendChild(a)});if(activeRole!=='public'){const signout=document.createElement('button');signout.type='button';signout.className='mobile-signout';signout.textContent=activeRole==='admin'?'Lock administration':'Sign out';signout.addEventListener('click',()=>{sessionStorage.removeItem(activeSessionKey);sessionStorage.removeItem('activeRole');location.href=activeRole==='admin'?'/static/admin.html':'/static/index.html'});list.appendChild(signout)}document.body.append(scrim,sheet);scrim.addEventListener('click',()=>toggleMobileMenu(false));sheet.querySelector('.mobile-sheet-head button').addEventListener('click',()=>toggleMobileMenu(false))}
@@ -101,7 +99,7 @@
       profile.addEventListener('click', () => {
         const existing = document.querySelector('.account-sheet'); if (existing) { existing.remove(); return; }
         const sheet=document.createElement('div'); sheet.className='account-sheet';
-        sheet.innerHTML=`<strong>${activeRole==='admin'?'Administrator':activeRole==='lecturer'?'Lecturer':'Student'} account</strong><a href="${activeRole==='admin'?'/static/admin.html':activeRole==='lecturer'?'/static/lecturer.html':'/static/student.html'}">${activeRole==='admin'?'Administration overview':'Profile & settings'}</a><a href="/static/trust.html#support">Help & support</a><button type="button">${activeRole==='admin'?'Lock administration':'Sign out'}</button>`;
+        sheet.innerHTML=`<strong>${activeRole==='admin'?'Administrator':activeRole==='lecturer'?'Lecturer':'Learner'} account</strong><a href="${activeRole==='admin'?'/static/admin.html':activeRole==='lecturer'?'/static/lecturer.html':'/static/student.html'}">${activeRole==='admin'?'Administration overview':'Profile & settings'}</a><a href="/static/trust.html#support">Help & support</a><button type="button">${activeRole==='admin'?'Lock administration':'Sign out'}</button>`;
         sheet.querySelector('button').addEventListener('click',()=>{sessionStorage.removeItem(activeSessionKey);sessionStorage.removeItem('activeRole');location.href=activeRole==='admin'?'/static/admin.html':'/static/index.html'});
         document.body.appendChild(sheet);
       });
@@ -118,7 +116,7 @@
       const profileHeader=activeRole==='student'?{'X-Student-Token':studentToken}:{'X-Lecturer-Token':lecturerToken};
       fetch(profileEndpoint,{headers:profileHeader}).then(response=>response.ok?response.json():null).then(profile=>{if(profile?.profile_image_url)avatar.src=profile.profile_image_url;avatarButton.dataset.accountName=profile?.full_name||''}).catch(()=>{});
       const openProfileEditor=()=>{const editor=document.getElementById(activeRole==='student'?'studentProfileCard':'profileCard');if(!editor){location.href=activeRole==='student'?'/static/student.html#edit-profile':'/static/lecturer.html#edit-profile';return}editor.classList.remove('hidden');history.replaceState(history.state,'',`${location.pathname}${location.search}#edit-profile`);requestAnimationFrame(()=>editor.scrollIntoView({behavior:'smooth',block:'start'}))};
-      avatarButton.addEventListener('click',event=>{event.stopPropagation();const existing=document.querySelector('.account-sheet');if(existing){existing.remove();return}const sheet=document.createElement('div');sheet.className='account-sheet';sheet.setAttribute('role','menu');sheet.innerHTML='<strong></strong><button class="account-edit-profile" type="button">Edit profile</button><a href="/static/trust.html#support">Help & support</a><button class="account-signout" type="button">Sign out</button>';sheet.querySelector('strong').textContent=avatarButton.dataset.accountName||`${activeRole==='lecturer'?'Lecturer':'Student'} account`;sheet.querySelector('.account-edit-profile').addEventListener('click',()=>{sheet.remove();openProfileEditor()});sheet.querySelector('.account-signout').addEventListener('click',()=>{sessionStorage.removeItem(activeSessionKey);sessionStorage.removeItem('activeRole');location.href='/static/index.html'});document.body.appendChild(sheet)});
+      avatarButton.addEventListener('click',event=>{event.stopPropagation();const existing=document.querySelector('.account-sheet');if(existing){existing.remove();return}const sheet=document.createElement('div');sheet.className='account-sheet';sheet.setAttribute('role','menu');sheet.innerHTML='<strong></strong><button class="account-edit-profile" type="button">Edit profile</button><a href="/static/trust.html#support">Help & support</a><button class="account-signout" type="button">Sign out</button>';sheet.querySelector('strong').textContent=avatarButton.dataset.accountName||`${activeRole==='lecturer'?'Lecturer':'Learner'} account`;sheet.querySelector('.account-edit-profile').addEventListener('click',()=>{sheet.remove();openProfileEditor()});sheet.querySelector('.account-signout').addEventListener('click',()=>{sessionStorage.removeItem(activeSessionKey);sessionStorage.removeItem('activeRole');location.href='/static/index.html'});document.body.appendChild(sheet)});
       document.addEventListener('click',event=>{const sheet=document.querySelector('.account-sheet');if(sheet&&!sheet.contains(event.target)&&!avatarButton.contains(event.target))sheet.remove()});
       if(location.hash==='#edit-profile')requestAnimationFrame(openProfileEditor);
     }
