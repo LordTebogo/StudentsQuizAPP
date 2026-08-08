@@ -172,24 +172,34 @@
       </form></div><div id="advertMessage"></div><div id="myAdvertList" class="manage-list"></div>`;
     side.appendChild(desk);
     const wrap = desk.querySelector('#advertFormWrap');
+    const advertDialog = document.createElement('dialog');
+    advertDialog.id = 'advertCreateDialog'; advertDialog.className = 'market-auth-dialog advert-create-dialog';
+    advertDialog.innerHTML = `<div class="market-auth-step advert-create-step"><button class="provider-auth-close" type="button" aria-label="Close advert form">&times;</button><span class="market-kicker">Campus promotion</span><h2>Create an advert</h2><p>Add your campaign details and submit it for administrator review.</p><div id="advertCreateHost"></div><div id="advertDialogMessage"></div></div>`;
+    document.body.appendChild(advertDialog);
+    advertDialog.querySelector('#advertCreateHost').appendChild(wrap);
+    const closeAdvertDialog = () => { if (advertDialog.open) advertDialog.close(); else advertDialog.removeAttribute('open'); };
+    advertDialog.querySelector('.provider-auth-close').addEventListener('click', closeAdvertDialog);
+    advertDialog.addEventListener('click', event => { if (event.target === advertDialog) closeAdvertDialog(); });
     const open = () => {
       if (!studentToken() && !landlordToken()) {
         showMarketAuthDialog({afterAuth:'advert'}); return;
       }
-      wrap.classList.remove('hidden'); desk.querySelector('#openAdvertForm').classList.add('hidden');
+      wrap.classList.remove('hidden');
+      advertDialog.querySelector('#advertDialogMessage').innerHTML = '';
+      if (typeof advertDialog.showModal === 'function') advertDialog.showModal(); else advertDialog.setAttribute('open', '');
     };
     desk.querySelector('#openAdvertForm').addEventListener('click', open);
-    desk.querySelector('#cancelAdvertForm').addEventListener('click', () => { wrap.classList.add('hidden'); desk.querySelector('#openAdvertForm').classList.remove('hidden'); });
-    document.addEventListener('click', event => { if (event.target.closest('.promote-trigger')) { event.preventDefault(); if(event.target.closest('.transport-promote'))desk.querySelector('[name="category"]').value='Ride & transport'; desk.scrollIntoView({behavior:'smooth'}); open(); } });
-    desk.querySelector('#advertForm').addEventListener('submit', async event => {
-      event.preventDefault(); const message = desk.querySelector('#advertMessage'); message.textContent = 'Submitting advert…';
+    advertDialog.querySelector('#cancelAdvertForm').addEventListener('click', closeAdvertDialog);
+    document.addEventListener('click', event => { if (event.target.closest('.promote-trigger')) { event.preventDefault(); if(event.target.closest('.transport-promote'))advertDialog.querySelector('[name="category"]').value='Ride & transport'; desk.scrollIntoView({behavior:'smooth'}); open(); } });
+    advertDialog.querySelector('#advertForm').addEventListener('submit', async event => {
+      event.preventDefault(); const message = advertDialog.querySelector('#advertDialogMessage'); message.textContent = 'Submitting advert…';
       try {
         const result = await api('/marketing/adverts', {method:'POST', headers:authHeaders(), body:new FormData(event.target)});
-        message.innerHTML = `<div class="success">${esc(result.message)}. You can track it below.</div>`;
-        event.target.reset(); wrap.classList.add('hidden'); desk.querySelector('#openAdvertForm').classList.remove('hidden'); await loadMyAds();
+        desk.querySelector('#advertMessage').innerHTML = `<div class="success">${esc(result.message)}. You can track it below.</div>`;
+        event.target.reset(); closeAdvertDialog(); await loadMyAds();
       } catch (error) { message.innerHTML = `<div class="error">${esc(error.message)}</div>`; }
     });
-    const advertImages=desk.querySelector('[name="images"]');advertImages.addEventListener('change',()=>{const category=desk.querySelector('[name="category"]').value,transport=/transport|ride|taxi|uber|shuttle|courier|delivery/i.test(category),limit=transport?2:1;if(advertImages.files.length>limit){alert(`Choose no more than ${limit} image${limit===1?'':'s'} for this service.`);advertImages.value=''}});
+    const advertImages=advertDialog.querySelector('[name="images"]');advertImages.addEventListener('change',()=>{const category=advertDialog.querySelector('[name="category"]').value,transport=/transport|ride|taxi|uber|shuttle|courier|delivery/i.test(category),limit=transport?2:1;if(advertImages.files.length>limit){alert(`Choose no more than ${limit} image${limit===1?'':'s'} for this service.`);advertImages.value=''}});
     loadMyAds();
   }
   async function loadMyAds() {

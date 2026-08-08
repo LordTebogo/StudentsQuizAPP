@@ -1,0 +1,32 @@
+.advert-create-dialog {
+  width: min(640px, calc(100% - 28px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+}
+
+.advert-create-dialog textarea {
+  width: 100%;
+  min-height: 120px;
+  margin: 6px 0 10px;
+  box-sizing: border-box;
+}
+
+.advert-create-dialog #advertFormWrap,
+.advert-create-dialog #advertForm {
+  width: 100%;
+}
+
+.advert-create-dialog #advertDialogMessage {
+  margin-top: 10px;
+}
+
+@media (max-width: 560px) {
+  .advert-create-dialog {
+    width: calc(100% - 18px);
+    max-height: calc(100dvh - 18px);
+  }
+
+  .advert-create-step {
+    padding: 20px 16px;
+  }
+}
