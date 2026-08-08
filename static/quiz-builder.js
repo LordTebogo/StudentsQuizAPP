@@ -15,19 +15,22 @@
   const html = value => String(value ?? '').replace(/[&<>]/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[character]));
   const attr = value => String(value ?? '').replace(/[&<>"']/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]));
   const mathSymbols = [
-    ['√','Square root'], ['∛','Cube root'], ['⁄','Fraction slash'], ['²','Squared'], ['³','Cubed'], ['ⁿ','Power'],
-    ['₁','Subscript one'], ['₂','Subscript two'], ['ₙ','Subscript n'], ['±','Plus or minus'], ['×','Multiply'], ['÷','Divide'],
-    ['=','Equals'], ['≠','Not equal'], ['≈','Approximately'], ['<','Less than'], ['>','Greater than'], ['≤','Less than or equal'], ['≥','Greater than or equal'],
-    ['∞','Infinity'], ['∑','Summation'], ['∏','Product'], ['∫','Integral'], ['∮','Contour integral'], ['∂','Partial derivative'], ['∇','Nabla'],
-    ['½','One half'], ['⅓','One third'], ['¼','One quarter'], ['|x|','Absolute value'], ['d/dx','Derivative'], ['∂/∂x','Partial derivative notation'],
-    ['lim','Limit'], ['sin','Sine'], ['cos','Cosine'], ['tan','Tangent'], ['log','Logarithm'], ['ln','Natural logarithm'],
-    ['π','Pi'], ['θ','Theta'], ['α','Alpha'], ['β','Beta'], ['γ','Gamma'], ['Δ','Delta'], ['λ','Lambda'], ['μ','Mu'], ['σ','Sigma'], ['Ω','Omega'],
-    ['→','Approaches'], ['∈','Element of'], ['∉','Not an element of'], ['⊂','Subset'], ['∪','Union'], ['∩','Intersection'], ['ℝ','Real numbers'], ['ℕ','Natural numbers'],
-    ['°','Degrees'], ['′','Prime'], ['″','Double prime'], ['·','Dot product']
+    ['√','\\sqrt{#0}','Square root'], ['ⁿ√','\\sqrt[#0]{#?}','Nth root'], ['a⁄b','\\frac{#0}{#?}','Fraction'],
+    ['x²','#0^{2}','Square'], ['xⁿ','#0^{#?}','Power'], ['xₙ','#0_{#?}','Subscript'], ['|x|','\\left|#0\\right|','Absolute value'],
+    ['()','\\left(#0\\right)','Brackets'], ['∫','\\int_{#0}^{#?}\\,','Definite integral'], ['∮','\\oint_{#0}^{#?}\\,','Contour integral'],
+    ['d/dx','\\frac{d}{dx}\\left(#0\\right)','Derivative'], ['∂/∂x','\\frac{\\partial}{\\partial x}\\left(#0\\right)','Partial derivative'],
+    ['lim','\\lim_{#0\\to#?}','Limit'], ['Σ','\\sum_{#0}^{#?}','Summation'], ['Π','\\prod_{#0}^{#?}','Product'],
+    ['∞','\\infty','Infinity'], ['sin','\\sin\\left(#0\\right)','Sine'], ['cos','\\cos\\left(#0\\right)','Cosine'],
+    ['tan','\\tan\\left(#0\\right)','Tangent'], ['log','\\log_{#0}\\left(#?\\right)','Logarithm'], ['ln','\\ln\\left(#0\\right)','Natural logarithm'],
+    ['π','\\pi','Pi'], ['θ','\\theta','Theta'], ['α','\\alpha','Alpha'], ['β','\\beta','Beta'], ['γ','\\gamma','Gamma'],
+    ['±','\\pm','Plus or minus'], ['≠','\\ne','Not equal'], ['≤','\\le','Less than or equal'], ['≥','\\ge','Greater than or equal'],
+    ['≈','\\approx','Approximately'], ['→','\\to','Approaches'], ['∈','\\in','Element of'], ['ℝ','\\mathbb{R}','Real numbers'],
+    ['ℕ','\\mathbb{N}','Natural numbers'], ['∇','\\nabla','Nabla'], ['Δ','\\Delta','Delta'], ['Text','\\text{#0}\\,','Insert upright text']
   ];
+  const looksLikeLatex = value => /\\[A-Za-z]+|[_^]\s*\{/.test(String(value || ''));
 
-  function mathToolsMarkup() {
-    return `<div class="builder-math-tools"><button class="math-tool-toggle" type="button" data-math-toggle aria-expanded="false">+ Math symbols</button><span class="math-tool-help">Select the question, an option, or the correct answer first.</span><div class="builder-math-toolbar hidden" role="toolbar" aria-label="Mathematical symbols">${mathSymbols.map(([symbol,label])=>`<button type="button" data-math-symbol="${attr(symbol)}" title="${attr(label)}" aria-label="${attr(label)}">${html(symbol)}</button>`).join('')}</div></div>`;
+  function mathToolsMarkup(question) {
+    return `<math-field class="builder-question-math ${question.mathMode ? '' : 'hidden'}" data-field="question" aria-label="Mathematical question" virtual-keyboard-mode="manual" smart-fence placeholder="Write the mathematical question">${html(question.question)}</math-field><div class="builder-math-tools"><button class="math-tool-toggle" type="button" data-math-mode aria-pressed="${question.mathMode}">${question.mathMode ? 'Aa Use text editor' : 'ƒx Use math editor'}</button><span class="math-tool-help">Roots, fractions, powers, sums and integrals contain editable slots. Use arrow keys to move between them.</span><div class="builder-math-toolbar ${question.mathMode ? '' : 'hidden'}" role="toolbar" aria-label="Mathematical structures">${mathSymbols.map(([label,latex,title])=>`<button type="button" data-math-insert="${attr(latex)}" title="${attr(title)}" aria-label="${attr(title)}">${html(label)}</button>`).join('')}</div></div>`;
   }
 
   function installMathTools() {
@@ -36,13 +39,20 @@
     container.querySelectorAll('.question-editor').forEach(editor => {
       if (editor.querySelector('.builder-math-tools')) return;
       const questionInput = editor.querySelector('textarea[data-field="question"]');
-      questionInput?.insertAdjacentHTML('afterend', mathToolsMarkup());
+      const question = state.questions.find(item => item.key === editor.dataset.key);
+      if (!question || !questionInput) return;
+      questionInput.insertAdjacentHTML('afterend', mathToolsMarkup(question));
+      questionInput.classList.toggle('hidden', question.mathMode);
+      const mathField = editor.querySelector('.builder-question-math');
+      customElements.whenDefined('math-field').then(() => {
+        if (mathField.isConnected && !mathField.value) mathField.value = question.question;
+      });
     });
   }
 
   function blankQuestion(type = 'mcq') {
     return {
-      key: uid(), type, question: '', marks: 1,
+      key: uid(), type, question: '', mathMode: false, marks: 1,
       options: type === 'mcq' ? ['', ''] : [],
       correctIndex: -1, correct_answer: '', image_url: '', file: null,
     };
@@ -57,6 +67,7 @@
       key: uid(),
       type,
       question: String(question.question || ''),
+      mathMode: Boolean(question.mathMode || question.math_mode || looksLikeLatex(question.question)),
       marks: Number(question.marks) > 0 ? Number(question.marks) : 1,
       options,
       correctIndex: type === 'mcq' && correctAnswer ? options.findIndex(option => option === correctAnswer) : -1,
@@ -313,6 +324,13 @@
     state.previewUrls = [];
   }
 
+  function renderedQuestionMath(value) {
+    const text = String(value || '');
+    return looksLikeLatex(text)
+      ? `<math-field class="quiz-authored-math" read-only aria-label="Mathematical expression">${html(text)}</math-field>`
+      : html(text);
+  }
+
   function previewQuiz() {
     const errors = validateQuiz();
     if (errors.length) { showBuilderMessage(errors.slice(0, 6).join(' • '), 'error'); return; }
@@ -322,8 +340,8 @@
     byId('quizPreviewQuestions').innerHTML = state.questions.map((question, index) => {
       let imageSource = question.image_url;
       if (question.file) { imageSource = URL.createObjectURL(question.file); state.previewUrls.push(imageSource); }
-      const answers = question.type === 'mcq' ? question.options.filter(option => option.trim()).map(option => `<label class="quiz-preview-option"><input type="radio" disabled> ${html(option)}</label>`).join('') : question.type === 'short' ? '<input type="text" disabled placeholder="Student short answer">' : '<textarea disabled placeholder="Student long answer"></textarea>';
-      return `<article class="quiz-preview-question"><header><strong>Question ${index + 1}</strong><span class="qmarks">${question.marks} mark${Number(question.marks) === 1 ? '' : 's'}</span></header><p>${html(question.question)}</p>${imageSource ? `<img src="${attr(imageSource)}" alt="Question image">` : ''}${answers}</article>`;
+      const answers = question.type === 'mcq' ? question.options.filter(option => option.trim()).map(option => `<label class="quiz-preview-option"><input type="radio" disabled> ${renderedQuestionMath(option)}</label>`).join('') : question.type === 'short' ? '<input type="text" disabled placeholder="Student short answer">' : '<textarea disabled placeholder="Student long answer"></textarea>';
+      return `<article class="quiz-preview-question"><header><strong>Question ${index + 1}</strong><span class="qmarks">${question.marks} mark${Number(question.marks) === 1 ? '' : 's'}</span></header><p>${renderedQuestionMath(question.question)}</p>${imageSource ? `<img src="${attr(imageSource)}" alt="Question image">` : ''}${answers}</article>`;
     }).join('');
     const dialog = byId('quizPreviewDialog');
     if (dialog.showModal) dialog.showModal(); else dialog.setAttribute('open', '');
@@ -380,7 +398,7 @@
   });
 
   root.addEventListener('focusin', event => {
-    if (!event.target.matches('textarea[data-field="question"], input[data-option-index], input[data-field="correct_answer"]')) return;
+    if (!event.target.matches('textarea[data-field="question"], math-field[data-field="question"], input[data-option-index], input[data-field="correct_answer"]')) return;
     const editor = event.target.closest('.question-editor');
     editor?.querySelectorAll('.math-entry-active').forEach(field => field.classList.remove('math-entry-active'));
     event.target.classList.add('math-entry-active');
@@ -398,24 +416,45 @@
     if (question && event.target.matches('[data-image-file]') && event.target.files.length) { question.file = event.target.files[0]; question.image_url = ''; renderQuestions(); setDirty(true); }
   });
 
-  root.addEventListener('click', event => {
-    const mathToggle = event.target.closest('[data-math-toggle]');
-    if (mathToggle) {
-      const toolbar = mathToggle.closest('.builder-math-tools').querySelector('.builder-math-toolbar');
-      const open = !toolbar.classList.toggle('hidden');
-      mathToggle.setAttribute('aria-expanded', String(open));
-      mathToggle.textContent = open ? 'Hide math symbols' : '+ Math symbols';
+  root.addEventListener('click', async event => {
+    const mathModeButton = event.target.closest('[data-math-mode]');
+    if (mathModeButton) {
+      const editor = mathModeButton.closest('.question-editor');
+      const question = questionFor(mathModeButton);
+      const textarea = editor.querySelector('textarea[data-field="question"]');
+      const mathField = editor.querySelector('math-field[data-field="question"]');
+      const toolbar = editor.querySelector('.builder-math-toolbar');
+      await customElements.whenDefined('math-field');
+      question.mathMode = !question.mathMode;
+      if (question.mathMode) {
+        mathField.value = textarea.value;
+        textarea.classList.add('hidden');
+        mathField.classList.remove('hidden');
+        toolbar.classList.remove('hidden');
+        mathModeButton.textContent = 'Aa Use text editor';
+        mathModeButton.setAttribute('aria-pressed', 'true');
+        mathField.focus();
+      } else {
+        textarea.value = mathField.value;
+        question.question = mathField.value;
+        mathField.classList.add('hidden');
+        textarea.classList.remove('hidden');
+        toolbar.classList.add('hidden');
+        mathModeButton.textContent = 'ƒx Use math editor';
+        mathModeButton.setAttribute('aria-pressed', 'false');
+        textarea.focus();
+      }
+      setDirty(true);
       return;
     }
-    const mathButton = event.target.closest('[data-math-symbol]');
+    const mathButton = event.target.closest('[data-math-insert]');
     if (mathButton) {
       const editor = mathButton.closest('.question-editor');
-      const target = editor.querySelector('.math-entry-active') || editor.querySelector('textarea[data-field="question"]');
-      const start = Number.isInteger(target.selectionStart) ? target.selectionStart : target.value.length;
-      const end = Number.isInteger(target.selectionEnd) ? target.selectionEnd : start;
-      target.setRangeText(mathButton.dataset.mathSymbol, start, end, 'end');
-      target.dispatchEvent(new Event('input', {bubbles:true}));
-      target.focus();
+      const mathField = editor.querySelector('math-field[data-field="question"]');
+      await customElements.whenDefined('math-field');
+      mathField.focus();
+      mathField.executeCommand(['insert', mathButton.dataset.mathInsert, {insertionMode:'replaceSelection'}]);
+      mathField.dispatchEvent(new Event('input', {bubbles:true}));
       return;
     }
     const button = event.target.closest('[data-action]');
