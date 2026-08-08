@@ -19,6 +19,15 @@
   font-size: 1.18rem;
   line-height: 1.65;
   box-sizing: border-box;
+  overflow-x: auto;
+  color-scheme: dark;
+  --caret-color: #67e8f9;
+  --selection-background-color: #155e75;
+  --selection-color: #ffffff;
+  --contains-highlight-background-color: rgba(34, 211, 238, .2);
+  --placeholder-color: #8190aa;
+  --smart-fence-color: #67e8f9;
+  --smart-fence-opacity: 1;
 }
 
 .builder-question-math:focus-within {
