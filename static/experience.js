@@ -25,6 +25,7 @@
   const body = document.body;
   if (!body) return;
   body.classList.add('nucleocampus-ui');
+  document.querySelectorAll('#appWrap .profile-strip').forEach(strip => strip.closest('.card')?.classList.add('hidden'));
   document.querySelectorAll('.brand').forEach(brand => {
     brand.innerHTML = 'Nucleo<span>Campus</span>';
     brand.setAttribute('aria-label', 'NucleoCampus');
@@ -95,7 +96,7 @@
     more.querySelector('summary').addEventListener('click',event=>{if(matchMedia('(max-width:820px)').matches){event.preventDefault();more.removeAttribute('open');toggleMobileMenu(true)}});
     const menu = more.querySelector('.nav-more-menu');
     moreLinks.forEach(([href, label]) => { const link=document.createElement('a'); link.href=href; link.textContent=label; menu.appendChild(link); });
-    if (activeRole !== 'public') {
+    if (activeRole === 'admin') {
       const profile = document.createElement('button'); profile.type='button'; profile.className='nav-profile-button'; profile.textContent='Profile';
       profile.addEventListener('click', () => {
         const existing = document.querySelector('.account-sheet'); if (existing) { existing.remove(); return; }
@@ -107,6 +108,20 @@
       menu.appendChild(profile);
     }
     nav.appendChild(more);
+    if ((activeRole === 'student' || activeRole === 'lecturer') && nav.closest('#appWrap')) {
+      const avatarButton=document.createElement('button');avatarButton.type='button';avatarButton.className='nav-account-avatar';avatarButton.setAttribute('aria-label','Open profile menu');avatarButton.setAttribute('aria-haspopup','menu');
+      const avatar=document.createElement('img');avatar.src='/branding/logo';avatar.alt='';avatarButton.appendChild(avatar);nav.appendChild(avatarButton);
+      const sourceImage=document.getElementById(activeRole==='student'?'studentImage':'profileImage');
+      const syncAvatar=()=>{if(sourceImage?.getAttribute('src'))avatar.src=sourceImage.src};syncAvatar();
+      if(sourceImage)new MutationObserver(syncAvatar).observe(sourceImage,{attributes:true,attributeFilter:['src']});
+      const profileEndpoint=activeRole==='student'?'/student/me':'/lecturer/me';
+      const profileHeader=activeRole==='student'?{'X-Student-Token':studentToken}:{'X-Lecturer-Token':lecturerToken};
+      fetch(profileEndpoint,{headers:profileHeader}).then(response=>response.ok?response.json():null).then(profile=>{if(profile?.profile_image_url)avatar.src=profile.profile_image_url;avatarButton.dataset.accountName=profile?.full_name||''}).catch(()=>{});
+      const openProfileEditor=()=>{const editor=document.getElementById(activeRole==='student'?'studentProfileCard':'profileCard');if(!editor){location.href=activeRole==='student'?'/static/student.html#edit-profile':'/static/lecturer.html#edit-profile';return}editor.classList.remove('hidden');history.replaceState(history.state,'',`${location.pathname}${location.search}#edit-profile`);requestAnimationFrame(()=>editor.scrollIntoView({behavior:'smooth',block:'start'}))};
+      avatarButton.addEventListener('click',event=>{event.stopPropagation();const existing=document.querySelector('.account-sheet');if(existing){existing.remove();return}const sheet=document.createElement('div');sheet.className='account-sheet';sheet.setAttribute('role','menu');sheet.innerHTML='<strong></strong><button class="account-edit-profile" type="button">Edit profile</button><a href="/static/trust.html#support">Help & support</a><button class="account-signout" type="button">Sign out</button>';sheet.querySelector('strong').textContent=avatarButton.dataset.accountName||`${activeRole==='lecturer'?'Lecturer':'Student'} account`;sheet.querySelector('.account-edit-profile').addEventListener('click',()=>{sheet.remove();openProfileEditor()});sheet.querySelector('.account-signout').addEventListener('click',()=>{sessionStorage.removeItem(activeSessionKey);sessionStorage.removeItem('activeRole');location.href='/static/index.html'});document.body.appendChild(sheet)});
+      document.addEventListener('click',event=>{const sheet=document.querySelector('.account-sheet');if(sheet&&!sheet.contains(event.target)&&!avatarButton.contains(event.target))sheet.remove()});
+      if(location.hash==='#edit-profile')requestAnimationFrame(openProfileEditor);
+    }
   });
 
   if (activeRole !== 'public' && !document.querySelector('.mobile-tabbar')) {
