@@ -173,6 +173,29 @@ def ensure_quiz_module_code():
 ensure_quiz_module_code()
 
 
+def ensure_fun_quiz_schema():
+    """Add fun-quiz fields without disturbing quizzes created before this feature."""
+    inspector = inspect(engine)
+    quiz_columns = {column["name"] for column in inspector.get_columns("quizzes")}
+    question_columns = {column["name"] for column in inspector.get_columns("questions")}
+    draft_columns = {column["name"] for column in inspector.get_columns("lecturer_quiz_drafts")}
+    with engine.begin() as conn:
+        if "is_fun" not in quiz_columns:
+            conn.execute(text("ALTER TABLE quizzes ADD COLUMN is_fun BOOLEAN DEFAULT FALSE"))
+        if "fun_level" not in quiz_columns:
+            conn.execute(text("ALTER TABLE quizzes ADD COLUMN fun_level VARCHAR(32) DEFAULT 'starter'"))
+        for column_name in ("explanation", "similar_question", "similar_options_json", "similar_correct_answer"):
+            if column_name not in question_columns:
+                conn.execute(text(f"ALTER TABLE questions ADD COLUMN {column_name} TEXT"))
+        if "is_fun" not in draft_columns:
+            conn.execute(text("ALTER TABLE lecturer_quiz_drafts ADD COLUMN is_fun BOOLEAN DEFAULT FALSE"))
+        if "fun_level" not in draft_columns:
+            conn.execute(text("ALTER TABLE lecturer_quiz_drafts ADD COLUMN fun_level VARCHAR(32) DEFAULT 'starter'"))
+
+
+ensure_fun_quiz_schema()
+
+
 def ensure_lecturer_ownership_schema():
     """Add ownership columns to installations created before lecturer accounts."""
     for table in ("quizzes", "lessons"):
@@ -486,12 +509,23 @@ class AdminQuestionInput(BaseModel):
     correct_answer: Optional[str] = None
     marks: float = 1
     image_url: Optional[str] = None
+    explanation: Optional[str] = None
+    similar_question: Optional[str] = None
+    similar_options: Optional[List[str]] = None
+    similar_correct_answer: Optional[str] = None
 
 
 class AdminQuizInput(BaseModel):
     title: str
     module_code: str = "GENERAL"
+    is_fun: bool = False
+    fun_level: str = "starter"
     questions: List[AdminQuestionInput]
+
+
+class FunQuizCheckInput(BaseModel):
+    answer: str = ""
+    similar: bool = False
 
 
 class AdminLessonInput(BaseModel):
@@ -1406,6 +1440,8 @@ def _lecturer_draft_payload(draft: LecturerQuizDraft) -> dict:
         "id": draft.id,
         "title": draft.title,
         "module_code": draft.module_code,
+        "is_fun": bool(draft.is_fun),
+        "fun_level": draft.fun_level or "starter",
         "questions": questions,
         "created_at": draft.created_at,
         "updated_at": draft.updated_at,
@@ -1434,6 +1470,8 @@ def lecturer_quiz_drafts(
             "id": draft.id,
             "title": draft.title,
             "module_code": draft.module_code,
+            "is_fun": bool(draft.is_fun),
+            "fun_level": draft.fun_level or "starter",
             "question_count": len(draft_payload["questions"]),
             "updated_at": draft.updated_at,
         })
@@ -1467,6 +1505,8 @@ def lecturer_create_quiz_draft(
         lecturer_id=lecturer.id,
         title=payload.title.strip() or "Untitled quiz",
         module_code=module_code,
+        is_fun=payload.is_fun,
+        fun_level=payload.fun_level if payload.fun_level in ("starter", "explorer", "challenger", "expert", "genius") else "starter",
         questions_json=_draft_questions_json(payload.questions),
         created_at=now,
         updated_at=now,
@@ -1492,6 +1532,8 @@ def lecturer_update_quiz_draft(
         raise HTTPException(status_code=404, detail="Quiz draft not found")
     draft.title = payload.title.strip() or "Untitled quiz"
     draft.module_code = _require_module_access(db, lecturer, payload.module_code) if payload.module_code.strip() else ""
+    draft.is_fun = payload.is_fun
+    draft.fun_level = payload.fun_level if payload.fun_level in ("starter", "explorer", "challenger", "expert", "genius") else "starter"
     draft.questions_json = _draft_questions_json(payload.questions)
     draft.updated_at = datetime.utcnow().isoformat() + "Z"
     db.commit()
@@ -1559,6 +1601,8 @@ def lecturer_get_quiz_for_builder(
         "id": quiz.id,
         "title": quiz.title,
         "module_code": quiz.module_code,
+        "is_fun": bool(quiz.is_fun),
+        "fun_level": quiz.fun_level or "starter",
         "questions": [_admin_question_dict(question) for question in quiz.questions],
     }
 
@@ -1604,7 +1648,11 @@ async def upload_quiz(
         raise HTTPException(status_code=400, detail="Quiz JSON must include a 'questions' list")
 
     module_code = _require_module_access(db, lecturer, module_code)
-    quiz = Quiz(title=title, module_code=module_code, lecturer_id=lecturer.id, created_at=datetime.utcnow().isoformat() + "Z")
+    is_fun = bool(data.get("is_fun", False))
+    fun_level = str(data.get("fun_level", "starter")).lower()
+    if fun_level not in ("starter", "explorer", "challenger", "expert", "genius"):
+        fun_level = "starter"
+    quiz = Quiz(title=title, module_code=module_code, lecturer_id=lecturer.id, is_fun=is_fun, fun_level=fun_level, created_at=datetime.utcnow().isoformat() + "Z")
     db.add(quiz)
     db.flush()  # assigns quiz.id without committing yet
 
@@ -1623,6 +1671,8 @@ async def upload_quiz(
         q_type = q.get("type")
         if q_type not in ("mcq", "short", "long"):
             raise HTTPException(status_code=400, detail=f"Invalid question type: {q_type}")
+        if is_fun and q_type == "long":
+            raise HTTPException(status_code=400, detail=f"Question {order + 1}: fun quizzes support multiple-choice and short answers only")
 
         question_text = q.get("question")
         marks = q.get("marks", 1)
@@ -1635,6 +1685,16 @@ async def upload_quiz(
             raise HTTPException(status_code=400, detail=f"{q_type} questions must include an 'answer'")
         if q_type == "short" and len(short_answer_words(answer)) > 2:
             raise HTTPException(status_code=400, detail=f"Question {order + 1}: short-answer keys can contain a maximum of two words")
+        explanation = str(q.get("explanation") or "").strip()
+        similar_question = str(q.get("similar_question") or "").strip()
+        similar_answer = str(q.get("similar_correct_answer") or "").strip()
+        similar_options = q.get("similar_options") if q_type == "mcq" else None
+        if is_fun and (not explanation or not similar_question or not similar_answer):
+            raise HTTPException(status_code=400, detail=f"Question {order + 1}: add an explanation, a similar question, and its correct answer")
+        if is_fun and q_type == "mcq" and (not similar_options or len(similar_options) < 2 or similar_answer not in similar_options):
+            raise HTTPException(status_code=400, detail=f"Question {order + 1}: the similar multiple-choice question needs options and a selected correct answer")
+        if is_fun and q_type == "short" and len(short_answer_words(similar_answer)) > 2:
+            raise HTTPException(status_code=400, detail=f"Question {order + 1}: the similar short-answer key can contain a maximum of two words")
 
         image_url = resolve_question_image(
             q.get("image"), uploaded_bytes_by_name, resolved_cache,
@@ -1650,6 +1710,10 @@ async def upload_quiz(
             correct_answer=answer,
             marks=marks,
             image_url=image_url,
+            explanation=explanation or None,
+            similar_question=similar_question or None,
+            similar_options_json=json.dumps(similar_options) if similar_options else None,
+            similar_correct_answer=similar_answer or None,
         ))
 
     db.commit()
@@ -1678,7 +1742,7 @@ async def upload_quiz(
 @app.get("/quizzes")
 def list_quizzes(lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db)):
     rows = db.query(Quiz).filter(Quiz.lecturer_id == lecturer.id).order_by(Quiz.id.desc()).all()
-    return [{"id": r.id, "title": r.title, "module_code": r.module_code, "created_at": r.created_at} for r in rows]
+    return [{"id": r.id, "title": r.title, "module_code": r.module_code, "is_fun": bool(r.is_fun), "fun_level": r.fun_level or "starter", "created_at": r.created_at} for r in rows]
 
 
 @app.get("/quiz-modules")
@@ -1709,7 +1773,7 @@ def update_student_modules(payload: ModuleSelection, student: Student = Depends(
 @app.get("/quizzes/by-module/{module_code}")
 def list_quizzes_by_module(module_code: str, db: Session = Depends(get_db)):
     rows = (db.query(Quiz).filter(Quiz.module_code == module_code.strip().upper()).order_by(Quiz.id.desc()).all())
-    return [{"id": q.id, "title": q.title, "module_code": q.module_code, "created_at": q.created_at} for q in rows]
+    return [{"id": q.id, "title": q.title, "module_code": q.module_code, "is_fun": bool(q.is_fun), "fun_level": q.fun_level or "starter", "created_at": q.created_at} for q in rows]
 
 
 @app.get("/student/quizzes/by-module/{module_code}")
@@ -1741,6 +1805,8 @@ def list_student_quizzes_by_module(
             "id": quiz.id,
             "title": quiz.title,
             "module_code": quiz.module_code,
+            "is_fun": bool(quiz.is_fun),
+            "fun_level": quiz.fun_level or "starter",
             "created_at": quiz.created_at,
             "completed": submission is not None,
             "submission_id": submission.id if submission else None,
@@ -1774,7 +1840,59 @@ def get_quiz(quiz_id: int, db: Session = Depends(get_db)):
             item["options"] = json.loads(q.options_json)
         out_questions.append(item)
 
-    return {"quiz_id": quiz.id, "title": quiz.title, "module_code": quiz.module_code, "questions": out_questions}
+    return {
+        "quiz_id": quiz.id,
+        "title": quiz.title,
+        "module_code": quiz.module_code,
+        "is_fun": bool(quiz.is_fun),
+        "fun_level": quiz.fun_level or "starter",
+        "questions": out_questions,
+    }
+
+
+def _fun_question_or_404(db: Session, quiz_id: int, question_id: int) -> tuple[Quiz, Question]:
+    quiz = db.query(Quiz).filter(Quiz.id == quiz_id, Quiz.is_fun.is_(True)).first()
+    question = db.query(Question).filter(Question.id == question_id, Question.quiz_id == quiz_id).first()
+    if not quiz or not question:
+        raise HTTPException(status_code=404, detail="Fun quiz question not found")
+    if question.type not in ("mcq", "short"):
+        raise HTTPException(status_code=400, detail="This question cannot be checked instantly")
+    return quiz, question
+
+
+@app.post("/student/fun-quiz/{quiz_id}/question/{question_id}/check")
+def check_fun_quiz_answer(
+    quiz_id: int,
+    question_id: int,
+    payload: FunQuizCheckInput,
+    _student: Student = Depends(require_student_account),
+    db: Session = Depends(get_db),
+):
+    _quiz, question = _fun_question_or_404(db, quiz_id, question_id)
+    expected = question.similar_correct_answer if payload.similar else question.correct_answer
+    if question.type == "short":
+        correct = short_answer_matches(expected, payload.answer)
+    else:
+        correct = normalize(expected) == normalize(payload.answer)
+    return {"correct": correct}
+
+
+@app.get("/student/fun-quiz/{quiz_id}/question/{question_id}/answer")
+def reveal_fun_quiz_answer(
+    quiz_id: int,
+    question_id: int,
+    similar: bool = False,
+    _student: Student = Depends(require_student_account),
+    db: Session = Depends(get_db),
+):
+    _quiz, question = _fun_question_or_404(db, quiz_id, question_id)
+    return {
+        "correct_answer": (question.similar_correct_answer if similar else question.correct_answer) or "",
+        "explanation": question.explanation or "The lecturer has not added an explanation yet.",
+        "similar_question": "" if similar else (question.similar_question or ""),
+        "similar_options": [] if similar else (json.loads(question.similar_options_json) if question.similar_options_json else []),
+        "has_similar": False if similar else bool(question.similar_question and question.similar_correct_answer),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -2790,7 +2908,7 @@ def delete_lesson_comment(
 # never be used without the PIN dependency.
 # ---------------------------------------------------------------------------
 
-def _validate_admin_questions(questions: List[AdminQuestionInput]):
+def _validate_admin_questions(questions: List[AdminQuestionInput], is_fun: bool = False):
     if not questions:
         raise HTTPException(status_code=400, detail="Add at least one question")
     for index, question in enumerate(questions, start=1):
@@ -2806,6 +2924,17 @@ def _validate_admin_questions(questions: List[AdminQuestionInput]):
             raise HTTPException(status_code=400, detail=f"Question {index}: a correct answer is required")
         if question.type == "short" and len(short_answer_words(question.correct_answer)) > 2:
             raise HTTPException(status_code=400, detail=f"Question {index}: a short-answer key can contain a maximum of two words")
+        if is_fun:
+            if question.type == "long":
+                raise HTTPException(status_code=400, detail=f"Question {index}: fun quizzes support multiple-choice and short answers only")
+            if not (question.explanation or "").strip():
+                raise HTTPException(status_code=400, detail=f"Question {index}: add the answer explanation")
+            if not (question.similar_question or "").strip() or not (question.similar_correct_answer or "").strip():
+                raise HTTPException(status_code=400, detail=f"Question {index}: add a similar question and its correct answer")
+            if question.type == "mcq" and (not question.similar_options or question.similar_correct_answer not in question.similar_options):
+                raise HTTPException(status_code=400, detail=f"Question {index}: add similar-question options and select the correct one")
+            if question.type == "short" and len(short_answer_words(question.similar_correct_answer)) > 2:
+                raise HTTPException(status_code=400, detail=f"Question {index}: the similar short-answer key can contain a maximum of two words")
 
 
 def _admin_question_dict(question):
@@ -2817,6 +2946,10 @@ def _admin_question_dict(question):
         "correct_answer": question.correct_answer or "",
         "marks": question.marks,
         "image_url": question.image_url or "",
+        "explanation": getattr(question, "explanation", None) or "",
+        "similar_question": getattr(question, "similar_question", None) or "",
+        "similar_options": json.loads(getattr(question, "similar_options_json", None)) if getattr(question, "similar_options_json", None) else [],
+        "similar_correct_answer": getattr(question, "similar_correct_answer", None) or "",
     }
 
 
@@ -2828,6 +2961,10 @@ def _add_quiz_questions(db: Session, quiz_id: int, questions: List[AdminQuestion
             options_json=json.dumps(question.options) if question.type == "mcq" else None,
             correct_answer=question.correct_answer.strip() if question.type in ("mcq", "short") else None,
             marks=question.marks, image_url=(question.image_url or "").strip() or None,
+            explanation=(question.explanation or "").strip() or None,
+            similar_question=(question.similar_question or "").strip() or None,
+            similar_options_json=json.dumps(question.similar_options) if question.similar_options else None,
+            similar_correct_answer=(question.similar_correct_answer or "").strip() or None,
         ))
 
 
@@ -2845,7 +2982,7 @@ def _add_lesson_questions(db: Session, lesson_id: int, questions: List[AdminQues
 @app.get("/admin/quizzes")
 def admin_list_quizzes(_pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
     rows = db.query(Quiz).order_by(Quiz.id.desc()).all()
-    return [{"id": q.id, "title": q.title, "module_code": q.module_code, "created_at": q.created_at, "question_count": len(q.questions), "submission_count": len(q.submissions)} for q in rows]
+    return [{"id": q.id, "title": q.title, "module_code": q.module_code, "is_fun": bool(q.is_fun), "fun_level": q.fun_level or "starter", "created_at": q.created_at, "question_count": len(q.questions), "submission_count": len(q.submissions)} for q in rows]
 
 
 @app.get("/admin/quizzes/{quiz_id}")
@@ -2853,15 +2990,15 @@ def admin_get_quiz(quiz_id: int, _pin_ok: bool = Depends(require_lecturer_pin), 
     quiz = db.query(Quiz).filter(Quiz.id == quiz_id).first()
     if not quiz:
         raise HTTPException(status_code=404, detail="Quiz not found")
-    return {"id": quiz.id, "title": quiz.title, "module_code": quiz.module_code, "created_at": quiz.created_at, "questions": [_admin_question_dict(q) for q in quiz.questions], "submission_count": len(quiz.submissions)}
+    return {"id": quiz.id, "title": quiz.title, "module_code": quiz.module_code, "is_fun": bool(quiz.is_fun), "fun_level": quiz.fun_level or "starter", "created_at": quiz.created_at, "questions": [_admin_question_dict(q) for q in quiz.questions], "submission_count": len(quiz.submissions)}
 
 
 @app.post("/admin/quizzes")
 def admin_create_quiz(payload: AdminQuizInput, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
-    _validate_admin_questions(payload.questions)
+    _validate_admin_questions(payload.questions, payload.is_fun)
     if not payload.title.strip():
         raise HTTPException(status_code=400, detail="Quiz title is required")
-    quiz = Quiz(title=payload.title.strip(), module_code=payload.module_code.strip().upper() or "GENERAL", created_at=datetime.utcnow().isoformat() + "Z")
+    quiz = Quiz(title=payload.title.strip(), module_code=payload.module_code.strip().upper() or "GENERAL", is_fun=payload.is_fun, fun_level=payload.fun_level, created_at=datetime.utcnow().isoformat() + "Z")
     db.add(quiz)
     db.flush()
     _add_quiz_questions(db, quiz.id, payload.questions)
@@ -2876,11 +3013,13 @@ def admin_update_quiz(quiz_id: int, payload: AdminQuizInput, _pin_ok: bool = Dep
         raise HTTPException(status_code=404, detail="Quiz not found")
     if quiz.submissions:
         raise HTTPException(status_code=409, detail="This quiz has submissions and cannot be changed. Create a new version instead.")
-    _validate_admin_questions(payload.questions)
+    _validate_admin_questions(payload.questions, payload.is_fun)
     if not payload.title.strip():
         raise HTTPException(status_code=400, detail="Quiz title is required")
     quiz.title = payload.title.strip()
     quiz.module_code = payload.module_code.strip().upper() or "GENERAL"
+    quiz.is_fun = payload.is_fun
+    quiz.fun_level = payload.fun_level
     for question in list(quiz.questions):
         db.delete(question)
     db.flush()

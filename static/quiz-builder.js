@@ -55,6 +55,9 @@
       key: uid(), type, question: '', mathMode: false, marks: 1,
       options: type === 'mcq' ? ['', ''] : [],
       correctIndex: -1, correct_answer: '', image_url: '', file: null,
+      explanation: '', similar_question: '',
+      similar_options: type === 'mcq' ? ['', ''] : [],
+      similarCorrectIndex: -1, similar_correct_answer: '',
     };
   }
 
@@ -63,6 +66,9 @@
     const options = type === 'mcq' ? [...(question.options || [])].map(String) : [];
     while (type === 'mcq' && options.length < 2) options.push('');
     const correctAnswer = String(question.correct_answer ?? question.answer ?? '');
+    const similarOptions = type === 'mcq' ? [...(question.similar_options || [])].map(String) : [];
+    while (type === 'mcq' && similarOptions.length < 2) similarOptions.push('');
+    const similarAnswer = String(question.similar_correct_answer || '');
     return {
       key: uid(),
       type,
@@ -74,6 +80,11 @@
       correct_answer: type === 'short' ? correctAnswer : '',
       image_url: String(question.image_url || question.image || ''),
       file: null,
+      explanation: String(question.explanation || ''),
+      similar_question: String(question.similar_question || ''),
+      similar_options: similarOptions,
+      similarCorrectIndex: type === 'mcq' && similarAnswer ? similarOptions.findIndex(option => option === similarAnswer) : -1,
+      similar_correct_answer: type === 'short' ? similarAnswer : '',
     };
   }
 
@@ -91,6 +102,12 @@
       correct_answer: currentCorrectAnswer(question),
       marks: Number(question.marks) || 0,
       image_url: String(question.image_url || '').trim(),
+      explanation: String(question.explanation || '').trim(),
+      similar_question: String(question.similar_question || '').trim(),
+      similar_options: question.type === 'mcq' ? question.similar_options.map(option => String(option).trim()).filter(Boolean) : [],
+      similar_correct_answer: question.type === 'mcq'
+        ? String(question.similar_options[question.similarCorrectIndex] || '').trim()
+        : String(question.similar_correct_answer || '').trim(),
     };
   }
 
@@ -126,6 +143,14 @@
     return '<div class="question-type-fields"><p class="muted">Students write a longer response. This question will wait for manual lecturer marking.</p></div>';
   }
 
+  function funFields(question) {
+    if (!byId('builderIsFun').checked) return '';
+    const similarAnswer = question.type === 'mcq'
+      ? `<label>Similar answer options — select the correct one</label><div class="question-options">${question.similar_options.map((option, index) => `<div class="question-option"><input type="radio" name="similar-correct-${attr(question.key)}" data-similar-correct-index="${index}" aria-label="Mark similar option ${index + 1} as correct" ${question.similarCorrectIndex === index ? 'checked' : ''}><input type="text" data-similar-option-index="${index}" value="${attr(option)}" placeholder="Similar option ${String.fromCharCode(65 + index)}"><button class="option-remove" type="button" data-action="remove-similar-option" data-index="${index}">Remove</button></div>`).join('')}</div><button class="btn secondary" type="button" data-action="add-similar-option">+ Add similar option</button>`
+      : `<label>Correct answer for the similar question</label><input type="text" data-field="similar_correct_answer" value="${attr(question.similar_correct_answer)}" placeholder="One or two words">`;
+    return `<section class="fun-question-fields"><h4>Fun Quiz feedback</h4><label>Explanation shown after viewing the answer</label><textarea data-field="explanation" placeholder="Explain why the answer is correct in a friendly, helpful way">${html(question.explanation)}</textarea><label>Try another similar question</label><textarea data-field="similar_question" placeholder="Write a different question that tests the same idea">${html(question.similar_question)}</textarea>${similarAnswer}</section>`;
+  }
+
   function imageFields(question) {
     const selected = question.file ? question.file.name : question.image_url;
     const preview = question.image_url ? `<img src="${attr(question.image_url)}" alt="Question image preview">` : '';
@@ -139,7 +164,7 @@
       updateSummary();
       return;
     }
-    container.innerHTML = state.questions.map((question, index) => `<article class="question-editor" data-key="${attr(question.key)}"><div class="question-editor-head"><div class="question-number"><span>${index + 1}</span>Question ${index + 1}</div><div class="question-actions"><button type="button" data-action="move-up" ${index === 0 ? 'disabled' : ''}>↑ Up</button><button type="button" data-action="move-down" ${index === state.questions.length - 1 ? 'disabled' : ''}>↓ Down</button><button type="button" data-action="duplicate">Duplicate</button><button type="button" data-action="delete">Delete</button></div></div><div class="question-editor-grid"><div><label>Question type</label><select data-field="type"><option value="mcq" ${question.type === 'mcq' ? 'selected' : ''}>Multiple choice</option><option value="short" ${question.type === 'short' ? 'selected' : ''}>Short answer</option><option value="long" ${question.type === 'long' ? 'selected' : ''}>Long answer</option></select></div><div><label>Marks</label><input type="number" min="0.5" step="0.5" data-field="marks" value="${attr(question.marks)}"></div></div><label>Question</label><textarea data-field="question" placeholder="Write the question students will see">${html(question.question)}</textarea>${typeFields(question)}${imageFields(question)}</article>`).join('');
+    container.innerHTML = state.questions.map((question, index) => `<article class="question-editor" data-key="${attr(question.key)}"><div class="question-editor-head"><div class="question-number"><span>${index + 1}</span>Question ${index + 1}</div><div class="question-actions"><button type="button" data-action="move-up" ${index === 0 ? 'disabled' : ''}>↑ Up</button><button type="button" data-action="move-down" ${index === state.questions.length - 1 ? 'disabled' : ''}>↓ Down</button><button type="button" data-action="duplicate">Duplicate</button><button type="button" data-action="delete">Delete</button></div></div><div class="question-editor-grid"><div><label>Question type</label><select data-field="type"><option value="mcq" ${question.type === 'mcq' ? 'selected' : ''}>Multiple choice</option><option value="short" ${question.type === 'short' ? 'selected' : ''}>Short answer</option><option value="long" ${question.type === 'long' ? 'selected' : ''} ${byId('builderIsFun').checked ? 'disabled' : ''}>Long answer</option></select></div><div><label>Marks</label><input type="number" min="0.5" step="0.5" data-field="marks" value="${attr(question.marks)}"></div></div><label>Question</label><textarea data-field="question" placeholder="Write the question students will see">${html(question.question)}</textarea>${typeFields(question)}${funFields(question)}${imageFields(question)}</article>`).join('');
     updateSummary();
   }
 
@@ -184,6 +209,8 @@
     return {
       title: byId('builderQuizTitle').value.trim() || 'Untitled quiz',
       module_code: byId('builderModuleCode').value,
+      is_fun: byId('builderIsFun').checked,
+      fun_level: byId('builderFunLevel').value,
       questions: state.questions.map(questionPayload),
     };
   }
@@ -230,6 +257,9 @@
       state.draftId = draft.id;
       byId('builderQuizTitle').value = draft.title;
       populateModuleSelect(byId('builderModuleCode'), draft.module_code);
+      byId('builderIsFun').checked = Boolean(draft.is_fun);
+      byId('builderFunLevel').value = draft.fun_level || 'starter';
+      byId('funQuizLevelField').classList.toggle('hidden', !draft.is_fun);
       replaceQuestions(draft.questions);
       setDirty(false);
       byId('quizDraftStatus').textContent = `Loaded ${formatSAST(draft.updated_at)}`;
@@ -254,6 +284,9 @@
     state.draftId = null;
     state.dirty = false;
     byId('builderQuizTitle').value = '';
+    byId('builderIsFun').checked = false;
+    byId('builderFunLevel').value = 'starter';
+    byId('funQuizLevelField').classList.add('hidden');
     populateModuleSelect(byId('builderModuleCode'), state.modules[0] || '');
     byId('quizDraftSelect').value = '';
     byId('quizDraftStatus').textContent = 'New unsaved quiz';
@@ -272,6 +305,9 @@
       state.draftId = null;
       byId('builderQuizTitle').value = `${quiz.title} — copy`;
       populateModuleSelect(byId('builderModuleCode'), quiz.module_code);
+      byId('builderIsFun').checked = Boolean(quiz.is_fun);
+      byId('builderFunLevel').value = quiz.fun_level || 'starter';
+      byId('funQuizLevelField').classList.toggle('hidden', !quiz.is_fun);
       replaceQuestions(quiz.questions);
       setDirty(true);
       showBuilderMessage('Quiz copied into the builder. Review it, then save as a draft or publish.');
@@ -299,6 +335,7 @@
 
   function validateQuiz() {
     const errors = [];
+    const isFun = byId('builderIsFun').checked;
     if (!byId('builderQuizTitle').value.trim()) errors.push('Enter a quiz title');
     if (!byId('builderModuleCode').value) errors.push('Choose an assigned module');
     if (!state.questions.length) errors.push('Add at least one question');
@@ -314,6 +351,14 @@
       if (question.type === 'short') {
         if (!payload.correct_answer) errors.push(`${label}: enter the correct short answer`);
         else if (payload.correct_answer.split(/\s+/).filter(Boolean).length > 2) errors.push(`${label}: the short-answer key can contain at most two words`);
+      }
+      if (isFun) {
+        if (question.type === 'long') errors.push(`${label}: fun quizzes cannot use long answers`);
+        if (!payload.explanation) errors.push(`${label}: add the answer explanation`);
+        if (!payload.similar_question) errors.push(`${label}: add a similar question`);
+        if (!payload.similar_correct_answer) errors.push(`${label}: select or enter the similar question's correct answer`);
+        if (question.type === 'mcq' && payload.similar_options.length < 2) errors.push(`${label}: add at least two similar-question options`);
+        if (question.type === 'short' && payload.similar_correct_answer.split(/\s+/).filter(Boolean).length > 2) errors.push(`${label}: the similar short-answer key can contain at most two words`);
       }
     });
     return errors;
@@ -336,12 +381,13 @@
     if (errors.length) { showBuilderMessage(errors.slice(0, 6).join(' • '), 'error'); return; }
     clearPreviewUrls();
     byId('quizPreviewTitle').textContent = byId('builderQuizTitle').value.trim();
-    byId('quizPreviewMeta').textContent = `${byId('builderModuleCode').value} · ${state.questions.length} questions · ${byId('builderTotalMarks').textContent}`;
+    byId('quizPreviewMeta').textContent = `${byId('builderModuleCode').value} · ${state.questions.length} questions · ${byId('builderTotalMarks').textContent}${byId('builderIsFun').checked ? ` · Fun Quiz: ${byId('builderFunLevel').value}` : ''}`;
     byId('quizPreviewQuestions').innerHTML = state.questions.map((question, index) => {
       let imageSource = question.image_url;
       if (question.file) { imageSource = URL.createObjectURL(question.file); state.previewUrls.push(imageSource); }
       const answers = question.type === 'mcq' ? question.options.filter(option => option.trim()).map(option => `<label class="quiz-preview-option"><input type="radio" disabled> ${renderedQuestionMath(option)}</label>`).join('') : question.type === 'short' ? '<input type="text" disabled placeholder="Student short answer">' : '<textarea disabled placeholder="Student long answer"></textarea>';
-      return `<article class="quiz-preview-question"><header><strong>Question ${index + 1}</strong><span class="qmarks">${question.marks} mark${Number(question.marks) === 1 ? '' : 's'}</span></header><p>${renderedQuestionMath(question.question)}</p>${imageSource ? `<img src="${attr(imageSource)}" alt="Question image">` : ''}${answers}</article>`;
+      const funPreview = byId('builderIsFun').checked ? `<div class="fun-question-fields"><strong>After an incorrect answer</strong><p>${html(question.explanation)}</p><strong>Similar question</strong><p>${renderedQuestionMath(question.similar_question)}</p></div>` : '';
+      return `<article class="quiz-preview-question"><header><strong>Question ${index + 1}</strong><span class="qmarks">${question.marks} mark${Number(question.marks) === 1 ? '' : 's'}</span></header><p>${renderedQuestionMath(question.question)}</p>${imageSource ? `<img src="${attr(imageSource)}" alt="Question image">` : ''}${answers}${funPreview}</article>`;
     }).join('');
     const dialog = byId('quizPreviewDialog');
     if (dialog.showModal) dialog.showModal(); else dialog.setAttribute('open', '');
@@ -358,6 +404,12 @@
         const result = {type: payload.type, question: payload.question, marks: payload.marks};
         if (payload.type === 'mcq') result.options = payload.options;
         if (payload.type === 'mcq' || payload.type === 'short') result.answer = payload.correct_answer;
+        if (byId('builderIsFun').checked) {
+          result.explanation = payload.explanation;
+          result.similar_question = payload.similar_question;
+          result.similar_options = payload.similar_options;
+          result.similar_correct_answer = payload.similar_correct_answer;
+        }
         if (question.file) {
           const extension = question.file.name.includes('.') ? question.file.name.slice(question.file.name.lastIndexOf('.')) : '';
           result.image = `builder-question-${index + 1}${extension}`;
@@ -365,7 +417,7 @@
         return result;
       });
       const form = new FormData();
-      const documentBody = {title: byId('builderQuizTitle').value.trim(), questions: legacyQuestions};
+      const documentBody = {title: byId('builderQuizTitle').value.trim(), is_fun: byId('builderIsFun').checked, fun_level: byId('builderFunLevel').value, questions: legacyQuestions};
       form.append('file', new Blob([JSON.stringify(documentBody)], {type:'application/json'}), 'quiz.json');
       form.append('module_code', byId('builderModuleCode').value);
       state.questions.forEach((question, index) => {
@@ -394,6 +446,7 @@
     const field = event.target.dataset.field;
     if (field && field !== 'type') question[field] = field === 'marks' ? Number(event.target.value) : event.target.value;
     if (event.target.dataset.optionIndex !== undefined) question.options[Number(event.target.dataset.optionIndex)] = event.target.value;
+    if (event.target.dataset.similarOptionIndex !== undefined) question.similar_options[Number(event.target.dataset.similarOptionIndex)] = event.target.value;
     setDirty(true); updateSummary();
   });
 
@@ -409,10 +462,13 @@
     if (question && event.target.dataset.field === 'type') {
       question.type = event.target.value;
       if (question.type === 'mcq' && question.options.length < 2) question.options = ['', ''];
+      if (question.type === 'mcq' && question.similar_options.length < 2) question.similar_options = ['', ''];
       if (question.type !== 'mcq') question.correctIndex = -1;
+      if (question.type !== 'mcq') question.similarCorrectIndex = -1;
       renderQuestions(); setDirty(true); return;
     }
     if (question && event.target.dataset.correctIndex !== undefined) { question.correctIndex = Number(event.target.dataset.correctIndex); setDirty(true); }
+    if (question && event.target.dataset.similarCorrectIndex !== undefined) { question.similarCorrectIndex = Number(event.target.dataset.similarCorrectIndex); setDirty(true); }
     if (question && event.target.matches('[data-image-file]') && event.target.files.length) { question.file = event.target.files[0]; question.image_url = ''; renderQuestions(); setDirty(true); }
   });
 
@@ -464,13 +520,19 @@
     const action = button.dataset.action;
     if (action === 'move-up' && index > 0) [state.questions[index - 1], state.questions[index]] = [state.questions[index], state.questions[index - 1]];
     if (action === 'move-down' && index < state.questions.length - 1) [state.questions[index + 1], state.questions[index]] = [state.questions[index], state.questions[index + 1]];
-    if (action === 'duplicate') state.questions.splice(index + 1, 0, {...question, key:uid(), options:[...question.options]});
+    if (action === 'duplicate') state.questions.splice(index + 1, 0, {...question, key:uid(), options:[...question.options], similar_options:[...question.similar_options]});
     if (action === 'delete') state.questions.splice(index, 1);
     if (action === 'add-option') question.options.push('');
+    if (action === 'add-similar-option') question.similar_options.push('');
     if (action === 'remove-option' && question.options.length > 2) {
       const optionIndex = Number(button.dataset.index); question.options.splice(optionIndex, 1);
       if (question.correctIndex === optionIndex) question.correctIndex = -1;
       else if (question.correctIndex > optionIndex) question.correctIndex -= 1;
+    }
+    if (action === 'remove-similar-option' && question.similar_options.length > 2) {
+      const optionIndex = Number(button.dataset.index); question.similar_options.splice(optionIndex, 1);
+      if (question.similarCorrectIndex === optionIndex) question.similarCorrectIndex = -1;
+      else if (question.similarCorrectIndex > optionIndex) question.similarCorrectIndex -= 1;
     }
     if (action === 'clear-image') { question.file = null; question.image_url = ''; }
     renderQuestions(); setDirty(true);
@@ -478,6 +540,12 @@
 
   byId('builderQuizTitle').addEventListener('input', () => setDirty(true));
   byId('builderModuleCode').addEventListener('change', event => { byId('moduleCode').value = event.target.value; setDirty(true); });
+  byId('builderIsFun').addEventListener('change', event => {
+    byId('funQuizLevelField').classList.toggle('hidden', !event.target.checked);
+    if (event.target.checked) state.questions.forEach(question => { if (question.type === 'long') question.type = 'short'; });
+    renderQuestions(); setDirty(true);
+  });
+  byId('builderFunLevel').addEventListener('change', () => setDirty(true));
   byId('newQuizBuilderBtn').addEventListener('click', () => newQuiz(true));
   byId('addQuestionBtn').addEventListener('click', () => { state.questions.push(blankQuestion()); renderQuestions(); setDirty(true); });
   byId('saveQuizDraftBtn').addEventListener('click', saveDraft);

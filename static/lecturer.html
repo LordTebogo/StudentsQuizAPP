@@ -85,6 +85,8 @@
     <div class="quiz-builder-meta">
       <div><label for="builderQuizTitle">Quiz title</label><input id="builderQuizTitle" type="text" maxlength="200" placeholder="e.g. Cell Biology: Week 1"></div>
       <div><label for="builderModuleCode">Assigned module</label><select id="builderModuleCode"><option value="">Loading assigned modules…</option></select></div>
+      <label class="fun-quiz-switch" for="builderIsFun"><input id="builderIsFun" type="checkbox"><span><strong>Make this a Fun Quiz</strong><small>One question at a time, spoken feedback, explanations and similar questions.</small></span></label>
+      <div id="funQuizLevelField" class="hidden"><label for="builderFunLevel">Fun Quiz level</label><select id="builderFunLevel"><option value="starter">1 · Starter</option><option value="explorer">2 · Explorer</option><option value="challenger">3 · Challenger</option><option value="expert">4 · Expert</option><option value="genius">5 · Genius</option></select></div>
     </div>
 
     <div class="quiz-builder-tools">
@@ -386,7 +388,7 @@ async function loadQuizzes() {
       $('quizReviewStatus').textContent = 'Upload a quiz before viewing student submissions.';
       return;
     }
-    select.innerHTML = quizzes.map(q => `<option value="${q.id}">${q.module_code} — ${q.title}</option>`).join('');
+    select.innerHTML = quizzes.map(q => `<option value="${q.id}">${q.module_code} — ${q.title}${q.is_fun ? ` · Fun Quiz (${q.fun_level})` : ''}</option>`).join('');
     if ([...select.options].some(option => option.value === selectedId)) select.value = selectedId;
     $('loadStudentsBtn').disabled = !select.value;
     $('quizReviewStatus').textContent = select.value ? 'Ready to load students who took the selected quiz.' : 'Choose a quiz, then load its student submissions.';

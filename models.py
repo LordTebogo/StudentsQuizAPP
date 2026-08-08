@@ -77,6 +77,8 @@ class LecturerQuizDraft(Base):
     title = Column(String, nullable=False)
     module_code = Column(String, nullable=False, default="")
     questions_json = Column(Text, nullable=False, default="[]")
+    is_fun = Column(Boolean, nullable=False, default=False)
+    fun_level = Column(String, nullable=False, default="starter")
     created_at = Column(String, nullable=False)
     updated_at = Column(String, nullable=False)
 
@@ -318,6 +320,8 @@ class Quiz(Base):
     title = Column(String, nullable=False)
     module_code = Column(String, nullable=False, default="GENERAL", index=True)
     lecturer_id = Column(Integer, ForeignKey("lecturers.id"), index=True)
+    is_fun = Column(Boolean, nullable=False, default=False)
+    fun_level = Column(String, nullable=False, default="starter")
     created_at = Column(String, nullable=False)  # ISO-8601 UTC string, e.g. "...Z"
 
     questions = relationship(
@@ -348,6 +352,10 @@ class Question(Base):
     correct_answer = Column(Text)        # used for mcq / short, NULL for long
     marks = Column(Float, nullable=False)
     image_url = Column(Text)             # Cloudinary (or other) URL, optional
+    explanation = Column(Text)
+    similar_question = Column(Text)
+    similar_options_json = Column(Text)
+    similar_correct_answer = Column(Text)
 
     quiz = relationship("Quiz", back_populates="questions")
     answers = relationship(
