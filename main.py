@@ -552,6 +552,23 @@ class AdminStudentCreate(BaseModel):
     active: bool = True
 
 
+class AdminUnifiedAccountUpdate(BaseModel):
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    active: Optional[bool] = None
+    approved: Optional[bool] = None
+    password: Optional[str] = None
+    student_number: Optional[str] = None
+    institution: Optional[str] = None
+    bio: Optional[str] = None
+    business_name: Optional[str] = None
+    provider_type: Optional[str] = None
+    party_name: Optional[str] = None
+    module_limit: Optional[int] = None
+    module_codes: Optional[List[str]] = None
+
+
 def _password_hash(password: str, salt: Optional[str] = None) -> str:
     salt = salt or secrets.token_hex(16)
     digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 210_000).hex()
@@ -2932,6 +2949,133 @@ def admin_delete_lesson(lesson_id: int, _pin_ok: bool = Depends(require_lecturer
     if not lesson:
         raise HTTPException(status_code=404, detail="Lesson not found")
     db.delete(lesson)
+    db.commit()
+    return {"ok": True}
+
+
+def _admin_account_record(account_type: str, account) -> dict:
+    base = {
+        "id": account.id,
+        "account_type": account_type,
+        "full_name": account.full_name,
+        "email": account.email,
+        "phone": account.phone or "",
+        "active": bool(account.active),
+        "approved": getattr(account, "approved", None),
+        "created_at": account.created_at,
+    }
+    if account_type == "student":
+        base.update(student_number=account.student_number, institution=account.institution or "", bio=account.bio or "",
+                    module_codes=[item.module_code for item in account.modules])
+    elif account_type == "lecturer":
+        base.update(institution=account.institution or "", bio=account.bio or "", module_limit=account.module_limit,
+                    module_codes=[item.module_code for item in account.modules])
+    elif account_type == "provider":
+        base.update(business_name=account.business_name or "", provider_type=account.provider_type or "other")
+    elif account_type == "src":
+        base.update(party_name=account.party_name)
+    return base
+
+
+def _admin_account_query(db: Session, account_type: str):
+    models = {"student": Student, "lecturer": Lecturer, "provider": Landlord, "src": SrcPresident}
+    model = models.get(account_type)
+    if not model:
+        raise HTTPException(status_code=404, detail="Account type not found")
+    return model
+
+
+@app.get("/admin/accounts")
+def admin_list_all_accounts(_pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    rows = []
+    for account_type, model in (("student", Student), ("lecturer", Lecturer), ("provider", Landlord), ("src", SrcPresident)):
+        rows.extend(_admin_account_record(account_type, item) for item in db.query(model).all())
+    return sorted(rows, key=lambda item: item.get("created_at") or "", reverse=True)
+
+
+@app.put("/admin/accounts/{account_type}/{account_id}")
+def admin_update_any_account(account_type: str, account_id: int, payload: AdminUnifiedAccountUpdate,
+                             _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    model = _admin_account_query(db, account_type)
+    account = db.query(model).filter(model.id == account_id).first()
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    if payload.full_name is not None:
+        if not payload.full_name.strip():
+            raise HTTPException(status_code=400, detail="Full name cannot be empty")
+        account.full_name = payload.full_name.strip()[:160]
+    if payload.email is not None:
+        email = payload.email.strip().lower()
+        if "@" not in email:
+            raise HTTPException(status_code=400, detail="Enter a valid email address")
+        if db.query(model).filter(model.email == email, model.id != account.id).first():
+            raise HTTPException(status_code=409, detail="Another account of this type already uses that email")
+        account.email = email
+    if payload.phone is not None:
+        account.phone = payload.phone.strip()[:60]
+    if payload.active is not None:
+        account.active = payload.active
+    if payload.approved is not None and hasattr(account, "approved"):
+        account.approved = payload.approved
+    if payload.password:
+        if len(payload.password) < 8:
+            raise HTTPException(status_code=400, detail="The new password must be at least 8 characters")
+        account.password_hash = _password_hash(payload.password)
+
+    if account_type == "student":
+        if payload.student_number is not None:
+            number = payload.student_number.strip().upper()
+            if not number:
+                raise HTTPException(status_code=400, detail="Student number cannot be empty")
+            if db.query(Student).filter(Student.student_number == number, Student.id != account.id).first():
+                raise HTTPException(status_code=409, detail="Another student already uses that student number")
+            account.student_number = number
+        if payload.institution is not None: account.institution = payload.institution.strip()[:200]
+        if payload.bio is not None: account.bio = payload.bio.strip()
+        if payload.module_codes is not None: _set_student_modules(db, account, payload.module_codes)
+    elif account_type == "lecturer":
+        if payload.institution is not None: account.institution = payload.institution.strip()[:200]
+        if payload.bio is not None: account.bio = payload.bio.strip()
+        next_limit = account.module_limit if payload.module_limit is None else payload.module_limit
+        if next_limit < 0:
+            raise HTTPException(status_code=400, detail="Module limit cannot be negative")
+        modules = payload.module_codes if payload.module_codes is not None else [item.module_code for item in account.modules]
+        _set_lecturer_modules(db, account, modules, next_limit)
+        account.module_limit = next_limit
+    elif account_type == "provider":
+        if payload.business_name is not None: account.business_name = payload.business_name.strip()[:160]
+        if payload.provider_type is not None:
+            if payload.provider_type not in {"residence", "transport", "sales", "other"}:
+                raise HTTPException(status_code=400, detail="Choose accommodation, transport, sales, or other")
+            account.provider_type = payload.provider_type
+    elif account_type == "src":
+        next_party = account.party_name if payload.party_name is None else payload.party_name.strip()
+        if not next_party:
+            raise HTTPException(status_code=400, detail="Party or organisation name cannot be empty")
+        if account.active and _active_src_party_exists(db, next_party, account.id):
+            raise HTTPException(status_code=409, detail="Another active SRC profile already represents this party")
+        account.party_name = next_party[:160]
+
+    db.commit()
+    db.refresh(account)
+    return _admin_account_record(account_type, account)
+
+
+@app.delete("/admin/accounts/{account_type}/{account_id}")
+def admin_delete_any_account(account_type: str, account_id: int, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    model = _admin_account_query(db, account_type)
+    account = db.query(model).filter(model.id == account_id).first()
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    if account_type == "lecturer" and (account.quizzes or account.lessons):
+        raise HTTPException(status_code=409, detail="This lecturer owns content. Reassign or delete that content before removing the account.")
+    if account_type == "src":
+        db.query(ComradePost).filter(ComradePost.src_president_id == account.id).update({ComradePost.src_president_id: None})
+    if account_type == "provider":
+        db.query(MarketAdvert).filter(MarketAdvert.owner_landlord_id == account.id).update({MarketAdvert.owner_landlord_id: None})
+        db.query(AccommodationComment).filter(AccommodationComment.author_landlord_id == account.id).update({AccommodationComment.author_landlord_id: None})
+    db.delete(account)
     db.commit()
     return {"ok": True}
 

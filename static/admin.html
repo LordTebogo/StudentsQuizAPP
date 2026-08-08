@@ -35,6 +35,11 @@
   .live-stat strong { display:block; color:#67e8f9; font-size:1.8rem; }
   .live-room-row { display:grid; grid-template-columns:minmax(120px,1fr) auto auto; gap:14px; align-items:center; padding:12px 14px; border:1px solid var(--border); border-radius:13px; margin:8px 0; }
   .live-room-row small { color:var(--muted); } @media(max-width:600px){.live-room-row{grid-template-columns:1fr 1fr}.live-room-row strong{grid-column:1/-1}}
+  .account-directory-editor { margin-top:18px; padding:18px; border:1px solid rgba(103,232,249,.32); border-radius:15px; background:rgba(5,12,30,.62); }
+  .account-directory-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 16px; }
+  .account-directory-fields .wide { grid-column:1/-1; }
+  .account-type-badge { display:inline-block; margin-right:7px; color:#67e8f9; font:700 .65rem var(--font-mono,monospace); letter-spacing:.06em; text-transform:uppercase; }
+  @media(max-width:700px){.account-directory-fields{grid-template-columns:1fr}.account-directory-fields .wide{grid-column:auto}}
 </style>
 </head>
 <body>
@@ -97,6 +102,35 @@
     <div id="srcPresidentAdminCard" class="hidden"><div id="srcPresidentMsg"></div></div>
   </section>
 
+  <section class="card" id="allAccountsCard">
+    <div class="admin-editor-heading"><div><span class="kicker">Read, update & delete</span><h2>All registered accounts</h2></div><button class="btn secondary" id="refreshAllAccountsBtn" type="button">Refresh</button></div>
+    <p class="muted">Manage every student, lecturer, SRC and marketplace account, including accommodation, transport, sales and other businesses.</p>
+    <div class="admin-list-tools"><label for="allAccountSearch">Search accounts<input id="allAccountSearch" type="search" placeholder="Name, email, business or identifier"></label><label for="allAccountType">Account type<select id="allAccountType"><option value="all">All accounts</option><option value="student">Students</option><option value="lecturer">Lecturers</option><option value="provider">Businesses and providers</option><option value="src">SRC presidents</option></select></label><label for="allAccountStatus">Status<select id="allAccountStatus"><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="unapproved">Not approved</option></select></label></div>
+    <div class="admin-page-head"><strong id="allAccountSummary">Accounts</strong></div>
+    <div id="allAccountList" class="admin-list"></div>
+    <div id="allAccountEditor" class="account-directory-editor hidden">
+      <div class="admin-editor-heading"><div><span class="kicker" id="allAccountRole">Account</span><h3 id="allAccountEditorTitle">Edit account</h3></div><button class="btn secondary" id="closeAllAccountEditorBtn" type="button">Close</button></div>
+      <div class="account-directory-fields">
+        <div><label for="allAccountName">Full name</label><input id="allAccountName" type="text"></div>
+        <div><label for="allAccountEmail">Email</label><input id="allAccountEmail" type="email"></div>
+        <div><label for="allAccountPhone">Phone</label><input id="allAccountPhone" type="text"></div>
+        <div id="allAccountStudentNumberField" class="hidden"><label for="allAccountStudentNumber">Student number</label><input id="allAccountStudentNumber" type="text"></div>
+        <div id="allAccountBusinessField" class="hidden"><label for="allAccountBusiness">Business name</label><input id="allAccountBusiness" type="text"></div>
+        <div id="allAccountProviderTypeField" class="hidden"><label for="allAccountProviderType">Business category</label><select id="allAccountProviderType"><option value="residence">Student accommodation</option><option value="transport">Transport or delivery</option><option value="sales">Sales</option><option value="other">Other</option></select></div>
+        <div id="allAccountPartyField" class="hidden"><label for="allAccountParty">Party or organisation</label><input id="allAccountParty" type="text"></div>
+        <div id="allAccountInstitutionField" class="hidden"><label for="allAccountInstitution">Institution</label><input id="allAccountInstitution" type="text"></div>
+        <div id="allAccountModuleLimitField" class="hidden"><label for="allAccountModuleLimit">Module limit</label><input id="allAccountModuleLimit" type="number" min="0"></div>
+        <div id="allAccountModulesField" class="wide hidden"><label for="allAccountModules">Assigned modules</label><input id="allAccountModules" type="text" placeholder="BIO101, CHEM102"></div>
+        <div id="allAccountBioField" class="wide hidden"><label for="allAccountBio">Profile information</label><textarea id="allAccountBio"></textarea></div>
+        <div class="wide"><label for="allAccountPassword">New password (leave blank to keep current)</label><input id="allAccountPassword" type="password" minlength="8" autocomplete="new-password"></div>
+      </div>
+      <label class="check-label"><input id="allAccountActive" type="checkbox"> Account active</label>
+      <label class="check-label hidden" id="allAccountApprovedField"><input id="allAccountApproved" type="checkbox"> Account approved</label>
+      <div><button class="btn" id="saveAllAccountBtn" type="button">Save account</button> <button class="btn secondary danger-action" id="deleteAllAccountBtn" type="button">Delete permanently</button></div>
+      <div id="allAccountMsg"></div>
+    </div>
+  </section>
+
   <section class="card">
     <div class="admin-editor-heading"><div><span class="kicker">Assessment archive</span><h2>All student scripts</h2></div><button class="btn secondary" id="refreshScriptsBtn">Refresh scripts</button></div>
     <p class="muted">Every quiz script submitted across every module. Download a complete PDF including answers, marks, and expected answers.</p>
@@ -154,6 +188,8 @@ let editor = { kind: null, id: null };
 let selectedLecturerId = null;
 let selectedStudentId = null;
 let selectedSrcPresidentId = null;
+let allAccountRows = [];
+let selectedAllAccount = null;
 let studentAdminRows = [];
 let studentAdminPage = 1;
 const STUDENTS_PER_PAGE = 20;
@@ -210,7 +246,7 @@ async function loadLists() {
     const [quizzes, lessons] = await Promise.all([api('/admin/quizzes'), api('/admin/lessons')]);
     renderList('quizList', quizzes, 'quiz'); renderList('lessonList', lessons, 'lesson');
     loadLiveSessions();
-    const secondaryLoads = [loadLecturers, loadStudents, loadSrcPresidents, loadAdminScripts, () => loadCommunityModeration(lessons)];
+    const secondaryLoads = [loadLecturers, loadStudents, loadSrcPresidents, loadAllAccounts, loadAdminScripts, () => loadCommunityModeration(lessons)];
     secondaryLoads.forEach((load, index) => window.setTimeout(load, 80 + (index * 120)));
   }
   catch (err) { showMsg($('editorMsg'), `Could not load content: ${err.message}`, 'error'); }
@@ -333,6 +369,82 @@ function selectSrcPresident(id, profiles) {
   $('srcPresidentAdminCard').classList.remove('hidden'); $('srcPresidentMsg').innerHTML = '';
   loadSrcPresidents();
 }
+function accountTypeLabel(item) {
+  if (item.account_type === 'student') return 'Student';
+  if (item.account_type === 'lecturer') return 'Lecturer';
+  if (item.account_type === 'src') return 'SRC president';
+  return ({residence:'Accommodation', transport:'Transport', sales:'Sales', other:'Other business'})[item.provider_type] || 'Business';
+}
+function accountIdentifier(item) {
+  if (item.account_type === 'student') return item.student_number || '';
+  if (item.account_type === 'provider') return item.business_name || '';
+  if (item.account_type === 'src') return item.party_name || '';
+  return (item.module_codes || []).join(', ');
+}
+function renderAllAccounts() {
+  const query = $('allAccountSearch').value.trim().toLowerCase();
+  const type = $('allAccountType').value, status = $('allAccountStatus').value;
+  const rows = allAccountRows.filter(item => {
+    const searchable = `${item.full_name} ${item.email} ${item.phone || ''} ${accountIdentifier(item)} ${accountTypeLabel(item)}`.toLowerCase();
+    const typeMatches = type === 'all' || item.account_type === type;
+    const statusMatches = status === 'all' || status === 'active' && item.active && item.approved !== false || status === 'inactive' && !item.active || status === 'unapproved' && item.approved === false;
+    return typeMatches && statusMatches && (!query || searchable.includes(query));
+  });
+  $('allAccountSummary').textContent = `${rows.length} account${rows.length === 1 ? '' : 's'}`;
+  $('allAccountList').innerHTML = rows.length ? rows.map(item => `<button class="admin-list-item" data-all-account-type="${item.account_type}" data-all-account-id="${item.id}"><span><strong><span class="account-type-badge">${escapeHtml(accountTypeLabel(item))}</span>${escapeHtml(item.full_name)}</strong><small>${escapeHtml(item.email)}${accountIdentifier(item) ? ' · ' + escapeHtml(accountIdentifier(item)) : ''}</small></span><span class="badge ${item.active && item.approved !== false ? 'done' : 'pending'}">${item.active ? (item.approved === false ? 'Not approved' : 'Active') : 'Inactive'}</span></button>`).join('') : '<div class="empty-state"><strong>No matching accounts</strong><span>Change the search, type, or status filter.</span></div>';
+  $('allAccountList').querySelectorAll('[data-all-account-id]').forEach(button => button.addEventListener('click', () => openAllAccount(button.dataset.allAccountType, Number(button.dataset.allAccountId))));
+}
+async function loadAllAccounts() {
+  try { allAccountRows = await api('/admin/accounts'); renderAllAccounts(); }
+  catch (error) { $('allAccountList').innerHTML = ''; showMsg($('allAccountMsg'), error.message, 'error'); }
+}
+function openAllAccount(type, id) {
+  const item = allAccountRows.find(row => row.account_type === type && row.id === id); if (!item) return;
+  selectedAllAccount = item;
+  $('allAccountRole').textContent = accountTypeLabel(item); $('allAccountEditorTitle').textContent = `Edit ${item.full_name}`;
+  $('allAccountName').value = item.full_name || ''; $('allAccountEmail').value = item.email || ''; $('allAccountPhone').value = item.phone || '';
+  $('allAccountStudentNumber').value = item.student_number || ''; $('allAccountBusiness').value = item.business_name || ''; $('allAccountProviderType').value = item.provider_type || 'other';
+  $('allAccountParty').value = item.party_name || ''; $('allAccountInstitution').value = item.institution || ''; $('allAccountBio').value = item.bio || '';
+  $('allAccountModules').value = (item.module_codes || []).join(', '); $('allAccountModuleLimit').value = item.module_limit ?? Math.max((item.module_codes || []).length, 1);
+  $('allAccountPassword').value = ''; $('allAccountActive').checked = item.active; $('allAccountApproved').checked = item.approved !== false;
+  const visibility = {
+    allAccountStudentNumberField: type === 'student', allAccountBusinessField: type === 'provider', allAccountProviderTypeField: type === 'provider',
+    allAccountPartyField: type === 'src', allAccountInstitutionField: type === 'student' || type === 'lecturer',
+    allAccountModuleLimitField: type === 'lecturer', allAccountModulesField: type === 'student' || type === 'lecturer',
+    allAccountBioField: type === 'student' || type === 'lecturer', allAccountApprovedField: item.approved !== null,
+  };
+  Object.entries(visibility).forEach(([id, visible]) => $(id).classList.toggle('hidden', !visible));
+  $('allAccountMsg').innerHTML = ''; $('allAccountEditor').classList.remove('hidden');
+  $('allAccountEditor').scrollIntoView({behavior:'smooth', block:'center'});
+}
+function allAccountPayload() {
+  const item = selectedAllAccount;
+  const payload = {full_name:$('allAccountName').value.trim(), email:$('allAccountEmail').value.trim(), phone:$('allAccountPhone').value.trim(), active:$('allAccountActive').checked};
+  if (item.approved !== null) payload.approved = $('allAccountApproved').checked;
+  if ($('allAccountPassword').value) payload.password = $('allAccountPassword').value;
+  if (item.account_type === 'student') Object.assign(payload, {student_number:$('allAccountStudentNumber').value.trim(), institution:$('allAccountInstitution').value.trim(), bio:$('allAccountBio').value.trim(), module_codes:$('allAccountModules').value.split(',').map(value=>value.trim()).filter(Boolean)});
+  if (item.account_type === 'lecturer') Object.assign(payload, {institution:$('allAccountInstitution').value.trim(), bio:$('allAccountBio').value.trim(), module_limit:Number($('allAccountModuleLimit').value), module_codes:$('allAccountModules').value.split(',').map(value=>value.trim()).filter(Boolean)});
+  if (item.account_type === 'provider') Object.assign(payload, {business_name:$('allAccountBusiness').value.trim(), provider_type:$('allAccountProviderType').value});
+  if (item.account_type === 'src') payload.party_name = $('allAccountParty').value.trim();
+  return payload;
+}
+async function saveAllAccount() {
+  if (!selectedAllAccount) return;
+  try {
+    const item = await api(`/admin/accounts/${selectedAllAccount.account_type}/${selectedAllAccount.id}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(allAccountPayload())});
+    selectedAllAccount = item; await loadAllAccounts(); openAllAccount(item.account_type, item.id); showMsg($('allAccountMsg'), 'Account changes saved.', 'ok');
+    if (item.account_type === 'student') loadStudents(); else if (item.account_type === 'lecturer') loadLecturers(); else if (item.account_type === 'src') loadSrcPresidents();
+  } catch (error) { showMsg($('allAccountMsg'), error.message, 'error'); }
+}
+async function deleteAllAccount() {
+  if (!selectedAllAccount) return;
+  const item = selectedAllAccount;
+  if (!confirm(`Permanently delete ${item.full_name}'s ${accountTypeLabel(item).toLowerCase()} account? This cannot be undone.`)) return;
+  try {
+    await api(`/admin/accounts/${item.account_type}/${item.id}`, {method:'DELETE'}); selectedAllAccount = null; $('allAccountEditor').classList.add('hidden'); await loadAllAccounts();
+    if (item.account_type === 'student') loadStudents(); else if (item.account_type === 'lecturer') loadLecturers(); else if (item.account_type === 'src') loadSrcPresidents();
+  } catch (error) { showMsg($('allAccountMsg'), error.message, 'error'); }
+}
 function renderModerationItem(item, area) {
   const pinAction = item.is_pinned ? 'Unpin' : 'Pin';
   const kind = item.kind || 'lesson';
@@ -395,6 +507,13 @@ $('studentAdminStatus').addEventListener('change',()=>{studentAdminPage=1;render
 $('studentPrevPage').addEventListener('click',()=>{if(studentAdminPage>1){studentAdminPage--;renderStudentPage();$('studentList').scrollIntoView({behavior:'smooth',block:'start'})}});
 $('studentNextPage').addEventListener('click',()=>{studentAdminPage++;renderStudentPage();$('studentList').scrollIntoView({behavior:'smooth',block:'start'})});
 $('refreshSrcPresidentsBtn').addEventListener('click', loadSrcPresidents);
+$('refreshAllAccountsBtn').addEventListener('click', loadAllAccounts);
+$('allAccountSearch').addEventListener('input', renderAllAccounts);
+$('allAccountType').addEventListener('change', renderAllAccounts);
+$('allAccountStatus').addEventListener('change', renderAllAccounts);
+$('saveAllAccountBtn').addEventListener('click', saveAllAccount);
+$('deleteAllAccountBtn').addEventListener('click', deleteAllAccount);
+$('closeAllAccountEditorBtn').addEventListener('click', () => { selectedAllAccount = null; $('allAccountEditor').classList.add('hidden'); });
 $('saveStudentBtn').addEventListener('click', saveStudent);
 $('resetStudentPasswordBtn').addEventListener('click', resetStudentPassword);
 async function setAllAccounts(kind, active) { const label = kind === 'lecturers' ? 'lecturers' : 'students'; try { const rows = await api(`/admin/${kind}`); if (!confirm(`${active ? 'Activate' : 'Inactivate'} ${rows.length} ${label}? This changes access for every account in this group.`)) return; await Promise.all(rows.map(row => api(`/admin/${kind}/${row.id}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({active})}))); if (kind === 'lecturers') loadLecturers(); else loadStudents(); } catch (error) { window.alert(error.message); } }
