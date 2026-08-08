@@ -4909,56 +4909,6 @@ def live_lesson_ice_config():
     return {"iceServers": servers}
 
 
-@app.post("/live/{room_code}/transcript.pdf")
-async def live_lesson_transcript_pdf(
-    room_code: str,
-    transcript_json: str = Form(...),
-    x_lecturer_token: Optional[str] = Header(None, alias="X-Lecturer-Token"),
-    db: Session = Depends(get_db),
-):
-    """Compile a client-captured live transcript into a lecturer-owned PDF."""
-    lecturer = db.query(Lecturer).filter(Lecturer.id == _lecturer_id_from_token(x_lecturer_token or "")).first()
-    if not lecturer or not lecturer.active or not lecturer.approved:
-        raise HTTPException(status_code=403, detail="An approved lecturer account is required")
-    code = re.sub(r"[^A-Z0-9_-]", "", room_code.upper())[:32]
-    try:
-        entries = json.loads(transcript_json)
-    except (TypeError, json.JSONDecodeError) as exc:
-        raise HTTPException(status_code=400, detail="The transcript could not be read") from exc
-    if not isinstance(entries, list) or len(entries) > 10000:
-        raise HTTPException(status_code=400, detail="The transcript is invalid or too large")
-
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle("LiveTitle", parent=styles["Title"], textColor=colors.HexColor("#0f766e"), spaceAfter=10)
-    meta_style = ParagraphStyle("LiveMeta", parent=styles["Normal"], textColor=colors.HexColor("#526174"), fontSize=9, leading=13, spaceAfter=16)
-    lecturer_style = ParagraphStyle("LecturerLine", parent=styles["BodyText"], leftIndent=0, borderColor=colors.HexColor("#14b8a6"), borderWidth=0, borderPadding=7, backColor=colors.HexColor("#ecfdf5"), spaceAfter=7, leading=14)
-    student_style = ParagraphStyle("StudentLine", parent=styles["BodyText"], leftIndent=14, borderPadding=7, backColor=colors.HexColor("#f1f5f9"), spaceAfter=7, leading=14)
-    story = [
-        Paragraph("Live lesson transcript", title_style),
-        Paragraph(f"Room: {_pdf_escape(code)} &nbsp;&nbsp; Lecturer: {_pdf_escape(lecturer.full_name)}<br/>Compiled: {datetime.now(timezone.utc).strftime('%d %B %Y, %H:%M UTC')}", meta_style),
-    ]
-    accepted = 0
-    for entry in entries:
-        if not isinstance(entry, dict):
-            continue
-        text_value = str(entry.get("text", "")).strip()[:5000]
-        if not text_value:
-            continue
-        name = str(entry.get("name", "Participant")).strip()[:100] or "Participant"
-        role = "lecturer" if entry.get("role") == "lecturer" else "student"
-        timestamp = str(entry.get("time", "")).strip()[:30]
-        label = "Lecturer" if role == "lecturer" else "Student question / response"
-        story.append(Paragraph(f"<b>{_pdf_escape(name)}</b> · {label} · {_pdf_escape(timestamp)}<br/>{_pdf_escape(text_value)}", lecturer_style if role == "lecturer" else student_style))
-        accepted += 1
-    if not accepted:
-        story.append(Paragraph("No spoken transcript entries were captured for this lesson.", styles["BodyText"]))
-    story.extend([Spacer(1, 14), Paragraph("Automatically transcribed speech may contain errors. Review important academic details against the original lesson materials.", meta_style)])
-    buffer = io.BytesIO()
-    SimpleDocTemplate(buffer, pagesize=A4, rightMargin=1.7*cm, leftMargin=1.7*cm, topMargin=1.6*cm, bottomMargin=1.6*cm, title=f"Live lesson {code} transcript").build(story)
-    buffer.seek(0)
-    return StreamingResponse(buffer, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="live-lesson-{code}-transcript.pdf"'})
-
-
 @app.post("/live/{room_code}/participants/{identity}/mute")
 async def lecturer_mute_live_participant(
     room_code: str,
