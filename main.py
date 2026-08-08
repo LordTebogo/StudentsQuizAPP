@@ -196,6 +196,17 @@ def ensure_fun_quiz_schema():
 ensure_fun_quiz_schema()
 
 
+def ensure_quiz_draft_progress_schema():
+    """Remember where a learner paused, including in one-question-at-a-time quizzes."""
+    draft_columns = {column["name"] for column in inspect(engine).get_columns("quiz_drafts")}
+    if "current_question" not in draft_columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE quiz_drafts ADD COLUMN current_question INTEGER DEFAULT 0"))
+
+
+ensure_quiz_draft_progress_schema()
+
+
 def ensure_lecturer_ownership_schema():
     """Add ownership columns to installations created before lecturer accounts."""
     for table in ("quizzes", "lessons"):
@@ -381,6 +392,7 @@ class QuizSubmission(BaseModel):
 
 class QuizDraftSave(BaseModel):
     answers: List[StudentAnswer]
+    current_question: int = 0
 
 
 class LongAnswerMark(BaseModel):
@@ -1923,19 +1935,22 @@ def get_quiz_draft(quiz_id: int, student: Student = Depends(require_student_acco
         QuizDraft.student_id == student.id,
     ).first()
     if not draft:
-        return {"answers": [], "updated_at": None}
+        return {"answers": [], "current_question": 0, "updated_at": None}
     try:
         answers = json.loads(draft.answers_json)
     except (TypeError, json.JSONDecodeError):
         answers = []
-    return {"answers": answers, "updated_at": draft.updated_at}
+    return {
+        "answers": answers,
+        "current_question": max(0, draft.current_question or 0),
+        "updated_at": draft.updated_at,
+    }
 
 
 @app.put("/student/quiz/{quiz_id}/draft")
 def save_quiz_draft(quiz_id: int, payload: QuizDraftSave, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
-    question_ids = {
-        question_id for (question_id,) in db.query(Question.id).filter(Question.quiz_id == quiz_id).all()
-    }
+    question_rows = db.query(Question.id).filter(Question.quiz_id == quiz_id).all()
+    question_ids = {question_id for (question_id,) in question_rows}
     if not question_ids:
         raise HTTPException(status_code=404, detail="Quiz not found")
     answers = []
@@ -1946,23 +1961,26 @@ def save_quiz_draft(quiz_id: int, payload: QuizDraftSave, student: Student = Dep
         seen.add(item.question_id)
         answers.append({"question_id": item.question_id, "answer": item.answer[:20000]})
     now = datetime.now(timezone.utc).isoformat()
+    current_question = max(0, min(payload.current_question, len(question_rows) - 1))
     draft = db.query(QuizDraft).filter(
         QuizDraft.quiz_id == quiz_id,
         QuizDraft.student_id == student.id,
     ).first()
     if draft:
         draft.answers_json = json.dumps(answers)
+        draft.current_question = current_question
         draft.updated_at = now
     else:
         draft = QuizDraft(
             quiz_id=quiz_id,
             student_id=student.id,
             answers_json=json.dumps(answers),
+            current_question=current_question,
             updated_at=now,
         )
         db.add(draft)
     db.commit()
-    return {"saved": True, "updated_at": now}
+    return {"saved": True, "current_question": current_question, "updated_at": now}
 
 
 @app.delete("/student/quiz/{quiz_id}/draft")

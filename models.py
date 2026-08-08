@@ -390,6 +390,7 @@ class QuizDraft(Base):
     quiz_id = Column(Integer, ForeignKey("quizzes.id", ondelete="CASCADE"), nullable=False, index=True)
     student_id = Column(Integer, ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True)
     answers_json = Column(Text, nullable=False, default="[]")
+    current_question = Column(Integer, nullable=False, default=0)
     updated_at = Column(String, nullable=False)
 
     quiz = relationship("Quiz", back_populates="drafts")
