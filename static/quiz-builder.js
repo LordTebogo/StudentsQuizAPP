@@ -140,7 +140,7 @@
     if (question.type === 'short') {
       return `<div class="question-type-fields"><label for="short-${attr(question.key)}">Correct short answer</label><input id="short-${attr(question.key)}" type="text" data-field="correct_answer" value="${attr(question.correct_answer)}" placeholder="One or two words"><small class="muted">The marking key can contain a maximum of two words.</small></div>`;
     }
-    return '<div class="question-type-fields"><p class="muted">Students write a longer response. This question will wait for manual lecturer marking.</p></div>';
+    return '<div class="question-type-fields"><p class="muted">Students write a longer response. This question will wait for manual tutor marking.</p></div>';
   }
 
   function funFields(question) {
@@ -240,7 +240,7 @@
       renderQuestions();
       await loadDraftList(result.id);
       byId('quizDraftStatus').textContent = `Saved ${formatSAST(result.updated_at)}`;
-      showBuilderMessage('Quiz draft saved to your lecturer account.');
+      showBuilderMessage('Quiz draft saved to your tutor account.');
     } catch (error) {
       showBuilderMessage(`Could not save draft: ${error.message}`, 'error');
     } finally {

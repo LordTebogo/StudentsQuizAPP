@@ -738,7 +738,7 @@ def require_lecturer_account(
 ) -> Lecturer:
     lecturer = db.query(Lecturer).filter(Lecturer.id == _lecturer_id_from_token(x_lecturer_token)).first()
     if not lecturer or not lecturer.active or not lecturer.approved:
-        raise HTTPException(status_code=403, detail="Your lecturer account is not active and approved")
+        raise HTTPException(status_code=403, detail="Your tutor account is not active and approved")
     return lecturer
 
 
@@ -901,7 +901,7 @@ async def register_lecturer(
     if not full_name.strip() or "@" not in email or len(password) < 8:
         raise HTTPException(status_code=400, detail="Provide a full name, valid email, and a password of at least 8 characters")
     if db.query(Lecturer).filter(Lecturer.email == email).first():
-        raise HTTPException(status_code=409, detail="A lecturer profile already uses this email")
+        raise HTTPException(status_code=409, detail="A tutor profile already uses this email")
     image_url = None
     if profile_image and profile_image.filename:
         image_url = upload_image_bytes(await profile_image.read(), folder="lecturer_profiles")
@@ -920,13 +920,13 @@ async def register_lecturer(
 def lecturer_login(payload: LecturerLogin, db: Session = Depends(get_db)):
     lecturer = db.query(Lecturer).filter(Lecturer.email == payload.email.strip().lower()).first()
     if not lecturer:
-        raise HTTPException(status_code=401, detail="No lecturer profile was found for this email")
+        raise HTTPException(status_code=401, detail="No tutor profile was found for this email")
     if not _password_matches(payload.password, lecturer.password_hash):
-        raise HTTPException(status_code=401, detail="Password does not match this lecturer profile. Ask the administrator to reset it.")
+        raise HTTPException(status_code=401, detail="Password does not match this tutor profile. Ask the administrator to reset it.")
     if not lecturer.active:
-        raise HTTPException(status_code=403, detail="This lecturer profile is inactive")
+        raise HTTPException(status_code=403, detail="This tutor profile is inactive")
     if not lecturer.approved:
-        raise HTTPException(status_code=403, detail="This lecturer profile is not currently approved")
+        raise HTTPException(status_code=403, detail="This tutor profile is not currently approved")
     return {"token": _issue_lecturer_token(lecturer.id), "lecturer": _lecturer_profile(lecturer)}
 
 
@@ -2061,7 +2061,7 @@ def submit_quiz(quiz_id: int, submission: QuizSubmission, student: Student = Dep
         "auto_marked_score": auto_score,
         "max_score": max_score,
         "fully_marked": not has_long_pending,
-        "message": "Long-answer questions still need lecturer marking." if has_long_pending else "Fully marked.",
+        "message": "Long-answer questions still need tutor marking." if has_long_pending else "Fully marked.",
     }
 
 
@@ -2865,7 +2865,7 @@ def post_lesson_comment(
     if payload.is_lecturer:
         lecturer = db.query(Lecturer).filter(Lecturer.id == _lecturer_id_from_token(x_lecturer_token)).first()
         if not lecturer or not lecturer.active or not lecturer.approved:
-            raise HTTPException(status_code=401, detail="An approved lecturer account is required to post as a lecturer")
+            raise HTTPException(status_code=401, detail="An approved tutor account is required to post as a tutor")
     else:
         student = db.query(Student).filter(Student.id == _student_id_from_token(x_student_token)).first()
         if not student or not student.active or not student.approved:
@@ -3266,7 +3266,7 @@ def admin_create_lecturer(payload: AdminLecturerInput, _pin_ok: bool = Depends(r
     if not payload.full_name.strip() or "@" not in email or len(payload.password) < 8:
         raise HTTPException(status_code=400, detail="Provide a full name, valid email, and a password of at least 8 characters")
     if db.query(Lecturer).filter(Lecturer.email == email).first():
-        raise HTTPException(status_code=409, detail="A lecturer profile already uses this email")
+        raise HTTPException(status_code=409, detail="A tutor profile already uses this email")
     lecturer = Lecturer(
         full_name=payload.full_name.strip(), email=email, password_hash=_password_hash(payload.password),
         phone=payload.phone.strip(), institution=payload.institution.strip(), bio=payload.bio.strip(),
@@ -3284,7 +3284,7 @@ def admin_create_lecturer(payload: AdminLecturerInput, _pin_ok: bool = Depends(r
 def admin_update_lecturer(lecturer_id: int, payload: AdminLecturerUpdate, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
     lecturer = db.query(Lecturer).filter(Lecturer.id == lecturer_id).first()
     if not lecturer:
-        raise HTTPException(status_code=404, detail="Lecturer not found")
+        raise HTTPException(status_code=404, detail="Tutor not found")
     for field in ("full_name", "phone", "institution", "bio", "approved", "active", "module_limit"):
         value = getattr(payload, field)
         if value is not None:
@@ -3303,7 +3303,7 @@ def admin_update_lecturer(lecturer_id: int, payload: AdminLecturerUpdate, _pin_o
 def admin_delete_lecturer(lecturer_id: int, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
     lecturer = db.query(Lecturer).filter(Lecturer.id == lecturer_id).first()
     if not lecturer:
-        raise HTTPException(status_code=404, detail="Lecturer not found")
+        raise HTTPException(status_code=404, detail="Tutor not found")
     if lecturer.quizzes or lecturer.lessons:
         raise HTTPException(status_code=409, detail="This lecturer owns content. Reassign or delete that content before removing the profile.")
     db.delete(lecturer)
@@ -3315,7 +3315,7 @@ def admin_delete_lecturer(lecturer_id: int, _pin_ok: bool = Depends(require_lect
 def admin_reset_lecturer_password(lecturer_id: int, payload: PasswordReset, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
     lecturer = db.query(Lecturer).filter(Lecturer.id == lecturer_id).first()
     if not lecturer:
-        raise HTTPException(status_code=404, detail="Lecturer not found")
+        raise HTTPException(status_code=404, detail="Tutor not found")
     if len(payload.password) < 8:
         raise HTTPException(status_code=400, detail="The new password must be at least 8 characters")
     lecturer.password_hash = _password_hash(payload.password)
@@ -3751,7 +3751,7 @@ def student_unblock_message_account(payload: MessageBlockRequest, student: Stude
 @app.post("/lecturer/messages")
 def lecturer_send_message(payload: DirectMessageCreate, lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db)):
     if payload.recipient_type.strip().lower() != "student":
-        raise HTTPException(status_code=400, detail="Lecturers can message students only")
+        raise HTTPException(status_code=400, detail="Tutors can message students only")
     assigned = {item.module_code for item in lecturer.modules}
     student_codes = {item.module_code for item in db.query(StudentModule).filter(StudentModule.student_id == payload.recipient_id).all()}
     if not assigned.intersection(student_codes):
@@ -5329,7 +5329,7 @@ async def live_lesson_token(
     else:
         account = None; role = ""; valid = False
     if not valid:
-        raise HTTPException(status_code=403, detail="Your approved student or lecturer account is required")
+        raise HTTPException(status_code=403, detail="Your approved learner or tutor account is required")
     try:
         from livekit import api
         participant_role = "screen" if screen_only else role
@@ -5364,7 +5364,7 @@ async def lecturer_mute_live_participant(
 ):
     lecturer = db.query(Lecturer).filter(Lecturer.id == _lecturer_id_from_token(x_lecturer_token or "")).first()
     if not lecturer or not lecturer.active or not lecturer.approved:
-        raise HTTPException(status_code=403, detail="An approved lecturer account is required")
+        raise HTTPException(status_code=403, detail="An approved tutor account is required")
     code = re.sub(r"[^A-Z0-9_-]", "", room_code.upper())[:32]
     if len(code) < 4 or not identity or not track_sid:
         raise HTTPException(status_code=400, detail="Invalid live participant or room")

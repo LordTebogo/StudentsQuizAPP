@@ -10,7 +10,7 @@
 <link rel="icon" type="image/png" sizes="96x96" href="/static/icons/favicon-96x96.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/static/icons/apple-touch-icon.png">
 <link rel="manifest" href="/static/manifest.webmanifest">
-<title>Video Lessons — Lecturer</title>
+<title>Video Lessons — Tutor</title>
 <link rel="stylesheet" href="/static/style.css">
 <style>
   video { width: 100%; border-radius: 4px; border: 1px solid var(--border); background: #000; display: block; margin-bottom: 14px; }
@@ -33,7 +33,7 @@
     <div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Nucleo<span>Campus</span></div><div class="brand-tagline">Bioscientist</div></div></div>
     <nav><a href="/static/index.html">Home</a></nav>
   </header>
-  <h1>Lecturer sign-in</h1>
+  <h1>Tutor sign-in</h1>
   <p class="lede">Sign in to access only your own lessons and student scripts.</p>
   <div class="card">
     <label for="emailInput">Email</label><input type="text" id="emailInput" autocomplete="email" placeholder="you@example.com">
@@ -313,7 +313,7 @@ async function loadComments(lessonId) {
 }
 
 function lessonCommentPreviewHtml(comment) {
-  const labels = `${comment.is_official ? ' <span class="lecturer-tag">(Official)</span>' : ''}${comment.is_lecturer ? ' <span class="lecturer-tag">(Lecturer)</span>' : ''}${comment.is_pinned ? ' <span class="lecturer-tag">(Pinned)</span>' : ''}${comment.is_anonymous ? ' <span class="lecturer-tag">(Anonymous)</span>' : ''}`;
+  const labels = `${comment.is_official ? ' <span class="lecturer-tag">(Official)</span>' : ''}${comment.is_lecturer ? ' <span class="lecturer-tag">(Tutor)</span>' : ''}${comment.is_pinned ? ' <span class="lecturer-tag">(Pinned)</span>' : ''}${comment.is_anonymous ? ' <span class="lecturer-tag">(Anonymous)</span>' : ''}`;
   return `<div class="comment${comment.parent_id ? ' reply' : ''}">
     <div class="comment-meta">${escapeHtml(comment.author_name)}${labels} &middot; ${formatSAST(comment.created_at)}</div>
     <div>${escapeHtml(comment.comment_text)}</div>
@@ -331,7 +331,7 @@ $('postCommentBtn').addEventListener('click', async () => {
     await api(`/lesson/${currentLessonId}/comments`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ author_name: 'Lecturer', comment_text: text, is_lecturer: true }),
+      body: JSON.stringify({ author_name: 'Tutor', comment_text: text, is_lecturer: true }),
     }, true);
     $('commentText').value = '';
     msgBox.innerHTML = '';

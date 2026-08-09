@@ -103,7 +103,7 @@
 
   <!-- Private result -->
   <div class="card hidden" id="myResultCard">
-    <h2>Your result (private — only you and the lecturer can see this)</h2>
+    <h2>Your result (private — only you and the tutor can see this)</h2>
     <div id="myResultBox"></div>
   </div>
 
@@ -195,7 +195,7 @@ async function loadModuleList() {
   try {
     const modules = await api('/modules');
     if (!modules.length) {
-      box.innerHTML = '<div class="empty-state"><strong>No lessons yet</strong><span>Your lessons will appear here when a lecturer publishes them.</span></div>';
+      box.innerHTML = '<div class="empty-state"><strong>No lessons yet</strong><span>Your lessons will appear here when a tutor publishes them.</span></div>';
       return;
     }
     box.innerHTML = modules.map(m => `
@@ -366,7 +366,7 @@ $('loadMineBtn').addEventListener('click', async () => {
 
 function renderMyResult(mine) {
   $('myResultCard').classList.remove('hidden');
-  const statusText = mine.fully_marked ? 'Final — fully marked' : 'Some questions still pending lecturer marking';
+  const statusText = mine.fully_marked ? 'Final — fully marked' : 'Some questions still pending tutor marking';
   $('myResultBox').innerHTML = `
     <div class="score-stamp">${mine.total_score} / ${mine.max_score}</div>
     <p class="muted" style="margin-top:10px;">${statusText} &nbsp;•&nbsp; submitted ${formatSAST(mine.submitted_at)}</p>
@@ -429,7 +429,7 @@ async function loadComments(lessonId) {
     }
     list.innerHTML = comments.map(c => `
       <div class="comment">
-        <div class="comment-meta">${escapeHtml(c.author_name)}${c.is_official ? ' <span class="lecturer-tag">(Official)</span>' : (c.is_lecturer ? ' <span class="lecturer-tag">(Lecturer)</span>' : '')}${c.is_pinned ? ' <span class="lecturer-tag">(Pinned)</span>' : ''} &middot; ${formatSAST(c.created_at)}</div>
+        <div class="comment-meta">${escapeHtml(c.author_name)}${c.is_official ? ' <span class="lecturer-tag">(Official)</span>' : (c.is_lecturer ? ' <span class="lecturer-tag">(Tutor)</span>' : '')}${c.is_pinned ? ' <span class="lecturer-tag">(Pinned)</span>' : ''} &middot; ${formatSAST(c.created_at)}</div>
         <div>${escapeHtml(c.comment_text)}</div>
       </div>
     `).join('');
@@ -489,7 +489,7 @@ function replySignal(count, expanded) {
 function lessonCommentHtml(comment) {
   const replies = comment.replies || [];
   const replyCount = replies.length;
-  const badges = `${comment.is_official ? '<span class="comment-label official">Official</span>' : ''}${comment.is_lecturer ? '<span class="comment-label">Lecturer</span>' : ''}${comment.is_pinned ? '<span class="comment-label pinned">Pinned</span>' : ''}${comment.is_anonymous ? '<span class="comment-label">Anonymous</span>' : ''}`;
+  const badges = `${comment.is_official ? '<span class="comment-label official">Official</span>' : ''}${comment.is_lecturer ? '<span class="comment-label">Tutor</span>' : ''}${comment.is_pinned ? '<span class="comment-label pinned">Pinned</span>' : ''}${comment.is_anonymous ? '<span class="comment-label">Anonymous</span>' : ''}`;
   return `<article class="lesson-comment${comment.parent_id ? ' reply' : ''}" id="lessonComment-${comment.id}">
     <div class="lesson-comment-top"><div class="lesson-identity">${lessonCommentAvatar(comment)}<div><div class="comment-author">${escapeHtml(comment.author_name)}${badges}</div><div class="comment-time">${escapeHtml(formatSAST(comment.created_at))}</div></div></div></div>
     <div class="lesson-comment-content">${formatLessonComment(comment.comment_text)}</div>

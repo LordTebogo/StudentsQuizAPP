@@ -44,7 +44,7 @@
 </head>
 <body>
 <div class="wrap" id="gateWrap">
-  <header class="top"><div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Nucleo<span>Campus</span></div><div class="brand-tagline">Administration</div></div></div><nav><a href="/static/index.html">Home</a><a href="/static/lecturer.html">Lecturer</a></nav></header>
+  <header class="top"><div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Nucleo<span>Campus</span></div><div class="brand-tagline">Administration</div></div></div><nav><a href="/static/index.html">Home</a><a href="/static/lecturer.html">Tutor</a></nav></header>
   <h1>Admin sign-in</h1>
   <p class="lede">Manage platform content, accounts, submissions, and moderation from one protected workspace.</p>
   <aside class="safety-banner"><strong>Restricted access:</strong> Use the administrator PIN supplied privately by the platform owner. Failed attempts are rate-limited and the PIN is never displayed.</aside>
@@ -52,7 +52,7 @@
 </div>
 
 <main class="wrap hidden" id="appWrap">
-  <header class="top"><div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Nucleo<span>Campus</span></div><div class="brand-tagline">Content control</div></div></div><nav><a href="/static/index.html">Home</a><a href="/static/lecturer.html">Lecturer</a><a href="#" id="lockBtn">Lock</a></nav></header>
+  <header class="top"><div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Nucleo<span>Campus</span></div><div class="brand-tagline">Content control</div></div></div><nav><a href="/static/index.html">Home</a><a href="/static/lecturer.html">Tutor</a><a href="#" id="lockBtn">Lock</a></nav></header>
   <h1>Content studio</h1>
   <p class="lede">Create, edit, or remove quizzes and video lessons. Editing is deliberately locked after students have submitted work, preserving their results.</p>
 
@@ -69,7 +69,7 @@
   </div>
 
   <section class="card">
-    <div class="admin-editor-heading"><div><span class="kicker">People & permissions</span><h2>Lecturer management</h2></div><button class="btn secondary" id="newLecturerBtn">New lecturer</button></div>
+    <div class="admin-editor-heading"><div><span class="kicker">People & permissions</span><h2>Tutor management</h2></div><button class="btn secondary" id="newLecturerBtn">New tutor</button></div>
     <div class="admin-grid">
       <div>
         <label for="lecturerName">Full name</label><input id="lecturerName" type="text" placeholder="Full name">
@@ -81,9 +81,9 @@
         <label for="lecturerBio">Professional bio</label><textarea id="lecturerBio" placeholder="Tutoring background"></textarea>
         <label for="lecturerModules">Assigned module codes</label><input id="lecturerModules" type="text" placeholder="e.g. BIO101, BIO102">
         <label for="lecturerLimit">Module limit</label><input id="lecturerLimit" type="number" min="0" value="1">
-        <button class="btn" id="saveLecturerBtn">Save lecturer</button><div id="lecturerMsg"></div>
+        <button class="btn" id="saveLecturerBtn">Save tutor</button><div id="lecturerMsg"></div>
       </div>
-      <div><div class="admin-editor-heading"><h3>Lecturer profiles</h3><span><button class="btn secondary" id="activateAllLecturersBtn">Activate all</button><button class="btn secondary" id="inactivateAllLecturersBtn">Inactivate all</button><button class="btn secondary" id="refreshLecturersBtn">Refresh</button></span></div><div id="lecturerList" class="admin-list"></div></div>
+      <div><div class="admin-editor-heading"><h3>Tutor profiles</h3><span><button class="btn secondary" id="activateAllLecturersBtn">Activate all</button><button class="btn secondary" id="inactivateAllLecturersBtn">Inactivate all</button><button class="btn secondary" id="refreshLecturersBtn">Refresh</button></span></div><div id="lecturerList" class="admin-list"></div></div>
     </div>
   </section>
 
@@ -104,8 +104,8 @@
 
   <section class="card" id="allAccountsCard">
     <div class="admin-editor-heading"><div><span class="kicker">Read, update & delete</span><h2>All registered accounts</h2></div><button class="btn secondary" id="refreshAllAccountsBtn" type="button">Refresh</button></div>
-    <p class="muted">Manage every learner, lecturer and marketplace account, including accommodation, transport, sales and other businesses.</p>
-    <div class="admin-list-tools"><label for="allAccountSearch">Search accounts<input id="allAccountSearch" type="search" placeholder="Name, email, business or username"></label><label for="allAccountType">Account type<select id="allAccountType"><option value="all">All accounts</option><option value="student">Learners</option><option value="lecturer">Lecturers</option><option value="provider">Businesses and providers</option></select></label><label for="allAccountStatus">Status<select id="allAccountStatus"><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="unapproved">Not approved</option></select></label></div>
+    <p class="muted">Manage every learner, tutor and marketplace account, including accommodation, transport, sales and other businesses.</p>
+    <div class="admin-list-tools"><label for="allAccountSearch">Search accounts<input id="allAccountSearch" type="search" placeholder="Name, email, business or username"></label><label for="allAccountType">Account type<select id="allAccountType"><option value="all">All accounts</option><option value="student">Learners</option><option value="lecturer">Tutors</option><option value="provider">Businesses and providers</option></select></label><label for="allAccountStatus">Status<select id="allAccountStatus"><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="unapproved">Not approved</option></select></label></div>
     <div class="admin-page-head"><strong id="allAccountSummary">Accounts</strong></div>
     <div id="allAccountList" class="admin-list"></div>
     <div id="allAccountEditor" class="account-directory-editor hidden">
@@ -321,7 +321,7 @@ async function setAccountAccess(kind, id, field, value) {
   } catch (error) { window.alert(error.message); }
 }
 async function deleteAccount(kind, id) {
-  const label = kind === 'lecturers' ? 'lecturer profile' : kind === 'students' ? 'student profile' : 'SRC profile';
+  const label = kind === 'lecturers' ? 'tutor profile' : kind === 'students' ? 'student profile' : 'SRC profile';
   if (!confirm(`Delete this ${label}? This cannot be undone.`)) return;
   try {
     await api(`/admin/${kind}/${id}`, {method:'DELETE'});
@@ -333,7 +333,7 @@ async function deleteAccount(kind, id) {
 }
 function loadLecturers() {
   api('/admin/lecturers').then(lecturers => {
-    $('lecturerList').innerHTML = lecturers.length ? lecturers.map(item => `<div class="account-row ${selectedLecturerId === item.id ? 'selected' : ''}"><button class="admin-list-item" data-lecturer="${item.id}"><span><strong>${escapeHtml(item.full_name)}</strong><small>${escapeHtml(item.email)} · ${escapeHtml(item.module_codes.join(', ') || 'No modules')}</small></span><span class="badge ${item.active && item.approved ? 'done' : 'pending'}">${item.active ? (item.approved ? 'Active' : 'Not approved') : 'Inactive'}</span></button>${selectedLecturerId === item.id ? accessControls('lecturers', item) : ''}</div>`).join('') : '<p class="muted">No lecturer profiles yet.</p>';
+    $('lecturerList').innerHTML = lecturers.length ? lecturers.map(item => `<div class="account-row ${selectedLecturerId === item.id ? 'selected' : ''}"><button class="admin-list-item" data-lecturer="${item.id}"><span><strong>${escapeHtml(item.full_name)}</strong><small>${escapeHtml(item.email)} · ${escapeHtml(item.module_codes.join(', ') || 'No modules')}</small></span><span class="badge ${item.active && item.approved ? 'done' : 'pending'}">${item.active ? (item.approved ? 'Active' : 'Not approved') : 'Inactive'}</span></button>${selectedLecturerId === item.id ? accessControls('lecturers', item) : ''}</div>`).join('') : '<p class="muted">No tutor profiles yet.</p>';
     $('lecturerList').querySelectorAll('[data-lecturer]').forEach(button => button.addEventListener('click', () => editLecturer(button.dataset.lecturer, lecturers)));
     bindAccessControls($('lecturerList'));
   }).catch(err => showMsg($('lecturerMsg'), err.message, 'error'));
@@ -371,7 +371,7 @@ function selectSrcPresident(id, profiles) {
 }
 function accountTypeLabel(item) {
   if (item.account_type === 'student') return 'Learner';
-  if (item.account_type === 'lecturer') return 'Lecturer';
+  if (item.account_type === 'lecturer') return 'Tutor';
   if (item.account_type === 'src') return 'SRC president';
   return ({residence:'Accommodation', transport:'Transport', sales:'Sales', other:'Other business'})[item.provider_type] || 'Business';
 }
@@ -471,7 +471,7 @@ async function postOfficialLesson() { const lessonId = $('officialLessonSelect')
 function selectStudent(id, students) { const student = students.find(item => item.id === Number(id)); if (!student) return; selectedStudentId = student.id; $('studentModules').value = (student.module_codes || []).join(', '); $('studentResetPassword').value = ''; $('studentAdminCard').classList.remove('hidden'); $('studentMsg').innerHTML = ''; const modules=(student.module_codes || []).join(', ') || 'No modules assigned'; $('selectedStudentBanner').innerHTML=`<strong>Editing: ${escapeHtml(student.full_name)}</strong><small>${escapeHtml(student.student_number)} · ${escapeHtml(student.email || 'No email')} · ${escapeHtml(modules)}</small>`; $('selectedStudentBanner').classList.remove('hidden'); loadStudents(); }
 async function saveStudent() { if (!selectedStudentId) return; try { await api(`/admin/students/${selectedStudentId}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({module_codes:$('studentModules').value.split(',').map(code=>code.trim()).filter(Boolean)})}); showMsg($('studentMsg'), 'Student modules saved.', 'ok'); loadStudents(); } catch (err) { showMsg($('studentMsg'), err.message, 'error'); } }
 async function resetStudentPassword() { const password = $('studentResetPassword').value; if (!selectedStudentId || password.length < 8) { showMsg($('studentMsg'), 'Enter a new password with at least 8 characters.', 'error'); return; } try { await api(`/admin/students/${selectedStudentId}/reset-password`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({password})}); $('studentResetPassword').value = ''; showMsg($('studentMsg'), 'New password saved. The student can sign in with it now.', 'ok'); } catch (err) { showMsg($('studentMsg'), err.message, 'error'); } }
-async function resetLecturerPassword() { const password = $('resetPassword').value; if (!selectedLecturerId || password.length < 8) { showMsg($('lecturerMsg'), 'Enter a new password with at least 8 characters.', 'error'); return; } try { await api(`/admin/lecturers/${selectedLecturerId}/reset-password`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({password})}); $('resetPassword').value = ''; showMsg($('lecturerMsg'), 'Password reset. Share the new password securely with the lecturer.', 'ok'); } catch (err) { showMsg($('lecturerMsg'), err.message, 'error'); } }
+async function resetLecturerPassword() { const password = $('resetPassword').value; if (!selectedLecturerId || password.length < 8) { showMsg($('lecturerMsg'), 'Enter a new password with at least 8 characters.', 'error'); return; } try { await api(`/admin/lecturers/${selectedLecturerId}/reset-password`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({password})}); $('resetPassword').value = ''; showMsg($('lecturerMsg'), 'Password reset. Share the new password securely with the tutor.', 'ok'); } catch (err) { showMsg($('lecturerMsg'), err.message, 'error'); } }
 function buildPayload() {
   let questions;
   try { questions = JSON.parse($('questionsJson').value); } catch (_) { throw new Error('Questions must be valid JSON.'); }
@@ -516,7 +516,7 @@ $('deleteAllAccountBtn').addEventListener('click', deleteAllAccount);
 $('closeAllAccountEditorBtn').addEventListener('click', () => { selectedAllAccount = null; $('allAccountEditor').classList.add('hidden'); });
 $('saveStudentBtn').addEventListener('click', saveStudent);
 $('resetStudentPasswordBtn').addEventListener('click', resetStudentPassword);
-async function setAllAccounts(kind, active) { const label = kind === 'lecturers' ? 'lecturers' : 'students'; try { const rows = await api(`/admin/${kind}`); if (!confirm(`${active ? 'Activate' : 'Inactivate'} ${rows.length} ${label}? This changes access for every account in this group.`)) return; await Promise.all(rows.map(row => api(`/admin/${kind}/${row.id}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({active})}))); if (kind === 'lecturers') loadLecturers(); else loadStudents(); } catch (error) { window.alert(error.message); } }
+async function setAllAccounts(kind, active) { const label = kind === 'lecturers' ? 'tutors' : 'students'; try { const rows = await api(`/admin/${kind}`); if (!confirm(`${active ? 'Activate' : 'Inactivate'} ${rows.length} ${label}? This changes access for every account in this group.`)) return; await Promise.all(rows.map(row => api(`/admin/${kind}/${row.id}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({active})}))); if (kind === 'lecturers') loadLecturers(); else loadStudents(); } catch (error) { window.alert(error.message); } }
 $('activateAllLecturersBtn').addEventListener('click', () => setAllAccounts('lecturers', true));
 $('inactivateAllLecturersBtn').addEventListener('click', () => setAllAccounts('lecturers', false));
 $('activateAllStudentsBtn').addEventListener('click', () => setAllAccounts('students', true));

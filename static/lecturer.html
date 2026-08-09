@@ -10,7 +10,7 @@
 <link rel="icon" type="image/png" sizes="96x96" href="/static/icons/favicon-96x96.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/static/icons/apple-touch-icon.png">
 <link rel="manifest" href="/static/manifest.webmanifest">
-<title>Lecturer — NucleoCampus</title>
+<title>Tutor — NucleoCampus</title>
 <link rel="stylesheet" href="/static/style.css">
 <link rel="stylesheet" href="/static/quiz-builder.css">
 <link rel="stylesheet" href="/static/quiz-math-tools.css">
@@ -43,12 +43,12 @@
     <div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Nucleo<span>Campus</span></div><div class="brand-tagline">Bioscientist</div></div></div>
     <nav><a href="/static/index.html">Home</a><a href="/static/lessons_lecturer.html">Video lessons</a></nav>
   </header>
-  <span class="kicker">Lecturer access</span>
+  <span class="kicker">Tutor access</span>
   <h1 id="lecturerAuthHeading">Welcome back</h1>
   <p class="lede" id="lecturerAuthIntro">Sign in to manage your assigned modules, quizzes, lessons, and student scripts.</p>
-  <div class="auth-switch" aria-label="Choose lecturer access mode"><button class="active" id="showLecturerSignIn" type="button">Sign in</button><button id="showLecturerRegister" type="button">Create account</button></div>
+  <div class="auth-switch" aria-label="Choose tutor access mode"><button class="active" id="showLecturerSignIn" type="button">Sign in</button><button id="showLecturerRegister" type="button">Create account</button></div>
   <section class="card" id="lecturerSignInCard">
-    <h2>Lecturer sign-in</h2>
+    <h2>Tutor sign-in</h2>
     <label for="emailInput">Email</label>
     <input type="text" id="emailInput" autocomplete="email" placeholder="you@example.com">
     <label for="passwordInput">Password</label>
@@ -58,13 +58,13 @@
     <div id="pinMsg"></div>
   </section>
   <section class="card hidden" id="lecturerRegisterCard">
-    <h2>Create lecturer profile</h2>
+    <h2>Create tutor profile</h2>
     <p class="required-note">Create your account with the essentials. An administrator assigns the modules you may manage.</p>
     <label for="registerName">Full name</label><input id="registerName" type="text" placeholder="Full name">
     <label for="registerEmail">Email</label><input id="registerEmail" type="email" autocomplete="email" placeholder="you@example.com">
     <label for="registerPassword">Password</label><input id="registerPassword" type="password" placeholder="At least 8 characters">
     <details><summary>Optional professional details</summary><label for="registerPhone">Phone (optional)</label><input id="registerPhone" type="tel" autocomplete="tel" placeholder="Phone number"><label for="registerInstitution">Institution (optional)</label><input id="registerInstitution" type="text" placeholder="School or university"><label for="registerBio">Professional bio (optional)</label><textarea id="registerBio" placeholder="Your tutoring background and subjects"></textarea><label for="registerImage">Profile image (optional)</label><input id="registerImage" type="file" accept="image/*"></details>
-    <button class="btn" id="registerBtn">Create lecturer account</button><p class="auth-help">After registration, sign in and contact an administrator if your module assignment is not yet visible.</p><div id="registerMsg"></div>
+    <button class="btn" id="registerBtn">Create tutor account</button><p class="auth-help">After registration, sign in and contact an administrator if your module assignment is not yet visible.</p><div id="registerMsg"></div>
   </section>
 </div>
 
@@ -77,8 +77,8 @@
 
   <section class="card lecturer-roster"><div class="admin-editor-heading"><div><span class="kicker">Assigned learners</span><h2>Learners in my modules</h2><p class="muted" id="myStudentsSummary">Loading enrolled learners…</p></div><button class="btn secondary" id="refreshMyStudents">Refresh</button></div><details><summary>Show enrolled learners</summary><div id="myStudentsList" class="admin-list"></div></details></section>
   <section class="card" id="lecturerMessagesCard"><div class="admin-editor-heading"><div><span class="kicker">Learner support</span><h2>Message a learner</h2></div><button class="btn secondary" id="refreshLecturerMessagesBtn">Refresh</button></div><label for="lecturerMessageStudent">Choose learner</label><select id="lecturerMessageStudent"></select><label for="lecturerMessageText">Message</label><textarea id="lecturerMessageText" maxlength="2000" placeholder="Write a private message to the selected learner"></textarea><button class="btn" id="sendLecturerMessageBtn">Send message</button><div id="lecturerMessageMsg"></div><details class="message-history"><summary>Show conversation history</summary><div id="lecturerMessagesList" class="admin-list"></div></details></section>
-  <div class="card"><div class="profile-strip"><img id="profileImage" class="profile-avatar hidden" alt="Lecturer profile image"><div id="profileSummary" class="muted"></div><button class="btn secondary" id="editProfileBtn">Edit profile</button></div></div>
-  <div class="card hidden" id="profileCard"><h2>My lecturer profile</h2><label for="profileName">Full name</label><input id="profileName" type="text"><label for="profilePhone">Phone</label><input id="profilePhone" type="text"><label for="profileInstitution">Institution</label><input id="profileInstitution" type="text"><label for="profileBio">Professional bio</label><textarea id="profileBio"></textarea><label for="profileUpload">Profile image</label><input id="profileUpload" type="file" accept="image/*"><button class="btn" id="saveProfileBtn">Save profile</button><div id="profileMsg"></div></div>
+  <div class="card"><div class="profile-strip"><img id="profileImage" class="profile-avatar hidden" alt="Tutor profile image"><div id="profileSummary" class="muted"></div><button class="btn secondary" id="editProfileBtn">Edit profile</button></div></div>
+  <div class="card hidden" id="profileCard"><h2>My tutor profile</h2><label for="profileName">Full name</label><input id="profileName" type="text"><label for="profilePhone">Phone</label><input id="profilePhone" type="text"><label for="profileInstitution">Institution</label><input id="profileInstitution" type="text"><label for="profileBio">Professional bio</label><textarea id="profileBio"></textarea><label for="profileUpload">Profile image</label><input id="profileUpload" type="file" accept="image/*"><button class="btn" id="saveProfileBtn">Save profile</button><div id="profileMsg"></div></div>
 
   <section class="card quiz-builder-card" id="quizBuilderCard">
     <div class="quiz-builder-heading"><div><span class="kicker">Visual quiz builder</span><h2>1. Create a quiz</h2><p class="muted">Build questions with ordinary form fields, preview the student view, then publish.</p></div><button class="btn secondary" id="newQuizBuilderBtn" type="button">New quiz</button></div>
@@ -91,14 +91,14 @@
     </div>
 
     <div class="quiz-builder-tools">
-      <section class="builder-tool-panel"><span class="kicker">Drafts</span><label for="quizDraftSelect">Continue a saved draft</label><select id="quizDraftSelect"><option value="">No saved drafts</option></select><div class="account-actions"><button class="btn secondary" id="loadQuizDraftBtn" type="button">Load draft</button><button class="btn secondary" id="saveQuizDraftBtn" type="button">Save as draft</button><button class="btn secondary danger-action" id="deleteQuizDraftBtn" type="button">Delete draft</button></div><small id="quizDraftStatus" class="muted">Drafts are saved to your lecturer account.</small></section>
+      <section class="builder-tool-panel"><span class="kicker">Drafts</span><label for="quizDraftSelect">Continue a saved draft</label><select id="quizDraftSelect"><option value="">No saved drafts</option></select><div class="account-actions"><button class="btn secondary" id="loadQuizDraftBtn" type="button">Load draft</button><button class="btn secondary" id="saveQuizDraftBtn" type="button">Save as draft</button><button class="btn secondary danger-action" id="deleteQuizDraftBtn" type="button">Delete draft</button></div><small id="quizDraftStatus" class="muted">Drafts are saved to your tutor account.</small></section>
       <section class="builder-tool-panel"><span class="kicker">Bulk import</span><label for="quizSpreadsheetFile">Excel or CSV question sheet</label><input id="quizSpreadsheetFile" type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"><div class="account-actions"><button class="btn secondary" id="importSpreadsheetBtn" type="button">Import into builder</button><a class="btn secondary" href="/static/quiz-import-template.csv" download>Download template</a></div><small class="muted">Review imported questions here before publishing.</small></section>
     </div>
 
     <div class="question-builder-header"><div><span class="kicker">Questions</span><strong id="builderQuestionCount">0 questions</strong></div><button class="btn secondary" id="addQuestionBtn" type="button">+ Add question</button></div>
     <div class="question-builder-list" id="quizQuestionsBuilder"></div>
 
-    <div class="quiz-builder-footer"><div><strong id="builderTotalMarks">0 total marks</strong><small class="muted">Multiple choice and short answers are marked automatically. Long answers wait for lecturer marking.</small></div><div class="account-actions"><button class="btn secondary" id="previewQuizBtn" type="button">Preview</button><button class="btn" id="publishQuizBtn" type="button">Publish quiz</button></div></div>
+    <div class="quiz-builder-footer"><div><strong id="builderTotalMarks">0 total marks</strong><small class="muted">Multiple choice and short answers are marked automatically. Long answers wait for tutor marking.</small></div><div class="account-actions"><button class="btn secondary" id="previewQuizBtn" type="button">Preview</button><button class="btn" id="publishQuizBtn" type="button">Publish quiz</button></div></div>
     <div id="builderMsg" aria-live="polite"></div>
 
     <details class="advanced-quiz-import">
@@ -187,7 +187,7 @@ function showLecturerAuth(mode) {
   $('showLecturerSignIn').classList.toggle('active', !registering);
   $('showLecturerRegister').classList.toggle('active', registering);
   $('lecturerAuthHeading').textContent = registering ? 'Join NucleoCampus' : 'Welcome back';
-  $('lecturerAuthIntro').textContent = registering ? 'Create a lecturer profile, then sign in to begin teaching.' : 'Sign in to manage your assigned modules, quizzes, lessons, and student scripts.';
+  $('lecturerAuthIntro').textContent = registering ? 'Create a tutor profile, then sign in to begin teaching.' : 'Sign in to manage your assigned modules, quizzes, lessons, and student scripts.';
   history.replaceState(null, '', registering ? '#register' : location.pathname);
 }
 $('showLecturerSignIn').addEventListener('click', () => showLecturerAuth('signin'));
@@ -225,7 +225,7 @@ async function api(path, options = {}, needsAuth = false) {
     }
 
 function applyProfile(profile) {
-  $('profileSummary').textContent = `${profile.full_name} · ${profile.institution || 'Lecturer'} · Assigned modules: ${profile.module_codes.join(', ') || 'None yet'}`;
+  $('profileSummary').textContent = `${profile.full_name} · ${profile.institution || 'Tutor'} · Assigned modules: ${profile.module_codes.join(', ') || 'None yet'}`;
   $('profileName').value = profile.full_name || ''; $('profilePhone').value = profile.phone || ''; $('profileInstitution').value = profile.institution || ''; $('profileBio').value = profile.bio || '';
   if (profile.profile_image_url) { $('profileImage').src = profile.profile_image_url; $('profileImage').classList.remove('hidden'); }
 }

@@ -9,7 +9,7 @@
   function install(){
     if(installed||!document.getElementById('appWrap'))return;installed=true;
     const card=document.createElement('section');card.className='card';card.id='adminMessagingCenter';card.innerHTML=`<div class="admin-editor-heading"><div><span class="kicker">Platform communication</span><h2>Student messages</h2></div><button class="btn secondary" id="refreshAdminMessages" type="button">Refresh</button></div>
-      <div class="message-mode"><button class="active" type="button">All students</button></div><p class="muted">Send one private copy to every active, approved student. Individual messaging remains available from each student or lecturer profile.</p>
+      <div class="message-mode"><button class="active" type="button">All students</button></div><p class="muted">Send one private copy to every active, approved student. Individual messaging remains available from each student or tutor profile.</p>
       <label for="adminBroadcastText">Announcement</label><textarea id="adminBroadcastText" maxlength="2000" placeholder="Write an important platform message"></textarea>
       <div class="message-compose-actions"><button class="btn" id="sendAdminBroadcast" type="button">Send to all students</button><span id="adminBroadcastMsg" aria-live="polite"></span></div>
       <details class="message-history" open><summary>All message history</summary><div id="adminMessageHistory" class="message-timeline"></div></details>`;
