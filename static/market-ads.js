@@ -53,15 +53,8 @@
     }));
   }
   function showMarketAuthDialog(options = {}) {
-    pendingAuthAction = options.afterAuth || '';
-    installMarketAuthDialog();
-    const dialog = document.getElementById('marketAuthDialog');
-    const providerGuest = document.getElementById('landlordGuest');
-    providerGuest?.classList.remove('hidden');
-    if (typeof setDesk === 'function') setDesk('login');
-    const message = document.getElementById('marketAuthMessage'); if (message) message.innerHTML = '';
-    dialog.querySelectorAll('[data-auth-step]').forEach(step => step.classList.toggle('hidden', step.dataset.authStep !== 'provider'));
-    if (typeof dialog.showModal === 'function') dialog.showModal(); else dialog.setAttribute('open', '');
+    const mode = options.mode === 'register' ? '&mode=register' : '';
+    window.location.href = `/static/index.html?role=advertiser${mode}`;
   }
   window.showMarketAuthDialog = showMarketAuthDialog;
   document.addEventListener('market-provider-authenticated', () => {

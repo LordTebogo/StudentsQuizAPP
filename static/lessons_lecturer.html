@@ -25,6 +25,7 @@
 </style>
 </head>
 <body>
+<script>if(!sessionStorage.getItem('lecturerToken'))location.replace('/static/index.html?role=lecturer')</script>
 
 <!-- PIN gate -->
 <div class="wrap" id="gateWrap">
@@ -190,12 +191,10 @@ $('lockBtn').addEventListener('click', (e) => {
   e.preventDefault();
   sessionStorage.removeItem('lecturerToken');
   LECTURER_TOKEN = null;
-  $('appWrap').classList.add('hidden');
-  $('gateWrap').classList.remove('hidden');
-  $('pinInput').value = '';
+  location.href = '/static/index.html?role=lecturer';
 });
 if (LECTURER_TOKEN) {
-  api('/lecturer/me', {}, true).then(() => { $('gateWrap').classList.add('hidden'); $('appWrap').classList.remove('hidden'); loadModules(); loadLessons(); }).catch(() => { sessionStorage.removeItem('lecturerToken'); LECTURER_TOKEN = null; });
+  api('/lecturer/me', {}, true).then(() => { $('gateWrap').classList.add('hidden'); $('appWrap').classList.remove('hidden'); loadModules(); loadLessons(); }).catch(() => { sessionStorage.removeItem('lecturerToken'); LECTURER_TOKEN = null; location.replace('/static/index.html?role=lecturer'); });
 }
 
 // ---- Upload lesson -----------------------------------------------------

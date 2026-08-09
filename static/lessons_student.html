@@ -56,6 +56,7 @@
 </style>
 </head>
 <body>
+<script>if(!sessionStorage.getItem('studentToken'))location.replace('/static/index.html?role=learner')</script>
 <div class="wrap">
   <header class="top">
     <div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Nucleo<span>Campus</span></div><div class="brand-tagline">Bioscientist</div></div></div>

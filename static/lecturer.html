@@ -35,6 +35,7 @@
 </style>
 </head>
 <body>
+<script>if(!sessionStorage.getItem('lecturerToken'))location.replace('/static/index.html?role=lecturer')</script>
 
 <!-- Lecturer account gate -->
 <div class="wrap" id="gateWrap">
@@ -299,9 +300,7 @@ $('lockBtn').addEventListener('click', (e) => {
   e.preventDefault();
   sessionStorage.removeItem('lecturerToken');
   LECTURER_TOKEN = null;
-  $('appWrap').classList.add('hidden');
-  $('gateWrap').classList.remove('hidden');
-  $('passwordInput').value = '';
+  location.href = '/static/index.html?role=lecturer';
 });
 
 // If a lecturer session exists, restore the workspace.
@@ -310,7 +309,7 @@ if (LECTURER_TOKEN) {
     $('gateWrap').classList.add('hidden'); $('appWrap').classList.remove('hidden');
     applyProfile(profile);
     loadQuizzes();
-  }).catch(() => { sessionStorage.removeItem('lecturerToken'); LECTURER_TOKEN = null; });
+  }).catch(() => { sessionStorage.removeItem('lecturerToken'); LECTURER_TOKEN = null; location.replace('/static/index.html?role=lecturer'); });
 }
 
 $('registerBtn').addEventListener('click', async () => {
