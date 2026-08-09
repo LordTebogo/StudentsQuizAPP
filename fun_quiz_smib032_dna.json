@@ -1,0 +1,135 @@
+{
+  "title": "Fun Quiz: DNA Architecture, Replication and Repair",
+  "is_fun": true,
+  "fun_level": "expert",
+  "questions": [
+    {
+      "type": "mcq",
+      "question": "In the diagram, which labelled component makes this unit a nucleotide rather than a nucleoside?",
+      "image": "smib032_nucleotide_components.svg",
+      "options": ["A — the phosphate group", "B — the deoxyribose sugar", "C — the nitrogenous base", "The bond between B and C"],
+      "answer": "A — the phosphate group",
+      "marks": 1,
+      "explanation": "A nucleoside contains a nitrogenous base joined to a pentose sugar. Adding one or more phosphate groups produces a nucleotide. In DNA, adjacent nucleotides become linked by 3′–5′ phosphodiester bonds.",
+      "similar_question": "Which two components are present in both a DNA nucleoside and a DNA nucleotide?",
+      "similar_options": ["Deoxyribose and a nitrogenous base", "Phosphate and ribose only", "Two phosphates and a base", "Amino acid and phosphate"],
+      "similar_correct_answer": "Deoxyribose and a nitrogenous base"
+    },
+    {
+      "type": "mcq",
+      "question": "Which statement correctly describes the first major level of eukaryotic DNA packaging?",
+      "options": ["About 147 bp of DNA wraps around a histone octamer to form a nucleosome", "Eight DNA molecules wrap around one histone to form a chromosome", "A nucleosome contains only H1 and 20 bp of DNA", "DNA is packaged first by covalently attaching it to RNA"],
+      "answer": "About 147 bp of DNA wraps around a histone octamer to form a nucleosome",
+      "marks": 1,
+      "explanation": "The nucleosome core contains two copies each of H2A, H2B, H3 and H4, forming a histone octamer. Roughly 145–147 bp of DNA wraps around it; linker DNA and histone H1 help higher-order compaction.",
+      "similar_question": "Which histones occur twice in the nucleosome core particle?",
+      "similar_options": ["H2A, H2B, H3 and H4", "H1 only", "H1, H2A and H5", "H3 and H4 only"],
+      "similar_correct_answer": "H2A, H2B, H3 and H4"
+    },
+    {
+      "type": "mcq",
+      "reading_page": {
+        "title": "Scenario: opening a silent gene",
+        "text": "A cell is exposed to heat stress. A protective gene is present, but its promoter is hidden within a tightly positioned nucleosome. An ATP-dependent chromatin-remodelling complex is recruited. It uses ATP to slide or partially remove the nucleosome, exposing the promoter. A histone acetyltransferase then acetylates lysine residues on nearby histone tails, weakening histone–DNA attraction and favouring a more open chromatin state."
+      },
+      "question": "What is the most direct reason transcription can now begin at the protective gene?",
+      "options": ["The promoter becomes accessible to transcription factors and RNA polymerase", "The DNA sequence is permanently replaced", "The histones synthesize messenger RNA", "The gene is moved out of the nucleus"],
+      "answer": "The promoter becomes accessible to transcription factors and RNA polymerase",
+      "marks": 1,
+      "explanation": "Chromatin remodelling changes nucleosome position or occupancy without changing the DNA sequence. This exposes regulatory DNA so transcription factors and RNA polymerase can bind.",
+      "similar_question": "If a remodeler shifts a nucleosome onto a promoter instead, what is the most likely immediate effect?",
+      "similar_options": ["Reduced transcription because the promoter is less accessible", "DNA replication doubles immediately", "The promoter changes into RNA", "Translation begins inside the nucleus"],
+      "similar_correct_answer": "Reduced transcription because the promoter is less accessible"
+    },
+    {
+      "type": "mcq",
+      "question": "Why does histone acetylation usually favour euchromatin and active transcription?",
+      "options": ["It reduces the positive charge on histone lysines and loosens histone–DNA interaction", "It cuts the DNA backbone at every nucleosome", "It converts thymine into uracil", "It adds more positive charge to histones and locks DNA tightly"],
+      "answer": "It reduces the positive charge on histone lysines and loosens histone–DNA interaction",
+      "marks": 1,
+      "explanation": "DNA is negatively charged. Acetylation neutralizes part of the positive charge on histone lysines, weakening electrostatic attraction and generally making chromatin more accessible. Euchromatin is relatively open; heterochromatin is more compact.",
+      "similar_question": "Which chromatin state is generally compact, less accessible and transcriptionally quiet?",
+      "similar_options": ["Heterochromatin", "Euchromatin", "A replication bubble", "A nucleoside"],
+      "similar_correct_answer": "Heterochromatin"
+    },
+    {
+      "type": "mcq",
+      "reading_page": {
+        "title": "Scenario: Meselson–Stahl’s density experiment",
+        "text": "E. coli cells are grown for many generations in ¹⁵N so that all DNA is heavy. The cells are transferred to ¹⁴N medium. DNA is collected after each cell generation and separated by CsCl density-gradient centrifugation. Heavy DNA bands lower in the tube, light DNA bands higher, and hybrid ¹⁵N/¹⁴N DNA bands between them.",
+        "image": "smib032_meselson_stahl_bands.svg"
+      },
+      "question": "After one generation in ¹⁴N, all DNA forms one intermediate-density band. Which replication model does this result support most directly?",
+      "options": ["Semiconservative replication", "Conservative replication", "Dispersive transcription", "Rolling-circle translation"],
+      "answer": "Semiconservative replication",
+      "marks": 1,
+      "explanation": "In semiconservative replication, each daughter duplex contains one old ¹⁵N strand and one new ¹⁴N strand after the first generation, so every molecule has intermediate density. A conservative model would already give separate heavy and light bands.",
+      "similar_question": "What strand composition produces the intermediate band after the first generation?",
+      "similar_options": ["One ¹⁵N strand paired with one ¹⁴N strand", "Two ¹⁵N strands", "Two ¹⁴N strands", "A protein strand paired with DNA"],
+      "similar_correct_answer": "One ¹⁵N strand paired with one ¹⁴N strand"
+    },
+    {
+      "type": "mcq",
+      "question": "After two generations in ¹⁴N medium, what band pattern is expected for semiconservative replication?",
+      "options": ["One light band and one intermediate hybrid band", "One heavy band only", "One intermediate band only", "One heavy band and one light band with no hybrid DNA"],
+      "answer": "One light band and one intermediate hybrid band",
+      "marks": 1,
+      "explanation": "Each hybrid molecule produces one hybrid duplex and one fully light duplex in the second round. Therefore the sample contains light and hybrid DNA, with no fully heavy duplexes.",
+      "similar_question": "Which DNA class disappears after cells complete their first replication in ¹⁴N medium?",
+      "similar_options": ["Fully heavy ¹⁵N/¹⁵N DNA", "Hybrid ¹⁵N/¹⁴N DNA", "Fully light ¹⁴N/¹⁴N DNA", "All double-stranded DNA"],
+      "similar_correct_answer": "Fully heavy ¹⁵N/¹⁵N DNA"
+    },
+    {
+      "type": "mcq",
+      "reading_page": {
+        "title": "How DNA polymerase III copies both strands",
+        "text": "The parental DNA strands are antiparallel, but every DNA polymerase synthesizes only 5′→3′. In the bacterial replisome, two DNA polymerase III cores travel together. The leading-strand core synthesizes continuously toward the replication fork. The lagging-strand template bends into a loop, allowing its polymerase core to face the same overall direction as the leading-strand core. Primase lays a new RNA primer, a clamp is loaded, and the loop grows while an Okazaki fragment is synthesized. When the fragment is complete, the loop is released and a new loop forms at the next primer. This repeating cycle is the trombone model."
+      },
+      "question": "What is the key purpose of looping the lagging-strand template in the trombone model?",
+      "options": ["It lets both DNA polymerase III cores move with the replication fork while synthesizing 5′→3′", "It allows DNA polymerase III to synthesize 3′→5′", "It removes the need for RNA primers", "It turns the lagging strand into RNA"],
+      "answer": "It lets both DNA polymerase III cores move with the replication fork while synthesizing 5′→3′",
+      "marks": 1,
+      "explanation": "Looping reverses the physical orientation of the lagging template relative to its polymerase core. The two cores remain coordinated and move with the fork, while both new strands are still synthesized chemically in the 5′→3′ direction.",
+      "similar_question": "Why is lagging-strand synthesis discontinuous?",
+      "similar_options": ["Its template orientation requires repeated 5′→3′ Okazaki-fragment synthesis away from the fork", "DNA polymerase can synthesize only 3′→5′", "Helicase works on the leading strand only", "Lagging-strand DNA contains no nucleotides"],
+      "similar_correct_answer": "Its template orientation requires repeated 5′→3′ Okazaki-fragment synthesis away from the fork"
+    },
+    {
+      "type": "mcq",
+      "question": "Which sequence correctly describes maturation of bacterial Okazaki fragments after DNA polymerase III has extended them?",
+      "options": ["DNA polymerase I removes RNA primers and fills DNA; DNA ligase seals remaining nicks", "Ligase removes primers; helicase fills DNA", "Primase seals nicks; topoisomerase adds bases", "DNA polymerase III joins fragments without primer removal"],
+      "answer": "DNA polymerase I removes RNA primers and fills DNA; DNA ligase seals remaining nicks",
+      "marks": 1,
+      "explanation": "DNA polymerase I uses its 5′→3′ exonuclease activity to remove RNA primers and replaces them with DNA. DNA ligase then forms the final phosphodiester bond that seals each nick.",
+      "similar_question": "Which enzyme makes the final phosphodiester bond between adjacent Okazaki fragments?",
+      "similar_options": ["DNA ligase", "Primase", "Helicase", "DNA polymerase III clamp loader"],
+      "similar_correct_answer": "DNA ligase"
+    },
+    {
+      "type": "mcq",
+      "reading_page": {
+        "title": "DNA lesions and repair pathways",
+        "text": "DNA is continuously damaged. UV light can create bulky pyrimidine dimers that distort the helix; nucleotide-excision repair removes a short damaged oligonucleotide and resynthesizes the gap. Oxidation can produce 8-oxo-guanine, while deamination of cytosine produces uracil; small non-bulky altered bases are commonly handled by base-excision repair. A replication mismatch that escapes polymerase proofreading can be corrected by mismatch repair. Double-strand breaks require pathways such as homologous recombination or non-homologous end joining."
+      },
+      "question": "A UV-induced thymine dimer strongly distorts the DNA helix. Which repair pathway is the best match?",
+      "options": ["Nucleotide-excision repair", "Base-excision repair", "Mismatch repair only", "Translation-coupled peptide repair"],
+      "answer": "Nucleotide-excision repair",
+      "marks": 1,
+      "explanation": "Nucleotide-excision repair recognizes helix-distorting lesions such as UV pyrimidine dimers, removes a short stretch containing the lesion, and uses DNA polymerase plus ligase to restore the strand. In organisms with photolyase, photoreactivation may also directly reverse dimers.",
+      "similar_question": "Which pathway is the best match for uracil formed by cytosine deamination in DNA?",
+      "similar_options": ["Base-excision repair", "Nucleotide-excision repair only", "Non-homologous end joining", "Homologous chromosome segregation"],
+      "similar_correct_answer": "Base-excision repair"
+    },
+    {
+      "type": "mcq",
+      "question": "A single-base substitution changes one codon in three different genes: gene X still encodes the same amino acid; gene Y encodes a different amino acid; gene Z gains a premature stop codon. How should X, Y and Z be classified?",
+      "options": ["X silent, Y missense, Z nonsense", "X missense, Y nonsense, Z silent", "X nonsense, Y silent, Z missense", "X frameshift, Y inversion, Z translocation"],
+      "answer": "X silent, Y missense, Z nonsense",
+      "marks": 1,
+      "explanation": "The three major coding consequences of point substitutions are: silent (codon changes but amino acid does not), missense (a different amino acid is encoded), and nonsense (a codon becomes a stop codon). These differ from insertions or deletions that may cause frameshifts.",
+      "similar_question": "A substitution changes a codon from UAU (Tyr) to UAA (Stop). What type of point mutation is this?",
+      "similar_options": ["Nonsense", "Silent", "Missense", "Frameshift"],
+      "similar_correct_answer": "Nonsense"
+    }
+  ]
+}

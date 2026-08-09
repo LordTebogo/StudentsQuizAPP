@@ -184,7 +184,10 @@ def ensure_fun_quiz_schema():
             conn.execute(text("ALTER TABLE quizzes ADD COLUMN is_fun BOOLEAN DEFAULT FALSE"))
         if "fun_level" not in quiz_columns:
             conn.execute(text("ALTER TABLE quizzes ADD COLUMN fun_level VARCHAR(32) DEFAULT 'starter'"))
-        for column_name in ("explanation", "similar_question", "similar_options_json", "similar_correct_answer"):
+        for column_name in (
+            "explanation", "similar_question", "similar_options_json", "similar_correct_answer",
+            "reading_title", "reading_text", "reading_image_url",
+        ):
             if column_name not in question_columns:
                 conn.execute(text(f"ALTER TABLE questions ADD COLUMN {column_name} TEXT"))
         if "is_fun" not in draft_columns:
@@ -525,6 +528,9 @@ class AdminQuestionInput(BaseModel):
     similar_question: Optional[str] = None
     similar_options: Optional[List[str]] = None
     similar_correct_answer: Optional[str] = None
+    reading_title: Optional[str] = None
+    reading_text: Optional[str] = None
+    reading_image_url: Optional[str] = None
 
 
 class AdminQuizInput(BaseModel):
@@ -1704,6 +1710,12 @@ async def upload_quiz(
         similar_question = str(q.get("similar_question") or "").strip()
         similar_answer = str(q.get("similar_correct_answer") or "").strip()
         similar_options = q.get("similar_options") if q_type == "mcq" else None
+        reading_page = q.get("reading_page") or {}
+        if not isinstance(reading_page, dict):
+            raise HTTPException(status_code=400, detail=f"Question {order + 1}: 'reading_page' must be an object")
+        reading_title = str(reading_page.get("title") or q.get("reading_title") or "").strip()
+        reading_text = str(reading_page.get("text") or q.get("reading_text") or "").strip()
+        reading_image_ref = reading_page.get("image") or q.get("reading_image")
         if is_fun and (not explanation or not similar_question or not similar_answer):
             raise HTTPException(status_code=400, detail=f"Question {order + 1}: add an explanation, a similar question, and its correct answer")
         if is_fun and q_type == "mcq" and (not similar_options or len(similar_options) < 2 or similar_answer not in similar_options):
@@ -1715,6 +1727,10 @@ async def upload_quiz(
             q.get("image"), uploaded_bytes_by_name, resolved_cache,
             cloud_folder, f"Question {order + 1}",
         )
+        reading_image_url = resolve_question_image(
+            reading_image_ref, uploaded_bytes_by_name, resolved_cache,
+            cloud_folder, f"Reading page before question {order + 1}",
+        ) if reading_image_ref else None
 
         db.add(Question(
             quiz_id=quiz.id,
@@ -1729,6 +1745,9 @@ async def upload_quiz(
             similar_question=similar_question or None,
             similar_options_json=json.dumps(similar_options) if similar_options else None,
             similar_correct_answer=similar_answer or None,
+            reading_title=reading_title or None,
+            reading_text=reading_text or None,
+            reading_image_url=reading_image_url,
         ))
 
     db.commit()
@@ -1862,6 +1881,9 @@ def get_quiz(quiz_id: int, db: Session = Depends(get_db)):
             "question": q.question,
             "marks": q.marks,
             "image_url": q.image_url,
+            "reading_title": getattr(q, "reading_title", None) or "",
+            "reading_text": getattr(q, "reading_text", None) or "",
+            "reading_image_url": getattr(q, "reading_image_url", None) or "",
         }
         if q.type == "mcq":
             item["options"] = _shuffled_answer_options(json.loads(q.options_json))
@@ -2983,6 +3005,9 @@ def _admin_question_dict(question):
         "similar_question": getattr(question, "similar_question", None) or "",
         "similar_options": json.loads(getattr(question, "similar_options_json", None)) if getattr(question, "similar_options_json", None) else [],
         "similar_correct_answer": getattr(question, "similar_correct_answer", None) or "",
+        "reading_title": getattr(question, "reading_title", None) or "",
+        "reading_text": getattr(question, "reading_text", None) or "",
+        "reading_image_url": getattr(question, "reading_image_url", None) or "",
     }
 
 
@@ -2998,6 +3023,9 @@ def _add_quiz_questions(db: Session, quiz_id: int, questions: List[AdminQuestion
             similar_question=(question.similar_question or "").strip() or None,
             similar_options_json=json.dumps(question.similar_options) if question.similar_options else None,
             similar_correct_answer=(question.similar_correct_answer or "").strip() or None,
+            reading_title=(question.reading_title or "").strip() or None,
+            reading_text=(question.reading_text or "").strip() or None,
+            reading_image_url=(question.reading_image_url or "").strip() or None,
         ))
 
 

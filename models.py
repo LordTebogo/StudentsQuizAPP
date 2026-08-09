@@ -356,6 +356,11 @@ class Question(Base):
     similar_question = Column(Text)
     similar_options_json = Column(Text)
     similar_correct_answer = Column(Text)
+    # Optional interlude shown as its own page immediately before this
+    # question in a Fun Quiz.
+    reading_title = Column(Text)
+    reading_text = Column(Text)
+    reading_image_url = Column(Text)
 
     quiz = relationship("Quiz", back_populates="questions")
     answers = relationship(

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="680" viewBox="0 0 1200 680">
+  <rect width="1200" height="680" rx="34" fill="#081426"/>
+  <text x="600" y="70" text-anchor="middle" fill="#eaf4ff" font-family="Arial, sans-serif" font-size="38" font-weight="700">Meselson–Stahl density-gradient pattern</text>
+  <g font-family="Arial, sans-serif" font-size="27" fill="#b7c7dc" text-anchor="middle">
+    <text x="260" y="125">Before transfer</text><text x="600" y="125">After 1 generation</text><text x="940" y="125">After 2 generations</text>
+  </g>
+  <g fill="#0d2038" stroke="#67e8f9" stroke-width="6">
+    <path d="M170 155h180v350c0 95-180 95-180 0z"/><path d="M510 155h180v350c0 95-180 95-180 0z"/><path d="M850 155h180v350c0 95-180 95-180 0z"/>
+  </g>
+  <g stroke-linecap="round" stroke-width="22">
+    <line x1="195" y1="475" x2="325" y2="475" stroke="#a78bfa"/>
+    <line x1="535" y1="365" x2="665" y2="365" stroke="#fbbf24"/>
+    <line x1="875" y1="255" x2="1005" y2="255" stroke="#6ee7b7"/>
+    <line x1="875" y1="365" x2="1005" y2="365" stroke="#fbbf24"/>
+  </g>
+  <g font-family="Arial, sans-serif" font-size="25" font-weight="700" text-anchor="middle">
+    <text x="260" y="585" fill="#a78bfa">heavy</text><text x="600" y="585" fill="#fbbf24">hybrid</text><text x="940" y="585" fill="#6ee7b7">light + hybrid</text>
+  </g>
+</svg>

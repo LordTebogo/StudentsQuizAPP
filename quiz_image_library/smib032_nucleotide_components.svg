@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="620" viewBox="0 0 1200 620">
+  <rect width="1200" height="620" rx="34" fill="#081426"/>
+  <text x="600" y="72" text-anchor="middle" fill="#eaf4ff" font-family="Arial, sans-serif" font-size="38" font-weight="700">A simplified DNA nucleotide</text>
+  <line x1="330" y1="320" x2="500" y2="320" stroke="#91a9c6" stroke-width="14"/>
+  <line x1="700" y1="320" x2="860" y2="320" stroke="#91a9c6" stroke-width="14"/>
+  <circle cx="230" cy="320" r="98" fill="#12395a" stroke="#67e8f9" stroke-width="8"/>
+  <text x="230" y="335" text-anchor="middle" fill="#67e8f9" font-family="Arial, sans-serif" font-size="54" font-weight="800">P</text>
+  <polygon points="510,230 680,260 700,430 570,505 460,390" fill="#17304e" stroke="#a78bfa" stroke-width="8"/>
+  <text x="585" y="365" text-anchor="middle" fill="#ddd6fe" font-family="Arial, sans-serif" font-size="45" font-weight="800">Sugar</text>
+  <rect x="860" y="225" width="250" height="190" rx="28" fill="#113f42" stroke="#6ee7b7" stroke-width="8"/>
+  <text x="985" y="336" text-anchor="middle" fill="#6ee7b7" font-family="Arial, sans-serif" font-size="48" font-weight="800">Base</text>
+  <g font-family="Arial, sans-serif" font-size="32" font-weight="700" fill="#f8fafc">
+    <text x="230" y="505" text-anchor="middle">A</text>
+    <text x="585" y="565" text-anchor="middle">B</text>
+    <text x="985" y="505" text-anchor="middle">C</text>
+  </g>
+</svg>
