@@ -5400,15 +5400,7 @@ def _process_ocr_job(job_id: str, data: bytes, source_type: str) -> None:
         )
 
 
-@app.post("/document-tools/ocr/start")
-async def start_ocr_document(
-    file: UploadFile = File(...),
-    source_type: str = Form(...),
-    _user: str = Depends(require_document_tool_user),
-):
-    if source_type not in {"picture", "scanned-pdf"}:
-        raise HTTPException(status_code=400, detail="Choose Picture or Scanned PDF")
-    data = await _document_bytes(file)
+def _launch_ocr_job(data: bytes, source_type: str) -> dict:
     _cleanup_ocr_jobs()
     job_id = secrets.token_urlsafe(24)
     with _ocr_jobs_lock:
@@ -5420,6 +5412,18 @@ async def start_ocr_document(
     _ocr_background_tasks.add(task)
     task.add_done_callback(_ocr_background_tasks.discard)
     return {"job_id": job_id, "status": "queued"}
+
+
+@app.post("/document-tools/ocr/start")
+async def start_ocr_document(
+    file: UploadFile = File(...),
+    source_type: str = Form(...),
+    _user: str = Depends(require_document_tool_user),
+):
+    if source_type not in {"picture", "scanned-pdf"}:
+        raise HTTPException(status_code=400, detail="Choose Picture or Scanned PDF")
+    data = await _document_bytes(file)
+    return _launch_ocr_job(data, source_type)
 
 
 @app.get("/document-tools/ocr/status/{job_id}")
@@ -5451,11 +5455,16 @@ def ocr_document_result(job_id: str, _user: str = Depends(require_document_tool_
 
 
 @app.post("/document-tools/ocr")
-async def ocr_document(file: UploadFile = File(...), source_type: str = Form(...), _user: str = Depends(require_document_tool_user)):
-    """Backward-compatible direct OCR route; the web interface uses background jobs."""
+async def ocr_document(
+    file: UploadFile = File(...), source_type: str = Form(...),
+    background: bool = Form(False), _user: str = Depends(require_document_tool_user),
+):
+    """Start background OCR on the established endpoint, or support older direct clients."""
     if source_type not in {"picture", "scanned-pdf"}:
         raise HTTPException(status_code=400, detail="Choose Picture or Scanned PDF")
     data = await _document_bytes(file)
+    if background:
+        return _launch_ocr_job(data, source_type)
     try:
         result = await asyncio.to_thread(_ocr_bytes_page_by_page, data, source_type)
         return _download(result, "text/plain; charset=utf-8", "ocr-text.txt")
