@@ -122,6 +122,31 @@
     }
   });
 
+  // Dropdown menus should behave like temporary overlays: opening another
+  // menu, clicking elsewhere, or pressing Escape closes the current one.
+  document.addEventListener('pointerdown', event => {
+    document.querySelectorAll('.nav-more[open]').forEach(menu => {
+      if (!menu.contains(event.target)) menu.removeAttribute('open');
+    });
+    document.querySelectorAll('.account-sheet').forEach(sheet => {
+      if (!sheet.contains(event.target) && !event.target.closest('.nav-account-avatar,.nav-profile-button')) sheet.remove();
+    });
+  }, true);
+  document.addEventListener('toggle', event => {
+    const opened = event.target;
+    if (!opened.matches?.('.nav-more[open]')) return;
+    document.querySelectorAll('.nav-more[open]').forEach(menu => {
+      if (menu !== opened) menu.removeAttribute('open');
+    });
+    document.querySelectorAll('.account-sheet').forEach(sheet => sheet.remove());
+  }, true);
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    document.querySelectorAll('.nav-more[open]').forEach(menu => menu.removeAttribute('open'));
+    document.querySelectorAll('.account-sheet').forEach(sheet => sheet.remove());
+    if (document.querySelector('.mobile-more-sheet')) toggleMobileMenu(false);
+  });
+
   if (activeRole !== 'public' && !document.querySelector('.mobile-tabbar')) {
     const mobile = document.createElement('nav'); mobile.className='mobile-tabbar'; mobile.setAttribute('aria-label','Primary mobile navigation');
     const mobileLinks = activeRole === 'lecturer' ? roleLinks : roleLinks.slice(0,4);
