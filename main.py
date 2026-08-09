@@ -37,6 +37,7 @@ import hmac
 import secrets
 import time
 import tempfile
+import threading
 import urllib.request
 import zipfile
 from datetime import datetime, timedelta, timezone
@@ -4923,6 +4924,10 @@ def admin_delete_lesson_comment(comment_id: int, _pin_ok: bool = Depends(require
 # ---------------------------------------------------------------------------
 DOCUMENT_TOOL_MAX_BYTES = 25 * 1024 * 1024
 _rapid_ocr_engine = None
+_rapid_ocr_lock = threading.Lock()
+_ocr_jobs_lock = threading.Lock()
+_ocr_jobs: dict[str, dict] = {}
+_ocr_background_tasks: set[asyncio.Task] = set()
 
 
 def require_document_tool_user(
@@ -5283,39 +5288,177 @@ async def convert_document(file: UploadFile = File(...), target: str = Form(...)
     raise HTTPException(status_code=400, detail="Choose a supported conversion")
 
 
+def _cleanup_ocr_jobs() -> None:
+    """Discard completed in-memory OCR results after thirty minutes."""
+    cutoff = time.time() - 1800
+    with _ocr_jobs_lock:
+        for job_id in [
+            key for key, value in _ocr_jobs.items()
+            if value.get("status") in {"done", "error"} and value.get("updated_at", 0) < cutoff
+        ]:
+            _ocr_jobs.pop(job_id, None)
+
+
+def _update_ocr_job(job_id: str, **changes) -> None:
+    with _ocr_jobs_lock:
+        job = _ocr_jobs.get(job_id)
+        if job is not None:
+            job.update(changes, updated_at=time.time())
+
+
+def _ocr_engine():
+    global _rapid_ocr_engine
+    with _rapid_ocr_lock:
+        if _rapid_ocr_engine is None:
+            from rapidocr import RapidOCR
+            _rapid_ocr_engine = RapidOCR()
+        return _rapid_ocr_engine
+
+
+def _read_image_text(image_bytes: bytes) -> list[str]:
+    engine = _ocr_engine()
+    # RapidOCR keeps shared model state, so inference is serialized while PDF
+    # rendering for other jobs can continue independently.
+    with _rapid_ocr_lock:
+        result = engine(image_bytes)
+    return list(result.txts or ()) if result else []
+
+
+def _ocr_bytes_page_by_page(data: bytes, source_type: str, progress=None) -> bytes:
+    """OCR one page at a time and release its bitmap before rendering the next."""
+    pages: list[str] = []
+    failures: list[Exception] = []
+    if source_type == "scanned-pdf":
+        if not data.startswith(b"%PDF"):
+            raise HTTPException(status_code=400, detail="Scanned PDF mode requires a PDF file")
+        document = pymupdf.open(stream=data, filetype="pdf")
+        try:
+            if document.needs_pass:
+                raise HTTPException(status_code=400, detail="The scanned PDF is password protected")
+            if document.page_count > 20:
+                raise HTTPException(status_code=400, detail="OCR is limited to 20 PDF pages at a time")
+            if progress:
+                progress(0, document.page_count, "Preparing individual PDF pages")
+            for index in range(document.page_count):
+                page_number = index + 1
+                if progress:
+                    progress(index, document.page_count, f"Reading page {page_number} of {document.page_count}")
+                try:
+                    # 180 DPI remains clear for exam papers while using roughly
+                    # half the pixels of the former 220-DPI whole-document pass.
+                    page = document.load_page(index)
+                    embedded_text = page.get_text("text").strip()
+                    if embedded_text:
+                        lines = embedded_text.splitlines()
+                        pixmap = image_bytes = None
+                    else:
+                        pixmap = page.get_pixmap(dpi=180, colorspace=pymupdf.csRGB, alpha=False)
+                        image_bytes = pixmap.tobytes("png")
+                        lines = _read_image_text(image_bytes)
+                    pages.append(f"--- Page {page_number} ---\n" + "\n".join(lines))
+                    del image_bytes, pixmap, page
+                except Exception as exc:
+                    failures.append(exc)
+                    pages.append(f"--- Page {page_number} ---\n[This page could not be read automatically.]")
+                if progress:
+                    progress(page_number, document.page_count, f"Finished page {page_number} of {document.page_count}")
+        finally:
+            document.close()
+    else:
+        if data.startswith(b"%PDF"):
+            raise HTTPException(status_code=400, detail="This is a PDF. Select Scanned PDF instead of Picture")
+        PILImage.open(io.BytesIO(data)).verify()
+        if progress:
+            progress(0, 1, "Reading picture")
+        pages.append("\n".join(_read_image_text(data)))
+        if progress:
+            progress(1, 1, "Finished picture")
+    if failures and len(failures) == len(pages):
+        raise failures[0]
+    text_output = "\n\n".join(pages).strip() or "No readable text was detected."
+    return text_output.encode("utf-8")
+
+
+def _process_ocr_job(job_id: str, data: bytes, source_type: str) -> None:
+    try:
+        _update_ocr_job(job_id, status="processing", message="Starting text recognition")
+        result = _ocr_bytes_page_by_page(
+            data, source_type,
+            lambda current, total, message: _update_ocr_job(
+                job_id, status="processing", current_page=current,
+                total_pages=total, message=message,
+            ),
+        )
+        _update_ocr_job(job_id, status="done", result=result, message="Done")
+    except HTTPException as exc:
+        _update_ocr_job(job_id, status="error", error=str(exc.detail), message="Could not process the document")
+    except Exception:
+        _update_ocr_job(
+            job_id, status="error",
+            error="OCR could not read this file. Use a clear, upright picture or scanned PDF",
+            message="Could not process the document",
+        )
+
+
+@app.post("/document-tools/ocr/start")
+async def start_ocr_document(
+    file: UploadFile = File(...),
+    source_type: str = Form(...),
+    _user: str = Depends(require_document_tool_user),
+):
+    if source_type not in {"picture", "scanned-pdf"}:
+        raise HTTPException(status_code=400, detail="Choose Picture or Scanned PDF")
+    data = await _document_bytes(file)
+    _cleanup_ocr_jobs()
+    job_id = secrets.token_urlsafe(24)
+    with _ocr_jobs_lock:
+        _ocr_jobs[job_id] = {
+            "status": "queued", "message": "Waiting to begin", "current_page": 0,
+            "total_pages": 0, "created_at": time.time(), "updated_at": time.time(),
+        }
+    task = asyncio.create_task(asyncio.to_thread(_process_ocr_job, job_id, data, source_type))
+    _ocr_background_tasks.add(task)
+    task.add_done_callback(_ocr_background_tasks.discard)
+    return {"job_id": job_id, "status": "queued"}
+
+
+@app.get("/document-tools/ocr/status/{job_id}")
+def ocr_document_status(job_id: str, _user: str = Depends(require_document_tool_user)):
+    _cleanup_ocr_jobs()
+    with _ocr_jobs_lock:
+        job = _ocr_jobs.get(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="This OCR job has expired or does not exist")
+        return {
+            "status": job["status"], "message": job.get("message", ""),
+            "current_page": job.get("current_page", 0), "total_pages": job.get("total_pages", 0),
+            "error": job.get("error", ""),
+        }
+
+
+@app.get("/document-tools/ocr/result/{job_id}")
+def ocr_document_result(job_id: str, _user: str = Depends(require_document_tool_user)):
+    with _ocr_jobs_lock:
+        job = _ocr_jobs.get(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="This OCR job has expired or does not exist")
+        if job["status"] == "error":
+            raise HTTPException(status_code=400, detail=job.get("error") or "OCR could not process this document")
+        if job["status"] != "done":
+            raise HTTPException(status_code=409, detail="OCR is still processing this document")
+        result = job.get("result", b"")
+    return _download(result, "text/plain; charset=utf-8", "ocr-text.txt")
+
+
 @app.post("/document-tools/ocr")
 async def ocr_document(file: UploadFile = File(...), source_type: str = Form(...), _user: str = Depends(require_document_tool_user)):
+    """Backward-compatible direct OCR route; the web interface uses background jobs."""
     if source_type not in {"picture", "scanned-pdf"}:
         raise HTTPException(status_code=400, detail="Choose Picture or Scanned PDF")
     data = await _document_bytes(file)
     try:
-        global _rapid_ocr_engine
-        if _rapid_ocr_engine is None:
-            from rapidocr import RapidOCR
-            _rapid_ocr_engine = RapidOCR()
-        engine = _rapid_ocr_engine
-        images = []
-        if source_type == "scanned-pdf":
-            if not data.startswith(b"%PDF"):
-                raise HTTPException(status_code=400, detail="Scanned PDF mode requires a PDF file")
-            document = pymupdf.open(stream=data, filetype="pdf")
-            if document.page_count > 20:
-                raise HTTPException(status_code=400, detail="OCR is limited to 20 PDF pages at a time")
-            images = [(index + 1, page.get_pixmap(dpi=220, colorspace=pymupdf.csRGB, alpha=False).tobytes("png")) for index, page in enumerate(document)]
-            document.close()
-        else:
-            if data.startswith(b"%PDF"):
-                raise HTTPException(status_code=400, detail="This is a PDF. Select Scanned PDF instead of Picture")
-            PILImage.open(io.BytesIO(data)).verify()
-            images = [(1, data)]
-        pages = []
-        for page_number, image_bytes in images:
-            result = engine(image_bytes)
-            lines = list(result.txts or ()) if result else []
-            heading = f"--- Page {page_number} ---\n" if source_type == "scanned-pdf" else ""
-            pages.append(heading + "\n".join(lines))
-        text_output = "\n\n".join(pages).strip() or "No readable text was detected."
-        return _download(text_output.encode("utf-8"), "text/plain; charset=utf-8", "ocr-text.txt")
+        result = await asyncio.to_thread(_ocr_bytes_page_by_page, data, source_type)
+        return _download(result, "text/plain; charset=utf-8", "ocr-text.txt")
     except HTTPException:
         raise
     except Exception as exc:
