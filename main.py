@@ -5016,6 +5016,122 @@ def _pdf_to_word_bytes(data: bytes) -> bytes:
     return output.getvalue()
 
 
+def _ocr_layout_to_word_bytes(layout: dict, page_images: list[bytes]) -> bytes:
+    """Build a visually faithful, editable DOCX from browser OCR layout data.
+
+    Each page image has its recognised text painted out in the browser.  The
+    retained page artwork (logos, rules, diagrams, and spacing) is placed as
+    the page layer, and editable Word text boxes are overlaid at the OCR
+    coordinates.  Keeping recognition in the browser avoids loading an OCR
+    model into the web service.
+    """
+    from xml.sax.saxutils import escape as xml_escape
+
+    from docx import Document
+    from docx.enum.section import WD_SECTION
+    from docx.oxml import parse_xml
+    from docx.oxml.ns import nsdecls
+    from docx.shared import Pt
+
+    pages = layout.get("pages") if isinstance(layout, dict) else None
+    if not isinstance(pages, list) or not pages or len(pages) != len(page_images):
+        raise HTTPException(status_code=400, detail="The OCR page layout is incomplete")
+    if len(pages) > 20:
+        raise HTTPException(status_code=400, detail="Editable OCR Word files are limited to 20 pages")
+
+    word = Document()
+    # Remove the starter paragraph so page geometry begins at the document edge.
+    if word.paragraphs:
+        starter = word.paragraphs[0]._element
+        starter.getparent().remove(starter)
+    word.core_properties.title = str(layout.get("title") or "Editable OCR document")[:255]
+    word.core_properties.subject = "Layout-preserving OCR with editable text"
+
+    def finite_number(value, default=0.0) -> float:
+        try:
+            number = float(value)
+            return number if number == number and abs(number) != float("inf") else default
+        except (TypeError, ValueError):
+            return default
+
+    shape_type_written = False
+    for page_index, (page_data, image_data) in enumerate(zip(pages, page_images)):
+        if not isinstance(page_data, dict):
+            raise HTTPException(status_code=400, detail="One OCR page layout is invalid")
+        width_px = max(1.0, finite_number(page_data.get("width_px"), 1.0))
+        height_px = max(1.0, finite_number(page_data.get("height_px"), 1.0))
+        width_pt = min(1584.0, max(72.0, finite_number(page_data.get("width_pt"), 595.0)))
+        height_pt = min(1584.0, max(72.0, finite_number(page_data.get("height_pt"), 842.0)))
+
+        if page_index == 0:
+            section = word.sections[0]
+        else:
+            section = word.add_section(WD_SECTION.NEW_PAGE)
+        section.page_width = Pt(width_pt)
+        section.page_height = Pt(height_pt)
+        section.top_margin = section.bottom_margin = Pt(0)
+        section.left_margin = section.right_margin = Pt(0)
+        section.header_distance = section.footer_distance = Pt(0)
+
+        paragraph = word.add_paragraph()
+        paragraph.paragraph_format.space_before = Pt(0)
+        paragraph.paragraph_format.space_after = Pt(0)
+        paragraph.paragraph_format.line_spacing = Pt(1)
+        # Leave a fraction of a point for Word's paragraph marker so it cannot
+        # force the page image onto an unexpected second page.
+        picture_height = max(1.0, height_pt - 1.25)
+        paragraph.add_run().add_picture(
+            io.BytesIO(image_data), width=Pt(width_pt), height=Pt(picture_height)
+        )
+
+        lines = page_data.get("lines") if isinstance(page_data, dict) else []
+        if not isinstance(lines, list):
+            lines = []
+        for line_index, line in enumerate(lines[:3000]):
+            if not isinstance(line, dict):
+                continue
+            text_value = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", str(line.get("text") or "")).strip()
+            if not text_value:
+                continue
+            x_px = max(0.0, finite_number(line.get("x")))
+            y_px = max(0.0, finite_number(line.get("y")))
+            box_width_px = max(2.0, finite_number(line.get("width"), 2.0))
+            box_height_px = max(2.0, finite_number(line.get("height"), 2.0))
+            x_pt = min(width_pt - 1.0, x_px * width_pt / width_px)
+            y_pt = min(height_pt - 1.0, y_px * height_pt / height_px)
+            box_width_pt = min(width_pt - x_pt, max(2.0, box_width_px * width_pt / width_px + 2.0))
+            box_height_pt = min(height_pt - y_pt, max(4.0, box_height_px * height_pt / height_px + 2.0))
+            measured_size = box_height_px * height_pt / height_px * 0.78
+            font_size = min(48.0, max(5.0, finite_number(line.get("font_size"), measured_size)))
+            bold = bool(line.get("bold"))
+            shape_id = f"ocr_text_{page_index + 1}_{line_index + 1}"
+            safe_text = xml_escape(text_value)
+            weight = '<w:b/>' if bold else ''
+            font_half_points = max(10, int(round(font_size * 2)))
+            shape_type = '''<v:shapetype id="_x0000_t202" coordsize="21600,21600" o:spt="202" path="m,l,21600r21600,l21600,xe"><v:stroke joinstyle="miter"/><v:path gradientshapeok="t" o:connecttype="rect"/></v:shapetype>''' if not shape_type_written else ''
+            shape_type_written = True
+            textbox_xml = f'''<w:r {nsdecls("w")} xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+              <w:pict>
+                {shape_type}
+                <v:shape id="{shape_id}" type="#_x0000_t202"
+                  style="position:absolute;margin-left:{x_pt:.2f}pt;margin-top:{y_pt:.2f}pt;width:{box_width_pt:.2f}pt;height:{box_height_pt:.2f}pt;z-index:2;mso-position-horizontal-relative:page;mso-position-vertical-relative:page"
+                  stroked="f" filled="f">
+                  <v:textbox inset="0,0,0,0">
+                    <w:txbxContent><w:p>
+                      <w:pPr><w:spacing w:before="0" w:after="0" w:line="{max(20, int(round(box_height_pt * 20)))}" w:lineRule="exact"/></w:pPr>
+                      <w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="{font_half_points}"/><w:szCs w:val="{font_half_points}"/>{weight}</w:rPr><w:t xml:space="preserve">{safe_text}</w:t></w:r>
+                    </w:p></w:txbxContent>
+                  </v:textbox>
+                </v:shape>
+              </w:pict>
+            </w:r>'''
+            paragraph._p.append(parse_xml(textbox_xml))
+
+    output = io.BytesIO()
+    word.save(output)
+    return output.getvalue()
+
+
 def _pdf_to_powerpoint_bytes(data: bytes) -> bytes:
     from pptx import Presentation
 
@@ -5412,6 +5528,50 @@ def _launch_ocr_job(data: bytes, source_type: str) -> dict:
     _ocr_background_tasks.add(task)
     task.add_done_callback(_ocr_background_tasks.discard)
     return {"job_id": job_id, "status": "queued"}
+
+
+@app.post("/document-tools/ocr-layout-word")
+async def create_editable_ocr_word(
+    layout_json: str = Form(...),
+    page_images: List[UploadFile] = File(...),
+    filename: str = Form("editable-ocr-document.docx"),
+    _user: str = Depends(require_document_tool_user),
+):
+    """Assemble browser OCR coordinates and retained page artwork into DOCX."""
+    if len(layout_json.encode("utf-8")) > 8 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="The editable OCR layout is too large")
+    try:
+        layout = json.loads(layout_json)
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=400, detail="The editable OCR layout is invalid") from exc
+    pages = layout.get("pages") if isinstance(layout, dict) else None
+    if not isinstance(pages, list) or not pages or len(pages) != len(page_images):
+        raise HTTPException(status_code=400, detail="The OCR page images and text layout do not match")
+    if len(page_images) > 20:
+        raise HTTPException(status_code=400, detail="Editable OCR Word files are limited to 20 pages")
+
+    images: list[bytes] = []
+    total_bytes = 0
+    for upload in page_images:
+        data = await _document_bytes(upload)
+        total_bytes += len(data)
+        if total_bytes > 45 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="The retained OCR page artwork is larger than 45 MB")
+        try:
+            with PILImage.open(io.BytesIO(data)) as picture:
+                picture.verify()
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail="One OCR page image is damaged or unsupported") from exc
+        images.append(data)
+
+    output = await asyncio.to_thread(_ocr_layout_to_word_bytes, layout, images)
+    requested_stem = re.sub(r"[^A-Za-z0-9._-]+", "-", os.path.splitext(filename or "editable-ocr-document")[0]).strip(".-")
+    download_name = f"{requested_stem or 'editable-ocr-document'}-editable.docx"
+    return _download(
+        output,
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        download_name,
+    )
 
 
 @app.post("/document-tools/ocr/start")
