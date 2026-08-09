@@ -1,0 +1,34 @@
+{
+  "title": "Fun Quiz: Scenario and Image Challenge",
+  "is_fun": true,
+  "fun_level": "challenger",
+  "questions": [
+    {
+      "type": "mcq",
+      "reading_page": {
+        "title": "Scenario: investigating photosynthesis",
+        "text": "A learner places an aquatic plant beneath a lamp and counts the oxygen bubbles released each minute. The lamp is moved closer while temperature and carbon dioxide concentration are kept constant.",
+        "image": "photosynthesis_scenario.png"
+      },
+      "question": "Which variable is deliberately changed in this investigation?",
+      "image": "lamp_distance_graph.png",
+      "options": [
+        "Light intensity",
+        "Temperature",
+        "Carbon dioxide concentration",
+        "Plant species"
+      ],
+      "answer": "Light intensity",
+      "marks": 1,
+      "explanation": "Moving the lamp changes the light intensity reaching the plant while the other stated factors are controlled.",
+      "similar_question": "Which variable is measured by counting the oxygen bubbles per minute?",
+      "similar_options": [
+        "Rate of photosynthesis",
+        "Light intensity",
+        "Water temperature",
+        "Distance from the lamp"
+      ],
+      "similar_correct_answer": "Rate of photosynthesis"
+    }
+  ]
+}

@@ -91,10 +91,48 @@ long,Explain semiconservative replication.,,,,,,10,</code></pre></div><p>Select 
       <section class="card guide-section" id="tools"><span class="kicker">Utilities</span><h2>11. PDF and document tools</h2><ul><li>Preview, merge, reorder or remove PDF pages before building the result.</li><li>Split PDFs into page groups.</li><li>Convert between PDF, pictures, Word and PowerPoint formats.</li><li>Recognise text from pictures or scanned PDFs. OCR runs page-by-page in the browser to protect server memory and privacy.</li><li>Preview results before selecting Download. Office and ZIP files show a result summary because browsers cannot render them directly.</li></ul></section>
 
       <section class="card guide-section" id="checklist"><span class="kicker">Before learners begin</span><h2>12. Publishing checklist</h2><ul class="guide-checklist"><li>Correct module selected</li><li>Clear title and instructions</li><li>Every MCQ has one correct option</li><li>Short keys use no more than two words</li><li>Marks are positive and total is sensible</li><li>Images are readable and relevant</li><li>Math displays correctly in Preview</li><li>Fun explanations are complete</li><li>Similar questions test the same concept</li><li>Reading scenarios are concise</li><li>Long questions have clear marking expectations</li><li>Learner view has been previewed</li></ul></section>
+      <section class="card guide-section" id="json-media"><span class="kicker">JSON design lab</span><h2>Design quizzes with images and “Read first” scenarios</h2><p>Use this pattern when a learner must study a case, experiment or source before answering, and then use a graph, structure or diagram with the question itself.</p><div class="guide-callout"><strong>Choose the correct image field:</strong> <code>reading_page.image</code> appears on a separate scenario screen before the question. <code>image</code> appears with the question while the learner answers. The current app does not support a separate image for the similar question.</div><h3>Complete Fun Quiz example</h3><div class="code-example"><button class="btn secondary copy-code" type="button">Copy</button><pre><code>{
+  "title": "Fun Quiz: Photosynthesis Investigation",
+  "is_fun": true,
+  "fun_level": "challenger",
+  "questions": [
+    {
+      "type": "mcq",
+      "reading_page": {
+        "title": "Scenario: investigating photosynthesis",
+        "text": "A learner moves a lamp closer to an aquatic plant and counts the oxygen bubbles released each minute. Temperature and carbon dioxide concentration are kept constant.",
+        "image": "photosynthesis_scenario.png"
+      },
+      "question": "Which variable is deliberately changed?",
+      "image": "lamp_distance_graph.png",
+      "options": [
+        "Light intensity",
+        "Temperature",
+        "Carbon dioxide concentration",
+        "Plant species"
+      ],
+      "answer": "Light intensity",
+      "marks": 1,
+      "explanation": "Moving the lamp changes light intensity while the stated factors are controlled.",
+      "similar_question": "Which variable is measured by counting bubbles per minute?",
+      "similar_options": [
+        "Rate of photosynthesis",
+        "Light intensity",
+        "Water temperature",
+        "Distance from the lamp"
+      ],
+      "similar_correct_answer": "Rate of photosynthesis"
+    }
+  ]
+}</code></pre></div><h3>What learners see</h3><div class="guide-table-wrap"><table class="guide-table"><thead><tr><th>JSON field</th><th>Where it appears</th><th>Suitable content</th></tr></thead><tbody><tr><td><code>reading_page.title</code> and <code>reading_page.text</code></td><td>A separate “Read first” screen.</td><td>Case study, experiment, patient history, field observation or data source.</td></tr><tr><td><code>reading_page.image</code></td><td>Above the scenario text.</td><td>Experiment setup, map, source photograph or introductory diagram.</td></tr><tr><td><code>image</code> on the question</td><td>With the question while the learner answers.</td><td>Graph, geometry figure, labelled structure, results table or photograph.</td></tr></tbody></table></div><h3>Keep the files together</h3><div class="code-example"><button class="btn secondary copy-code" type="button">Copy</button><pre><code>photosynthesis_quiz_files/
+  photosynthesis_quiz.json
+  photosynthesis_scenario.png
+  lamp_distance_graph.png</code></pre></div><ol class="guide-steps"><li>Save the JSON as a UTF-8 <code>.json</code> file and keep the scenario concise.</li><li>Make every filename in the JSON match the local image exactly, including capital letters, spaces and the <code>.png</code>/<code>.jpg</code> extension.</li><li>In the Quiz builder, open <strong>Advanced options: import the original JSON format</strong> and choose an assigned module.</li><li>Select the JSON. Under <strong>Question images referenced by the JSON</strong>, select every image named in <code>image</code> or <code>reading_page.image</code>.</li><li>Choose <strong>Import and publish JSON</strong>, then preview the reading screen, the question image and the answer feedback.</li></ol><div class="guide-callout guide-warning"><strong>Use a filename, not a path from your computer.</strong> Write <code>graph.png</code>, not <code>C:\Users\Name\Pictures\graph.png</code>. A complete public <code>https://</code> image URL is also accepted.</div><h3>Answer rules for Fun Quizzes</h3><ul><li>The primary <code>answer</code> must exactly match one primary option.</li><li>Every similar MCQ needs <code>similar_options</code> and <code>similar_correct_answer</code>; that answer must exactly match one similar option.</li><li>When a learner opens a similar question and selects View correct answer, BioscientistApp shows the similar question and its answer—not the original answer.</li><li>Use double quotes, no comments and no trailing commas.</li></ul><div class="guide-actions"><a class="btn secondary" href="/static/fun-quiz-images-scenario-template.json" download>Download scenario + images template</a><a class="btn secondary" href="#json">Review all JSON rules</a></div></section>
     </div>
   </div>
 </main>
 <script>
+const guideToc=document.querySelector('.guide-toc');if(guideToc&&!guideToc.querySelector('[href="#json-media"]')){const link=document.createElement('a');link.href='#json-media';link.textContent='JSON images & scenarios';guideToc.appendChild(link)}
 document.querySelectorAll('.copy-code').forEach(button=>button.addEventListener('click',async()=>{const text=button.parentElement.querySelector('code').textContent;try{await navigator.clipboard.writeText(text);button.textContent='Copied';setTimeout(()=>button.textContent='Copy',1400)}catch(_){button.textContent='Select and copy'}}));
 </script>
 <script src="/static/loading.js"></script><script src="/static/pwa.js"></script>

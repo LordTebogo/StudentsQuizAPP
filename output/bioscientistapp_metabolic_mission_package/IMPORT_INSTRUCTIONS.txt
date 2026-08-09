@@ -1,0 +1,23 @@
+BIOSCIENTISTAPP - METABOLIC MISSION QUIZ
+
+Contents
+- bioscientistapp_metabolic_mission_quiz.json
+- 7 PNG pathway diagrams
+
+Import
+1. Open the Tutor workspace.
+2. Open "Advanced options: import the original JSON format".
+3. Choose the assigned module.
+4. Select bioscientistapp_metabolic_mission_quiz.json.
+5. Under "Question images referenced by the JSON", select all 7 PNG files.
+6. Choose "Import and publish JSON".
+
+App-specific behaviour
+- There are 20 scored primary questions worth 50 marks.
+- Each primary question has one similar practice question, giving 40 prompts in total.
+- Similar questions are practice retries and do not add to the recorded maximum score.
+- Seven "Read first" pages introduce the topics and display the diagrams.
+- BioscientistApp does not currently support a separate image for a similar question.
+
+The same seven images have also been placed in the local quiz_image_library folder,
+so the local app can resolve the filenames even when they are not selected manually.

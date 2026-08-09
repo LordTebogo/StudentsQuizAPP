@@ -1,0 +1,19 @@
+BIOSCIENTISTAPP - GRADE 12 MATHEMATICS PAPER 1 FUN QUIZ
+
+Contents
+- bioscientistapp_grade12_math_paper1_fun_quiz.json
+- 21 PNG examination-style graphs and diagrams
+
+Import
+1. Open the Tutor workspace.
+2. Open 'Advanced options: import the original JSON format'.
+3. Choose the assigned module.
+4. Select bioscientistapp_grade12_math_paper1_fun_quiz.json.
+5. Under 'Question images referenced by the JSON', select all 21 PNG files.
+6. Choose 'Import and publish JSON'.
+
+Quiz structure
+- 50 scored primary questions worth 100 marks.
+- Every primary question has a matched similar question and keyed answer.
+- 21 primary questions include graphs or diagrams.
+- When a similar question is open, BioscientistApp now reveals that similar question's answer rather than the original answer.

@@ -1,0 +1,262 @@
+{
+  "title": "Fun Quiz: Metabolic Mission",
+  "is_fun": true,
+  "fun_level": "challenger",
+  "questions": [
+    {
+      "type": "mcq",
+      "reading_page": {
+        "title": "Energy Lab: The cell's energy budget",
+        "text": "A campus food-science team must decide whether cellular reactions can proceed. A negative Delta G indicates a thermodynamically favourable forward reaction, while ATP hydrolysis can drive an unfavourable step when the reactions are coupled and their Delta G values are added.",
+        "image": "bioenergetics.png"
+      },
+      "question": "Energy Lab: Which Delta G value describes a spontaneous reaction?",
+      "options": ["Delta G < 0", "Delta G > 0", "Delta G = +10 kJ/mol", "Delta G is always zero"],
+      "answer": "Delta G < 0",
+      "marks": 1,
+      "explanation": "A reaction is thermodynamically favourable or spontaneous in the forward direction when its Delta G is negative.",
+      "similar_question": "Which Delta G value describes a reaction at equilibrium?",
+      "similar_options": ["Delta G = 0", "Delta G < 0", "Delta G > 0", "Delta G = -30.5 kJ/mol"],
+      "similar_correct_answer": "Delta G = 0"
+    },
+    {
+      "type": "mcq",
+      "question": "Why can ATP hydrolysis drive an endergonic biosynthetic reaction?",
+      "options": ["The summed Delta G of the coupled reactions can become negative", "ATP changes every enzyme into a kinase", "ATP removes all products from the cell", "ATP makes Delta G irrelevant"],
+      "answer": "The summed Delta G of the coupled reactions can become negative",
+      "marks": 2,
+      "explanation": "When reactions are mechanistically coupled, their free-energy changes are added. A sufficiently negative Delta G for ATP hydrolysis can make the overall process favourable.",
+      "similar_question": "Why is ATP described as an energy currency rather than an energy creator?",
+      "similar_options": ["It transfers conserved chemical free energy between processes", "It creates energy from nothing", "It stores genetic information", "It eliminates the first law of thermodynamics"],
+      "similar_correct_answer": "It transfers conserved chemical free energy between processes"
+    },
+    {
+      "type": "mcq",
+      "question": "A reaction with Delta G = +18.0 kJ/mol is coupled to ATP hydrolysis with Delta G = -30.5 kJ/mol. What is the combined Delta G?",
+      "options": ["-12.5 kJ/mol", "+12.5 kJ/mol", "+48.5 kJ/mol", "-48.5 kJ/mol"],
+      "answer": "-12.5 kJ/mol",
+      "marks": 3,
+      "explanation": "Delta G values are added: +18.0 + (-30.5) = -12.5 kJ/mol, so the coupled process is favourable.",
+      "similar_question": "Transport with Delta G = +22.0 kJ/mol is coupled to a reaction with Delta G = -28.0 kJ/mol. What is the net Delta G?",
+      "similar_options": ["-6.0 kJ/mol", "+6.0 kJ/mol", "+50.0 kJ/mol", "-50.0 kJ/mol"],
+      "similar_correct_answer": "-6.0 kJ/mol"
+    },
+    {
+      "type": "mcq",
+      "reading_page": {
+        "title": "Sprint Track: Glycolysis under pressure",
+        "text": "During a short, intense sprint, muscle needs ATP faster than oxygen delivery can support oxidative metabolism. Glycolysis invests ATP, splits six-carbon intermediates, and earns ATP in the payoff phase. When oxygen is limiting, lactate formation regenerates NAD+ so glycolysis can continue.",
+        "image": "glycolysis.png"
+      },
+      "question": "Sprint Track: What is the net ATP yield of glycolysis per glucose molecule?",
+      "options": ["2 ATP", "4 ATP", "6 ATP", "10 ATP"],
+      "answer": "2 ATP",
+      "marks": 1,
+      "explanation": "Glycolysis invests 2 ATP and produces 4 ATP, giving a net gain of 2 ATP per glucose.",
+      "similar_question": "How many pyruvate molecules are produced from one glucose during glycolysis?",
+      "similar_options": ["2", "1", "3", "4"],
+      "similar_correct_answer": "2"
+    },
+    {
+      "type": "mcq",
+      "question": "Which enzyme catalyses the first committed step of glycolysis?",
+      "options": ["Phosphofructokinase-1", "Hexokinase", "Aldolase", "Lactate dehydrogenase"],
+      "answer": "Phosphofructokinase-1",
+      "marks": 2,
+      "explanation": "PFK-1 converts fructose-6-phosphate to fructose-1,6-bisphosphate and is a major regulated control point in glycolysis.",
+      "similar_question": "Which combination correctly describes regulation of PFK-1?",
+      "similar_options": ["Activated by AMP and inhibited by ATP", "Activated by ATP and inhibited by AMP", "Activated by citrate and inhibited by fructose-2,6-bisphosphate", "Activated only by glucose-6-phosphate"],
+      "similar_correct_answer": "Activated by AMP and inhibited by ATP"
+    },
+    {
+      "type": "mcq",
+      "question": "During oxygen-limited sprinting, why is pyruvate converted to lactate?",
+      "options": ["To regenerate NAD+ for glycolysis", "To generate glucose directly", "To produce FADH2", "To activate glycogen synthase"],
+      "answer": "To regenerate NAD+ for glycolysis",
+      "marks": 3,
+      "explanation": "Lactate dehydrogenase converts NADH to NAD+, allowing the glyceraldehyde-3-phosphate dehydrogenase reaction and glycolysis to continue.",
+      "similar_question": "Why is lactate formation especially important for red blood cells?",
+      "similar_options": ["They lack mitochondria and depend on glycolysis for ATP", "They use the glyoxylate cycle", "They store large amounts of fat", "They perform gluconeogenesis"],
+      "similar_correct_answer": "They lack mitochondria and depend on glycolysis for ATP"
+    },
+    {
+      "type": "mcq",
+      "reading_page": {
+        "title": "Fuel Depot: Why glycogen is branched",
+        "text": "Liver and muscle store glucose as highly branched glycogen. Alpha(1->4) bonds form the chains and alpha(1->6) bonds form branch points. Many non-reducing ends allow several enzyme molecules to work at once, supporting rapid glucose-unit release.",
+        "image": "glycogen.png"
+      },
+      "question": "Fuel Depot: Which bonds form glycogen chains and branch points, respectively?",
+      "options": ["alpha(1->4) and alpha(1->6)", "alpha(1->6) and alpha(1->4)", "beta(1->4) and beta(1->6)", "Peptide and phosphodiester bonds"],
+      "answer": "alpha(1->4) and alpha(1->6)",
+      "marks": 1,
+      "explanation": "Glucose residues in glycogen chains are linked by alpha(1->4) bonds, while branches are introduced through alpha(1->6) bonds.",
+      "similar_question": "Why do many non-reducing ends allow rapid glycogen mobilization?",
+      "similar_options": ["Many enzyme molecules can remove glucose units simultaneously", "Every end contains glucose-6-phosphatase", "Branching converts glycogen into fat", "The ends release ATP without enzymes"],
+      "similar_correct_answer": "Many enzyme molecules can remove glucose units simultaneously"
+    },
+    {
+      "type": "mcq",
+      "question": "Why can liver glycogen support blood glucose while muscle glycogen mainly supplies muscle?",
+      "options": ["Liver contains glucose-6-phosphatase, whereas muscle lacks it", "Muscle contains no glycogen phosphorylase", "Liver cannot perform glycolysis", "Muscle exports glucose-6-phosphate directly"],
+      "answer": "Liver contains glucose-6-phosphatase, whereas muscle lacks it",
+      "marks": 2,
+      "explanation": "Liver can hydrolyse glucose-6-phosphate to free glucose for release into blood. Muscle retains glucose-6-phosphate for local energy production.",
+      "similar_question": "Which enzyme converts glycogen-derived glucose-1-phosphate to glucose-6-phosphate?",
+      "similar_options": ["Phosphoglucomutase", "Glucose-6-phosphatase", "Glycogen synthase", "Hexokinase"],
+      "similar_correct_answer": "Phosphoglucomutase"
+    },
+    {
+      "type": "mcq",
+      "question": "What is the most likely result of debranching-enzyme deficiency?",
+      "options": ["Glycogen with short outer branches accumulates", "All glycogen is instantly converted to glucose", "Only fatty acids accumulate", "Glycogen becomes completely unbranched during synthesis"],
+      "answer": "Glycogen with short outer branches accumulates",
+      "marks": 3,
+      "explanation": "Glycogen phosphorylase stops near branch points and cannot cleave alpha(1->6) bonds. The debranching enzyme is required for complete degradation.",
+      "similar_question": "What is the direct effect of muscle glycogen-phosphorylase deficiency?",
+      "similar_options": ["Reduced release of glucose-1-phosphate from alpha(1->4) bonds", "Increased cleavage of alpha(1->6) bonds", "Increased gluconeogenesis in muscle", "Rapid conversion of fatty acids to glucose"],
+      "similar_correct_answer": "Reduced release of glucose-1-phosphate from alpha(1->4) bonds"
+    },
+    {
+      "type": "mcq",
+      "reading_page": {
+        "title": "Fasting Rescue: Rebuilding glucose",
+        "text": "As liver glycogen becomes limited during fasting, the liver synthesizes glucose from lactate, glycerol, pyruvate and glucogenic amino-acid carbon skeletons. Gluconeogenesis must bypass the three irreversible glycolytic reactions and consumes ATP, GTP and NADH.",
+        "image": "gluconeogenesis.png"
+      },
+      "question": "Fasting Rescue: Which set contains three gluconeogenic precursors?",
+      "options": ["Lactate, glycerol and alanine", "Acetyl-CoA, cholesterol and ketone bodies", "Glycogen, starch and cellulose", "ATP, NADH and FADH2"],
+      "answer": "Lactate, glycerol and alanine",
+      "marks": 1,
+      "explanation": "Lactate, glycerol and glucogenic amino acids such as alanine can provide carbon for hepatic gluconeogenesis.",
+      "similar_question": "Which organ is the main site of gluconeogenesis during an overnight fast?",
+      "similar_options": ["Liver", "Skeletal muscle", "Red blood cell", "Adipose tissue"],
+      "similar_correct_answer": "Liver"
+    },
+    {
+      "type": "mcq",
+      "question": "Which enzyme bypasses PFK-1 during gluconeogenesis?",
+      "options": ["Fructose-1,6-bisphosphatase", "Phosphoglycerate kinase", "Glucose-6-phosphate dehydrogenase", "Pyruvate dehydrogenase"],
+      "answer": "Fructose-1,6-bisphosphatase",
+      "marks": 2,
+      "explanation": "Fructose-1,6-bisphosphatase hydrolyses fructose-1,6-bisphosphate to fructose-6-phosphate, bypassing the irreversible PFK-1 reaction.",
+      "similar_question": "Which enzymes together bypass pyruvate kinase during gluconeogenesis?",
+      "similar_options": ["Pyruvate carboxylase and PEP carboxykinase", "Hexokinase and PFK-1", "Aldolase and enolase", "Glycogen phosphorylase and debranching enzyme"],
+      "similar_correct_answer": "Pyruvate carboxylase and PEP carboxykinase"
+    },
+    {
+      "type": "mcq",
+      "question": "What is required to synthesize one glucose from two pyruvate molecules?",
+      "options": ["4 ATP, 2 GTP and 2 NADH", "2 ATP, 2 GTP and no NADH", "4 ATP, no GTP and 2 FADH2", "6 ATP and 6 NADPH"],
+      "answer": "4 ATP, 2 GTP and 2 NADH",
+      "marks": 3,
+      "explanation": "Gluconeogenesis from two pyruvate consumes 4 ATP, 2 GTP and 2 NADH per glucose molecule.",
+      "similar_question": "What is required to synthesize two glucose molecules from pyruvate?",
+      "similar_options": ["8 ATP, 4 GTP and 4 NADH", "4 ATP, 2 GTP and 2 NADH", "12 ATP, no GTP and 2 NADH", "2 ATP, 8 GTP and 4 FADH2"],
+      "similar_correct_answer": "8 ATP, 4 GTP and 4 NADH"
+    },
+    {
+      "type": "mcq",
+      "reading_page": {
+        "title": "Control Room: Fed versus fasting signals",
+        "text": "A hepatocyte receives different instructions after a meal and during fasting. Insulin favours glucose use and storage. Glucagon activates cAMP and PKA, lowering hepatic fructose-2,6-bisphosphate so glycolysis slows while gluconeogenesis increases.",
+        "image": "regulation.png"
+      },
+      "question": "Control Room: Which hormonal response is expected after a carbohydrate-rich meal?",
+      "options": ["Insulin promotes glycogen synthesis", "Glucagon promotes glycogen synthesis", "Epinephrine suppresses glucose uptake in all tissues", "Insulin activates liver glycogen phosphorylase"],
+      "answer": "Insulin promotes glycogen synthesis",
+      "marks": 1,
+      "explanation": "High blood glucose stimulates insulin, which promotes glucose uptake in responsive tissues and favours glycogen synthesis.",
+      "similar_question": "Which hormone promotes rapid glycogen breakdown during acute stress?",
+      "similar_options": ["Epinephrine", "Insulin", "Aldosterone", "Thyroxine"],
+      "similar_correct_answer": "Epinephrine"
+    },
+    {
+      "type": "mcq",
+      "question": "What is the reciprocal effect of fructose-2,6-bisphosphate?",
+      "options": ["It activates PFK-1 and inhibits FBPase-1", "It inhibits both PFK-1 and FBPase-1", "It activates FBPase-1 and inhibits PFK-1", "It activates glycogen phosphorylase only"],
+      "answer": "It activates PFK-1 and inhibits FBPase-1",
+      "marks": 2,
+      "explanation": "Fructose-2,6-bisphosphate stimulates glycolysis through PFK-1 and suppresses gluconeogenesis through inhibition of fructose-1,6-bisphosphatase.",
+      "similar_question": "Why does low hepatic fructose-2,6-bisphosphate favour gluconeogenesis?",
+      "similar_options": ["PFK-1 loses activation and FBPase-1 loses inhibition", "Both PFK-1 and FBPase-1 become permanently inactive", "Glycogen branches are removed", "The pentose phosphate pathway stops producing NADPH"],
+      "similar_correct_answer": "PFK-1 loses activation and FBPase-1 loses inhibition"
+    },
+    {
+      "type": "mcq",
+      "question": "During fasting, glucagon activates PKA in liver. What is the expected metabolic outcome?",
+      "options": ["F2,6BP falls, glycolysis decreases and gluconeogenesis increases", "F2,6BP rises, glycolysis increases and gluconeogenesis decreases", "F2,6BP rises and both pathways increase equally", "F2,6BP falls and glycogen synthesis increases"],
+      "answer": "F2,6BP falls, glycolysis decreases and gluconeogenesis increases",
+      "marks": 3,
+      "explanation": "PKA phosphorylation favours the FBPase-2 activity of the hepatic bifunctional enzyme, lowering fructose-2,6-bisphosphate and shifting metabolism toward gluconeogenesis.",
+      "similar_question": "What occurs when insulin promotes dephosphorylation of hepatic PFK-2/FBPase-2?",
+      "similar_options": ["F2,6BP rises and glycolysis increases", "F2,6BP falls and gluconeogenesis increases", "PFK-1 is destroyed", "Glucose-6-phosphatase is activated in muscle"],
+      "similar_correct_answer": "F2,6BP rises and glycolysis increases"
+    },
+    {
+      "type": "mcq",
+      "reading_page": {
+        "title": "Antioxidant Shield: The pentose phosphate pathway",
+        "text": "The oxidative pentose phosphate pathway produces NADPH and pentose phosphate. NADPH supports reductive biosynthesis and keeps glutathione reduced in red blood cells. Reversible non-oxidative reactions connect pentose phosphates with glycolytic intermediates.",
+        "image": "ppp.png"
+      },
+      "question": "Antioxidant Shield: What are the major products of the oxidative pentose phosphate pathway?",
+      "options": ["NADPH, CO2 and ribulose-5-phosphate", "ATP, lactate and NADH", "Glucose, oxygen and FADH2", "Glycogen, glycerol and acetyl-CoA"],
+      "answer": "NADPH, CO2 and ribulose-5-phosphate",
+      "marks": 2,
+      "explanation": "The irreversible oxidative phase converts glucose-6-phosphate to ribulose-5-phosphate while generating two NADPH and releasing CO2.",
+      "similar_question": "Which glycolytic intermediates are connected to the reversible non-oxidative PPP?",
+      "similar_options": ["Fructose-6-phosphate and glyceraldehyde-3-phosphate", "Pyruvate and lactate", "Acetyl-CoA and citrate", "Glucose and glycogen"],
+      "similar_correct_answer": "Fructose-6-phosphate and glyceraldehyde-3-phosphate"
+    },
+    {
+      "type": "mcq",
+      "question": "Why can glucose-6-phosphate dehydrogenase deficiency cause haemolysis after oxidant exposure?",
+      "options": ["Low NADPH limits regeneration of reduced glutathione", "Low NADH prevents the CAC from releasing CO2", "High ATP destroys red-cell membranes", "Low ribose directly hydrolyses haemoglobin"],
+      "answer": "Low NADPH limits regeneration of reduced glutathione",
+      "marks": 4,
+      "explanation": "Reduced PPP flux lowers NADPH production. Glutathione reductase then cannot efficiently regenerate reduced glutathione, leaving red cells vulnerable to oxidative damage.",
+      "similar_question": "Which enzyme uses NADPH to regenerate reduced glutathione?",
+      "similar_options": ["Glutathione reductase", "Pyruvate kinase", "Citrate synthase", "Phosphoglucomutase"],
+      "similar_correct_answer": "Glutathione reductase"
+    },
+    {
+      "type": "mcq",
+      "reading_page": {
+        "title": "Carbon Roundabout: CAC and the glyoxylate bypass",
+        "text": "The citric acid cycle oxidizes acetyl-CoA and loses carbon as CO2. Plants and many microorganisms can instead use the glyoxylate cycle, where isocitrate lyase and malate synthase bypass the carbon-losing reactions. Vertebrates lack this pathway and cannot obtain net glucose from even-chain fatty acids.",
+        "image": "cac_glyoxylate.png"
+      },
+      "question": "Carbon Roundabout: What is produced during one turn of the CAC per acetyl-CoA?",
+      "options": ["3 NADH, 1 FADH2, 1 GTP and 2 CO2", "2 NADPH, 2 ATP and 1 CO2", "4 NADH, 2 FADH2 and no CO2", "1 NADH, 3 ATP and 2 lactate"],
+      "answer": "3 NADH, 1 FADH2, 1 GTP and 2 CO2",
+      "marks": 4,
+      "explanation": "Each acetyl-CoA oxidized in the CAC yields three NADH, one FADH2, one GTP or ATP, and two CO2 molecules.",
+      "similar_question": "Which condition generally slows CAC flux?",
+      "similar_options": ["High ATP and high NADH", "High ADP and high NAD+", "Low energy charge", "Increased substrate availability with low ATP"],
+      "similar_correct_answer": "High ATP and high NADH"
+    },
+    {
+      "type": "mcq",
+      "question": "Why can a germinating seed achieve net carbohydrate synthesis from acetyl-CoA?",
+      "options": ["The glyoxylate cycle bypasses the carbon-losing CAC steps", "Its CAC produces no CO2", "It converts acetyl-CoA directly to glucose in one reaction", "It uses lactate dehydrogenase to make glycogen"],
+      "answer": "The glyoxylate cycle bypasses the carbon-losing CAC steps",
+      "marks": 5,
+      "explanation": "Isocitrate lyase and malate synthase bypass the CAC decarboxylations, conserving acetyl-CoA carbon in four-carbon products that can support carbohydrate synthesis.",
+      "similar_question": "Which two enzymes are unique to the glyoxylate cycle?",
+      "similar_options": ["Isocitrate lyase and malate synthase", "Citrate synthase and aconitase", "PFK-1 and pyruvate kinase", "G6PD and transketolase"],
+      "similar_correct_answer": "Isocitrate lyase and malate synthase"
+    },
+    {
+      "type": "mcq",
+      "question": "A fed liver has abundant glucose, high ATP, and needs fatty acids and nucleotides. Which carbon-flow plan is most appropriate?",
+      "options": ["Store glycogen, use PPP for NADPH and ribose, and supply citrate for fatty-acid synthesis", "Activate gluconeogenesis and export all glucose", "Convert all glucose to lactate and suppress the PPP", "Use the glyoxylate cycle to convert fat into glucose"],
+      "answer": "Store glycogen, use PPP for NADPH and ribose, and supply citrate for fatty-acid synthesis",
+      "marks": 5,
+      "explanation": "In the fed state, insulin favours glucose use and storage. The PPP supplies NADPH and ribose-5-phosphate, while glycolytic carbon can provide citrate for fatty-acid synthesis.",
+      "similar_question": "Which plan best describes a fasting liver with active fatty-acid oxidation?",
+      "similar_options": ["Use glycogenolysis then gluconeogenesis; fatty-acid oxidation supplies energy but acetyl-CoA gives no net glucose", "Activate glycogen synthesis and suppress gluconeogenesis", "Convert acetyl-CoA to net glucose through the human glyoxylate cycle", "Increase F2,6BP to maximise hepatic glycolysis"],
+      "similar_correct_answer": "Use glycogenolysis then gluconeogenesis; fatty-acid oxidation supplies energy but acetyl-CoA gives no net glucose"
+    }
+  ]
+}

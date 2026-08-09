@@ -1936,12 +1936,22 @@ def reveal_fun_quiz_answer(
     db: Session = Depends(get_db),
 ):
     _quiz, question = _fun_question_or_404(db, quiz_id, question_id)
+    answer_is_similar = bool(similar)
+    answer_text = question.similar_correct_answer if answer_is_similar else question.correct_answer
+    question_text = question.similar_question if answer_is_similar else question.question
+    explanation = (
+        "This answer belongs to the similar question currently open."
+        if answer_is_similar
+        else (question.explanation or "The lecturer has not added an explanation yet.")
+    )
     return {
-        "correct_answer": (question.similar_correct_answer if similar else question.correct_answer) or "",
-        "explanation": question.explanation or "The lecturer has not added an explanation yet.",
-        "similar_question": "" if similar else (question.similar_question or ""),
-        "similar_options": [] if similar else (_shuffled_answer_options(json.loads(question.similar_options_json)) if question.similar_options_json else []),
-        "has_similar": False if similar else bool(question.similar_question and question.similar_correct_answer),
+        "answer_for": "similar" if answer_is_similar else "original",
+        "question_text": question_text or "",
+        "correct_answer": answer_text or "",
+        "explanation": explanation,
+        "similar_question": "" if answer_is_similar else (question.similar_question or ""),
+        "similar_options": [] if answer_is_similar else (_shuffled_answer_options(json.loads(question.similar_options_json)) if question.similar_options_json else []),
+        "has_similar": False if answer_is_similar else bool(question.similar_question and question.similar_correct_answer),
     }
 
 
