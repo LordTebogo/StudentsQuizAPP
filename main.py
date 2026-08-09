@@ -5422,8 +5422,10 @@ async def start_ocr_document(
 ):
     if source_type not in {"picture", "scanned-pdf"}:
         raise HTTPException(status_code=400, detail="Choose Picture or Scanned PDF")
-    data = await _document_bytes(file)
-    return _launch_ocr_job(data, source_type)
+    raise HTTPException(
+        status_code=409,
+        detail="OCR now runs safely in your browser. Refresh the Document tools page and try again.",
+    )
 
 
 @app.get("/document-tools/ocr/status/{job_id}")
@@ -5459,19 +5461,13 @@ async def ocr_document(
     file: UploadFile = File(...), source_type: str = Form(...),
     background: bool = Form(False), _user: str = Depends(require_document_tool_user),
 ):
-    """Start background OCR on the established endpoint, or support older direct clients."""
+    """Protect low-memory servers from legacy clients that still request server OCR."""
     if source_type not in {"picture", "scanned-pdf"}:
         raise HTTPException(status_code=400, detail="Choose Picture or Scanned PDF")
-    data = await _document_bytes(file)
-    if background:
-        return _launch_ocr_job(data, source_type)
-    try:
-        result = await asyncio.to_thread(_ocr_bytes_page_by_page, data, source_type)
-        return _download(result, "text/plain; charset=utf-8", "ocr-text.txt")
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail="OCR could not read this file. Use a clear, upright picture or scanned PDF") from exc
+    raise HTTPException(
+        status_code=409,
+        detail="OCR now runs safely in your browser. Refresh the Document tools page and try again.",
+    )
 
 
 # ---------------------------------------------------------------------------
