@@ -5,6 +5,7 @@
     '/static/lecturer.html': '/lecturers',
     '/static/lessons_student.html': '/students/lessons',
     '/static/lessons_lecturer.html': '/lecturers/lessons',
+    '/static/tutor_guide.html': '/lecturers/guide',
     '/static/live_lesson.html': '/live',
     '/static/fun.html': '/community',
     '/static/marketing.html': '/market',
@@ -62,7 +63,7 @@
     ['/static/admin.html#liveMonitorCard','Live sessions'], ['/static/admin.html#adminScripts','Submissions'],
     ['/static/admin.html#adminModeration','Moderation'], ['/static/trust.html#support','Support'],
   ] : activeRole === 'lecturer' ? [
-    ['/static/pdf_tools.html', 'PDF tools'], ['/static/fun.html', 'Community'],
+    ['/static/tutor_guide.html', 'Tutor guide'], ['/static/pdf_tools.html', 'PDF tools'], ['/static/fun.html', 'Community'],
     ['/static/marketing.html', 'Market'],
   ] : activeRole === 'student' ? [
     ['/static/marketing.html', 'Market'], ['/static/pdf_tools.html', 'PDF tools'],

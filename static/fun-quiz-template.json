@@ -1,0 +1,31 @@
+{
+  "title": "Fun Quiz: Cell Biology Challenge",
+  "is_fun": true,
+  "fun_level": "challenger",
+  "questions": [
+    {
+      "type": "mcq",
+      "reading_page": {
+        "title": "Read this short scenario",
+        "text": "A cell is placed in a solution with a lower water potential than its cytoplasm. Water moves across the selectively permeable membrane."
+      },
+      "question": "In which direction will water move?",
+      "options": ["Out of the cell", "Into the cell", "It will not move", "Only into the nucleus"],
+      "answer": "Out of the cell",
+      "marks": 1,
+      "explanation": "Water moves by osmosis from higher water potential to lower water potential, so it leaves the cell in this scenario.",
+      "similar_question": "What happens to an animal cell in a strongly hypertonic solution?",
+      "similar_options": ["It loses water and shrinks", "It gains water and bursts", "It divides immediately", "Its DNA leaves the nucleus"],
+      "similar_correct_answer": "It loses water and shrinks"
+    },
+    {
+      "type": "short",
+      "question": "Name the organelle that contains chromosomes.",
+      "answer": "Nucleus",
+      "marks": 1,
+      "explanation": "In a eukaryotic cell, chromosomes are housed inside the nucleus.",
+      "similar_question": "Name the organelle where ribosomal subunits begin assembly.",
+      "similar_correct_answer": "Nucleolus"
+    }
+  ]
+}

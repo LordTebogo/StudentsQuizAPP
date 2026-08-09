@@ -1,0 +1,24 @@
+{
+  "title": "Cell Biology Revision",
+  "is_fun": false,
+  "questions": [
+    {
+      "type": "mcq",
+      "question": "Which organelle produces most cellular ATP?",
+      "options": ["Mitochondrion", "Ribosome", "Lysosome", "Nucleus"],
+      "answer": "Mitochondrion",
+      "marks": 1
+    },
+    {
+      "type": "short",
+      "question": "What molecule carries genetic information?",
+      "answer": "DNA",
+      "marks": 2
+    },
+    {
+      "type": "long",
+      "question": "Explain how membrane structure supports selective transport.",
+      "marks": 10
+    }
+  ]
+}

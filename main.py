@@ -5699,6 +5699,7 @@ FRONTEND_PAGES = {
     "/lecturers": "lecturer.html",
     "/students/lessons": "lessons_student.html",
     "/lecturers/lessons": "lessons_lecturer.html",
+    "/lecturers/guide": "tutor_guide.html",
     "/live": "live_lesson.html",
     "/community": "fun.html",
     "/src": "index.html",
