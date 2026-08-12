@@ -5777,7 +5777,29 @@ async def ocr_document(
 # Ephemeral WebRTC live lessons (signalling only - no media is stored)
 # ---------------------------------------------------------------------------
 _live_rooms: dict[str, dict[str, dict]] = {}
-LIVE_ROOM_LIMIT = 12
+LIVE_ROOM_LIMIT = 100
+LIVE_SLIDE_MAX_BYTES = 25 * 1024 * 1024
+LIVE_SLIDE_MAX_PAGES = 100
+_live_presentations: dict[str, dict] = {}
+_live_slide_cache: dict[tuple[str, int], bytes] = {}
+
+
+def _live_presentation_payload(deck: Optional[dict]) -> Optional[dict]:
+    if not deck or not deck.get("active"):
+        return None
+    return {
+        "type": "presentation-state",
+        "deck_id": deck["deck_id"],
+        "title": deck["title"],
+        "page_count": deck["page_count"],
+        "page": deck["page"],
+        "active": True,
+    }
+
+
+def _clear_live_slide_cache(deck_id: str):
+    for cache_key in [key for key in _live_slide_cache if key[0] == deck_id]:
+        _live_slide_cache.pop(cache_key, None)
 
 
 @app.post("/live/token")
@@ -5822,6 +5844,112 @@ async def live_lesson_token(
         return {"token": access.to_jwt(), "url": livekit_url, "room": code, "role": role, "name": account.full_name, "capacity": 100}
     except Exception as exc:
         raise HTTPException(status_code=500, detail="Could not prepare the live lesson") from exc
+
+
+@app.post("/live/{room_code}/slides")
+async def upload_live_slides(
+    room_code: str,
+    file: UploadFile = File(...),
+    x_lecturer_token: Optional[str] = Header(None, alias="X-Lecturer-Token"),
+    db: Session = Depends(get_db),
+):
+    """Convert a tutor's PDF or PowerPoint to an ephemeral classroom deck."""
+    lecturer = db.query(Lecturer).filter(Lecturer.id == _lecturer_id_from_token(x_lecturer_token or "")).first()
+    if not lecturer or not lecturer.active or not lecturer.approved:
+        raise HTTPException(status_code=403, detail="An approved tutor account is required to present slides")
+    code = re.sub(r"[^A-Z0-9_-]", "", room_code.upper())[:32]
+    room = _live_rooms.get(code)
+    if len(code) < 4 or not room:
+        raise HTTPException(status_code=409, detail="Join and start this live classroom before uploading slides")
+    if not any(member.get("role") == "lecturer" and member.get("account_id") == lecturer.id for member in room.values()):
+        raise HTTPException(status_code=403, detail="Join this classroom as its tutor before uploading slides")
+    filename = (file.filename or "slides").strip()
+    extension = os.path.splitext(filename)[1].lower()
+    if extension not in {".pdf", ".pptx"}:
+        raise HTTPException(status_code=400, detail="Choose a PDF or PowerPoint (.pptx) presentation")
+    data = await file.read(LIVE_SLIDE_MAX_BYTES + 1)
+    if not data:
+        raise HTTPException(status_code=400, detail="The selected presentation is empty")
+    if len(data) > LIVE_SLIDE_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="Presentations must be 25 MB or smaller")
+    try:
+        if extension == ".pdf":
+            if not data.startswith(b"%PDF"):
+                raise HTTPException(status_code=400, detail="The selected file is not a valid PDF")
+            pdf_data = data
+        else:
+            if not data.startswith(b"PK"):
+                raise HTTPException(status_code=400, detail="The selected file is not a valid PowerPoint presentation")
+            with zipfile.ZipFile(io.BytesIO(data)) as archive:
+                if "ppt/presentation.xml" not in archive.namelist():
+                    raise HTTPException(status_code=400, detail="The selected file is not a valid PowerPoint presentation")
+                if sum(item.file_size for item in archive.infolist()) > 150 * 1024 * 1024:
+                    raise HTTPException(status_code=413, detail="The expanded PowerPoint presentation is too large")
+            pdf_data = _powerpoint_to_pdf_bytes(data)
+        document = pymupdf.open(stream=pdf_data, filetype="pdf")
+        page_count = document.page_count
+        document.close()
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="The presentation could not be opened. Try exporting it as a PDF first.") from exc
+    if page_count < 1:
+        raise HTTPException(status_code=400, detail="The presentation has no slides")
+    if page_count > LIVE_SLIDE_MAX_PAGES:
+        raise HTTPException(status_code=400, detail=f"Presentations are limited to {LIVE_SLIDE_MAX_PAGES} slides")
+    if len(pdf_data) > 60 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="The prepared slide deck is too large. Export a compressed PDF and try again.")
+    other_deck_bytes = sum(len(item.get("pdf", b"")) for key, item in _live_presentations.items() if key != code)
+    if other_deck_bytes + len(pdf_data) > 250 * 1024 * 1024:
+        raise HTTPException(status_code=503, detail="The classroom slide service is busy. Try again after another live lesson ends.")
+    old_deck = _live_presentations.get(code)
+    if old_deck:
+        _clear_live_slide_cache(old_deck["deck_id"])
+    title = re.sub(r"\s+", " ", os.path.splitext(filename)[0]).strip()[:120] or "Class presentation"
+    deck = {
+        "deck_id": secrets.token_urlsafe(18),
+        "title": title,
+        "page_count": page_count,
+        "page": 1,
+        "active": True,
+        "owner_id": lecturer.id,
+        "pdf": pdf_data,
+        "created_at": time.time(),
+    }
+    _live_presentations[code] = deck
+    payload = _live_presentation_payload(deck)
+    await _live_broadcast(room, payload)
+    return payload
+
+
+@app.get("/live/slides/{deck_id}/{page_number}")
+def live_slide_page(deck_id: str, page_number: int):
+    if not re.fullmatch(r"[A-Za-z0-9_-]{16,64}", deck_id):
+        raise HTTPException(status_code=404, detail="Presentation not found")
+    deck = next((item for item in _live_presentations.values() if item.get("deck_id") == deck_id), None)
+    if not deck or page_number < 1 or page_number > deck["page_count"]:
+        raise HTTPException(status_code=404, detail="Slide not found")
+    cache_key = (deck_id, page_number)
+    image_data = _live_slide_cache.get(cache_key)
+    if image_data is None:
+        try:
+            document = pymupdf.open(stream=deck["pdf"], filetype="pdf")
+            page = document.load_page(page_number - 1)
+            page_width, page_height = max(page.rect.width, 1), max(page.rect.height, 1)
+            scale = min(2.0, 2200 / page_width, 1400 / page_height)
+            pixmap = page.get_pixmap(matrix=pymupdf.Matrix(scale, scale), colorspace=pymupdf.csRGB, alpha=False)
+            image_data = pixmap.tobytes("png")
+            document.close()
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail="This slide could not be rendered") from exc
+        _live_slide_cache[cache_key] = image_data
+        while len(_live_slide_cache) > 24 or sum(len(item) for item in _live_slide_cache.values()) > 128 * 1024 * 1024:
+            _live_slide_cache.pop(next(iter(_live_slide_cache)))
+    return StreamingResponse(
+        io.BytesIO(image_data),
+        media_type="image/png",
+        headers={"Cache-Control": "private, max-age=3600", "X-Content-Type-Options": "nosniff"},
+    )
 
 
 @app.get("/live/ice-config")
@@ -5955,9 +6083,15 @@ async def live_lesson_socket(websocket: WebSocket, room_code: str):
             return
 
         participants = [{"id": existing_id, "name": member["name"], "role": member["role"]} for existing_id, member in room.items()]
-        room[peer_id] = {"socket": websocket, "name": display_name, "role": role}
+        room[peer_id] = {"socket": websocket, "name": display_name, "role": role, "account_id": account.id}
         joined = True
-        await websocket.send_json({"type": "welcome", "selfId": peer_id, "room": room_code, "participants": participants})
+        await websocket.send_json({
+            "type": "welcome",
+            "selfId": peer_id,
+            "room": room_code,
+            "participants": participants,
+            "presentation": _live_presentation_payload(_live_presentations.get(room_code)),
+        })
         await _live_broadcast(room, {"type": "peer-joined", "id": peer_id, "name": display_name, "role": role}, exclude=peer_id)
 
         while True:
@@ -5998,6 +6132,33 @@ async def live_lesson_socket(websocket: WebSocket, room_code: str):
                     "raised": bool(message.get("raised")),
                 }, exclude=peer_id)
                 continue
+            if kind == "presentation-page":
+                deck = _live_presentations.get(room_code)
+                if role != "lecturer" or not deck or deck.get("owner_id") != account.id or not deck.get("active"):
+                    continue
+                try:
+                    page_number = int(message.get("page", 0))
+                except (TypeError, ValueError):
+                    continue
+                if page_number < 1 or page_number > deck["page_count"]:
+                    continue
+                deck["page"] = page_number
+                await _live_broadcast(room, {
+                    "type": "presentation-page",
+                    "deck_id": deck["deck_id"],
+                    "page": page_number,
+                }, exclude=peer_id)
+                continue
+            if kind == "presentation-stop":
+                deck = _live_presentations.get(room_code)
+                if role != "lecturer" or not deck or deck.get("owner_id") != account.id:
+                    continue
+                deck["active"] = False
+                await _live_broadcast(room, {
+                    "type": "presentation-stop",
+                    "deck_id": deck["deck_id"],
+                }, exclude=peer_id)
+                continue
             if kind not in {"offer", "answer", "ice"}:
                 continue
             target = str(message.get("target", ""))
@@ -6024,6 +6185,9 @@ async def live_lesson_socket(websocket: WebSocket, room_code: str):
                 room.clear()
             if not room:
                 _live_rooms.pop(room_code, None)
+                deck = _live_presentations.pop(room_code, None)
+                if deck:
+                    _clear_live_slide_cache(deck["deck_id"])
         elif not joined:
             try:
                 await websocket.close(code=1008)
