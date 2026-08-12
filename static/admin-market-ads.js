@@ -10,7 +10,8 @@
         <div class="advert-review-copy"><div class="advert-review-head"><div><span class="kicker">${esc(ad.category)} · ${esc(ad.placement)}</span><h3>${esc(ad.headline)}</h3></div><span class="status-chip advert-status ${esc(ad.status)}">${esc(ad.status)}</span></div>
         <p>${esc(ad.description)}</p><dl class="review-meta"><div><dt>Business</dt><dd>${esc(ad.business_name)}</dd></div><div><dt>Submitted by</dt><dd>${esc(ad.owner_name||'Unknown account')}</dd></div><div><dt>Submitted</dt><dd>${esc(ad.created_at.slice(0,10))}</dd></div><div><dt>Engagement</dt><dd>${ad.impressions} views · ${ad.clicks} clicks</dd></div></dl>
         <p class="muted"><strong>Destination:</strong> ${esc(ad.website_url||ad.contact||'Missing')}</p>
-        <div class="actions review-actions"><button class="btn approve-ad" type="button">Approve</button><button class="btn secondary reject-ad" type="button">Reject</button><button class="btn secondary feature-ad" type="button">${ad.is_featured?'Remove feature':'Feature'}</button><button class="btn danger delete-ad" type="button">Delete</button></div></div>
+        <div class="actions review-actions"><button class="btn approve-ad" type="button">Approve</button><button class="btn secondary reject-ad" type="button">Reject</button><button class="btn secondary feature-ad${ad.is_featured?' is-featured':''}" type="button" data-featured="${ad.is_featured?'true':'false'}" aria-describedby="feature-help-${ad.id}" title="${ad.is_featured?'Return this advert to normal ordering':'Show this approved advert before regular adverts'}">${ad.is_featured?'★ Featured':'☆ Feature advert'}</button><button class="btn danger delete-ad" type="button">Delete</button></div>
+        <p class="feature-help" id="feature-help-${ad.id}"><span aria-hidden="true">★</span><span><strong>${ad.is_featured?'This advert is featured.':'What does Feature do?'}</strong> ${ad.is_featured?'It is shown before regular approved adverts in its selected Campus Market placement.':'It moves an approved advert ahead of regular adverts in its selected Campus Market placement. It does not approve the advert or change its dates.'}</span></p></div>
       </article>`).join('') : '<div class="empty-state"><strong>No advert submissions</strong><span>New adverts awaiting review will appear here.</span></div>';
     } catch (error) { list.innerHTML = `<div class="error">${esc(error.message)}</div>`; }
   }
@@ -26,7 +27,8 @@
       const id = row.dataset.adminAd; let body;
       if (event.target.closest('.approve-ad')) body = {status:'approved'};
       if (event.target.closest('.reject-ad')) { if (!confirm('Reject this advert? The submitter will see it as rejected.')) return; body = {status:'rejected'}; }
-      if (event.target.closest('.feature-ad')) body = {is_featured:event.target.textContent.trim() === 'Feature'};
+      const featureButton = event.target.closest('.feature-ad');
+      if (featureButton) body = {is_featured:featureButton.dataset.featured !== 'true'};
       if (event.target.closest('.delete-ad')) { if (!confirm('Permanently delete this advert?')) return; await api(`/admin/market-adverts/${id}`, {method:'DELETE'}); load(); return; }
       if (body) { await api(`/admin/market-adverts/${id}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)}); load(); }
     });
