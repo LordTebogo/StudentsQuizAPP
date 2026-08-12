@@ -1844,7 +1844,7 @@ def get_student_module_enrollment(student: Student = Depends(require_student_acc
     return {
         "completed": bool(student.module_selection_completed),
         "module_codes": sorted(_student_module_codes(student)),
-        "available_modules": _available_module_catalog(db),
+        "available_modules": [] if student.module_selection_completed else _available_module_catalog(db),
     }
 
 

@@ -169,7 +169,7 @@ async function restoreStudentSession() {
     $('studentId').value = student.student_number;
     $('studentName').readOnly = true;
     $('studentId').readOnly = true;
-    return true;
+    return student;
   } catch (_) {
     sessionStorage.removeItem('studentToken');
     window.location.href = '/static/student.html';
@@ -584,9 +584,11 @@ $('addCommentTagBtn').addEventListener('click', () => addLessonTag('commentTagPi
 const params = new URLSearchParams(window.location.search);
 restoreStudentSession().then(async ready => {
   if (!ready) return;
-  await window.ensureStudentModuleEnrollment(STUDENT_TOKEN);
+  const enrollment = window.ensureStudentModuleEnrollment(STUDENT_TOKEN);
+  if (ready.module_selection_completed) loadModuleList();
+  await enrollment;
   loadLessonMembers();
-  loadModuleList();
+  if (!ready.module_selection_completed) loadModuleList();
   if (params.get('lesson')) openLesson(params.get('lesson'));
   else if (params.get('module')) openModule(params.get('module'));
 });

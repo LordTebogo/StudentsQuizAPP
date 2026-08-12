@@ -165,7 +165,28 @@
   }
   if (pagePath.endsWith('/lecturer.html') && document.getElementById('appWrap')) {
     const app=document.getElementById('appWrap'), workbench=app.querySelector('.lecturer-workbench');
-    if(workbench&&!document.querySelector('.workflow-nav')){const tabs=document.createElement('nav');tabs.className='workflow-nav';tabs.setAttribute('aria-label','Tutor workspace sections');tabs.innerHTML='<a href="#quizCreate">Create quiz</a><a href="#quizLibrary">Quiz library</a><a href="#submissionsCard">Submissions</a><a href="#lecturerMessagesCard">Messages</a><a href="#myStudentsList">Students</a>';const cards=workbench.querySelectorAll('.card');if(cards[0])cards[0].id='quizCreate';if(cards[1])cards[1].id='quizLibrary';workbench.before(tabs)}
+    if(workbench&&!document.querySelector('.tutor-task-nav')){
+      const libraryCards=[...workbench.querySelectorAll(':scope > .card')], builder=document.getElementById('quizBuilderCard'), roster=app.querySelector('.lecturer-roster'), messages=document.getElementById('lecturerMessagesCard'), submissions=document.getElementById('submissionsCard'), grading=document.getElementById('gradingCard');
+      if(builder)builder.id='quizCreate';if(libraryCards[0])libraryCards[0].id='quizLibrary';
+      const intro=document.createElement('section');intro.className='tutor-command-center';intro.innerHTML='<div><span class="kicker">Tutor workspace</span><h1>What would you like to do?</h1><p>Choose one task. Your teaching tools stay focused and easy to scan.</p></div><a class="btn" href="/static/live_lesson.html">Start live classroom</a>';
+      const tabs=document.createElement('nav');tabs.className='tutor-task-nav';tabs.setAttribute('aria-label','Tutor workspace tasks');tabs.innerHTML='<button type="button" data-tutor-view="create">Create quiz</button><button type="button" data-tutor-view="library">Quiz library</button><button type="button" data-tutor-view="submissions">Submissions</button><button type="button" data-tutor-view="students">Students</button><button type="button" data-tutor-view="messages">Messages</button>';
+      const views=document.createElement('div');views.className='tutor-task-views';
+      const makeView=(name,title,description)=>{const section=document.createElement('section');section.className='tutor-task-view';section.dataset.tutorViewPanel=name;section.innerHTML=`<header class="task-view-heading"><span class="kicker">${title}</span><p>${description}</p></header>`;views.appendChild(section);return section};
+      const createView=makeView('create','Create quiz','Build, preview and publish one assessment at a time.');
+      const libraryView=makeView('library','Quiz library','Choose an existing quiz, duplicate it, or open its learner submissions.');
+      const submissionsView=makeView('submissions','Submissions','Review learner attempts and complete marking.');
+      const studentsView=makeView('students','Students','See the learners enrolled in your assigned modules.');
+      const messagesView=makeView('messages','Learner support','Send individual or module messages without leaving your workspace.');
+      if(builder)createView.appendChild(builder);libraryCards.forEach(card=>libraryView.appendChild(card));if(submissions)submissionsView.appendChild(submissions);if(grading)submissionsView.appendChild(grading);if(roster)studentsView.appendChild(roster);if(messages)messagesView.appendChild(messages);workbench.remove();
+      app.querySelector('header.top')?.after(intro,tabs,views);
+      const activate=view=>{const known=['create','library','submissions','students','messages'];const next=known.includes(view)?view:'create';tabs.querySelectorAll('[data-tutor-view]').forEach(button=>{const active=button.dataset.tutorView===next;button.classList.toggle('active',active);button.setAttribute('aria-current',active?'page':'false')});views.querySelectorAll('[data-tutor-view-panel]').forEach(panel=>panel.classList.toggle('hidden',panel.dataset.tutorViewPanel!==next));history.replaceState(history.state,'',`${location.pathname}${location.search}#${next}`);window.scrollTo({top:Math.max(0,tabs.offsetTop-94),behavior:'smooth'})};
+      tabs.addEventListener('click',event=>{const button=event.target.closest('[data-tutor-view]');if(button)activate(button.dataset.tutorView)});
+      document.getElementById('loadStudentsBtn')?.addEventListener('click',()=>activate('submissions'));
+      document.getElementById('duplicateQuizBtn')?.addEventListener('click',()=>activate('create'));
+      document.getElementById('newQuizBuilderBtn')?.addEventListener('click',()=>activate('create'));
+      const hashView=location.hash.replace('#','');activate(hashView==='lecturerMessagesCard'?'messages':hashView==='myStudentsList'?'students':hashView);
+      window.addEventListener('hashchange',()=>{const value=location.hash.replace('#','');if(['create','library','submissions','students','messages'].includes(value))activate(value)});
+    }
   }
   if (pagePath.endsWith('/lessons_lecturer.html') && document.getElementById('appWrap')) {
     const app=document.getElementById('appWrap'),cards=[...app.querySelectorAll(':scope > .card')];
@@ -173,7 +194,7 @@
   }
   if (pagePath.endsWith('/student.html') && document.getElementById('appWrap')) {
     const app=document.getElementById('appWrap');
-    if(!document.querySelector('.workflow-nav')){const results=[...app.querySelectorAll('.card')].find(card=>card.querySelector('h2')?.textContent.includes('My results'));if(results)results.id='studentResults';const tabs=document.createElement('nav');tabs.className='workflow-nav';tabs.setAttribute('aria-label','Student workspace sections');tabs.innerHTML='<a href="#moduleCard">Quizzes</a><a href="#studentResults">Results</a><a href="#studentBottomMessages">Messages</a><a href="#studentModulePicker">My modules</a>';app.querySelector('.lede')?.after(tabs)}
+    if(!document.querySelector('.workflow-nav')){const results=[...app.querySelectorAll('.card')].find(card=>card.querySelector('h2')?.textContent.includes('My results'));if(results)results.id='studentResults';const heading=app.querySelector('h1'),lede=app.querySelector('.lede');if(heading)heading.textContent='Your learning';if(lede)lede.textContent='Choose a subject, continue a quiz, or check your latest result.';const overview=document.createElement('section');overview.className='learner-command-center';overview.id='learnerCommandCenter';overview.innerHTML='<div><span class="kicker">Recommended next step</span><h2 id="learnerNextTitle">Choose a module to begin</h2><p id="learnerNextMeta">Your assigned quizzes and video lessons are kept together by subject.</p></div><div class="learner-command-actions"><button class="btn" id="learnerContinueBtn" type="button">Browse my quizzes</button><a class="btn secondary" href="/static/lessons_student.html">Watch video lessons</a></div>';const tabs=document.createElement('nav');tabs.className='workflow-nav';tabs.setAttribute('aria-label','Student workspace sections');tabs.innerHTML='<a href="#learnerCommandCenter">Overview</a><a href="#moduleCard">Quizzes</a><a href="#studentResults">Results</a><a href="#studentBottomMessages">Messages</a>';lede?.after(overview,tabs);overview.querySelector('#learnerContinueBtn')?.addEventListener('click',()=>document.getElementById('moduleCard')?.scrollIntoView({behavior:'smooth',block:'start'}))}
   }
   if (pagePath.endsWith('/admin.html') && document.getElementById('appWrap')) {
     const app=document.getElementById('appWrap'),heading=app.querySelector('h1'),lede=app.querySelector('.lede');if(heading)heading.id='adminOverview';

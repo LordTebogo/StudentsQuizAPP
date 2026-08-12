@@ -20,7 +20,7 @@
     control.classList.add('is-fetching');
     control.setAttribute('aria-busy', 'true');
     if ('disabled' in control) control.disabled = true;
-    control.textContent = control.dataset.loadingText || 'Fetching…';
+    control.textContent = control.dataset.loadingText || 'Loading…';
   }
 
   function stopLoading(control) {

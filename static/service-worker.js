@@ -1,4 +1,4 @@
-const CACHE_NAME = "nucleocampus-static-v10";
+const CACHE_NAME = "nucleocampus-static-v11";
 const APP_SHELL = [
   "/",
   "/students",
@@ -7,7 +7,9 @@ const APP_SHELL = [
   "/lecturers/lessons",
   "/admin",
   "/static/style.css",
+  "/static/product.css",
   "/static/experience.js",
+  "/static/student-module-enrollment.js",
   "/static/loading.js",
   "/static/pwa.js",
   "/static/quiz-builder.css",

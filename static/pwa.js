@@ -23,6 +23,20 @@ async function notificationConfig() {
   return response.json();
 }
 
+function showNotificationHelp() {
+  document.querySelector(".notification-help")?.remove();
+  const panel = document.createElement("section");
+  panel.className = "notification-help";
+  panel.setAttribute("role", "dialog");
+  panel.setAttribute("aria-labelledby", "notificationHelpTitle");
+  panel.innerHTML = '<h2 id="notificationHelpTitle">Notifications are blocked</h2><p>Your browser is currently preventing NucleoCampus alerts. Open the site settings beside the address bar, change Notifications to Allow, then reload this page.</p><button class="btn secondary" type="button">Got it</button>';
+  panel.querySelector("button").addEventListener("click", () => panel.remove());
+  document.body.appendChild(panel);
+  window.setTimeout(() => document.addEventListener("pointerdown", event => {
+    if (!panel.contains(event.target)) panel.remove();
+  }, { once: true }), 0);
+}
+
 async function setupStudentPushNotifications() {
   const studentToken = sessionStorage.getItem("studentToken");
   if (!studentToken || !("Notification" in window) || !("PushManager" in window) || !("serviceWorker" in navigator)) return;
@@ -46,7 +60,8 @@ async function setupStudentPushNotifications() {
   const paint = () => {
     if (Notification.permission === "denied") {
       button.textContent = "Alerts blocked";
-      button.disabled = true;
+      button.title = "Learn how to allow notifications";
+      button.classList.remove("is-on");
     } else if (subscription) {
       button.textContent = "Alerts on";
       button.classList.add("is-on");
@@ -58,6 +73,10 @@ async function setupStudentPushNotifications() {
   paint();
 
   button.addEventListener("click", async () => {
+    if (Notification.permission === "denied") {
+      showNotificationHelp();
+      return;
+    }
     button.disabled = true;
     try {
       if (subscription) {
@@ -99,14 +118,14 @@ async function setupStudentPushNotifications() {
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", async () => {
     try {
-      const registration = await navigator.serviceWorker.register("/service-worker.js?v=7", { updateViaCache: "none" });
+      const registration = await navigator.serviceWorker.register("/service-worker.js?v=8", { updateViaCache: "none" });
       await registration.update();
       if (registration.waiting) registration.waiting.postMessage({ type: "SKIP_WAITING" });
     } catch (_) { /* The app remains usable without offline caching. */ }
   });
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (sessionStorage.getItem("nucleocampusCacheV7Reloaded")) return;
-    sessionStorage.setItem("nucleocampusCacheV7Reloaded", "true");
+    if (sessionStorage.getItem("nucleocampusCacheV8Reloaded")) return;
+    sessionStorage.setItem("nucleocampusCacheV8Reloaded", "true");
     window.location.reload();
   });
 }
