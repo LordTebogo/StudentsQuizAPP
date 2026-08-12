@@ -5975,6 +5975,29 @@ async def live_lesson_socket(websocket: WebSocket, room_code: str):
                     "name": display_name,
                 }, exclude=peer_id)
                 continue
+            if kind == "chat":
+                chat_text = str(message.get("text", "")).strip()[:500]
+                event_id = str(message.get("id", ""))[:160]
+                if not chat_text or not event_id:
+                    continue
+                await _live_broadcast(room, {
+                    "type": "chat",
+                    "id": event_id,
+                    "name": display_name,
+                    "text": chat_text,
+                }, exclude=peer_id)
+                continue
+            if kind == "hand-raise":
+                event_id = str(message.get("id", ""))[:160]
+                if not event_id:
+                    continue
+                await _live_broadcast(room, {
+                    "type": "hand-raise",
+                    "id": event_id,
+                    "name": display_name,
+                    "raised": bool(message.get("raised")),
+                }, exclude=peer_id)
+                continue
             if kind not in {"offer", "answer", "ice"}:
                 continue
             target = str(message.get("target", ""))
