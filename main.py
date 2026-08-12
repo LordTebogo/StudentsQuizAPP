@@ -5830,6 +5830,18 @@ async def live_lesson_socket(websocket: WebSocket, room_code: str):
         while True:
             message = await websocket.receive_json()
             kind = message.get("type")
+            if kind == "reaction":
+                reaction_code = str(message.get("code", ""))
+                reaction_id = str(message.get("id", ""))[:160]
+                if reaction_code not in {"like", "love", "happy", "laugh", "wow", "sad"} or not reaction_id:
+                    continue
+                await _live_broadcast(room, {
+                    "type": "reaction",
+                    "code": reaction_code,
+                    "id": reaction_id,
+                    "name": display_name,
+                }, exclude=peer_id)
+                continue
             if kind not in {"offer", "answer", "ice"}:
                 continue
             target = str(message.get("target", ""))
