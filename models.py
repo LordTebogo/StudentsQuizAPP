@@ -99,6 +99,7 @@ class Student(Base):
     password_hash = Column(String, nullable=False)
     approved = Column(Boolean, nullable=False, default=False)
     active = Column(Boolean, nullable=False, default=True)
+    module_selection_completed = Column(Boolean, nullable=False, default=False)
     created_at = Column(String, nullable=False)
 
     modules = relationship("StudentModule", back_populates="student", cascade="all, delete-orphan")

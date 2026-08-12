@@ -367,6 +367,23 @@ def ensure_direct_message_privacy_schema():
 
 ensure_direct_message_privacy_schema()
 
+
+def ensure_student_module_selection_schema():
+    """Persist the learner's one-time module choice across browsers and devices."""
+    if "students" not in inspect(engine).get_table_names():
+        return
+    columns = {column["name"] for column in inspect(engine).get_columns("students")}
+    if "module_selection_completed" not in columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE students ADD COLUMN module_selection_completed BOOLEAN DEFAULT FALSE NOT NULL"))
+            conn.execute(text(
+                "UPDATE students SET module_selection_completed = TRUE "
+                "WHERE EXISTS (SELECT 1 FROM student_modules WHERE student_modules.student_id = students.id)"
+            ))
+
+
+ensure_student_module_selection_schema()
+
 app = FastAPI(title="Quiz + Video Lessons App")
 
 # Wide-open CORS since this app has no per-user accounts; the PIN gates the
@@ -783,7 +800,9 @@ def _student_profile(student: Student) -> dict:
     return {"id": student.id, "username": student.student_number, "student_number": student.student_number, "full_name": student.full_name,
             "email": student.email, "phone": student.phone or "", "institution": student.institution or "",
             "bio": student.bio or "", "profile_image_url": student.profile_image_url,
-            "approved": student.approved, "active": student.active, "module_codes": [item.module_code for item in student.modules], "created_at": student.created_at}
+            "approved": student.approved, "active": student.active,
+            "module_selection_completed": bool(student.module_selection_completed),
+            "module_codes": sorted(item.module_code for item in student.modules), "created_at": student.created_at}
 
 
 def _src_president_profile(president: SrcPresident) -> dict:
@@ -816,6 +835,30 @@ def _set_student_modules(db: Session, student: Student, codes: List[str]):
     for code, item in existing.items():
         if code not in wanted: db.delete(item)
     for code in wanted - set(existing): db.add(StudentModule(student_id=student.id, module_code=code))
+
+
+def _available_module_catalog(db: Session) -> list[dict]:
+    """Return all subjects known through teaching assignments or published content."""
+    quiz_counts = dict(db.query(Quiz.module_code, func.count(Quiz.id)).group_by(Quiz.module_code).all())
+    lesson_counts = dict(db.query(Lesson.module_code, func.count(Lesson.id)).group_by(Lesson.module_code).all())
+    codes = set(quiz_counts) | set(lesson_counts) | {
+        code for (code,) in db.query(LecturerModule.module_code).distinct().all()
+    }
+    return [
+        {"module_code": code, "quiz_count": quiz_counts.get(code, 0), "lesson_count": lesson_counts.get(code, 0)}
+        for code in sorted(code for code in codes if code)
+    ]
+
+
+def _student_module_codes(student: Student) -> set[str]:
+    return {item.module_code for item in student.modules}
+
+
+def _require_student_module(student: Student, module_code: str) -> str:
+    code = module_code.strip().upper()
+    if code not in _student_module_codes(student):
+        raise HTTPException(status_code=403, detail="This module is not assigned to your learner account")
+    return code
 
 
 def _lecturer_profile(lecturer: Lecturer) -> dict:
@@ -983,6 +1026,8 @@ async def register_student(
                       created_at=datetime.utcnow().isoformat() + "Z")
     db.add(student); db.flush()
     _set_student_modules(db, student, module_codes.split(","))
+    if any(code.strip() for code in module_codes.split(",")):
+        student.module_selection_completed = True
     db.commit()
     return {"ok": True, "message": "Profile created and activated. You can sign in now."}
 
@@ -1791,18 +1836,58 @@ def list_quiz_modules(db: Session = Depends(get_db)):
 
 @app.get("/student/modules")
 def student_modules(student: Student = Depends(require_student_account)):
-    return {"module_codes": [item.module_code for item in student.modules]}
+    return {"module_codes": sorted(_student_module_codes(student)), "completed": bool(student.module_selection_completed)}
+
+
+@app.get("/student/module-enrollment")
+def get_student_module_enrollment(student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+    return {
+        "completed": bool(student.module_selection_completed),
+        "module_codes": sorted(_student_module_codes(student)),
+        "available_modules": _available_module_catalog(db),
+    }
 
 
 @app.put("/student/modules")
 def update_student_modules(payload: ModuleSelection, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
-    available = {row[0] for row in db.query(Quiz.module_code).distinct().all()} | {row[0] for row in db.query(Lesson.module_code).distinct().all()}
+    if student.module_selection_completed:
+        raise HTTPException(status_code=409, detail="Your module selection is locked. Ask your lecturer or administrator to add another module.")
+    available = {item["module_code"] for item in _available_module_catalog(db)}
     wanted = {code.strip().upper() for code in payload.module_codes if code and code.strip()}
+    if not wanted:
+        raise HTTPException(status_code=400, detail="Choose at least one module before saving")
     invalid = wanted - available
     if invalid:
-        raise HTTPException(status_code=400, detail="Only modules created by Admin can be selected")
-    _set_student_modules(db, student, list(wanted)); db.commit()
-    return {"module_codes": sorted(wanted)}
+        raise HTTPException(status_code=400, detail="Choose modules from the available subject list only")
+    _set_student_modules(db, student, list(wanted))
+    student.module_selection_completed = True
+    db.commit()
+    return {"module_codes": sorted(wanted), "completed": True}
+
+
+@app.put("/student/module-enrollment")
+def complete_student_module_enrollment(payload: ModuleSelection, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+    return update_student_modules(payload, student, db)
+
+
+@app.get("/student/quiz-modules")
+def list_student_quiz_modules(student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+    assigned = _student_module_codes(student)
+    if not assigned:
+        return []
+    rows = (db.query(Quiz.module_code, func.count(Quiz.id).label("quiz_count"))
+            .filter(Quiz.module_code.in_(assigned)).group_by(Quiz.module_code).order_by(Quiz.module_code.asc()).all())
+    return [{"module_code": code, "quiz_count": count} for code, count in rows]
+
+
+@app.get("/student/lesson-modules")
+def list_student_lesson_modules(student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+    assigned = _student_module_codes(student)
+    if not assigned:
+        return []
+    rows = (db.query(Lesson.module_code, func.count(Lesson.id).label("lesson_count"))
+            .filter(Lesson.module_code.in_(assigned)).group_by(Lesson.module_code).order_by(Lesson.module_code.asc()).all())
+    return [{"module_code": code, "lesson_count": count} for code, count in rows]
 
 
 @app.get("/quizzes/by-module/{module_code}")
@@ -1818,9 +1903,10 @@ def list_student_quizzes_by_module(
     db: Session = Depends(get_db),
 ):
     """List a module's quizzes together with this student's latest result."""
+    normalized_module = _require_student_module(student, module_code)
     rows = (
         db.query(Quiz)
-        .filter(Quiz.module_code == module_code.strip().upper())
+        .filter(Quiz.module_code == normalized_module)
         .order_by(Quiz.id.desc())
         .all()
     )
@@ -1900,6 +1986,15 @@ def get_quiz(quiz_id: int, db: Session = Depends(get_db)):
     }
 
 
+@app.get("/student/quiz/{quiz_id}")
+def get_student_quiz(quiz_id: int, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+    quiz = db.query(Quiz).filter(Quiz.id == quiz_id).first()
+    if not quiz:
+        raise HTTPException(status_code=404, detail="Quiz not found")
+    _require_student_module(student, quiz.module_code)
+    return get_quiz(quiz_id, db)
+
+
 def _fun_question_or_404(db: Session, quiz_id: int, question_id: int) -> tuple[Quiz, Question]:
     quiz = db.query(Quiz).filter(Quiz.id == quiz_id, Quiz.is_fun.is_(True)).first()
     question = db.query(Question).filter(Question.id == question_id, Question.quiz_id == quiz_id).first()
@@ -1915,10 +2010,11 @@ def check_fun_quiz_answer(
     quiz_id: int,
     question_id: int,
     payload: FunQuizCheckInput,
-    _student: Student = Depends(require_student_account),
+    student: Student = Depends(require_student_account),
     db: Session = Depends(get_db),
 ):
-    _quiz, question = _fun_question_or_404(db, quiz_id, question_id)
+    quiz, question = _fun_question_or_404(db, quiz_id, question_id)
+    _require_student_module(student, quiz.module_code)
     expected = question.similar_correct_answer if payload.similar else question.correct_answer
     if question.type == "short":
         correct = short_answer_matches(expected, payload.answer)
@@ -1932,10 +2028,11 @@ def reveal_fun_quiz_answer(
     quiz_id: int,
     question_id: int,
     similar: bool = False,
-    _student: Student = Depends(require_student_account),
+    student: Student = Depends(require_student_account),
     db: Session = Depends(get_db),
 ):
-    _quiz, question = _fun_question_or_404(db, quiz_id, question_id)
+    quiz, question = _fun_question_or_404(db, quiz_id, question_id)
+    _require_student_module(student, quiz.module_code)
     answer_is_similar = bool(similar)
     answer_text = question.similar_correct_answer if answer_is_similar else question.correct_answer
     question_text = question.similar_question if answer_is_similar else question.question
@@ -1961,8 +2058,10 @@ def reveal_fun_quiz_answer(
 
 @app.get("/student/quiz/{quiz_id}/draft")
 def get_quiz_draft(quiz_id: int, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
-    if not db.query(Quiz.id).filter(Quiz.id == quiz_id).first():
+    quiz = db.query(Quiz).filter(Quiz.id == quiz_id).first()
+    if not quiz:
         raise HTTPException(status_code=404, detail="Quiz not found")
+    _require_student_module(student, quiz.module_code)
     draft = db.query(QuizDraft).filter(
         QuizDraft.quiz_id == quiz_id,
         QuizDraft.student_id == student.id,
@@ -1982,6 +2081,10 @@ def get_quiz_draft(quiz_id: int, student: Student = Depends(require_student_acco
 
 @app.put("/student/quiz/{quiz_id}/draft")
 def save_quiz_draft(quiz_id: int, payload: QuizDraftSave, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+    quiz = db.query(Quiz).filter(Quiz.id == quiz_id).first()
+    if not quiz:
+        raise HTTPException(status_code=404, detail="Quiz not found")
+    _require_student_module(student, quiz.module_code)
     question_rows = db.query(Question.id).filter(Question.quiz_id == quiz_id).all()
     question_ids = {question_id for (question_id,) in question_rows}
     if not question_ids:
@@ -2018,6 +2121,9 @@ def save_quiz_draft(quiz_id: int, payload: QuizDraftSave, student: Student = Dep
 
 @app.delete("/student/quiz/{quiz_id}/draft")
 def delete_quiz_draft(quiz_id: int, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+    quiz = db.query(Quiz).filter(Quiz.id == quiz_id).first()
+    if quiz:
+        _require_student_module(student, quiz.module_code)
     db.query(QuizDraft).filter(
         QuizDraft.quiz_id == quiz_id,
         QuizDraft.student_id == student.id,
@@ -2032,6 +2138,10 @@ def delete_quiz_draft(quiz_id: int, student: Student = Depends(require_student_a
 
 @app.post("/quiz/{quiz_id}/submit")
 def submit_quiz(quiz_id: int, submission: QuizSubmission, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+    quiz = db.query(Quiz).filter(Quiz.id == quiz_id).first()
+    if not quiz:
+        raise HTTPException(status_code=404, detail="Quiz not found")
+    _require_student_module(student, quiz.module_code)
     questions = db.query(Question).filter(Question.quiz_id == quiz_id).all()
     if not questions:
         raise HTTPException(status_code=404, detail="Quiz not found")
@@ -2445,9 +2555,12 @@ def list_student_lessons(
     db: Session = Depends(get_db),
 ):
     """List lessons with each student's latest completion and result state."""
-    query = db.query(Lesson)
+    assigned = _student_module_codes(student)
+    if not assigned:
+        return []
+    query = db.query(Lesson).filter(Lesson.module_code.in_(assigned))
     if module_code:
-        query = query.filter(Lesson.module_code == module_code.strip().upper())
+        query = query.filter(Lesson.module_code == _require_student_module(student, module_code))
     rows = query.order_by(Lesson.id.desc()).all()
     latest_by_lesson = {}
     for submission in (
@@ -2497,6 +2610,7 @@ def record_lesson_view(lesson_id: int, student: Student = Depends(require_studen
     lesson = db.query(Lesson).filter(Lesson.id == lesson_id).first()
     if not lesson:
         raise HTTPException(status_code=404, detail="Lesson not found")
+    _require_student_module(student, lesson.module_code)
     now = datetime.now(timezone.utc).isoformat()
     view = db.query(LessonView).filter(LessonView.lesson_id == lesson_id, LessonView.student_account_id == student.id).first()
     if view:
@@ -2548,6 +2662,15 @@ def get_lesson(lesson_id: int, db: Session = Depends(get_db)):
     }
 
 
+@app.get("/student/lesson/{lesson_id}")
+def get_student_lesson(lesson_id: int, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+    lesson = db.query(Lesson).filter(Lesson.id == lesson_id).first()
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    _require_student_module(student, lesson.module_code)
+    return get_lesson(lesson_id, db)
+
+
 @app.get("/lesson/{lesson_id}/script/pdf")
 def download_lesson_script_pdf(lesson_id: int, db: Session = Depends(get_db)):
     """Download the lesson notes and quiz questions shown below the video."""
@@ -2573,6 +2696,10 @@ def download_lesson_script_pdf(lesson_id: int, db: Session = Depends(get_db)):
 
 @app.post("/lesson/{lesson_id}/submit")
 def submit_lesson(lesson_id: int, submission: QuizSubmission, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+    lesson = db.query(Lesson).filter(Lesson.id == lesson_id).first()
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    _require_student_module(student, lesson.module_code)
     questions = db.query(LessonQuestion).filter(LessonQuestion.lesson_id == lesson_id).all()
     if not questions:
         raise HTTPException(status_code=404, detail="Lesson not found")
@@ -3247,7 +3374,10 @@ def admin_update_any_account(account_type: str, account_id: int, payload: AdminU
             account.student_number = number
         if payload.institution is not None: account.institution = payload.institution.strip()[:200]
         if payload.bio is not None: account.bio = payload.bio.strip()
-        if payload.module_codes is not None: _set_student_modules(db, account, payload.module_codes)
+        if payload.module_codes is not None:
+            _set_student_modules(db, account, payload.module_codes)
+            if any(code and code.strip() for code in payload.module_codes):
+                account.module_selection_completed = True
     elif account_type == "lecturer":
         if payload.institution is not None: account.institution = payload.institution.strip()[:200]
         if payload.bio is not None: account.bio = payload.bio.strip()
@@ -3390,7 +3520,10 @@ def admin_update_student(student_id: int, payload: AdminStudentUpdate, _pin_ok: 
         raise HTTPException(status_code=404, detail="Student not found")
     if payload.approved is not None: student.approved = payload.approved
     if payload.active is not None: student.active = payload.active
-    if payload.module_codes is not None: _set_student_modules(db, student, payload.module_codes)
+    if payload.module_codes is not None:
+        _set_student_modules(db, student, payload.module_codes)
+        if any(code and code.strip() for code in payload.module_codes):
+            student.module_selection_completed = True
     db.commit()
     return _student_profile(student)
 

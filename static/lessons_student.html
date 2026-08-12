@@ -54,6 +54,7 @@
   .lesson-replies.hidden, .lesson-reply-composer.hidden { display: none; }
   @media (max-width: 560px) { .lesson-discussion-head { display: block; } .lesson-comment.reply { margin-left: 12px; } .lesson-composer-tools { align-items: stretch; } }
 </style>
+<script src="/static/student-module-enrollment.js"></script>
 </head>
 <body>
 <script>if(!sessionStorage.getItem('studentToken'))location.replace('/static/index.html?role=learner')</script>
@@ -193,7 +194,7 @@ async function loadModuleList() {
   const box = $('moduleList');
   box.innerHTML = '<div class="loading-skeleton" aria-label="Loading lesson modules"><span></span><span></span><span></span></div>';
   try {
-    const modules = await api('/modules');
+    const modules = await api('/student/lesson-modules');
     if (!modules.length) {
       box.innerHTML = '<div class="empty-state"><strong>No lessons yet</strong><span>Your lessons will appear here when a tutor publishes them.</span></div>';
       return;
@@ -262,7 +263,7 @@ async function loadLessonList(moduleCode) {
 // ---- Open a lesson -----------------------------------------------------
 async function openLesson(lessonId) {
   try {
-    const lesson = await api(`/lesson/${lessonId}`);
+    const lesson = await api(`/student/lesson/${lessonId}`);
     currentLesson = lesson;
     currentModule = lesson.module_code;
 
@@ -581,8 +582,9 @@ $('addCommentTagBtn').addEventListener('click', () => addLessonTag('commentTagPi
 
 // ---- Init: auto-open a module or lesson if present in the URL -----------
 const params = new URLSearchParams(window.location.search);
-restoreStudentSession().then(ready => {
+restoreStudentSession().then(async ready => {
   if (!ready) return;
+  await window.ensureStudentModuleEnrollment(STUDENT_TOKEN);
   loadLessonMembers();
   loadModuleList();
   if (params.get('lesson')) openLesson(params.get('lesson'));
