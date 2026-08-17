@@ -183,15 +183,42 @@
     select.innerHTML = state.modules.length
       ? '<option value="">Choose a module</option>' + state.modules.map(code => `<option value="${attr(code)}">${html(code)}</option>`).join('')
       : '<option value="">No modules assigned</option>';
+    select.disabled = !state.modules.length;
     if (selectedValue && state.modules.includes(selectedValue)) select.value = selectedValue;
   }
 
-  async function loadProfile() {
-    const profile = await api('/lecturer/me', {}, true);
-    state.modules = [...(profile.module_codes || [])].sort();
-    const selected = byId('builderModuleCode').value;
-    populateModuleSelect(byId('builderModuleCode'), selected || state.modules[0] || '');
-    populateModuleSelect(byId('moduleCode'), selected || state.modules[0] || '');
+  function profileWithTimeout(refresh = false) {
+    const request = typeof getLecturerProfile === 'function'
+      ? getLecturerProfile(refresh)
+      : api('/lecturer/me', {}, true);
+    return Promise.race([
+      request,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('The module request timed out. Check your connection and retry.')), 12000)),
+    ]);
+  }
+
+  async function loadProfile(refresh = false) {
+    const builderSelect = byId('builderModuleCode');
+    const legacySelect = byId('moduleCode');
+    const retryButton = byId('retryBuilderModulesBtn');
+    builderSelect.disabled = true;
+    legacySelect.disabled = true;
+    builderSelect.innerHTML = '<option value="">Loading assigned modules…</option>';
+    legacySelect.innerHTML = '<option value="">Loading assigned modules…</option>';
+    retryButton.classList.add('hidden');
+    try {
+      const profile = await profileWithTimeout(refresh);
+      state.modules = [...new Set(profile.module_codes || [])].map(String).sort();
+      const selected = builderSelect.value;
+      populateModuleSelect(builderSelect, selected || state.modules[0] || '');
+      populateModuleSelect(legacySelect, selected || state.modules[0] || '');
+    } catch (error) {
+      state.modules = [];
+      builderSelect.innerHTML = '<option value="">Could not load assigned modules</option>';
+      legacySelect.innerHTML = '<option value="">Could not load assigned modules</option>';
+      retryButton.classList.remove('hidden');
+      throw error;
+    }
   }
 
   async function loadDraftList(selectId = state.draftId) {
@@ -547,6 +574,9 @@
   });
   byId('builderFunLevel').addEventListener('change', () => setDirty(true));
   byId('newQuizBuilderBtn').addEventListener('click', () => newQuiz(true));
+  byId('retryBuilderModulesBtn').addEventListener('click', () => {
+    loadProfile(true).catch(error => showBuilderMessage(`Could not load assigned modules: ${error.message}`, 'error'));
+  });
   byId('addQuestionBtn').addEventListener('click', () => { state.questions.push(blankQuestion()); renderQuestions(); setDirty(true); });
   byId('saveQuizDraftBtn').addEventListener('click', saveDraft);
   byId('loadQuizDraftBtn').addEventListener('click', loadDraft);

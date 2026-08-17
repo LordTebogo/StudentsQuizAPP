@@ -85,7 +85,7 @@
 
     <div class="quiz-builder-meta">
       <div><label for="builderQuizTitle">Quiz title</label><input id="builderQuizTitle" type="text" maxlength="200" placeholder="e.g. Cell Biology: Week 1"></div>
-      <div><label for="builderModuleCode">Assigned module</label><select id="builderModuleCode"><option value="">Loading assigned modules…</option></select></div>
+      <div><label for="builderModuleCode">Assigned module</label><select id="builderModuleCode" disabled><option value="">Loading assigned modules…</option></select><button class="btn secondary hidden" id="retryBuilderModulesBtn" type="button">Retry loading modules</button></div>
       <label class="fun-quiz-switch" for="builderIsFun"><input id="builderIsFun" type="checkbox"><span><strong>Make this a Fun Quiz</strong><small>One question at a time, spoken feedback, explanations and similar questions.</small></span></label>
       <div id="funQuizLevelField" class="hidden"><label for="builderFunLevel">Fun Quiz level</label><select id="builderFunLevel"><option value="starter">1 · Starter</option><option value="explorer">2 · Explorer</option><option value="challenger">3 · Challenger</option><option value="expert">4 · Expert</option><option value="genius">5 · Genius</option></select></div>
     </div>
@@ -225,9 +225,25 @@ async function api(path, options = {}, needsAuth = false) {
     }
 
 function applyProfile(profile) {
+  window.LECTURER_PROFILE = profile;
   $('profileSummary').textContent = `${profile.full_name} · ${profile.institution || 'Tutor'} · Assigned modules: ${profile.module_codes.join(', ') || 'None yet'}`;
   $('profileName').value = profile.full_name || ''; $('profilePhone').value = profile.phone || ''; $('profileInstitution').value = profile.institution || ''; $('profileBio').value = profile.bio || '';
   if (profile.profile_image_url) { $('profileImage').src = profile.profile_image_url; $('profileImage').classList.remove('hidden'); }
+}
+
+let lecturerProfilePromise = null;
+function getLecturerProfile(refresh = false) {
+  if (!refresh && window.LECTURER_PROFILE) return Promise.resolve(window.LECTURER_PROFILE);
+  if (!lecturerProfilePromise || refresh) {
+    lecturerProfilePromise = api('/lecturer/me', {}, true).then(profile => {
+      window.LECTURER_PROFILE = profile;
+      return profile;
+    }).catch(error => {
+      lecturerProfilePromise = null;
+      throw error;
+    });
+  }
+  return lecturerProfilePromise;
 }
 
 // Fetches a PDF from a lecturer-only endpoint and
@@ -305,7 +321,7 @@ $('lockBtn').addEventListener('click', (e) => {
 
 // If a lecturer session exists, restore the workspace.
 if (LECTURER_TOKEN) {
-  api('/lecturer/me', {}, true).then(profile => {
+  getLecturerProfile().then(profile => {
     $('gateWrap').classList.add('hidden'); $('appWrap').classList.remove('hidden');
     applyProfile(profile);
     loadQuizzes();
@@ -630,7 +646,7 @@ $('downloadOnePdfBtn').addEventListener('click', () => {
 });
 </script>
 <script src="/static/experience.js"></script>
-<script src="/static/quiz-builder.js"></script>
+<script src="/static/quiz-builder.js?v=12"></script>
 <script src="/static/loading.js"></script>
 <script src="/static/pwa.js"></script>
 </body>
