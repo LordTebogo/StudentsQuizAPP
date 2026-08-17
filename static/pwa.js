@@ -10,6 +10,25 @@ function syncInstallButton() {
   if (button && isInstalledApp()) button.remove();
 }
 
+function syncConnectivityStatus() {
+  let banner = document.getElementById("offlineStatusBanner");
+  if (navigator.onLine) {
+    banner?.remove();
+    document.documentElement.classList.remove("app-is-offline");
+    return;
+  }
+  document.documentElement.classList.add("app-is-offline");
+  if (!banner) {
+    banner = document.createElement("div");
+    banner.id = "offlineStatusBanner";
+    banner.className = "offline-status-banner";
+    banner.setAttribute("role", "status");
+    banner.setAttribute("aria-live", "polite");
+    banner.textContent = "Offline mode · downloaded pages and previously viewed learning content remain available";
+    document.body.appendChild(banner);
+  }
+}
+
 function urlBase64ToUint8Array(value) {
   const padding = "=".repeat((4 - value.length % 4) % 4);
   const encoded = (value + padding).replace(/-/g, "+").replace(/_/g, "/");
@@ -118,14 +137,14 @@ async function setupStudentPushNotifications() {
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", async () => {
     try {
-      const registration = await navigator.serviceWorker.register("/service-worker.js?v=12", { updateViaCache: "none" });
+      const registration = await navigator.serviceWorker.register("/service-worker.js?v=13", { updateViaCache: "none" });
       await registration.update();
       if (registration.waiting) registration.waiting.postMessage({ type: "SKIP_WAITING" });
     } catch (_) { /* The app remains usable without offline caching. */ }
   });
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (sessionStorage.getItem("nucleocampusCacheV12Reloaded")) return;
-    sessionStorage.setItem("nucleocampusCacheV12Reloaded", "true");
+    if (sessionStorage.getItem("nucleocampusCacheV13Reloaded")) return;
+    sessionStorage.setItem("nucleocampusCacheV13Reloaded", "true");
     window.location.reload();
   });
 }
@@ -141,13 +160,17 @@ window.addEventListener("appinstalled", () => {
   const button = document.getElementById("installAppBtn");
   const hint = document.getElementById("installHint");
   if (button) button.remove();
-  if (hint) hint.textContent = "NucleoCampus is installed on this device.";
+  if (hint) hint.textContent = "NucleoCampus is installed with offline access on this device.";
 });
+
+window.addEventListener("online", syncConnectivityStatus);
+window.addEventListener("offline", syncConnectivityStatus);
 
 document.addEventListener("DOMContentLoaded", () => {
   const button = document.getElementById("installAppBtn");
   const hint = document.getElementById("installHint");
   syncInstallButton();
+  syncConnectivityStatus();
   if (button) {
     button.addEventListener("click", async () => {
       if (installPrompt) {
@@ -156,7 +179,7 @@ document.addEventListener("DOMContentLoaded", () => {
         installPrompt = null;
         button.classList.add("hidden");
       } else if (hint) {
-        hint.textContent = "Use your browser menu and choose Add to Home Screen. NucleoCampus still needs an internet connection for current learning content.";
+        hint.textContent = "Use your browser menu and choose Add to Home Screen. Open learning content once while online to keep it available offline.";
       }
     });
   }
