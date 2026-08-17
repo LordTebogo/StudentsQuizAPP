@@ -1,4 +1,4 @@
-const OFFLINE_VERSION = "v13";
+const OFFLINE_VERSION = "v14";
 const SHELL_CACHE = `nucleocampus-shell-${OFFLINE_VERSION}`;
 const DATA_CACHE = `nucleocampus-data-${OFFLINE_VERSION}`;
 const EXTERNAL_CACHE = `nucleocampus-external-${OFFLINE_VERSION}`;
@@ -18,12 +18,12 @@ const APP_SHELL = [
   "/static/market-ads.css", "/static/market-advert-dialog.css",
   "/static/lesson-insights.css", "/static/quiz-builder.css",
   "/static/quiz-math-tools.css",
-  "/static/experience.js", "/static/loading.js", "/static/pwa.js?v=13",
+  "/static/experience.js", "/static/loading.js", "/static/pwa.js?v=14",
   "/static/student-module-enrollment.js", "/static/student-messaging.js",
   "/static/lecturer-messaging.js", "/static/admin-messaging.js",
   "/static/admin-market-ads.js", "/static/market-ads.js",
   "/static/market-gallery.js", "/static/market-messaging.js",
-  "/static/lesson-insights.js", "/static/quiz-builder.js?v=13",
+  "/static/lesson-insights.js", "/static/quiz-builder.js?v=14",
   "/static/quiz-import-template.csv", "/static/standard-quiz-template.json",
   "/static/fun-quiz-template.json", "/static/fun-quiz-images-scenario-template.json",
   "/static/lesson.json", "/static/manifest.webmanifest",
@@ -162,7 +162,7 @@ self.addEventListener("fetch", event => {
     || url.pathname.startsWith("/static/");
   if (isShellAsset) {
     event.respondWith((async () => {
-      const cached = await caches.match(request, { ignoreSearch: true });
+      const cached = await caches.match(request);
       if (cached) return cached;
       return (await networkFirst(request, SHELL_CACHE)) || offlineJson("This app file is not available offline.");
     })());

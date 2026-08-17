@@ -137,14 +137,14 @@ async function setupStudentPushNotifications() {
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", async () => {
     try {
-      const registration = await navigator.serviceWorker.register("/service-worker.js?v=13", { updateViaCache: "none" });
+      const registration = await navigator.serviceWorker.register("/service-worker.js?v=14", { updateViaCache: "none" });
       await registration.update();
       if (registration.waiting) registration.waiting.postMessage({ type: "SKIP_WAITING" });
     } catch (_) { /* The app remains usable without offline caching. */ }
   });
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (sessionStorage.getItem("nucleocampusCacheV13Reloaded")) return;
-    sessionStorage.setItem("nucleocampusCacheV13Reloaded", "true");
+    if (sessionStorage.getItem("nucleocampusCacheV14Reloaded")) return;
+    sessionStorage.setItem("nucleocampusCacheV14Reloaded", "true");
     window.location.reload();
   });
 }

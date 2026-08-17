@@ -156,6 +156,6 @@ document.getElementById('splitForm').addEventListener('submit',event=>{event.pre
 document.getElementById('convertForm').addEventListener('submit',event=>{event.preventDefault();runTool(event.currentTarget,'/document-tools/convert','converted-document')});
 document.getElementById('ocrForm').addEventListener('submit',event=>{event.preventDefault();runLayoutOcrInBrowser(event.currentTarget).catch(error=>{event.currentTarget.querySelector('.tool-status').innerHTML=`<span class="msg error">${safe(error.message)}</span>`})});
 </script>
-<script src="/static/loading.js"></script><script src="/static/pwa.js?v=13"></script>
+<script src="/static/loading.js"></script><script src="/static/pwa.js?v=14"></script>
 </body>
 </html>

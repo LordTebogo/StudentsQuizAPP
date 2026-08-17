@@ -201,6 +201,14 @@
     const builderSelect = byId('builderModuleCode');
     const legacySelect = byId('moduleCode');
     const retryButton = byId('retryBuilderModulesBtn');
+    if (!refresh && window.LECTURER_PROFILE) {
+      state.modules = [...new Set(window.LECTURER_PROFILE.module_codes || [])].map(String).sort();
+      const selected = builderSelect.value;
+      populateModuleSelect(builderSelect, selected || state.modules[0] || '');
+      populateModuleSelect(legacySelect, selected || state.modules[0] || '');
+      retryButton.classList.add('hidden');
+      return;
+    }
     builderSelect.disabled = true;
     legacySelect.disabled = true;
     builderSelect.innerHTML = '<option value="">Loading assigned modules…</option>';

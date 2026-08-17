@@ -226,6 +226,26 @@ async function api(path, options = {}, needsAuth = false) {
 
 function applyProfile(profile) {
   window.LECTURER_PROFILE = profile;
+  const assignedModules = [...new Set(profile.module_codes || [])].map(String).sort();
+  ['builderModuleCode', 'moduleCode'].forEach(id => {
+    const select = $(id);
+    if (!select) return;
+    const previous = select.value;
+    select.replaceChildren();
+    const prompt = document.createElement('option');
+    prompt.value = '';
+    prompt.textContent = assignedModules.length ? 'Choose a module' : 'No modules assigned';
+    select.appendChild(prompt);
+    assignedModules.forEach(code => {
+      const option = document.createElement('option');
+      option.value = code;
+      option.textContent = code;
+      select.appendChild(option);
+    });
+    select.disabled = !assignedModules.length;
+    select.value = assignedModules.includes(previous) ? previous : (assignedModules[0] || '');
+  });
+  $('retryBuilderModulesBtn')?.classList.add('hidden');
   $('profileSummary').textContent = `${profile.full_name} · ${profile.institution || 'Tutor'} · Assigned modules: ${profile.module_codes.join(', ') || 'None yet'}`;
   $('profileName').value = profile.full_name || ''; $('profilePhone').value = profile.phone || ''; $('profileInstitution').value = profile.institution || ''; $('profileBio').value = profile.bio || '';
   if (profile.profile_image_url) { $('profileImage').src = profile.profile_image_url; $('profileImage').classList.remove('hidden'); }
@@ -646,8 +666,8 @@ $('downloadOnePdfBtn').addEventListener('click', () => {
 });
 </script>
 <script src="/static/experience.js"></script>
-<script src="/static/quiz-builder.js?v=13"></script>
+<script src="/static/quiz-builder.js?v=14"></script>
 <script src="/static/loading.js"></script>
-<script src="/static/pwa.js?v=13"></script>
+<script src="/static/pwa.js?v=14"></script>
 </body>
 </html>

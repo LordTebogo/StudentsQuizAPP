@@ -350,7 +350,7 @@
     (async () => { if (!token) { window.location.href = '/static/student.html'; return; } try { await api('/student/me'); await loadMembers(); await loadFeed(); } catch (_) { sessionStorage.removeItem('studentToken'); window.location.href = '/static/student.html'; } })();
   </script>
 <script src="/static/loading.js"></script>
-<script src="/static/pwa.js?v=13"></script>
+<script src="/static/pwa.js?v=14"></script>
 <script src="/static/experience.js"></script>
 </body>
 </html>
