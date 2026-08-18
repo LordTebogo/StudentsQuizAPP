@@ -5827,6 +5827,8 @@ def _live_presentation_payload(deck: Optional[dict]) -> Optional[dict]:
         "title": deck["title"],
         "page_count": deck["page_count"],
         "page": deck["page"],
+        "presenter_id": deck["owner_peer_id"],
+        "presenter_name": deck["owner_name"],
         "active": True,
     }
 
@@ -5884,19 +5886,34 @@ async def live_lesson_token(
 async def upload_live_slides(
     room_code: str,
     file: UploadFile = File(...),
+    x_student_token: Optional[str] = Header(None, alias="X-Student-Token"),
     x_lecturer_token: Optional[str] = Header(None, alias="X-Lecturer-Token"),
+    x_live_peer_id: Optional[str] = Header(None, alias="X-Live-Peer-Id"),
     db: Session = Depends(get_db),
 ):
-    """Convert a tutor's PDF or PowerPoint to an ephemeral classroom deck."""
-    lecturer = db.query(Lecturer).filter(Lecturer.id == _lecturer_id_from_token(x_lecturer_token or "")).first()
-    if not lecturer or not lecturer.active or not lecturer.approved:
-        raise HTTPException(status_code=403, detail="An approved tutor account is required to present slides")
+    """Convert one room participant's PDF or PowerPoint to an ephemeral deck."""
+    if x_lecturer_token:
+        account = db.query(Lecturer).filter(Lecturer.id == _lecturer_id_from_token(x_lecturer_token)).first()
+        presenter_role = "lecturer"
+    elif x_student_token:
+        account = db.query(Student).filter(Student.id == _student_id_from_token(x_student_token)).first()
+        presenter_role = "student"
+    else:
+        account = None
+        presenter_role = ""
+    if not account or not account.active or not account.approved:
+        raise HTTPException(status_code=403, detail="An approved classroom participant is required to present slides")
     code = re.sub(r"[^A-Z0-9_-]", "", room_code.upper())[:32]
     room = _live_rooms.get(code)
     if len(code) < 4 or not room:
         raise HTTPException(status_code=409, detail="Join and start this live classroom before uploading slides")
-    if not any(member.get("role") == "lecturer" and member.get("account_id") == lecturer.id for member in room.values()):
-        raise HTTPException(status_code=403, detail="Join this classroom as its tutor before uploading slides")
+    presenter_id = str(x_live_peer_id or "")
+    presenter = room.get(presenter_id)
+    if not presenter or presenter.get("role") != presenter_role or presenter.get("account_id") != account.id:
+        raise HTTPException(status_code=403, detail="Reconnect to this classroom before presenting slides")
+    current_deck = _live_presentations.get(code)
+    if current_deck and current_deck.get("active"):
+        raise HTTPException(status_code=409, detail=f'{current_deck.get("owner_name", "Another participant")} is already presenting')
     filename = (file.filename or "slides").strip()
     extension = os.path.splitext(filename)[1].lower()
     if extension not in {".pdf", ".pptx"}:
@@ -5936,6 +5953,9 @@ async def upload_live_slides(
     other_deck_bytes = sum(len(item.get("pdf", b"")) for key, item in _live_presentations.items() if key != code)
     if other_deck_bytes + len(pdf_data) > 250 * 1024 * 1024:
         raise HTTPException(status_code=503, detail="The classroom slide service is busy. Try again after another live lesson ends.")
+    current_deck = _live_presentations.get(code)
+    if current_deck and current_deck.get("active"):
+        raise HTTPException(status_code=409, detail=f'{current_deck.get("owner_name", "Another participant")} is already presenting')
     old_deck = _live_presentations.get(code)
     if old_deck:
         _clear_live_slide_cache(old_deck["deck_id"])
@@ -5946,7 +5966,10 @@ async def upload_live_slides(
         "page_count": page_count,
         "page": 1,
         "active": True,
-        "owner_id": lecturer.id,
+        "owner_id": account.id,
+        "owner_role": presenter_role,
+        "owner_peer_id": presenter_id,
+        "owner_name": account.full_name[:100],
         "pdf": pdf_data,
         "created_at": time.time(),
     }
@@ -6168,7 +6191,7 @@ async def live_lesson_socket(websocket: WebSocket, room_code: str):
                 continue
             if kind == "presentation-page":
                 deck = _live_presentations.get(room_code)
-                if role != "lecturer" or not deck or deck.get("owner_id") != account.id or not deck.get("active"):
+                if not deck or deck.get("owner_peer_id") != peer_id or not deck.get("active"):
                     continue
                 try:
                     page_number = int(message.get("page", 0))
@@ -6185,7 +6208,7 @@ async def live_lesson_socket(websocket: WebSocket, room_code: str):
                 continue
             if kind == "presentation-stop":
                 deck = _live_presentations.get(room_code)
-                if role != "lecturer" or not deck or deck.get("owner_id") != account.id:
+                if not deck or deck.get("owner_peer_id") != peer_id:
                     continue
                 deck["active"] = False
                 await _live_broadcast(room, {
@@ -6210,6 +6233,10 @@ async def live_lesson_socket(websocket: WebSocket, room_code: str):
         room = _live_rooms.get(room_code)
         if joined and room:
             room.pop(peer_id, None)
+            deck = _live_presentations.get(room_code)
+            if deck and deck.get("active") and deck.get("owner_peer_id") == peer_id:
+                deck["active"] = False
+                await _live_broadcast(room, {"type": "presentation-stop", "deck_id": deck["deck_id"]})
             await _live_broadcast(room, {"type": "peer-left", "id": peer_id, "name": display_name})
             if role == "lecturer" and not any(member["role"] == "lecturer" for member in room.values()):
                 await _live_broadcast(room, {"type": "room-ended"})
