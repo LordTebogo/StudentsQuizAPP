@@ -35,6 +35,8 @@ import base64
 import hashlib
 import hmac
 import secrets
+import shutil
+import subprocess
 import time
 import tempfile
 import threading
@@ -5345,7 +5347,39 @@ def _word_to_pdf_bytes(data: bytes) -> bytes:
     return output.getvalue()
 
 
+def _powerpoint_to_pdf_with_office_suite(data: bytes) -> Optional[bytes]:
+    """Use a real presentation renderer when available for maximum fidelity."""
+    configured = os.getenv("LIBREOFFICE_PATH", "").strip()
+    executable = configured or shutil.which("soffice") or shutil.which("libreoffice")
+    if not executable:
+        return None
+    try:
+        with tempfile.TemporaryDirectory(prefix="nucleocampus-slides-") as directory:
+            source = os.path.join(directory, "presentation.pptx")
+            output = os.path.join(directory, "presentation.pdf")
+            with open(source, "wb") as presentation_file:
+                presentation_file.write(data)
+            subprocess.run(
+                [executable, "--headless", "--convert-to", "pdf", "--outdir", directory, source],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=90,
+            )
+            with open(output, "rb") as converted_file:
+                pdf_data = converted_file.read()
+            return pdf_data if pdf_data.startswith(b"%PDF") else None
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
 def _powerpoint_to_pdf_bytes(data: bytes) -> bytes:
+    # LibreOffice renders fonts, charts, groups, cropping and theme geometry as
+    # a complete slide. The shape-by-shape path below remains a portable
+    # fallback for deployments where an office suite is unavailable.
+    rendered = _powerpoint_to_pdf_with_office_suite(data)
+    if rendered:
+        return rendered
     from pptx import Presentation
     from reportlab.lib.utils import ImageReader
     import textwrap
