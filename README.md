@@ -59,6 +59,9 @@ DATABASE_URL=postgresql://user:password@host:5432/dbname
 CLOUDINARY_CLOUD_NAME=your-cloud-name
 CLOUDINARY_API_KEY=your-api-key
 CLOUDINARY_API_SECRET=your-api-secret
+OPENAI_API_KEY=your-openai-api-key
+# Optional; defaults to gpt-5.4-mini
+OPENAI_QUIZ_MODEL=gpt-5.4-mini
 LECTURER_PIN=90435
 ```
 
@@ -86,6 +89,11 @@ uvicorn main:app --reload
 Visit `http://localhost:8000` — you'll land on the home page, with links
 for **Quizzes** (Lecturer / Student) and **Video Lessons** (Lecturer /
 Student). Raw API docs are at `http://localhost:8000/docs`.
+
+In the Tutor quiz builder, **Generate questions** creates an editable draft
+from a topic, learning outcomes, or pasted source notes. The tutor must review
+the generated questions and explicitly publish them. This feature requires
+`OPENAI_API_KEY`; the key remains on the server and is never sent to browsers.
 
 ## 4. Deploy on Render
 

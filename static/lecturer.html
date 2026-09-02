@@ -31,7 +31,12 @@
   .message-entry time { color: var(--text-muted); font: .66rem var(--font-mono); white-space: nowrap; }
   .message-entry p { margin: 7px 0 0; color: var(--text-muted); white-space: pre-wrap; }
   #lecturerMessagesCard textarea { min-height: 96px; }
+  .ai-quiz-panel { grid-column: 1 / -1; }
+  .ai-quiz-grid { display: grid; grid-template-columns: 2fr repeat(3, minmax(120px, 1fr)); gap: 12px; align-items: end; }
+  .ai-quiz-panel textarea { min-height: 82px; }
+  .ai-source-field { margin-top: 12px; }
   @media (max-width: 760px) { .lecturer-workbench { grid-template-columns: 1fr; } }
+  @media (max-width: 760px) { .ai-quiz-grid { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
@@ -91,6 +96,7 @@
     </div>
 
     <div class="quiz-builder-tools">
+      <section class="builder-tool-panel ai-quiz-panel"><span class="kicker">AI quiz generator</span><h3>Generate editable questions</h3><p class="muted">Describe the topic or learning outcomes. Generated questions are added to this builder for your review and are never published automatically.</p><div class="ai-quiz-grid"><div><label for="aiQuizTopic">Topic or learning outcomes</label><textarea id="aiQuizTopic" maxlength="500" placeholder="e.g. Compare mitosis and meiosis, including chromosome number and genetic variation"></textarea></div><div><label for="aiQuestionCount">Questions</label><input id="aiQuestionCount" type="number" min="1" max="30" value="10"></div><div><label for="aiDifficulty">Difficulty</label><select id="aiDifficulty"><option value="introductory">Introductory</option><option value="intermediate" selected>Intermediate</option><option value="advanced">Advanced</option></select></div><div><label for="aiQuestionTypes">Question types</label><select id="aiQuestionTypes"><option value="mixed">Mixed</option><option value="mcq">Multiple choice</option><option value="short">Short answer</option><option value="long">Long answer</option></select></div></div><details class="ai-source-field"><summary>Optional: constrain questions to source notes</summary><label for="aiSourceText">Lecture notes or source material</label><textarea id="aiSourceText" maxlength="20000" placeholder="Paste the material students were taught. When supplied, questions will be based only on this text."></textarea><small class="muted">Source notes are sent to the configured AI service. Do not include learner names or other personal information.</small></details><div class="account-actions"><button class="btn" id="generateQuizBtn" type="button">Generate questions</button><small id="aiQuizStatus" class="muted" aria-live="polite">Choose an assigned module above before generating.</small></div></section>
       <section class="builder-tool-panel"><span class="kicker">Drafts</span><label for="quizDraftSelect">Continue a saved draft</label><select id="quizDraftSelect"><option value="">No saved drafts</option></select><div class="account-actions"><button class="btn secondary" id="loadQuizDraftBtn" type="button">Load draft</button><button class="btn secondary" id="saveQuizDraftBtn" type="button">Save as draft</button><button class="btn secondary danger-action" id="deleteQuizDraftBtn" type="button">Delete draft</button></div><small id="quizDraftStatus" class="muted">Drafts are saved to your tutor account.</small></section>
       <section class="builder-tool-panel"><span class="kicker">Bulk import</span><label for="quizSpreadsheetFile">Excel or CSV question sheet</label><input id="quizSpreadsheetFile" type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"><div class="account-actions"><button class="btn secondary" id="importSpreadsheetBtn" type="button">Import into builder</button><a class="btn secondary" href="/static/quiz-import-template.csv" download>Download template</a></div><small class="muted">Review imported questions here before publishing.</small></section>
     </div>
@@ -666,8 +672,8 @@ $('downloadOnePdfBtn').addEventListener('click', () => {
 });
 </script>
 <script src="/static/experience.js"></script>
-<script src="/static/quiz-builder.js?v=14"></script>
+<script src="/static/quiz-builder.js?v=15"></script>
 <script src="/static/loading.js"></script>
-<script src="/static/pwa.js?v=14"></script>
+<script src="/static/pwa.js?v=15"></script>
 </body>
 </html>

@@ -187,6 +187,14 @@
     if (selectedValue && state.modules.includes(selectedValue)) select.value = selectedValue;
   }
 
+  function syncAiQuestionTypes() {
+    const select = byId('aiQuestionTypes');
+    const longOption = select?.querySelector('option[value="long"]');
+    const isFun = byId('builderIsFun').checked;
+    if (longOption) longOption.disabled = isFun;
+    if (isFun && select.value === 'long') select.value = 'mixed';
+  }
+
   function profileWithTimeout(refresh = false) {
     const request = typeof getLecturerProfile === 'function'
       ? getLecturerProfile(refresh)
@@ -293,6 +301,7 @@
       byId('builderQuizTitle').value = draft.title;
       populateModuleSelect(byId('builderModuleCode'), draft.module_code);
       byId('builderIsFun').checked = Boolean(draft.is_fun);
+      syncAiQuestionTypes();
       byId('builderFunLevel').value = draft.fun_level || 'starter';
       byId('funQuizLevelField').classList.toggle('hidden', !draft.is_fun);
       replaceQuestions(draft.questions);
@@ -320,6 +329,7 @@
     state.dirty = false;
     byId('builderQuizTitle').value = '';
     byId('builderIsFun').checked = false;
+    syncAiQuestionTypes();
     byId('builderFunLevel').value = 'starter';
     byId('funQuizLevelField').classList.add('hidden');
     populateModuleSelect(byId('builderModuleCode'), state.modules[0] || '');
@@ -341,6 +351,7 @@
       byId('builderQuizTitle').value = `${quiz.title} — copy`;
       populateModuleSelect(byId('builderModuleCode'), quiz.module_code);
       byId('builderIsFun').checked = Boolean(quiz.is_fun);
+      syncAiQuestionTypes();
       byId('builderFunLevel').value = quiz.fun_level || 'starter';
       byId('funQuizLevelField').classList.toggle('hidden', !quiz.is_fun);
       replaceQuestions(quiz.questions);
@@ -366,6 +377,48 @@
       showBuilderMessage(`Imported ${result.num_questions} question${result.num_questions === 1 ? '' : 's'}. Review them before publishing.`);
     } catch (error) { showBuilderMessage(`Import failed: ${error.message}`, 'error'); }
     finally { button.disabled = false; }
+  }
+
+  async function generateQuiz() {
+    const topic = byId('aiQuizTopic').value.trim();
+    const moduleCode = byId('builderModuleCode').value;
+    const count = Number(byId('aiQuestionCount').value);
+    if (!moduleCode) { showBuilderMessage('Choose an assigned module before generating questions.', 'error'); return; }
+    if (topic.length < 3) { showBuilderMessage('Describe the quiz topic or learning outcomes.', 'error'); return; }
+    if (!Number.isInteger(count) || count < 1 || count > 30) { showBuilderMessage('Choose between 1 and 30 questions.', 'error'); return; }
+    if (state.dirty && state.questions.some(question => question.question.trim()) && !confirm('Replace the current unsaved questions with a generated quiz?')) return;
+    const button = byId('generateQuizBtn');
+    const status = byId('aiQuizStatus');
+    button.disabled = true;
+    button.textContent = 'Generating…';
+    status.textContent = 'Creating questions. This can take up to a minute…';
+    try {
+      const result = await api('/lecturer/quiz/generate', {
+        method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({
+          topic,
+          module_code: moduleCode,
+          title: byId('builderQuizTitle').value.trim(),
+          question_count: count,
+          difficulty: byId('aiDifficulty').value,
+          question_types: byId('aiQuestionTypes').value,
+          is_fun: byId('builderIsFun').checked,
+          source_text: byId('aiSourceText').value.trim(),
+        }),
+      }, true);
+      if (!byId('builderQuizTitle').value.trim()) byId('builderQuizTitle').value = result.title;
+      replaceQuestions(result.questions);
+      state.draftId = null;
+      setDirty(true);
+      status.textContent = `${result.num_questions} editable questions generated. Review every answer before publishing.`;
+      showBuilderMessage(`Generated ${result.num_questions} questions for “${result.title}”. Review and edit them before publishing.`);
+      byId('quizQuestionsBuilder').scrollIntoView({behavior:'smooth', block:'start'});
+    } catch (error) {
+      status.textContent = 'Generation did not complete.';
+      showBuilderMessage(`Could not generate quiz: ${error.message}`, 'error');
+    } finally {
+      button.disabled = false;
+      button.textContent = 'Generate questions';
+    }
   }
 
   function validateQuiz() {
@@ -577,6 +630,7 @@
   byId('builderModuleCode').addEventListener('change', event => { byId('moduleCode').value = event.target.value; setDirty(true); });
   byId('builderIsFun').addEventListener('change', event => {
     byId('funQuizLevelField').classList.toggle('hidden', !event.target.checked);
+    syncAiQuestionTypes();
     if (event.target.checked) state.questions.forEach(question => { if (question.type === 'long') question.type = 'short'; });
     renderQuestions(); setDirty(true);
   });
@@ -591,6 +645,7 @@
   byId('deleteQuizDraftBtn').addEventListener('click', deleteDraft);
   byId('duplicateQuizBtn').addEventListener('click', duplicateQuiz);
   byId('importSpreadsheetBtn').addEventListener('click', importSpreadsheet);
+  byId('generateQuizBtn').addEventListener('click', generateQuiz);
   byId('previewQuizBtn').addEventListener('click', previewQuiz);
   byId('publishQuizBtn').addEventListener('click', publishQuiz);
   byId('closeQuizPreviewBtn').addEventListener('click', () => { byId('quizPreviewDialog').close(); clearPreviewUrls(); });

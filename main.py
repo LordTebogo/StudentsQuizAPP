@@ -41,6 +41,7 @@ import time
 import tempfile
 import threading
 import urllib.request
+import urllib.error
 import zipfile
 from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
@@ -51,7 +52,7 @@ from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func, inspect, text
 from sqlalchemy.orm import Session
 
@@ -135,6 +136,8 @@ VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "").strip()
 VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "").strip()
 VAPID_SUBJECT = os.getenv("VAPID_SUBJECT", "mailto:admin@example.com").strip()
 GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY", "").strip()
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
+OPENAI_QUIZ_MODEL = os.getenv("OPENAI_QUIZ_MODEL", "gpt-5.4-mini").strip() or "gpt-5.4-mini"
 MAX_LESSON_VIDEO_BYTES = 80 * 1024 * 1024
 ADMIN_MAX_FAILURES = int(os.getenv("ADMIN_MAX_FAILURES", "5"))
 ADMIN_LOCKOUT_SECONDS = int(os.getenv("ADMIN_LOCKOUT_SECONDS", "300"))
@@ -559,6 +562,17 @@ class AdminQuizInput(BaseModel):
     is_fun: bool = False
     fun_level: str = "starter"
     questions: List[AdminQuestionInput]
+
+
+class QuizGenerationInput(BaseModel):
+    topic: str = Field(min_length=3, max_length=500)
+    module_code: str = Field(min_length=1, max_length=64)
+    title: str = Field(default="", max_length=200)
+    question_count: int = Field(default=10, ge=1, le=30)
+    difficulty: str = Field(default="intermediate", max_length=32)
+    question_types: str = Field(default="mixed", max_length=32)
+    is_fun: bool = False
+    source_text: str = Field(default="", max_length=20000)
 
 
 class FunQuizCheckInput(BaseModel):
@@ -1657,6 +1671,185 @@ async def lecturer_import_quiz_spreadsheet(
     except QuizSpreadsheetError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"questions": questions, "num_questions": len(questions)}
+
+
+def _generated_quiz_schema() -> dict:
+    question = {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "type": {"type": "string", "enum": ["mcq", "short", "long"]},
+            "question": {"type": "string"},
+            "options": {"type": "array", "items": {"type": "string"}},
+            "correct_answer": {"type": "string"},
+            "marks": {"type": "number", "minimum": 0.5, "maximum": 100},
+            "explanation": {"type": "string"},
+            "similar_question": {"type": "string"},
+            "similar_options": {"type": "array", "items": {"type": "string"}},
+            "similar_correct_answer": {"type": "string"},
+        },
+        "required": [
+            "type", "question", "options", "correct_answer", "marks", "explanation",
+            "similar_question", "similar_options", "similar_correct_answer",
+        ],
+    }
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "title": {"type": "string"},
+            "questions": {"type": "array", "items": question},
+        },
+        "required": ["title", "questions"],
+    }
+
+
+def _response_output_text(response: dict) -> str:
+    if isinstance(response.get("output_text"), str):
+        return response["output_text"]
+    parts = []
+    for item in response.get("output") or []:
+        if item.get("type") != "message":
+            continue
+        for content in item.get("content") or []:
+            if content.get("type") == "output_text" and isinstance(content.get("text"), str):
+                parts.append(content["text"])
+    return "".join(parts)
+
+
+@app.post("/lecturer/quiz/generate")
+def lecturer_generate_quiz(
+    payload: QuizGenerationInput,
+    lecturer: Lecturer = Depends(require_lecturer_account),
+    db: Session = Depends(get_db),
+):
+    """Generate an editable quiz draft. Nothing is saved or published here."""
+    if not OPENAI_API_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail="AI quiz generation is not configured. Add OPENAI_API_KEY to the server environment.",
+        )
+    if len(payload.topic.strip()) < 3:
+        raise HTTPException(status_code=400, detail="Describe the quiz topic or learning outcomes")
+    module_code = _require_module_access(db, lecturer, payload.module_code)
+    difficulty = payload.difficulty.strip().lower()
+    if difficulty not in {"introductory", "intermediate", "advanced"}:
+        raise HTTPException(status_code=400, detail="Choose an introductory, intermediate, or advanced difficulty")
+    question_types = payload.question_types.strip().lower()
+    if question_types not in {"mixed", "mcq", "short", "long"}:
+        raise HTTPException(status_code=400, detail="Choose mixed, MCQ, short-answer, or long-answer questions")
+    if payload.is_fun and question_types == "long":
+        raise HTTPException(status_code=400, detail="Fun Quizzes cannot contain long-answer questions")
+
+    type_instruction = (
+        "Use a balanced mixture of multiple-choice, short-answer, and long-answer questions."
+        if question_types == "mixed" and not payload.is_fun else
+        "Use a balanced mixture of multiple-choice and short-answer questions."
+        if question_types == "mixed" else
+        f"Use only {question_types} questions."
+    )
+    source_instruction = (
+        "Base every question only on the lecturer's source material below. Do not introduce facts outside it."
+        if payload.source_text.strip() else
+        "Use established, broadly accepted subject knowledge and avoid disputed or ambiguous facts."
+    )
+    fun_instruction = (
+        "For every question, provide a friendly explanation and a different similar practice question with its answer. "
+        "Fun Quizzes may only use mcq or short types."
+        if payload.is_fun else
+        "Provide a concise answer explanation. Leave similar_question, similar_options, and similar_correct_answer empty."
+    )
+    prompt = f"""Create an assessment for module {module_code}.
+Topic or learning outcomes: {payload.topic.strip()}
+Requested title: {payload.title.strip() or 'Choose a concise descriptive title'}
+Difficulty: {difficulty}
+Number of questions: exactly {payload.question_count}
+{type_instruction}
+{source_instruction}
+{fun_instruction}
+
+Rules:
+- Use clear, self-contained questions with one defensible answer.
+- MCQs need exactly four plausible, distinct options; correct_answer must exactly equal one option.
+- Short-answer keys must contain no more than two words.
+- Long-answer questions use an empty correct_answer and empty options.
+- Use marks appropriate to the work required.
+- Do not include question numbers in the question text.
+
+Lecturer source material:
+{payload.source_text.strip() or '(No source material supplied.)'}"""
+    request_body = {
+        "model": OPENAI_QUIZ_MODEL,
+        "instructions": "You are an expert assessment designer. Return only the requested structured quiz data.",
+        "input": prompt,
+        "text": {
+            "format": {
+                "type": "json_schema",
+                "name": "generated_quiz",
+                "strict": True,
+                "schema": _generated_quiz_schema(),
+            }
+        },
+        "max_output_tokens": min(16000, 1800 + payload.question_count * 450),
+        "store": False,
+        "safety_identifier": hashlib.sha256(f"lecturer:{lecturer.id}".encode()).hexdigest()[:32],
+    }
+    request = urllib.request.Request(
+        "https://api.openai.com/v1/responses",
+        data=json.dumps(request_body).encode("utf-8"),
+        headers={"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=90) as response:
+            result = json.loads(response.read())
+    except urllib.error.HTTPError as exc:
+        try:
+            upstream = json.loads(exc.read()).get("error", {}).get("message", "")
+        except (json.JSONDecodeError, AttributeError):
+            upstream = ""
+        detail = upstream or "The quiz-generation service rejected the request"
+        if exc.code == 401:
+            detail = "The quiz-generation API key is invalid"
+        elif exc.code == 429:
+            detail = "Quiz generation is temporarily at capacity. Please try again shortly"
+        elif exc.code >= 500:
+            detail = "The quiz-generation service is temporarily unavailable"
+        raise HTTPException(status_code=502, detail=detail) from exc
+    except (urllib.error.URLError, TimeoutError) as exc:
+        raise HTTPException(status_code=504, detail="Quiz generation timed out. Please try again.") from exc
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=502, detail="The quiz-generation service returned an unreadable response") from exc
+
+    output_text = _response_output_text(result)
+    if not output_text:
+        raise HTTPException(status_code=502, detail="The quiz-generation service returned no quiz")
+    try:
+        generated = json.loads(output_text)
+        raw_questions = generated.get("questions") or []
+        questions = [AdminQuestionInput(**question) for question in raw_questions]
+    except (json.JSONDecodeError, TypeError, ValueError, AttributeError) as exc:
+        raise HTTPException(status_code=502, detail="The generated quiz could not be validated. Please try again.") from exc
+    if len(questions) != payload.question_count:
+        raise HTTPException(status_code=502, detail="The generator returned the wrong number of questions. Please try again.")
+    if question_types != "mixed" and any(question.type != question_types for question in questions):
+        raise HTTPException(status_code=502, detail="The generator returned unexpected question types. Please try again.")
+    for index, question in enumerate(questions, start=1):
+        if question.type == "mcq" and (
+            len(question.options or []) != 4 or question.correct_answer not in (question.options or [])
+        ):
+            raise HTTPException(status_code=502, detail=f"Generated question {index} has an invalid answer key. Please try again.")
+    try:
+        _validate_admin_questions(questions, payload.is_fun)
+    except HTTPException as exc:
+        raise HTTPException(status_code=502, detail=f"Generated quiz failed validation: {exc.detail}") from exc
+    return {
+        "title": str(generated.get("title") or payload.title or payload.topic).strip()[:200],
+        "module_code": module_code,
+        "questions": [question.model_dump() for question in questions],
+        "num_questions": len(questions),
+        "model": OPENAI_QUIZ_MODEL,
+    }
 
 
 @app.get("/lecturer/quizzes/{quiz_id}")
