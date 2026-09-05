@@ -167,7 +167,8 @@
     const app=document.getElementById('appWrap'), workbench=app.querySelector('.lecturer-workbench');
     if(workbench&&!document.querySelector('.tutor-task-nav')){
       const libraryCards=[...workbench.querySelectorAll(':scope > .card')], builder=document.getElementById('quizBuilderCard'), roster=app.querySelector('.lecturer-roster'), messages=document.getElementById('lecturerMessagesCard'), submissions=document.getElementById('submissionsCard'), grading=document.getElementById('gradingCard');
-      if(builder)builder.id='quizCreate';if(libraryCards[0])libraryCards[0].id='quizLibrary';
+      // Keep the builder's ID stable: quiz-builder.js initializes after this layout.
+      if(libraryCards[0])libraryCards[0].id='quizLibrary';
       const intro=document.createElement('section');intro.className='tutor-command-center';intro.innerHTML='<div><span class="kicker">Tutor workspace</span><h1>What would you like to do?</h1><p>Choose one task. Your teaching tools stay focused and easy to scan.</p></div><a class="btn" href="/static/live_lesson.html">Start live classroom</a>';
       const tabs=document.createElement('nav');tabs.className='tutor-task-nav';tabs.setAttribute('aria-label','Tutor workspace tasks');tabs.innerHTML='<button type="button" data-tutor-view="create">Create quiz</button><button type="button" data-tutor-view="library">Quiz library</button><button type="button" data-tutor-view="submissions">Submissions</button><button type="button" data-tutor-view="students">Students</button><button type="button" data-tutor-view="messages">Messages</button>';
       const views=document.createElement('div');views.className='tutor-task-views';

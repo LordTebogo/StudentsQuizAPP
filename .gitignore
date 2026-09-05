@@ -8,3 +8,4 @@ quiz_images/
 lesson_videos/
 
 *.log
+node_modules/
