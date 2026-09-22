@@ -56,7 +56,7 @@
     ['/static/lessons_student.html', 'Lessons'], ['/static/live_lesson.html', 'Live'],
     ['/static/fun.html', 'Community'],
   ] : [
-    ['/static/index.html', 'Home'], ['/static/student.html', 'Learners'],
+    ['/static/index.html', 'Home'], ['/static/academics.html', 'Academics'],
     ['/static/lecturer.html', 'Tutors'], ['/static/marketing.html', 'Market'],
   ];
   const moreLinks = activeRole === 'admin' ? [
