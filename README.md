@@ -415,3 +415,9 @@ below) need an `X-Lecturer-Pin: 90435` header.
 - Lesson comments have no edit/delete function and no moderation — anyone can post, and posts are permanent. Fine for a small trusted classroom, not for anything with a large public audience.
 - PDF export currently covers quizzes only, not video lesson submissions.
 - The lecturer PIN (`LECTURER_PIN`) and Cloudinary/Postgres credentials all come from environment variables now — never hardcode them in a `.py` file, and never commit a real `.env` file (it's in `.gitignore`).
+
+## Campus marketplace home
+
+The root page and installed app now open the public campus market. Visitors can filter available rooms and approved adverts by university/college, category and search text. The chosen campus is remembered on the device. Transport and items use the existing reviewed advert categories; posting continues through the existing market workspace. The Academics button opens `static/academics.html`, preserving learner/tutor sign-in and learning tools. Legacy home links with account role or registration parameters continue to open account entry.
+
+Run frontend regression checks with `npm ci --prefix tests` then `npm test --prefix tests`.

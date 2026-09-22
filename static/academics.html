@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#070a14">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="96x96" href="/static/icons/favicon-96x96.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/static/icons/apple-touch-icon.png">
+<link rel="manifest" href="/static/manifest.webmanifest">
+<title>Academics — NucleoCampus</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+  .student-home-actions { position:relative; display:none; align-items:center; gap:10px; }
+  .student-home-actions.active { display:flex; }
+  .home-message-button { position:relative; width:42px; height:42px; border:1px solid rgba(103,232,249,.42); border-radius:14px; background:rgba(7,16,35,.72); color:#67e8f9; cursor:pointer; font-size:1.15rem; }
+  .home-message-count { position:absolute; top:-7px; right:-6px; min-width:18px; height:18px; padding:0 4px; border-radius:99px; background:#f472b6; color:#08111f; font:700 .65rem/18px var(--font-mono,monospace); }
+  .home-profile-avatar { width:42px; height:42px; border:2px solid rgba(103,232,249,.7); border-radius:50%; object-fit:cover; background:#15223c; }
+  .home-profile-name { max-width:130px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); font-size:.86rem; }
+  .home-inbox { position:absolute; z-index:20; top:82px; right:0; width:min(390px,calc(100vw - 32px)); max-height:440px; overflow:auto; padding:16px; border:1px solid rgba(103,232,249,.35); border-radius:18px; background:rgba(7,14,31,.98); box-shadow:0 24px 60px rgba(0,0,0,.42); }
+  .home-inbox h3 { margin:0 0 12px; } .home-inbox .q { margin:9px 0; padding:12px; } .home-inbox small { display:block; color:var(--muted); margin:3px 0 6px; }
+  @media(max-width:620px){.home-profile-name{display:none}.student-home-actions{gap:7px}.home-inbox{right:8px;top:74px}}
+  .home-profile-menu { position:absolute; z-index:21; top:54px; right:0; width:180px; padding:8px; border:1px solid rgba(103,232,249,.35); border-radius:15px; background:rgba(7,14,31,.98); box-shadow:0 24px 60px rgba(0,0,0,.42); }
+  .home-profile-menu button { width:100%; margin:0; padding:11px; border:0; border-radius:10px; background:transparent; color:var(--text); text-align:left; cursor:pointer; } .home-profile-menu button:hover { background:rgba(103,232,249,.12); color:#67e8f9; }
+  #welcome .top { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:center; }
+  #welcome .top nav { display:flex; align-items:center; justify-content:flex-end; flex-wrap:nowrap; min-width:0; gap:2px; }
+  #welcome .top nav > a { order:1; white-space:nowrap; }
+  #welcome .student-home-actions { order:2; flex:0 0 auto; flex-wrap:nowrap; margin-left:12px; padding-left:14px; border-left:1px solid rgba(103,232,249,.2); }
+  #welcome .home-profile-avatar { order:1; }
+  #welcome .home-profile-name { order:2; }
+  #welcome .home-message-button { order:3; }
+  #welcome .notification-toggle { order:4; margin:0; white-space:nowrap; }
+  #welcome .install-app-btn { order:2; margin-left:10px; white-space:nowrap; }
+  @media(max-width:1040px){#welcome .home-profile-name{display:none}#welcome .student-home-actions{gap:6px;margin-left:8px;padding-left:9px}#welcome .top nav a{padding-inline:6px;font-size:.66rem}}
+  #welcome .top nav { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; row-gap:10px; }
+  #welcome .primary-nav-links { grid-column:1/-1; grid-row:2; display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:4px; padding-top:10px; border-top:1px solid rgba(148,163,184,.12); }
+  #welcome .primary-nav-links a { padding:6px 10px; }
+  #welcome .student-home-actions { grid-column:2; grid-row:1; margin:0; padding:0; border:0; }
+  #welcome .install-app-btn { grid-column:2; grid-row:1; margin:0; }
+  #welcome.dashboard-mode .public-intro { display:none; }
+  #welcome.dashboard-mode .top { margin-bottom:28px; }
+  #welcome.dashboard-mode #studentPortal, #welcome.dashboard-mode #lecturerPortal, #welcome.dashboard-mode #advertiserPortal { padding:28px; }
+  #studentNextStep { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:8px 24px; padding:18px 20px; }
+  #studentNextStep .next-copy h3, #studentNextStep .next-copy p { margin-bottom:5px; }
+  #studentNextStep .next-actions { display:flex; flex-direction:column; align-items:flex-end; gap:8px; }
+  #studentNextStep .next-actions .btn { margin:0; }
+  #guestChoices .role-card:first-child { order:3; }
+  .market-role-card { position:relative; overflow:hidden; isolation:isolate; background:radial-gradient(circle at 82% 20%,rgba(192,132,252,.34),transparent 36%),linear-gradient(135deg,#11264a,#38205c); }
+  .market-role-card::before { content:''; position:absolute; inset:0; z-index:-2; opacity:0; background:center/cover no-repeat var(--market-image); transform:scale(1.05); transition:opacity .7s ease, transform 4.5s ease; }
+  .market-role-card::after { content:''; position:absolute; inset:0; z-index:-1; background:linear-gradient(105deg,rgba(8,17,37,.96) 0%,rgba(10,23,48,.76) 58%,rgba(47,22,79,.68) 100%); }
+  .market-role-card.has-market-image::before { opacity:.72; transform:scale(1); }
+  .market-role-card .market-pulse { display:inline-flex; align-items:center; gap:6px; color:#d9bcff; font:700 .66rem var(--font-mono,monospace); letter-spacing:.08em; text-transform:uppercase; }
+  .market-role-card .market-pulse::before { content:''; width:7px; height:7px; border-radius:99px; background:#d9bcff; box-shadow:0 0 14px #d9bcff; animation:marketPulse 1.5s infinite; }
+  @keyframes marketPulse { 50% { opacity:.28; transform:scale(.7); } }
+  .home-ad-belt { margin-top:22px; overflow:hidden; border:1px solid rgba(103,232,249,.28); border-radius:24px; background:linear-gradient(120deg,rgba(8,25,47,.96),rgba(31,20,62,.94)); box-shadow:0 20px 50px rgba(0,0,0,.2); }
+  .home-ad-head { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:13px 16px; border-bottom:1px solid rgba(148,163,184,.16); }
+  .home-ad-label { display:flex; align-items:center; gap:9px; color:#a9bbd3; font:700 .66rem var(--font-mono,monospace); letter-spacing:.09em; text-transform:uppercase; }
+  .home-ad-label::before { content:'Sponsored'; padding:4px 7px; border-radius:999px; background:rgba(103,232,249,.13); color:#67e8f9; }
+  .home-ad-controls { display:flex; align-items:center; gap:7px; }
+  .home-ad-control { display:grid; place-items:center; width:34px; height:34px; margin:0; padding:0; border:1px solid rgba(103,232,249,.32); border-radius:50%; background:rgba(5,14,30,.58); color:#dffbff; cursor:pointer; }
+  .home-ad-control:hover, .home-ad-control:focus-visible { border-color:#67e8f9; color:#67e8f9; outline:none; }
+  .home-ad-count { min-width:48px; color:#9fb1ca; font:.66rem var(--font-mono,monospace); text-align:center; }
+  .home-ad-viewport { overflow:hidden; }
+  .home-ad-track { display:flex; transition:transform .55s cubic-bezier(.22,.78,.25,1); }
+  .home-ad-slide { min-width:100%; display:grid; grid-template-columns:minmax(260px,42%) minmax(0,1fr); min-height:230px; cursor:pointer; }
+  .home-ad-slide:focus-visible { outline:2px solid #67e8f9; outline-offset:-4px; }
+  .home-ad-media { position:relative; min-height:230px; overflow:hidden; background:radial-gradient(circle at 45% 45%,rgba(192,132,252,.32),transparent 55%),#101c34; }
+  .home-ad-media img, .home-ad-media video { width:100%; height:100%; min-height:230px; max-height:290px; display:block; object-fit:cover; }
+  .home-ad-media video { background:#020714; }
+  .home-ad-fallback { display:grid; place-items:center; height:100%; min-height:230px; color:#d9bcff; font-size:3rem; }
+  .home-ad-copy { display:flex; flex-direction:column; justify-content:center; align-items:flex-start; padding:28px clamp(22px,4vw,52px); }
+  .home-ad-copy h3 { margin:7px 0 9px; max-width:760px; font-size:clamp(1.45rem,2.8vw,2.35rem); line-height:1.05; letter-spacing:-.035em; }
+  .home-ad-copy p { max-width:700px; margin:0 0 13px; color:#b4c4db; line-height:1.5; }
+  .home-ad-meta { color:#dce8f7; font-size:.82rem; }
+  .home-ad-cta { margin-top:17px; }
+  .home-ad-dots { display:flex; justify-content:center; flex-wrap:wrap; gap:7px; padding:11px; border-top:1px solid rgba(148,163,184,.12); }
+  .home-ad-dot { width:7px; height:7px; margin:0; padding:0; border:0; border-radius:99px; background:rgba(148,163,184,.38); cursor:pointer; transition:width .25s ease,background .25s ease; }
+  .home-ad-dot.active { width:24px; background:#67e8f9; }
+  @media (max-width:620px) {
+    #welcome { width:min(100% - 20px, 520px); padding-top:12px; }
+    #welcome .top { grid-template-columns:1fr; min-height:0; padding:14px 16px; align-items:center; gap:12px; }
+    #welcome .brand-logo { width:42px; height:42px; }
+    #welcome .brand { font-size:1.35rem; }
+    #welcome .brand-tagline { font-size:.58rem; }
+    #welcome nav { width:100%; margin-left:0; display:flex; align-items:center; justify-content:flex-start; flex-wrap:wrap; gap:5px; }
+    #welcome .student-home-actions { width:100%; margin:7px 0 0; padding:10px 0 0; border-left:0; border-top:1px solid rgba(103,232,249,.2); }
+    #welcome .top nav { grid-template-columns:1fr; }
+    #welcome .primary-nav-links { grid-column:1; grid-row:2; justify-content:flex-start; width:100%; overflow-x:auto; flex-wrap:nowrap; padding-bottom:3px; scrollbar-width:none; }
+    #welcome .primary-nav-links::-webkit-scrollbar { display:none; }
+    #welcome .student-home-actions, #welcome .install-app-btn { grid-column:1; grid-row:1; justify-self:start; }
+    #studentNextStep { grid-template-columns:1fr; }
+    #studentNextStep .next-actions { align-items:flex-start; }
+    #welcome .install-app-btn { min-height:40px; padding:0 12px; font-size:.62rem; letter-spacing:.08em; }
+    .home-message-button, .home-profile-avatar { width:40px; height:40px; }
+    .home-profile-menu { top:48px; right:0; width:164px; padding:6px; }
+    .home-profile-menu button { padding:10px; font-size:.9rem; }
+    #welcome h1 { margin-top:42px; font-size:clamp(2.45rem, 13vw, 3.35rem); line-height:.98; letter-spacing:-.055em; }
+    #welcome .lede { font-size:1rem; line-height:1.55; }
+    #welcome .role-grid { grid-template-columns:1fr; gap:14px; }
+    #welcome .role-card { min-height:0; padding:20px; }
+    #studentPortal { padding:20px 16px; }
+    #studentPortal h2 { font-size:1.6rem; }
+    .home-inbox { position:fixed; top:82px; right:10px; width:calc(100vw - 20px); max-height:calc(100vh - 100px); border-radius:16px; }
+    .home-ad-belt { margin-top:14px; border-radius:20px; }
+    .home-ad-slide { grid-template-columns:1fr; min-height:0; }
+    .home-ad-media, .home-ad-fallback { min-height:190px; }
+    .home-ad-media img, .home-ad-media video { min-height:190px; max-height:220px; }
+    .home-ad-copy { padding:21px 20px 24px; }
+    .home-ad-copy h3 { font-size:1.55rem; }
+    .home-ad-copy p { display:-webkit-box; overflow:hidden; -webkit-box-orient:vertical; -webkit-line-clamp:3; }
+  }
+  .entry-shell{max-width:780px;margin:34px auto 0;padding:clamp(20px,4vw,38px);border:1px solid rgba(103,232,249,.28);border-radius:26px;background:linear-gradient(145deg,rgba(15,31,58,.94),rgba(10,18,38,.97));box-shadow:0 24px 65px rgba(0,0,0,.25)}
+  .entry-heading{text-align:center}.entry-heading h1{margin:7px 0 8px;font-size:clamp(2rem,5vw,3.5rem)}.entry-heading p{margin:0 auto 22px;max-width:590px;color:var(--muted)}
+  .entry-role-tabs,.entry-mode-tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:18px 0}.entry-mode-tabs{grid-template-columns:repeat(2,1fr);max-width:390px;margin:18px auto}
+  .entry-tab{margin:0;padding:12px 10px;border:1px solid rgba(148,163,184,.26);border-radius:13px;background:rgba(5,14,31,.56);color:var(--muted);cursor:pointer;font-weight:800}.entry-tab.active{border-color:#67e8f9;background:linear-gradient(135deg,#67e8f9,#6ee7b7);color:#07111f;box-shadow:0 8px 24px rgba(103,232,249,.16)}
+  .entry-form{max-width:540px;margin:0 auto}.entry-form label{display:block;margin-top:12px}.entry-form input,.entry-form select,.entry-form textarea{width:100%}.entry-form .btn{width:100%;margin-top:18px}.entry-form details{margin-top:14px}.entry-role-note{text-align:center;color:var(--muted)}.visitor-entry{text-align:center;padding:22px 0 4px}.visitor-entry .btn{width:auto;min-width:230px}.entry-message{margin-top:14px}
+  @media(max-width:620px){.entry-shell{margin-top:18px;padding:18px 15px;border-radius:20px}.entry-role-tabs{grid-template-columns:repeat(2,1fr)}.entry-tab{padding:11px 7px;font-size:.82rem}}
+</style>
+</head>
+<body>
+<div class="wrap" id="welcome">
+  <header class="top">
+    <div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Nucleo<span>Campus</span></div><div class="brand-tagline">Bioscientist</div></div></div>
+    <nav><a href="/" class="btn secondary">← Campus market</a><div class="student-home-actions" id="studentHomeActions"><button class="home-message-button" id="homeMessagesBtn" type="button" aria-label="Open messages">✉<span class="home-message-count hidden" id="homeMessageCount">0</span></button><span class="home-profile-name" id="homeStudentName"></span><img class="home-profile-avatar" id="homeStudentAvatar" src="/branding/logo" alt="Student profile picture"></div><button class="install-app-btn" id="installAppBtn" type="button" title="Add NucleoCampus to your home screen for faster, full-screen access">Install NucleoCampus</button></nav>
+  </header>
+
+  <section class="entry-shell" id="guestChoices">
+    <div class="entry-heading"><span class="kicker">Academics</span><h1>Tutorials &amp; tutors</h1><p>Access video tutorials, quizzes and your tutor workspace. Sign in or create an account to continue.</p></div>
+    <div class="entry-role-tabs" role="tablist" aria-label="Choose account type"><button class="entry-tab active" type="button" data-entry-role="learner">Learner</button><button class="entry-tab" type="button" data-entry-role="lecturer">Tutor</button><button class="entry-tab" type="button" data-entry-role="visitor">Visitor</button><button class="entry-tab" type="button" data-entry-role="advertiser">Advertiser</button></div>
+    <div id="accountEntry"><div class="entry-mode-tabs" id="entryModeTabs"><button class="entry-tab active" type="button" data-entry-mode="login">Sign in</button><button class="entry-tab" type="button" data-entry-mode="register">Create account</button></div><p class="entry-role-note" id="entryRoleNote"></p><form class="entry-form" id="entryForm"></form><div class="entry-message" id="entryMessage" aria-live="polite"></div></div>
+  </section>
+  <section class="home-ad-belt hidden" id="homeAdvertBelt" aria-label="Sponsored campus adverts">
+    <div class="home-ad-head"><div class="home-ad-label">Campus offers</div><div class="home-ad-controls"><button class="home-ad-control" id="homeAdPrevious" type="button" aria-label="Previous advert">&#8249;</button><span class="home-ad-count" id="homeAdCount"></span><button class="home-ad-control" id="homeAdNext" type="button" aria-label="Next advert">&#8250;</button></div></div>
+    <div class="home-ad-viewport"><div class="home-ad-track" id="homeAdTrack"></div></div>
+    <div class="home-ad-dots" id="homeAdDots" aria-label="Choose advert"></div>
+  </section>
+  <section class="card hidden" id="studentPortal"><span class="kicker">Learner account active</span><h2>Your learner workspace</h2><p class="muted">Your quizzes, lessons, community, and private notifications in one place.</p><div class="role-grid"><a class="role-card" href="/static/student.html"><h3>Quizzes &amp; scripts</h3><p>Take assessments and download your work.</p></a><a class="role-card" href="/static/lessons_student.html"><h3>Video lessons</h3><p>Learn at your pace and answer lesson questions.</p></a><a class="role-card" href="/static/fun.html"><h3>Fun Page</h3><p>Join the community and view tags.</p></a></div><button class="btn secondary" id="studentSignOut">Sign out</button></section>
+  <aside class="home-inbox hidden" id="homeInbox"><h3>Messages &amp; mentions</h3><div id="homeInboxList"></div></aside>
+  <section class="card hidden" id="lecturerPortal"><span class="kicker">Tutor account active</span><h2>Your tutor workspace</h2><p class="muted">Only tutor tools are shown here.</p><div class="role-grid"><a class="role-card" href="/static/lecturer.html"><h3>Quizzes &amp; marking</h3></a><a class="role-card" href="/static/lessons_lecturer.html"><h3>Video lessons</h3></a></div><button class="btn secondary" id="lecturerSignOut">Sign out</button></section>
+  <section class="card hidden" id="advertiserPortal"><span class="kicker">Advertiser account active</span><h2>Your advertiser workspace</h2><p class="muted">Manage accommodation, services, promotions and customer messages.</p><div class="role-grid"><a class="role-card" href="/static/marketing.html"><h3>Open advertiser workspace</h3><p>Manage listings and submit reviewed adverts.</p></a></div><button class="btn secondary" id="advertiserSignOut">Sign out</button></section>
+</div>
+<footer class="site-footer"><strong>NucleoCampus</strong><div>Learning lives here.</div><nav><a href="/static/trust.html#privacy">Privacy</a><a href="/static/trust.html#terms">Terms</a><a href="/static/trust.html#support">Support</a></nav></footer>
+<p class="install-hint" id="installHint" aria-live="polite">Install for faster access and a full-screen app experience. Online access is still required for current content.</p>
+<script>
+  (() => {
+    const roleButtons=[...document.querySelectorAll('[data-entry-role]')],modeButtons=[...document.querySelectorAll('[data-entry-mode]')],form=document.getElementById('entryForm'),modeTabs=document.getElementById('entryModeTabs'),note=document.getElementById('entryRoleNote'),message=document.getElementById('entryMessage');
+    if(!form)return;
+    const params=new URLSearchParams(location.search);let role=['learner','lecturer','visitor','advertiser'].includes(params.get('role'))?params.get('role'):'learner',mode=params.get('mode')==='register'||location.hash==='#register'?'register':'login';
+    const escapeEntry=value=>{const element=document.createElement('div');element.textContent=value??'';return element.innerHTML};
+    const showEntryMessage=(text,kind='ok')=>{message.innerHTML=`<div class="msg ${kind}">${escapeEntry(text)}</div>`};
+    const commonRegister=(includeConfirm=true)=>`<label for="entryFullName">Full name</label><input id="entryFullName" name="full_name" autocomplete="name" required><label for="entryEmail">Email</label><input id="entryEmail" name="email" type="email" autocomplete="email" required><label for="entryPassword">Password</label><input id="entryPassword" name="password" type="password" autocomplete="new-password" minlength="8" placeholder="At least 8 characters" required>${includeConfirm?'<label for="entryConfirmPassword">Confirm password</label><input id="entryConfirmPassword" name="confirm_password" type="password" autocomplete="new-password" minlength="8" required>':''}`;
+    function renderEntry(){roleButtons.forEach(button=>button.classList.toggle('active',button.dataset.entryRole===role));modeButtons.forEach(button=>button.classList.toggle('active',button.dataset.entryMode===mode));message.innerHTML='';if(role==='visitor'){modeTabs.classList.add('hidden');note.textContent='No account is needed to browse public campus spaces.';form.innerHTML='<div class="visitor-entry"><p>Explore public adverts, accommodation, services and community information.</p><button class="btn" type="submit">Continue as visitor</button></div>';return}modeTabs.classList.remove('hidden');const labels={learner:'Access quizzes, lessons and saved progress.',lecturer:'Manage teaching content, quizzes and learner work.',advertiser:'Manage accommodation, sales, transport or other services.'},roleLabel=role==='lecturer'?'tutor':role;note.textContent=labels[role];if(mode==='login'){const identifier=role==='learner'?'<label for="entryIdentifier">Username or email</label><input id="entryIdentifier" name="identifier" autocomplete="username" required>':'<label for="entryEmail">Email</label><input id="entryEmail" name="email" type="email" autocomplete="email" required>';form.innerHTML=`${identifier}<label for="entryPassword">Password</label><input id="entryPassword" name="password" type="password" autocomplete="current-password" required><button class="btn" type="submit">Sign in as ${roleLabel}</button>`;return}if(role==='learner')form.innerHTML=`<label for="entryUsername">Unique username</label><input id="entryUsername" name="username" autocomplete="username" pattern="[A-Za-z0-9][A-Za-z0-9._-]{2,39}" required>${commonRegister(true)}<details><summary>Optional profile details</summary><label>Phone<input name="phone" type="tel"></label><label>Institution<input name="institution"></label><label>About you<textarea name="bio"></textarea></label><label>Profile picture<input name="profile_image" type="file" accept="image/*"></label></details><button class="btn" type="submit">Create learner account</button>`;else if(role==='lecturer')form.innerHTML=`${commonRegister(true)}<details><summary>Optional professional details</summary><label>Phone<input name="phone" type="tel"></label><label>Institution<input name="institution"></label><label>Professional bio<textarea name="bio"></textarea></label><label>Profile picture<input name="profile_image" type="file" accept="image/*"></label></details><button class="btn" type="submit">Create tutor account</button>`;else form.innerHTML=`<label for="entryProviderType">What do you provide?</label><select id="entryProviderType" name="provider_type" required><option value="residence">Student accommodation</option><option value="transport">Transport or delivery</option><option value="sales">Sales</option><option value="other">Other</option></select>${commonRegister(true)}<label>Business or service name<input name="business_name"></label><label>Contact number<input name="phone" type="tel" required></label><label>Profile or business image (optional)<input name="profile_image" type="file" accept="image/*"></label><button class="btn" type="submit">Create advertiser account</button>`}
+    async function entryRequest(path,options){const response=await fetch(path,options),data=await response.json().catch(()=>null);if(!response.ok)throw new Error(data?.detail||'The request could not be completed');return data}
+    roleButtons.forEach(button=>button.addEventListener('click',()=>{role=button.dataset.entryRole;renderEntry()}));modeButtons.forEach(button=>button.addEventListener('click',()=>{mode=button.dataset.entryMode;renderEntry()}));
+    form.addEventListener('submit',async event=>{event.preventDefault();if(role==='visitor'){sessionStorage.setItem('activeRole','visitor');location.href='/static/marketing.html';return}const submit=form.querySelector('button[type="submit"]');submit.disabled=true;showEntryMessage(mode==='login'?'Signing you in…':'Creating your account…');try{if(mode==='login'){const values=Object.fromEntries(new FormData(form));if(role==='learner'){const result=await entryRequest('/students/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({identifier:values.identifier,password:values.password})});sessionStorage.setItem('studentToken',result.token);sessionStorage.removeItem('lecturerToken');sessionStorage.removeItem('landlordToken');sessionStorage.setItem('activeRole','student');location.href='/static/student.html'}else if(role==='lecturer'){const result=await entryRequest('/lecturers/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:values.email,password:values.password})});sessionStorage.setItem('lecturerToken',result.token);sessionStorage.removeItem('studentToken');sessionStorage.removeItem('landlordToken');sessionStorage.setItem('activeRole','lecturer');location.href='/static/lecturer.html'}else{const result=await entryRequest('/marketing/landlords/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:values.email,password:values.password})});sessionStorage.setItem('landlordToken',result.token);sessionStorage.removeItem('studentToken');sessionStorage.removeItem('lecturerToken');sessionStorage.setItem('activeRole','advertiser');location.href='/static/marketing.html'}}else{const data=new FormData(form),password=data.get('password'),confirmation=data.get('confirm_password');if(password!==confirmation)throw new Error('The password confirmation does not match');let result;if(role==='learner')result=await entryRequest('/students/register',{method:'POST',body:data});else if(role==='lecturer'){data.delete('confirm_password');result=await entryRequest('/lecturers/register',{method:'POST',body:data})}else{result=await entryRequest('/marketing/landlords/register',{method:'POST',body:data});sessionStorage.setItem('landlordToken',result.token);sessionStorage.removeItem('studentToken');sessionStorage.removeItem('lecturerToken');sessionStorage.setItem('activeRole','advertiser');location.href='/static/marketing.html';return}const email=data.get('email'),username=data.get('username');mode='login';renderEntry();const identifier=form.querySelector('[name="identifier"]'),emailInput=form.querySelector('[name="email"]');if(identifier)identifier.value=username||email;if(emailInput)emailInput.value=email;showEntryMessage(result.message||'Account created. You can sign in now.')}}catch(error){showEntryMessage(error.message,'error')}finally{if(document.body.contains(submit))submit.disabled=false}});
+    renderEntry();
+  })();
+</script>
+<script>
+  let homeHasStudent = sessionStorage.getItem('studentToken');
+  let homeHasLecturer = sessionStorage.getItem('lecturerToken');
+  let homeHasAdvertiser = sessionStorage.getItem('landlordToken');
+  const preferredRole = sessionStorage.getItem('activeRole');
+  if (homeHasStudent && homeHasLecturer) { if (preferredRole === 'student') { sessionStorage.removeItem('lecturerToken'); homeHasLecturer = null; } else { sessionStorage.removeItem('studentToken'); homeHasStudent = null; sessionStorage.setItem('activeRole','lecturer'); } }
+  if(homeHasAdvertiser&&preferredRole==='advertiser'){sessionStorage.removeItem('studentToken');sessionStorage.removeItem('lecturerToken');homeHasStudent=null;homeHasLecturer=null}else if(homeHasStudent||homeHasLecturer){sessionStorage.removeItem('landlordToken');homeHasAdvertiser=null}
+  if (homeHasStudent || homeHasLecturer || homeHasAdvertiser) document.getElementById('welcome').classList.add('dashboard-mode');
+  if (homeHasStudent) {
+    const portal = document.getElementById('studentPortal');
+    const grid = portal && portal.querySelector('.role-grid');
+    if (grid && !document.getElementById('studentNextStep')) {
+      const next = document.createElement('div');
+      next.id = 'studentNextStep'; next.className = 'dashboard-priority';
+      next.innerHTML = '<div class="next-copy"><span class="kicker">Recommended next step</span><h3>Check your modules and unfinished quizzes</h3><p>Continue where you left off or review your latest results.</p></div><div class="next-actions"><a class="btn" href="/static/student.html">Continue learning</a><span class="progress-pill">Progress saved</span></div>';
+      grid.before(next);
+    }
+  }
+</script>
+<script src="/static/experience.js"></script>
+<script src="/static/loading.js"></script>
+<script src="/static/pwa.js?v=15"></script>
+<script>
+  const studentToken = sessionStorage.getItem('studentToken');
+  const lecturerToken = sessionStorage.getItem('lecturerToken');
+  const advertiserToken = sessionStorage.getItem('landlordToken');
+  const guest = document.getElementById('guestChoices');
+  const escapeHome = value => { const element=document.createElement('div'); element.textContent=value ?? ''; return element.innerHTML; };
+  async function studentApi(path) { const response=await fetch(path,{headers:{'X-Student-Token':studentToken}}); const data=await response.json().catch(()=>null); if(!response.ok) throw new Error(data?.detail || 'Could not load messages'); return data; }
+  async function loadHomeInbox() { try { const messages=await studentApi('/student/messages'); document.getElementById('homeInboxList').innerHTML=messages.length ? messages.map(message=>`<div class="q"><strong>${escapeHome(message.sender_name)}</strong><small>${escapeHome(message.created_at)}</small><div>${escapeHome(message.content)}</div></div>`).join('') : '<p class="muted">No messages or mentions yet.</p>'; document.getElementById('homeMessageCount').classList.add('hidden'); } catch(error) { document.getElementById('homeInboxList').innerHTML=`<p class="muted">${escapeHome(error.message)}</p>`; } }
+  if (studentToken) { guest.classList.add('hidden'); document.getElementById('studentPortal').classList.remove('hidden'); document.getElementById('studentHomeActions').classList.add('active'); studentApi('/student/me').then(profile=>{document.getElementById('homeStudentName').textContent=profile.full_name; if(profile.profile_image_url) document.getElementById('homeStudentAvatar').src=profile.profile_image_url;}); studentApi('/student/messages/unread').then(result=>{const badge=document.getElementById('homeMessageCount'); badge.textContent=result.count || 0; badge.classList.toggle('hidden',!result.count);}).catch(()=>{}); document.getElementById('homeMessagesBtn').addEventListener('click',()=>{const inbox=document.getElementById('homeInbox'); inbox.classList.toggle('hidden'); if(!inbox.classList.contains('hidden')) loadHomeInbox();}); }
+  else if (lecturerToken) { guest.classList.add('hidden'); document.getElementById('lecturerPortal').classList.remove('hidden'); }
+  else if (advertiserToken) { guest.classList.add('hidden'); document.getElementById('advertiserPortal').classList.remove('hidden'); }
+  document.getElementById('studentSignOut').addEventListener('click', () => { sessionStorage.removeItem('studentToken'); location.reload(); });
+  document.getElementById('lecturerSignOut').addEventListener('click', () => { sessionStorage.removeItem('lecturerToken'); location.reload(); });
+  document.getElementById('advertiserSignOut').addEventListener('click', () => { sessionStorage.removeItem('landlordToken'); location.reload(); });
+  const avatar = document.getElementById('homeStudentAvatar');
+  const actionBar = document.getElementById('studentHomeActions');
+  const profileMenu = document.createElement('div'); profileMenu.className='home-profile-menu hidden'; profileMenu.innerHTML='<button type="button" id="menuEditProfile">Edit profile</button><button type="button" id="menuSignOut">Sign out</button>';
+  actionBar.appendChild(profileMenu);
+  function openProfileMenu(){ profileMenu.classList.toggle('hidden'); }
+  avatar.addEventListener('click', event => { event.stopPropagation(); openProfileMenu(); });
+  profileMenu.addEventListener('click', event => event.stopPropagation());
+  document.addEventListener('click', event => { profileMenu.classList.add('hidden'); const inbox=document.getElementById('homeInbox'); const messageButton=document.getElementById('homeMessagesBtn'); if (!inbox.contains(event.target) && !messageButton.contains(event.target)) inbox.classList.add('hidden'); });
+  document.getElementById('menuEditProfile').addEventListener('click',()=>{ location.href=studentToken ? '/static/student.html' : '/static/lecturer.html'; });
+  document.getElementById('menuSignOut').addEventListener('click',()=>{ sessionStorage.removeItem(studentToken ? 'studentToken' : 'lecturerToken'); location.reload(); });
+  if (studentToken) document.getElementById('studentSignOut').classList.add('hidden');
+  if (lecturerToken) { document.getElementById('lecturerSignOut').classList.add('hidden'); guest.classList.add('hidden'); document.getElementById('lecturerPortal').classList.remove('hidden'); actionBar.classList.add('active'); fetch('/lecturer/me',{headers:{'X-Lecturer-Token':lecturerToken}}).then(r=>r.json()).then(profile=>{document.getElementById('homeStudentName').textContent=profile.full_name; if(profile.profile_image_url) avatar.src=profile.profile_image_url;}); fetch('/lecturer/messages/unread',{headers:{'X-Lecturer-Token':lecturerToken}}).then(r=>r.json()).then(result=>{const badge=document.getElementById('homeMessageCount');badge.textContent=result.count||0;badge.classList.toggle('hidden',!result.count)}); document.getElementById('homeMessagesBtn').addEventListener('click',async()=>{const inbox=document.getElementById('homeInbox');inbox.classList.toggle('hidden');if(!inbox.classList.contains('hidden')){const rows=await fetch('/lecturer/messages',{headers:{'X-Lecturer-Token':lecturerToken}}).then(r=>r.json());document.getElementById('homeInboxList').innerHTML=rows.length?rows.map(m=>`<div class="q"><strong>${escapeHome(m.sender_name)}</strong><small>${escapeHome(m.created_at)}</small><div>${escapeHome(m.content)}</div></div>`).join(''):'<p class="muted">No messages yet.</p>';}}); }
+  // Available accommodation images become a quiet, rotating window into the
+  // market. The card keeps its colour treatment when no images exist yet.
+  (async () => {
+    const card = document.getElementById('marketRoleCard');
+    const label = document.getElementById('marketPulseText');
+    if (!card) return;
+    try {
+      const listings = await fetch('/marketing/listings').then(response => response.ok ? response.json() : []);
+      const images = listings.filter(item => item.is_available && item.image_url).map(item => item.image_url);
+      if (!images.length) { label.textContent = 'Fresh campus spaces'; return; }
+      let imageIndex = 0;
+      const showImage = () => {
+        const image = images[imageIndex % images.length];
+        card.style.setProperty('--market-image', `url("${String(image).replace(/"/g, '%22')}")`);
+        card.classList.add('has-market-image');
+        label.textContent = images.length === 1 ? 'Available market space' : `Available spaces · ${imageIndex + 1} of ${images.length}`;
+        imageIndex += 1;
+      };
+      showImage();
+      if (images.length > 1) window.setInterval(showImage, 4200);
+    } catch (_) { label.textContent = 'Fresh campus spaces'; }
+  })();
+
+  // The homepage belt uses the same reviewed, date-limited adverts as the
+  // campus market. A business website takes priority over WhatsApp.
+  (async () => {
+    const belt = document.getElementById('homeAdvertBelt');
+    const track = document.getElementById('homeAdTrack');
+    const dots = document.getElementById('homeAdDots');
+    const count = document.getElementById('homeAdCount');
+    if (!belt || !track) return;
+    const safeWebsite = value => {
+      const raw = String(value || '').trim();
+      if (!raw) return '';
+      const candidate = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+      try { const url = new URL(candidate); return /^https?:$/.test(url.protocol) ? url.href : ''; } catch (_) { return ''; }
+    };
+    const whatsAppLink = value => {
+      let digits = String(value || '').replace(/\D/g, '');
+      if (digits.startsWith('00')) digits = digits.slice(2);
+      if (digits.startsWith('0')) digits = `27${digits.slice(1)}`;
+      return digits.length >= 8 ? `https://wa.me/${digits}` : '';
+    };
+    const advertLink = advert => safeWebsite(advert.website_url) || whatsAppLink(advert.contact);
+    try {
+      const response = await fetch('/marketing/adverts');
+      if (!response.ok) return;
+      const adverts = (await response.json()).filter(advert => advertLink(advert)).slice(0, 12);
+      const slides = [];
+      adverts.forEach(advert => {
+        const media = [];
+        if (advert.video_url) media.push({type:'video', url:advert.video_url});
+        (advert.image_urls?.length ? advert.image_urls : (advert.image_url ? [advert.image_url] : [])).slice(0, 2).forEach(url => media.push({type:'image', url}));
+        (media.length ? media : [{type:'fallback', url:''}]).forEach(item => slides.push({advert, media:item}));
+      });
+      if (!slides.length) return;
+      track.innerHTML = slides.map(({advert, media}, index) => {
+        const target = advertLink(advert);
+        const hasWebsite = Boolean(safeWebsite(advert.website_url));
+        const visual = media.type === 'video'
+          ? `<video src="${escapeHome(media.url)}" muted loop playsinline preload="metadata" controls aria-label="${escapeHome(advert.business_name)} advert video"></video>`
+          : media.type === 'image'
+            ? `<img src="${escapeHome(media.url)}" alt="${escapeHome(advert.business_name)} advert" loading="${index ? 'lazy' : 'eager'}">`
+            : '<div class="home-ad-fallback" aria-hidden="true">&#10022;</div>';
+        return `<article class="home-ad-slide" data-home-ad-index="${index}" data-home-ad-id="${advert.id}" data-home-ad-target="${escapeHome(target)}" tabindex="0" role="link" aria-label="Open advert from ${escapeHome(advert.business_name)}">
+          <div class="home-ad-media">${visual}</div><div class="home-ad-copy"><span class="kicker">${escapeHome(advert.category)}</span><h3>${escapeHome(advert.headline)}</h3><p>${escapeHome(advert.description)}</p><div class="home-ad-meta"><strong>${escapeHome(advert.business_name)}</strong>${advert.campus ? ` &middot; ${escapeHome(advert.campus)}` : ''}</div><a class="btn secondary home-ad-cta" href="${escapeHome(target)}" target="_blank" rel="noopener" data-home-ad-open="${advert.id}">${hasWebsite ? 'Visit website' : 'WhatsApp advertiser'} &rarr;</a></div>
+        </article>`;
+      }).join('');
+      dots.innerHTML = slides.map((_, index) => `<button class="home-ad-dot${index ? '' : ' active'}" type="button" data-home-ad-dot="${index}" aria-label="Show advert ${index + 1}"></button>`).join('');
+      belt.classList.remove('hidden');
+      const previous = document.getElementById('homeAdPrevious');
+      const next = document.getElementById('homeAdNext');
+      let activeIndex = 0;
+      let timer;
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const show = index => {
+        activeIndex = (index + slides.length) % slides.length;
+        track.style.transform = `translateX(-${activeIndex * 100}%)`;
+        count.textContent = `${activeIndex + 1} / ${slides.length}`;
+        dots.querySelectorAll('.home-ad-dot').forEach((dot, dotIndex) => dot.classList.toggle('active', dotIndex === activeIndex));
+        track.querySelectorAll('video').forEach((video, videoIndex) => {
+          if (video.closest('.home-ad-slide')?.dataset.homeAdIndex === String(activeIndex)) video.play().catch(() => {});
+          else video.pause();
+        });
+      };
+      const stopTimer = () => window.clearInterval(timer);
+      const startTimer = () => { stopTimer(); if (slides.length > 1 && !reduceMotion) timer = window.setInterval(() => show(activeIndex + 1), 6500); };
+      const move = amount => { show(activeIndex + amount); startTimer(); };
+      previous.addEventListener('click', () => move(-1));
+      next.addEventListener('click', () => move(1));
+      dots.addEventListener('click', event => { const dot=event.target.closest('[data-home-ad-dot]'); if(dot){show(Number(dot.dataset.homeAdDot));startTimer();} });
+      const recordClick = id => fetch(`/marketing/adverts/${id}/click`, {method:'POST', keepalive:true}).catch(() => {});
+      track.addEventListener('click', event => {
+        const direct = event.target.closest('[data-home-ad-open]');
+        if (direct) { recordClick(direct.dataset.homeAdOpen); return; }
+        if (event.target.closest('video,button,a')) return;
+        const slide = event.target.closest('.home-ad-slide');
+        if (slide?.dataset.homeAdTarget) { recordClick(slide.dataset.homeAdId); window.open(slide.dataset.homeAdTarget, '_blank', 'noopener'); }
+      });
+      track.addEventListener('keydown', event => {
+        const slide = event.target.closest('.home-ad-slide');
+        if (event.target.closest('video,button,a')) return;
+        if (slide && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); recordClick(slide.dataset.homeAdId); window.open(slide.dataset.homeAdTarget, '_blank', 'noopener'); }
+      });
+      belt.addEventListener('mouseenter', stopTimer);
+      belt.addEventListener('mouseleave', startTimer);
+      belt.addEventListener('focusin', stopTimer);
+      belt.addEventListener('focusout', startTimer);
+      document.addEventListener('visibilitychange', () => document.hidden ? stopTimer() : startTimer());
+      if (slides.length === 1) { previous.classList.add('hidden'); next.classList.add('hidden'); dots.classList.add('hidden'); }
+      show(0); startTimer();
+    } catch (_) { belt.classList.add('hidden'); }
+  })();
+</script>
+</body>
+</html>

@@ -1,7 +1,7 @@
 {
   "name": "quiz-builder-tests",
   "private": true,
-  "scripts": { "test": "node --test quiz-builder.test.cjs" },
+  "scripts": { "test": "node --test *.test.cjs" },
   "devDependencies": {
     "jsdom": "^30.0.1"
   }
