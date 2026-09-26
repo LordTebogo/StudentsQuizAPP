@@ -1,0 +1,62 @@
+/* Keep classroom actions clear of the slide title on narrow screens. */
+#callArea .slide-deck-controls [hidden] { display: none !important; }
+
+@media (max-width: 760px) {
+  #callArea .live-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+
+  #callArea .live-head > div { min-width: 0; }
+  #callArea .live-head > div:last-child {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  #callArea #copyInvite {
+    display: inline-flex;
+    margin-left: 0;
+    padding: 7px 9px;
+  }
+
+  #callArea.slides-active .room-badge { display: none; }
+
+  #callArea.slides-active .slide-deck-stage {
+    top: 154px;
+    bottom: calc(78px + env(safe-area-inset-bottom));
+  }
+
+  #callArea.slides-active .meeting-utility-controls {
+    top: 88px;
+    right: 12px;
+  }
+
+  #callArea.slides-active .slide-deck-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 2px 10px;
+    padding: 8px 12px;
+  }
+
+  #callArea.slides-active .slide-deck-title {
+    grid-column: 1;
+    grid-row: 1;
+    max-width: 100%;
+  }
+
+  #callArea.slides-active .slide-deck-meta {
+    grid-column: 1;
+    grid-row: 2;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #callArea.slides-active .slide-deck-fullscreen {
+    grid-column: 2;
+    grid-row: 1 / 3;
+    align-self: center;
+  }
+}
