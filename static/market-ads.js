@@ -108,13 +108,18 @@
     more.textContent = `Show ${Math.max(services.length - 2, 0)} more transport service${services.length === 3 ? '' : 's'}`;
   }
   function renderSpotlight() {
-    const slots = document.querySelectorAll('.market-side .ad-card');
-    if (!slots.length) return;
+    const side = document.querySelector('.market-side');
+    if (!side) return;
     const ads = publicAds.filter(ad => ad.placement === 'spotlight');
-    const target = slots[1] || slots[0];
+    let target = side.querySelector('.ad-card');
     if (!ads.length) {
-      target.innerHTML = '<div class="ad-symbol">↗</div><small>STUDENT BUSINESS SPOTLIGHT</small><h3>Your side hustle belongs here</h3><p class="muted">Submit an advert below for review and reach the campus community.</p><button class="btn secondary promote-trigger" type="button">Promote here</button>';
+      target?.remove();
       return;
+    }
+    if (!target) {
+      target = document.createElement('section');
+      target.className = 'ad-card';
+      side.prepend(target);
     }
     target.innerHTML = advertCard(ads[spotlightIndex % ads.length], true);
     spotlightIndex += 1;
@@ -211,8 +216,7 @@
     installMarketAuthDialog();
     installAdvertDesk();
     ensureTransportSection();
-    const first = document.querySelector('.market-side .ad-card');
-    if (first) first.innerHTML = '<div class="ad-symbol">✦</div><small>FEED AD SPACE</small><h3>Reach students where they browse</h3><p class="muted">Approved campus offers can appear naturally between accommodation listings.</p><button class="btn secondary promote-trigger" type="button">Promote here</button>';
+    document.querySelectorAll('.market-side .ad-card').forEach(card => card.remove());
     const feed = document.getElementById('listingFeed');
     if (feed) { feedObserver = new MutationObserver(() => insertFeedAds()); feedObserver.observe(feed, {childList:true}); }
     loadPublicAds(); setInterval(renderSpotlight, 7000);
