@@ -57,7 +57,7 @@
     ['/static/fun.html', 'Community'],
   ] : [
     ['/static/index.html', 'Home'], ['/static/academics.html', 'Academics'],
-    ['/static/lecturer.html', 'Tutors'], ['/static/marketing.html', 'Market'],
+    ['/static/marketing.html', 'Market'],
   ];
   const moreLinks = activeRole === 'admin' ? [
     ['/static/admin.html#liveMonitorCard','Live sessions'], ['/static/admin.html#adminScripts','Submissions'],
@@ -77,6 +77,7 @@
   document.querySelectorAll('header.top nav').forEach(nav => {
     nav.classList.add('experience-nav');
     if (nav.closest('#welcome')) {
+      if (activeRole === 'public') return;
       let primary=nav.querySelector('.primary-nav-links');
       if(!primary){primary=document.createElement('div');primary.className='primary-nav-links';nav.appendChild(primary)}
       primary.replaceChildren();
