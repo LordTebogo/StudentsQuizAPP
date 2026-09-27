@@ -1,0 +1,199 @@
+/* NucleoCampus visual system: quiet laboratory surfaces and clear actions. */
+:root {
+  --night: #09171b;
+  --night-raised: #10262b;
+  --surface: #132c31;
+  --surface-solid: #17343a;
+  --surface-hover: #204149;
+  --line: rgba(171, 216, 207, .18);
+  --line-strong: rgba(119, 222, 191, .53);
+  --text: #f2f7f3;
+  --text-muted: #adc4bd;
+  --cyan: #83e1bd;
+  --cyan-deep: #37b894;
+  --violet: #f0b77c;
+  --green: #9ce2ae;
+  --shadow: 0 18px 48px rgba(1, 15, 17, .23);
+}
+
+body.nucleocampus-ui {
+  color: var(--text);
+  background: radial-gradient(ellipse at 10% 0%, rgba(44, 120, 108, .18), transparent 35rem),
+    radial-gradient(ellipse at 95% 35%, rgba(158, 105, 56, .08), transparent 29rem), #09171b !important;
+}
+body.nucleocampus-ui::before {
+  opacity: .11;
+  background-image: radial-gradient(circle, rgba(171, 216, 207, .42) .7px, transparent 1px);
+  background-size: 32px 32px;
+}
+body.nucleocampus-ui header.top,
+body.nucleocampus-ui #welcome .top {
+  border: 1px solid var(--line);
+  background: rgba(13, 35, 39, .95);
+  box-shadow: 0 10px 36px rgba(2, 13, 16, .2);
+}
+body.nucleocampus-ui .brand { letter-spacing: -.045em; }
+body.nucleocampus-ui .brand span { color: var(--cyan); }
+body.nucleocampus-ui header.top nav a,
+body.nucleocampus-ui .experience-nav a { transition: background .15s ease, color .15s ease; }
+body.nucleocampus-ui header.top nav a:hover,
+body.nucleocampus-ui .experience-nav a:hover { background: rgba(131, 225, 189, .1); }
+body.nucleocampus-ui header.top nav a[aria-current=page],
+body.nucleocampus-ui .mobile-tabbar a[aria-current=page] {
+  color: #0a2926 !important;
+  background: var(--cyan) !important;
+}
+body.nucleocampus-ui #welcome .top {
+  min-height: 72px;
+  margin-bottom: 24px;
+}
+body.nucleocampus-ui #welcome .top nav {
+  display: flex !important;
+  justify-content: flex-end;
+  gap: 10px !important;
+}
+body.nucleocampus-ui #welcome .primary-nav-links {
+  grid-column: auto;
+  grid-row: auto;
+  align-items: center;
+  padding: 0;
+  border: 0;
+}
+body.nucleocampus-ui #welcome .install-app-btn,
+body.nucleocampus-ui #welcome .student-home-actions {
+  grid-column: auto;
+  grid-row: auto;
+}
+
+body.nucleocampus-ui .card,
+body.nucleocampus-ui .role-card,
+body.nucleocampus-ui .entry-shell,
+body.nucleocampus-ui .learner-command-center,
+body.nucleocampus-ui .tutor-command-center,
+body.nucleocampus-ui .market-filter-panel,
+body.nucleocampus-ui .status-grid a {
+  border: 1px solid var(--line);
+  background: linear-gradient(154deg, rgba(24, 57, 61, .98), rgba(14, 37, 42, .98));
+  box-shadow: var(--shadow);
+}
+body.nucleocampus-ui .card::after { background: var(--cyan); }
+body.nucleocampus-ui :is(#studentPortal, #lecturerPortal) .role-grid .role-card::before {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin-bottom: 18px;
+  border: 1px solid rgba(131, 225, 189, .36);
+  border-radius: 12px;
+  background: rgba(131, 225, 189, .11);
+  color: var(--cyan);
+  font: 700 1.35rem/1 system-ui;
+  content: '◈';
+}
+body.nucleocampus-ui :is(#studentPortal, #lecturerPortal) .role-grid .role-card[href*="lesson"]::before { content: '▷'; }
+body.nucleocampus-ui :is(#studentPortal, #lecturerPortal) .role-grid .role-card[href*="student"]::before { content: '▤'; }
+body.nucleocampus-ui :is(#studentPortal, #lecturerPortal) .role-grid .role-card[href*="lecturer"]::before { content: '✎'; }
+body.nucleocampus-ui :is(#studentPortal, #lecturerPortal) .role-grid .role-card[href*="fun"]::before { content: '◎'; }
+body.nucleocampus-ui .card:hover,
+body.nucleocampus-ui .role-card:hover,
+body.nucleocampus-ui .status-grid a:hover { border-color: rgba(131, 225, 189, .42); }
+body.nucleocampus-ui h1,
+body.nucleocampus-ui h2,
+body.nucleocampus-ui h3 { color: var(--text); text-wrap: balance; }
+body.nucleocampus-ui .kicker { color: var(--cyan); letter-spacing: .1em; }
+body.nucleocampus-ui .muted,
+body.nucleocampus-ui small { color: var(--text-muted); }
+
+body.nucleocampus-ui .btn:not(.secondary):not(.danger),
+body.nucleocampus-ui .entry-tab.active {
+  border-color: #9beccf !important;
+  background: var(--cyan) !important;
+  color: #082925 !important;
+  box-shadow: 0 6px 18px rgba(29, 103, 84, .2) !important;
+}
+body.nucleocampus-ui .btn.secondary,
+body.nucleocampus-ui .entry-tab,
+body.nucleocampus-ui .filter-collapse {
+  border-color: var(--line-strong);
+  background: rgba(12, 39, 43, .74);
+  color: var(--text);
+}
+body.nucleocampus-ui .btn:hover,
+body.nucleocampus-ui button:hover { filter: brightness(1.09); }
+body.nucleocampus-ui input,
+body.nucleocampus-ui select,
+body.nucleocampus-ui textarea {
+  border-color: rgba(171, 216, 207, .25);
+  background-color: #0d2529;
+  color: var(--text);
+}
+body.nucleocampus-ui input:focus,
+body.nucleocampus-ui select:focus,
+body.nucleocampus-ui textarea:focus { border-color: var(--cyan); outline-color: var(--cyan); }
+body.nucleocampus-ui .mobile-tabbar,
+body.nucleocampus-ui .tutor-task-nav,
+body.nucleocampus-ui .quiz-progress-shell,
+body.nucleocampus-ui .quiz-page-actions {
+  border-color: var(--line);
+  background: rgba(14, 38, 42, .97);
+}
+body.nucleocampus-ui .tutor-task-nav button.active { color: #082925; background: var(--cyan); }
+
+/* The classroom stays darker so slides and video remain the visual focus. */
+body.nucleocampus-ui #callArea:not(.hidden) {
+  background: radial-gradient(circle at 50% -20%, rgba(55, 133, 112, .18), transparent 48%), #081719;
+}
+body.nucleocampus-ui #callArea .live-head,
+body.nucleocampus-ui #callArea .slide-deck-head,
+body.nucleocampus-ui #callArea .slide-deck-controls,
+body.nucleocampus-ui #callArea .call-controls {
+  background: rgba(18, 47, 51, .96);
+}
+body.nucleocampus-ui #callArea .slide-deck-stage {
+  border-color: rgba(131, 225, 189, .26);
+  background: #091c20;
+}
+body.nucleocampus-ui #callArea .slide-deck-viewport { background: #071215; }
+
+@media (max-width: 760px) {
+  body.nucleocampus-ui #welcome .top nav {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+  body.nucleocampus-ui #welcome .primary-nav-links {
+    width: 100%;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  body.nucleocampus-ui .mobile-tabbar { bottom: max(8px, env(safe-area-inset-bottom)); }
+  body.nucleocampus-ui #callArea.slides-active .meeting-utility-controls {
+    top: 76px;
+    right: 14px;
+    bottom: auto;
+    gap: 6px;
+  }
+  body.nucleocampus-ui #callArea.slides-active .meeting-utility-controls .control-button {
+    width: 42px;
+    min-width: 42px;
+    height: 42px;
+    min-height: 42px;
+  }
+  body.nucleocampus-ui #callArea.slides-active .slide-deck-stage {
+    top: 136px;
+    bottom: calc(76px + env(safe-area-inset-bottom));
+  }
+  body.nucleocampus-ui #callArea.slides-active .slide-deck-head {
+    min-height: 66px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 10px;
+  }
+  body.nucleocampus-ui #callArea.slides-active .slide-deck-fullscreen {
+    position: relative;
+    z-index: 2;
+    min-width: 44px;
+    min-height: 44px;
+    justify-self: end;
+  }
+  body.nucleocampus-ui #callArea.slides-active .slide-deck-title,
+  body.nucleocampus-ui #callArea.slides-active .slide-deck-meta { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+}

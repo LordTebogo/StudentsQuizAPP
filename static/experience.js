@@ -22,6 +22,12 @@
     productStyles.href = '/static/product.css';
     document.head.appendChild(productStyles);
   }
+  if (!document.querySelector('link[href="/static/theme.css"]')) {
+    const themeStyles = document.createElement('link');
+    themeStyles.rel = 'stylesheet';
+    themeStyles.href = '/static/theme.css?v=2';
+    document.head.appendChild(themeStyles);
+  }
   const body = document.body;
   if (!body) return;
   body.classList.add('nucleocampus-ui');
