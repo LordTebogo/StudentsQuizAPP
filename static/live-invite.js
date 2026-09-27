@@ -23,7 +23,7 @@
     const next = destination(location.href, location.origin);
     const params = new URLSearchParams({role: 'learner'});
     if (next) params.set('next', next);
-    return `/static/index.html?${params}`;
+    return `/static/academics.html?${params}`;
   }
 
   function postLoginUrl(location) {

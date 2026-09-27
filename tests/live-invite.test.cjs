@@ -8,6 +8,7 @@ test('a classroom invitation survives sign in', () => {
   const live = new URL(invite.shareUrl(origin, 'bio101-live'));
   assert.equal(live.pathname + live.search, '/live?room=BIO101-LIVE');
   const signIn = new URL(invite.loginUrl(live), origin);
+  assert.equal(signIn.pathname, '/static/academics.html');
   assert.equal(signIn.searchParams.get('role'), 'learner');
   assert.equal(signIn.searchParams.get('next'), '/live?room=BIO101-LIVE');
   assert.equal(invite.postLoginUrl(signIn), '/live?room=BIO101-LIVE');
