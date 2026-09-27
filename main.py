@@ -6067,10 +6067,10 @@ async def live_lesson_token(
         access = (api.AccessToken(api_key, api_secret)
             .with_identity(identity)
             .with_name((account.full_name + (" screen" if screen_only else ""))[:100])
-            .with_attributes({"role": participant_role})
+            .with_attributes({"role": participant_role, "avatar_url": account.profile_image_url or ""})
             .with_grants(api.VideoGrants(room_join=True, room=code, can_publish=True, can_subscribe=not screen_only, can_publish_data=not screen_only))
             .with_room_config(api.RoomConfiguration(max_participants=100, empty_timeout=600, departure_timeout=30)))
-        return {"token": access.to_jwt(), "url": livekit_url, "room": code, "role": role, "name": account.full_name, "capacity": 100}
+        return {"token": access.to_jwt(), "url": livekit_url, "room": code, "role": role, "name": account.full_name, "avatar_url": account.profile_image_url or "", "capacity": 100}
     except Exception as exc:
         raise HTTPException(status_code=500, detail="Could not prepare the live lesson") from exc
 
