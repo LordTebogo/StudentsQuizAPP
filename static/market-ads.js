@@ -11,7 +11,7 @@
   };
   const safeLink = value => /^https?:\/\//i.test(value || '') ? value : (value ? `https://${value}` : '');
   let pendingAuthAction = '';
-  const galleryMarkup = (images, title) => { const rows=(images||[]).filter(Boolean);if(!rows.length)return'<div class="advert-art">✦</div>';return `<div class="market-gallery" data-gallery-title="${esc(title)}" data-gallery-index="0">${rows.map((url,index)=>`<button class="market-slide ${index?'':'active'}" type="button" data-gallery-view="${index}" aria-label="View image ${index+1} of ${rows.length}"><img src="${esc(url)}" alt="${esc(title)} image ${index+1}" loading="lazy"></button>`).join('')}${rows.length>1?'<button class="gallery-nav previous" type="button" data-gallery-move="-1" aria-label="Previous image">‹</button><button class="gallery-nav next" type="button" data-gallery-move="1" aria-label="Next image">›</button>':''}<span class="gallery-count">1 / ${rows.length}</span><button class="gallery-view" type="button" data-gallery-view="0">View photos</button></div>` };
+  const galleryMarkup = (images, title) => { const rows=(images||[]).filter(Boolean);if(!rows.length)return'<div class="advert-art">✦</div>';return `<div class="market-gallery" data-gallery-title="${esc(title)}" data-gallery-index="0">${rows.map((url,index)=>`<button class="market-slide ${index?'':'active'}" type="button" data-gallery-view="${index}" aria-label="View image ${index+1} of ${rows.length}"><img src="${esc(window.arounusThumb?.(url, 640) || url)}" data-full-src="${esc(url)}" alt="${esc(title)} image ${index+1}" loading="lazy"></button>`).join('')}${rows.length>1?'<button class="gallery-nav previous" type="button" data-gallery-move="-1" aria-label="Previous image">‹</button><button class="gallery-nav next" type="button" data-gallery-move="1" aria-label="Next image">›</button>':''}<span class="gallery-count">1 / ${rows.length}</span><button class="gallery-view" type="button" data-gallery-view="0">View photos</button></div>` };
   function installMarketAuthDialog() {
     if (document.getElementById('marketAuthDialog')) return;
     const dialog = document.createElement('dialog');
@@ -73,8 +73,9 @@
   });
   const advertCard = (ad, compact = false) => {
     const link = safeLink(ad.website_url) || (ad.contact ? `https://wa.me/${ad.contact.replace(/\D/g, '')}` : '');
-    return `<article class="market-advert ${compact ? 'compact' : ''}" data-market-ad="${ad.id}">
+    return `<article class="market-advert ${compact ? 'compact' : ''}" data-market-ad="${ad.id}" data-market-kind="adverts" data-market-id="${ad.id}" data-market-views="${ad.views||0}" data-market-rating="${ad.rating||''}" data-market-rating-count="${ad.rating_count||0}">
       ${galleryMarkup(ad.image_urls?.length ? ad.image_urls : (ad.image_url ? [ad.image_url] : []), ad.business_name)}
+      ${ad.video_url ? `<video controls playsinline preload="none" data-free-video="${esc(ad.video_url)}" data-video-kind="advert" data-video-id="${ad.id}" data-premium-available="${Boolean(ad.premium_available)}" style="width:100%;max-height:260px"></video>` : ''}
       <div class="advert-copy"><div class="advert-label">${ad.is_featured ? 'Featured · ' : ''}Sponsored · ${esc(ad.category)}</div><h3>${esc(ad.headline)}</h3>
       <p>${esc(ad.description)}</p><div class="advert-meta">${esc(ad.business_name)}${ad.campus ? ` · ${esc(ad.campus)}` : ''}</div>
       <div class="advert-actions">${ad.provider_id ? `<button class="btn secondary provider-message-trigger" type="button" data-provider-message="${ad.provider_id}" data-provider-name="${esc(ad.business_name)}">Private message</button>` : ''}${link ? `<a class="btn secondary advert-cta" href="${esc(link)}" target="_blank" rel="noopener" data-ad-click="${ad.id}">${ad.website_url ? 'Visit business' : 'Contact advertiser'}</a>` : ''}</div></div></article>`;

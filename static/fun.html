@@ -170,7 +170,7 @@
     <section class="card composer">
       <h2>Start a conversation</h2>
       <textarea id="postContent" maxlength="1500" placeholder="What’s on your mind?"></textarea>
-      <div class="media-tools"><label class="upload-control" for="postImage"><input class="media-input" id="postImage" type="file" accept="image/*" data-preview-owner="post" data-media-kind="image"><span class="upload-icon">▧</span><span><strong>Add image</strong><small>Preview before sharing</small></span></label><label class="upload-control" for="postVideo"><input class="media-input" id="postVideo" type="file" accept="video/*" data-preview-owner="post" data-media-kind="video"><span class="upload-icon">▶</span><span><strong>Add video</strong><small>Preview before sharing</small></span></label></div>
+      <div class="media-tools"><label class="upload-control" for="postImage"><input class="media-input" id="postImage" type="file" accept="image/*" data-preview-owner="post" data-media-kind="image"><span class="upload-icon">▧</span><span><strong>Add image</strong><small>Preview before sharing</small></span></label><label class="upload-control" for="postVideo"><input class="media-input" id="postVideo" type="file" accept="video/*" data-preview-owner="post" data-media-kind="video"><span class="upload-icon">▶</span><span><strong>Add video</strong><small>Up to 10 per month</small></span></label></div>
       <div class="media-preview" id="mediaPreview-post" aria-live="polite"></div>
       <div class="sticker-tray" id="postStickerPicker" aria-label="Choose a sticker"></div>
       <div class="composer-tools">
@@ -187,6 +187,8 @@
     </section>
   </main>
 
+  <script src="/static/media-url.js?v=1"></script>
+<script src="/static/video-access.js?v=1"></script>
   <script>
     const $ = id => document.getElementById(id);
     const token = sessionStorage.getItem('studentToken');
@@ -253,8 +255,8 @@
     }
     function clearMediaPreviews(owner) { ['image', 'video'].forEach(kind => removeMediaPreview(owner, kind)); }
     function mediaHtml(post) {
-      const image = post.image_url ? `<img src="${escapeHtml(post.image_url)}" alt="Post attachment" draggable="false">` : '';
-      const video = post.video_url ? `<video controls controlslist="nodownload noplaybackrate" disablepictureinpicture disableremoteplayback preload="metadata" src="${escapeHtml(post.video_url)}">Your browser cannot play this video.</video>` : '';
+      const image = post.image_url ? `<img src="${escapeHtml(window.arounusThumb?.(post.image_url, 720) || post.image_url)}" alt="Post attachment" draggable="false">` : '';
+      const video = post.video_url ? `<video controls controlslist="nodownload noplaybackrate" disablepictureinpicture disableremoteplayback preload="none" data-free-video="${escapeHtml(post.video_url)}" data-video-kind="post" data-video-id="${post.id}" data-premium-available="${Boolean(post.premium_available)}">Your browser cannot play this video.</video>` : '';
       return image || video ? `<div class="post-media">${image}${video}</div>` : '';
     }
     function replyToggleContent(count, expanded) { return `<span class="thread-signal" aria-hidden="true"></span><span>Reply signal</span><span class="thread-state">${expanded ? 'hide' : 'show'}</span><span class="thread-count">${count}</span>`; }

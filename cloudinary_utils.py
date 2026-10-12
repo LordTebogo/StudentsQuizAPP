@@ -20,10 +20,13 @@ update the environment variable with the new secret.
 """
 
 import os
+import json
+import time
 from typing import Optional
 
 import cloudinary
 import cloudinary.uploader
+import cloudinary.utils
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -74,3 +77,32 @@ def upload_video_bytes(data: bytes, folder: str, public_id: Optional[str] = None
         overwrite=True,
     )
     return result["secure_url"]
+
+
+def upload_video_variants(data: bytes, folder: str) -> tuple[str, Optional[str]]:
+    """Save a public 480p copy and protect the higher-resolution original."""
+    original = cloudinary.uploader.upload(
+        data, folder=f"{folder}/premium", resource_type="video", type="authenticated"
+    )
+    try:
+        free = cloudinary.uploader.upload(
+            data, folder=f"{folder}/free", resource_type="video",
+            transformation={"height": 480, "crop": "limit", "quality": "auto"},
+        )
+    except Exception:
+        cloudinary.uploader.destroy(original["public_id"], resource_type="video", type="authenticated")
+        raise
+    if int(original.get("height") or 0) <= 480:
+        cloudinary.uploader.destroy(original["public_id"], resource_type="video", type="authenticated")
+        return free["secure_url"], None
+    asset = json.dumps({"public_id": original["public_id"], "format": original.get("format") or "mp4"})
+    return free["secure_url"], asset
+
+
+def premium_video_url(asset_json: str) -> str:
+    """Provide a short-lived URL only after the caller's account is checked."""
+    asset = json.loads(asset_json)
+    return cloudinary.utils.private_download_url(
+        asset["public_id"], asset["format"], resource_type="video",
+        type="authenticated", expires_at=int(time.time()) + 900,
+    )

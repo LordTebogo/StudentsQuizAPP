@@ -1,5 +1,14 @@
 # Quiz + Video Lessons App (cloud-deployable version)
 
+## Media and marketplace sustainability
+
+- New lesson, community, and advert video uploads create a public copy capped at 480p. If the uploaded original is higher resolution, its HD copy is stored as a Cloudinary authenticated asset. Videos load only after a viewer chooses Play.
+- An administrator can grant **Premium HD video access** to a learner in **Admin → All accounts**. HD requests require that approved learner's token and return a short-lived signed URL. This is an admin-controlled entitlement; online subscription payments are not connected yet.
+- Community uploads remain limited to 50 MB per video and 10 videos per learner each month. Lesson and advert upload size limits remain in place.
+- Campus market cards show unique views and an average rating out of five. A view is counted once per browser and listing using a long-lived cookie and a database uniqueness rule; clearing cookies or using another device can count separately. An approved learner can rate a listing once and update that rating later.
+- Feed images request smaller Cloudinary versions, while opening the gallery requests the full image. The admin media finance panel shows videos uploaded and unique listing views for a selected month, alongside Cloudinary's rolling usage report. Administrators record actual advert income and Cloudinary, hosting, or other costs in rand to see the monthly difference. Featured adverts still require administrator approval; payment arrangements are handled outside the app until a payment provider is connected.
+- Videos uploaded before this change can still have publicly accessible high-resolution originals at Cloudinary. The app requests a 480p version for those older videos, but protecting their originals requires re-uploading or migrating them to authenticated storage. External video URLs added directly by an administrator are outside this upload control.
+
 A FastAPI app for running quizzes and video lessons: MCQ, short-answer, and
 long-answer questions, with a basic HTML/CSS/JS frontend included, so
 there's nothing extra to build or host. MCQ and short-answer are
@@ -304,7 +313,7 @@ with comprehension questions attached, and students watch + answer them.
    }
    ```
    A ready-to-try example is included: `sample_lesson/lesson.json` + `sample_lesson/sample_video.mp4`.
-2. A **video file** (any format the browser can play — mp4/webm are the safest bet). This is uploaded straight to Cloudinary — there's no size limit imposed by this app itself, but check both Render's request size/timeout limits and your Cloudinary plan's video upload limit if a large lecture recording fails to upload.
+2. A **video file** (MP4/WebM are the safest choices), up to 80 MB. The upload creates a public 480p copy and, when the source is higher resolution, a protected HD copy in Cloudinary. Render's request limits and your Cloudinary plan can still reject large files.
 3. Optional **question images**, resolved the same four ways as quiz images (direct URL, uploaded alongside, from `quiz_image_library/`, or a committed repo path — see section 6 above).
 
 **Module codes — how students use them:** the student lessons page opens on

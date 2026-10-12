@@ -126,6 +126,7 @@
       </div>
       <label class="check-label"><input id="allAccountActive" type="checkbox"> Account active</label>
       <label class="check-label hidden" id="allAccountApprovedField"><input id="allAccountApproved" type="checkbox"> Account approved</label>
+      <label class="check-label hidden" id="allAccountPremiumField"><input id="allAccountPremium" type="checkbox"> Premium HD video access</label>
       <div><button class="btn" id="saveAllAccountBtn" type="button">Save account</button> <button class="btn secondary danger-action" id="deleteAllAccountBtn" type="button">Delete permanently</button></div>
       <div id="allAccountMsg"></div>
     </div>
@@ -173,6 +174,20 @@
     <textarea id="questionsJson" class="json-editor" spellcheck="false"></textarea>
     <p class="muted">Each question needs <code>type</code>, <code>question</code>, and <code>marks</code>. MCQs also need <code>options</code> and <code>correct_answer</code>; short answers need <code>correct_answer</code>. Optional: <code>image_url</code>.</p>
     <button class="btn" id="saveBtn">Save</button><button class="btn secondary hidden" id="deleteBtn">Delete permanently</button><div id="editorMsg"></div>
+  </section>
+  <section class="card" id="mediaFinanceCard">
+    <div class="admin-editor-heading"><div><span class="kicker">Sustainable media</span><h2>Media costs and promotion income</h2></div><button class="btn secondary" id="refreshMediaFinance" type="button">Refresh</button></div>
+    <p class="muted">Compare recorded advert income with Cloudinary, hosting and other costs. Enter actual invoice amounts below. Cloudinary usage is a rolling account report.</p>
+    <label for="mediaFinanceMonth">Month</label><input id="mediaFinanceMonth" type="month">
+    <div id="mediaFinanceSummary" class="admin-grid"></div>
+    <form id="mediaFinanceForm" class="admin-grid">
+      <label>Type<select name="kind"><option value="income">Income</option><option value="expense">Expense</option></select></label>
+      <label>Category<select name="category"><option value="advert">Advert or sponsorship</option><option value="cloudinary">Cloudinary</option><option value="hosting">Hosting</option><option value="other">Other</option></select></label>
+      <label>Amount (R)<input name="amount" type="number" min="0.01" step="0.01" required></label>
+      <label>Note<input name="note" maxlength="240" placeholder="Invoice or campaign"></label>
+      <button class="btn" type="submit">Record amount</button>
+    </form>
+    <div id="mediaFinanceEntries"></div><div id="mediaFinanceMessage" role="status"></div>
   </section>
 </main>
 
@@ -406,12 +421,12 @@ function openAllAccount(type, id) {
   $('allAccountStudentNumber').value = item.username || item.student_number || ''; $('allAccountBusiness').value = item.business_name || ''; $('allAccountProviderType').value = item.provider_type || 'other';
   $('allAccountParty').value = item.party_name || ''; $('allAccountInstitution').value = item.institution || ''; $('allAccountBio').value = item.bio || '';
   $('allAccountModules').value = (item.module_codes || []).join(', '); $('allAccountModuleLimit').value = item.module_limit ?? Math.max((item.module_codes || []).length, 1);
-  $('allAccountPassword').value = ''; $('allAccountActive').checked = item.active; $('allAccountApproved').checked = item.approved !== false;
+  $('allAccountPassword').value = ''; $('allAccountActive').checked = item.active; $('allAccountApproved').checked = item.approved !== false; $('allAccountPremium').checked = Boolean(item.premium_video);
   const visibility = {
     allAccountStudentNumberField: type === 'student', allAccountBusinessField: type === 'provider', allAccountProviderTypeField: type === 'provider',
     allAccountPartyField: type === 'src', allAccountInstitutionField: type === 'student' || type === 'lecturer',
     allAccountModuleLimitField: type === 'lecturer', allAccountModulesField: type === 'student' || type === 'lecturer',
-    allAccountBioField: type === 'student' || type === 'lecturer', allAccountApprovedField: item.approved !== null,
+    allAccountBioField: type === 'student' || type === 'lecturer', allAccountApprovedField: item.approved !== null, allAccountPremiumField: type === 'student',
   };
   Object.entries(visibility).forEach(([id, visible]) => $(id).classList.toggle('hidden', !visible));
   $('allAccountMsg').innerHTML = ''; $('allAccountEditor').classList.remove('hidden');
@@ -422,7 +437,7 @@ function allAccountPayload() {
   const payload = {full_name:$('allAccountName').value.trim(), email:$('allAccountEmail').value.trim(), phone:$('allAccountPhone').value.trim(), active:$('allAccountActive').checked};
   if (item.approved !== null) payload.approved = $('allAccountApproved').checked;
   if ($('allAccountPassword').value) payload.password = $('allAccountPassword').value;
-  if (item.account_type === 'student') Object.assign(payload, {student_number:$('allAccountStudentNumber').value.trim(), institution:$('allAccountInstitution').value.trim(), bio:$('allAccountBio').value.trim(), module_codes:$('allAccountModules').value.split(',').map(value=>value.trim()).filter(Boolean)});
+  if (item.account_type === 'student') Object.assign(payload, {student_number:$('allAccountStudentNumber').value.trim(), institution:$('allAccountInstitution').value.trim(), bio:$('allAccountBio').value.trim(), module_codes:$('allAccountModules').value.split(',').map(value=>value.trim()).filter(Boolean), premium_video:$('allAccountPremium').checked});
   if (item.account_type === 'lecturer') Object.assign(payload, {institution:$('allAccountInstitution').value.trim(), bio:$('allAccountBio').value.trim(), module_limit:Number($('allAccountModuleLimit').value), module_codes:$('allAccountModules').value.split(',').map(value=>value.trim()).filter(Boolean)});
   if (item.account_type === 'provider') Object.assign(payload, {business_name:$('allAccountBusiness').value.trim(), provider_type:$('allAccountProviderType').value});
   if (item.account_type === 'src') payload.party_name = $('allAccountParty').value.trim();
@@ -564,6 +579,7 @@ if (pin) unlock(pin);
 setInterval(() => { if (pin && !$('appWrap').classList.contains('hidden')) loadLiveSessions(); }, 15000);
 </script>
 <script src="/static/admin-market-ads.js"></script>
+<script src="/static/admin-finance.js?v=1"></script>
 <script src="/static/experience.js"></script>
 <script src="/static/loading.js"></script>
 <script src="/static/pwa.js?v=16"></script>

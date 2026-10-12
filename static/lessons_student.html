@@ -85,7 +85,7 @@
     <button class="btn secondary" id="backToListBtn">&larr; Back to lessons</button>
     <h2 id="lessonTitle"></h2>
     <p class="muted" id="lessonDescription"></p>
-    <video id="lessonVideo" controls></video>
+    <video id="lessonVideo" controls preload="none"></video>
   </div>
 
   <!-- Questions -->
@@ -130,6 +130,7 @@
   </div>
 </div>
 
+<script src="/static/video-access.js?v=1"></script>
 <script>
 const $ = (id) => document.getElementById(id);
 let currentLesson = null;
@@ -277,8 +278,11 @@ async function openLesson(lessonId) {
     $('lessonTitle').textContent = lesson.title;
     $('lessonDescription').textContent = `${lesson.module_code}${lesson.description ? ' — ' + lesson.description : ''}`;
     const videoEl = $('lessonVideo');
-    videoEl.src = lesson.video_url;
-    videoEl.load();
+    videoEl.dataset.freeVideo = lesson.video_url;
+    videoEl.dataset.videoKind = 'lesson';
+    videoEl.dataset.videoId = String(lesson.lesson_id);
+    videoEl.dataset.premiumAvailable = String(Boolean(lesson.premium_available));
+    window.arounusSetupVideo(videoEl);
 
     $('questionsBox').innerHTML = lesson.questions.map((q, i) => renderQuestion(q, i + 1)).join('');
     $('submitMsg').innerHTML = '';

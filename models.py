@@ -99,6 +99,7 @@ class Student(Base):
     password_hash = Column(String, nullable=False)
     approved = Column(Boolean, nullable=False, default=False)
     active = Column(Boolean, nullable=False, default=True)
+    premium_video = Column(Boolean, nullable=False, default=False)
     module_selection_completed = Column(Boolean, nullable=False, default=False)
     created_at = Column(String, nullable=False)
 
@@ -176,6 +177,9 @@ class Accommodation(Base):
     latitude = Column(Float)
     longitude = Column(Float)
     is_available = Column(Boolean, nullable=False, default=True)
+    view_count = Column(Integer, nullable=False, default=0)
+    rating_total = Column(Integer, nullable=False, default=0)
+    rating_count = Column(Integer, nullable=False, default=0)
     created_at = Column(String, nullable=False)
 
 
@@ -224,14 +228,61 @@ class MarketAdvert(Base):
     image_url = Column(Text)
     image_urls = Column(Text)
     video_url = Column(Text)
+    premium_video_asset = Column(Text)
     starts_at = Column(String)
     expires_at = Column(String)
     status = Column(String, nullable=False, default="pending")
     is_featured = Column(Boolean, nullable=False, default=False)
     impressions = Column(Integer, nullable=False, default=0)
     clicks = Column(Integer, nullable=False, default=0)
+    view_count = Column(Integer, nullable=False, default=0)
+    rating_total = Column(Integer, nullable=False, default=0)
+    rating_count = Column(Integer, nullable=False, default=0)
     created_at = Column(String, nullable=False)
     updated_at = Column(String, nullable=False)
+
+
+class MarketListingView(Base):
+    __tablename__ = "market_listing_views"
+    __table_args__ = (UniqueConstraint("kind", "listing_id", "viewer_key", name="market_listing_view_unique"),)
+    id = Column(Integer, primary_key=True)
+    kind = Column(String(16), nullable=False, index=True)
+    listing_id = Column(Integer, nullable=False, index=True)
+    viewer_key = Column(String(80), nullable=False)
+    viewed_at = Column(String, nullable=False)
+
+
+class MarketListingRating(Base):
+    __tablename__ = "market_listing_ratings"
+    __table_args__ = (UniqueConstraint("kind", "listing_id", "student_id", name="market_listing_rating_unique"),)
+    id = Column(Integer, primary_key=True)
+    kind = Column(String(16), nullable=False, index=True)
+    listing_id = Column(Integer, nullable=False, index=True)
+    student_id = Column(Integer, ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True)
+    stars = Column(Integer, nullable=False)
+    created_at = Column(String, nullable=False)
+
+
+class MediaFinanceEntry(Base):
+    __tablename__ = "media_finance_entries"
+    id = Column(Integer, primary_key=True)
+    month = Column(String(7), nullable=False, index=True)
+    kind = Column(String(12), nullable=False)
+    category = Column(String(32), nullable=False)
+    amount_cents = Column(Integer, nullable=False)
+    note = Column(String(240))
+    created_at = Column(String, nullable=False)
+
+
+class MediaUploadEvent(Base):
+    __tablename__ = "media_upload_events"
+    id = Column(Integer, primary_key=True)
+    kind = Column(String(16), nullable=False, index=True)
+    owner_type = Column(String(16), nullable=False)
+    owner_id = Column(Integer, nullable=False, index=True)
+    source_bytes = Column(Integer, nullable=False)
+    premium_created = Column(Boolean, nullable=False, default=False)
+    created_at = Column(String, nullable=False)
 
 
 # ---------------------------------------------------------------------------
@@ -248,6 +299,7 @@ class FunPost(Base):
     content = Column(Text, nullable=False)
     image_url = Column(Text)
     video_url = Column(Text)
+    premium_video_asset = Column(Text)
     sticker_code = Column(String)
     is_pinned = Column(Boolean, nullable=False, default=False)
     is_anonymous = Column(Boolean, nullable=False, default=False)
@@ -429,6 +481,7 @@ class Lesson(Base):
     module_code = Column(String, nullable=False, default="GENERAL", index=True)
     lecturer_id = Column(Integer, ForeignKey("lecturers.id"), index=True)
     video_url = Column(Text, nullable=False)  # Cloudinary secure video URL
+    premium_video_asset = Column(Text)
     created_at = Column(String, nullable=False)
 
     questions = relationship(

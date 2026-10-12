@@ -43,14 +43,16 @@ import threading
 import urllib.request
 import urllib.error
 import zipfile
+import cloudinary.api
 from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
 from itertools import permutations
 from typing import List, Optional
+from urllib.parse import urlsplit, urlunsplit
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import func, inspect, text
@@ -102,12 +104,12 @@ from models import (
     Student,
     PushSubscription,
     StudentModule,
-    Landlord, Accommodation, AccommodationComment, MarketAdvert,
+    Landlord, Accommodation, AccommodationComment, MarketAdvert, MarketListingView, MarketListingRating, MediaFinanceEntry, MediaUploadEvent,
     SrcPresident,
     ComradePost, ComradeReply, ComradeSrcReply,
 )
 from quiz_spreadsheet import QuizSpreadsheetError, parse_quiz_spreadsheet
-from cloudinary_utils import upload_image_bytes, upload_video_bytes
+from cloudinary_utils import upload_image_bytes, upload_video_variants, premium_video_url
 
 # Matplotlib is loaded lazily for equation rendering. Give it a writable
 # cache in local and cloud environments where the default home may be read-only.
@@ -139,6 +141,7 @@ GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY", "").strip()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
 OPENAI_QUIZ_MODEL = os.getenv("OPENAI_QUIZ_MODEL", "gpt-5.4-mini").strip() or "gpt-5.4-mini"
 MAX_LESSON_VIDEO_BYTES = 80 * 1024 * 1024
+MAX_COMMUNITY_VIDEOS_PER_MONTH = 10
 ADMIN_MAX_FAILURES = int(os.getenv("ADMIN_MAX_FAILURES", "5"))
 ADMIN_LOCKOUT_SECONDS = int(os.getenv("ADMIN_LOCKOUT_SECONDS", "300"))
 _admin_pin_failures: dict[str, list[float]] = {}
@@ -338,6 +341,32 @@ def ensure_market_advert_video_schema():
 ensure_market_advert_video_schema()
 
 
+def ensure_market_metrics_schema():
+    """Keep older installations compatible with listing analytics and ratings."""
+    for table in ("accommodations", "market_adverts"):
+        columns = {column["name"] for column in inspect(engine).get_columns(table)}
+        with engine.begin() as conn:
+            for column in ("view_count", "rating_total", "rating_count"):
+                if column not in columns:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} INTEGER DEFAULT 0 NOT NULL"))
+    if "premium_video" not in {column["name"] for column in inspect(engine).get_columns("students")}:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE students ADD COLUMN premium_video BOOLEAN DEFAULT FALSE NOT NULL"))
+
+
+ensure_market_metrics_schema()
+
+
+def ensure_premium_media_schema():
+    for table in ("lessons", "market_adverts", "fun_posts"):
+        if "premium_video_asset" not in {column["name"] for column in inspect(engine).get_columns(table)}:
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN premium_video_asset TEXT"))
+
+
+ensure_premium_media_schema()
+
+
 def ensure_comrade_identity_schema():
     """Link new announcements to the verified SRC profile that created them."""
     if "comrade_posts" not in inspect(engine).get_table_names():
@@ -500,6 +529,18 @@ class AccommodationCommentCreate(BaseModel):
     is_anonymous: bool = False
 
 
+class MarketRatingInput(BaseModel):
+    stars: int = Field(ge=1, le=5)
+
+
+class MediaFinanceInput(BaseModel):
+    month: str
+    kind: str
+    category: str
+    amount_cents: int = Field(gt=0, le=1000000000)
+    note: str = ""
+
+
 class SrcPasswordChange(BaseModel):
     current_password: str
     new_password: str
@@ -629,6 +670,7 @@ class StudentLogin(BaseModel):
 class AdminStudentUpdate(BaseModel):
     approved: Optional[bool] = None
     active: Optional[bool] = None
+    premium_video: Optional[bool] = None
     module_codes: Optional[List[str]] = None
 
 
@@ -648,6 +690,7 @@ class AdminUnifiedAccountUpdate(BaseModel):
     phone: Optional[str] = None
     active: Optional[bool] = None
     approved: Optional[bool] = None
+    premium_video: Optional[bool] = None
     password: Optional[str] = None
     student_number: Optional[str] = None
     institution: Optional[str] = None
@@ -816,7 +859,7 @@ def _student_profile(student: Student) -> dict:
     return {"id": student.id, "username": student.student_number, "student_number": student.student_number, "full_name": student.full_name,
             "email": student.email, "phone": student.phone or "", "institution": student.institution or "",
             "bio": student.bio or "", "profile_image_url": student.profile_image_url,
-            "approved": student.approved, "active": student.active,
+            "approved": student.approved, "active": student.active, "premium_video": bool(student.premium_video),
             "module_selection_completed": bool(student.module_selection_completed),
             "module_codes": sorted(item.module_code for item in student.modules), "created_at": student.created_at}
 
@@ -2667,7 +2710,7 @@ async def upload_lesson(
             detail="Your video is too large. The maximum allowed size is 80 MB. Please compress the video or choose a smaller MP4.",
         )
     try:
-        video_url = upload_video_bytes(video_bytes, folder=f"lesson_videos/{module_code}")
+        video_url, premium_asset = upload_video_variants(video_bytes, folder=f"lesson_videos/{module_code}")
     except Exception:
         raise HTTPException(
             status_code=502,
@@ -2679,11 +2722,12 @@ async def upload_lesson(
         description=description,
         module_code=module_code,
         lecturer_id=lecturer.id,
-        video_url=video_url,
+        video_url=video_url, premium_video_asset=premium_asset,
         created_at=datetime.utcnow().isoformat() + "Z",
     )
     db.add(lesson)
     db.flush()
+    db.add(MediaUploadEvent(kind="lesson", owner_type="lecturer", owner_id=lecturer.id, source_bytes=len(video_bytes), premium_created=bool(premium_asset), created_at=datetime.now(timezone.utc).isoformat()))
 
     resolved_cache = {}
     cloud_folder = f"lesson_{lesson.id}"
@@ -2852,9 +2896,30 @@ def get_lesson(lesson_id: int, db: Session = Depends(get_db)):
         "title": lesson.title,
         "description": lesson.description,
         "module_code": lesson.module_code,
-        "video_url": lesson.video_url,
+        "video_url": _free_video_url(lesson.video_url), "premium_available": bool(lesson.premium_video_asset),
         "questions": out_questions,
     }
+
+
+@app.get("/media/premium/{kind}/{item_id}")
+def get_premium_video(kind: str, item_id: int, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+    if not student.premium_video:
+        raise HTTPException(status_code=403, detail="Premium HD video access has not been granted to your account")
+    if kind == "lesson":
+        item = db.query(Lesson).filter(Lesson.id == item_id).first()
+        if item:
+            _require_student_module(student, item.module_code)
+    elif kind == "advert":
+        item = db.query(MarketAdvert).filter(MarketAdvert.id == item_id, MarketAdvert.status == "approved").first()
+    elif kind == "post":
+        item = db.query(FunPost).filter(FunPost.id == item_id).first()
+    else:
+        item = None
+    if not item or not item.premium_video_asset:
+        raise HTTPException(status_code=404, detail="Premium video is unavailable")
+    response = JSONResponse({"url": premium_video_url(item.premium_video_asset), "expires_in": 900})
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
 
 
 @app.get("/student/lesson/{lesson_id}")
@@ -3501,7 +3566,7 @@ def _admin_account_record(account_type: str, account) -> dict:
         "created_at": account.created_at,
     }
     if account_type == "student":
-        base.update(username=account.student_number, student_number=account.student_number, institution=account.institution or "", bio=account.bio or "",
+        base.update(username=account.student_number, student_number=account.student_number, institution=account.institution or "", bio=account.bio or "", premium_video=bool(account.premium_video),
                     module_codes=[item.module_code for item in account.modules])
     elif account_type == "lecturer":
         base.update(institution=account.institution or "", bio=account.bio or "", module_limit=account.module_limit,
@@ -3560,6 +3625,7 @@ def admin_update_any_account(account_type: str, account_id: int, payload: AdminU
         account.password_hash = _password_hash(payload.password)
 
     if account_type == "student":
+        if payload.premium_video is not None: account.premium_video = payload.premium_video
         if payload.student_number is not None:
             number = payload.student_number.strip().upper()
             if not re.fullmatch(r"[A-Z0-9][A-Z0-9._-]{2,39}", number):
@@ -3715,6 +3781,7 @@ def admin_update_student(student_id: int, payload: AdminStudentUpdate, _pin_ok: 
         raise HTTPException(status_code=404, detail="Student not found")
     if payload.approved is not None: student.approved = payload.approved
     if payload.active is not None: student.active = payload.active
+    if payload.premium_video is not None: student.premium_video = payload.premium_video
     if payload.module_codes is not None:
         _set_student_modules(db, student, payload.module_codes)
         if any(code and code.strip() for code in payload.module_codes):
@@ -4340,7 +4407,7 @@ def _accommodation_payload(item: Accommodation, landlord: Landlord) -> dict:
     if item.latitude is not None and item.longitude is not None:
         directions_url = f"https://www.google.com/maps/dir/?api=1&destination={item.latitude},{item.longitude}"
     image_urls = _market_image_urls(item)
-    return {"id": item.id, "title": item.title, "campus": item.campus, "area": item.area, "monthly_rent": item.monthly_rent, "bedrooms": item.bedrooms or "", "description": item.description, "contact": item.contact or landlord.phone, "image_url": image_urls[0] if image_urls else None, "image_urls": image_urls, "latitude": item.latitude, "longitude": item.longitude, "directions_url": directions_url, "is_available": item.is_available, "created_at": item.created_at, "landlord": {"id": landlord.id, "name": landlord.full_name, "business_name": landlord.business_name or "", "profile_image_url": landlord.profile_image_url}}
+    return {"id": item.id, "title": item.title, "campus": item.campus, "area": item.area, "monthly_rent": item.monthly_rent, "bedrooms": item.bedrooms or "", "description": item.description, "contact": item.contact or landlord.phone, "image_url": image_urls[0] if image_urls else None, "image_urls": image_urls, "latitude": item.latitude, "longitude": item.longitude, "directions_url": directions_url, "is_available": item.is_available, "created_at": item.created_at, "views": item.view_count or 0, "rating": round((item.rating_total or 0) / item.rating_count, 1) if item.rating_count else None, "rating_count": item.rating_count or 0, "landlord": {"id": landlord.id, "name": landlord.full_name, "business_name": landlord.business_name or "", "profile_image_url": landlord.profile_image_url}}
 
 
 def _market_image_urls(item) -> List[str]:
@@ -4352,6 +4419,16 @@ def _market_image_urls(item) -> List[str]:
     if not urls and item.image_url:
         urls = [item.image_url]
     return urls
+
+
+def _free_video_url(value: Optional[str]) -> Optional[str]:
+    """Show older public Cloudinary videos at no more than 480p in the app."""
+    if not value:
+        return value
+    parsed = urlsplit(value)
+    if parsed.hostname != "res.cloudinary.com" or "/video/upload/" not in parsed.path or "/free/" in parsed.path:
+        return value
+    return urlunsplit(parsed._replace(path=parsed.path.replace("/video/upload/", "/video/upload/c_limit,h_480,q_auto/", 1)))
 
 
 async def _upload_market_images(files: List[UploadFile], limit: int, folder: str, max_bytes: int) -> List[str]:
@@ -4418,6 +4495,63 @@ def landlord_login(payload: LandlordLogin, db: Session = Depends(get_db)):
 @app.get("/marketing/landlords/me")
 def landlord_me(landlord: Landlord = Depends(require_landlord_account)):
     return _landlord_profile(landlord)
+
+
+def _market_item(kind: str, listing_id: int, db: Session):
+    if kind == "rooms":
+        item = db.query(Accommodation).filter(Accommodation.id == listing_id).first()
+    elif kind == "adverts":
+        item = db.query(MarketAdvert).filter(MarketAdvert.id == listing_id, MarketAdvert.status == "approved").first()
+    else:
+        raise HTTPException(status_code=404, detail="Listing not found")
+    if not item:
+        raise HTTPException(status_code=404, detail="Listing not found")
+    return item
+
+
+@app.post("/marketing/{kind}/{listing_id}/view")
+def record_market_view(kind: str, listing_id: int, request: Request, db: Session = Depends(get_db)):
+    """One view per listing and browser, including after reloads or repeat visits."""
+    item = _market_item(kind, listing_id, db)
+    viewer = request.cookies.get("arounus_viewer", "")
+    new_cookie = not re.fullmatch(r"[0-9a-f]{32}", viewer)
+    if new_cookie:
+        viewer = secrets.token_hex(16)
+    viewer_key = hmac.new(STUDENT_SESSION_SECRET.encode(), viewer.encode(), hashlib.sha256).hexdigest()
+    result = db.execute(text(
+        "INSERT INTO market_listing_views (kind, listing_id, viewer_key, viewed_at) "
+        "VALUES (:kind, :listing_id, :viewer_key, :viewed_at) "
+        "ON CONFLICT (kind, listing_id, viewer_key) DO NOTHING"
+    ), {"kind": kind, "listing_id": listing_id, "viewer_key": viewer_key, "viewed_at": datetime.now(timezone.utc).isoformat()})
+    if result.rowcount:
+        model = Accommodation if kind == "rooms" else MarketAdvert
+        db.query(model).filter(model.id == listing_id).update({model.view_count: model.view_count + 1})
+    db.commit()
+    db.refresh(item)
+    response = JSONResponse({"views": item.view_count or 0, "new_view": bool(result.rowcount)})
+    if new_cookie:
+        response.set_cookie("arounus_viewer", viewer, max_age=31536000, httponly=True, samesite="lax", secure=request.url.scheme == "https")
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.put("/marketing/{kind}/{listing_id}/rating")
+def rate_market_listing(kind: str, listing_id: int, payload: MarketRatingInput, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+    item = _market_item(kind, listing_id, db)
+    if (kind == "adverts" and item.owner_student_id == student.id):
+        raise HTTPException(status_code=403, detail="You cannot rate your own listing")
+    model = Accommodation if kind == "rooms" else MarketAdvert
+    db.query(model).filter(model.id == listing_id).with_for_update().first()
+    current = db.query(MarketListingRating).filter_by(kind=kind, listing_id=listing_id, student_id=student.id).first()
+    if current:
+        item.rating_total = (item.rating_total or 0) + payload.stars - current.stars
+        current.stars = payload.stars
+    else:
+        db.add(MarketListingRating(kind=kind, listing_id=listing_id, student_id=student.id, stars=payload.stars, created_at=datetime.now(timezone.utc).isoformat()))
+        item.rating_total = (item.rating_total or 0) + payload.stars
+        item.rating_count = (item.rating_count or 0) + 1
+    db.commit()
+    return {"rating": round(item.rating_total / item.rating_count, 1), "rating_count": item.rating_count, "your_rating": payload.stars}
 
 
 @app.get("/marketing/listings")
@@ -4504,6 +4638,8 @@ def delete_accommodation(listing_id: int, landlord: Landlord = Depends(require_l
         raise HTTPException(status_code=404, detail="Accommodation listing not found")
     for comment in db.query(AccommodationComment).filter(AccommodationComment.accommodation_id == item.id).all():
         db.delete(comment)
+    db.query(MarketListingView).filter_by(kind="rooms", listing_id=item.id).delete()
+    db.query(MarketListingRating).filter_by(kind="rooms", listing_id=item.id).delete()
     db.delete(item); db.commit()
     return {"ok": True}
 
@@ -4558,9 +4694,12 @@ def _advert_payload(item: MarketAdvert, owner_name: str = "") -> dict:
         "description": item.description, "category": item.category, "campus": item.campus or "",
         "contact": item.contact or "", "website_url": item.website_url or "",
         "placement": item.placement, "image_url": image_urls[0] if image_urls else None, "image_urls": image_urls,
-        "video_url": item.video_url or None, "starts_at": item.starts_at,
+        "video_url": _free_video_url(item.video_url), "premium_available": bool(item.premium_video_asset), "starts_at": item.starts_at,
         "expires_at": item.expires_at, "status": item.status, "is_featured": item.is_featured,
         "impressions": item.impressions or 0, "clicks": item.clicks or 0,
+        "views": item.view_count or 0,
+        "rating": round((item.rating_total or 0) / item.rating_count, 1) if item.rating_count else None,
+        "rating_count": item.rating_count or 0,
         "created_at": item.created_at, "updated_at": item.updated_at, "owner_name": owner_name,
         "provider_id": item.owner_landlord_id,
     }
@@ -4605,9 +4744,6 @@ def list_market_adverts(placement: str = "", db: Session = Depends(get_db)):
     if placement in {"feed", "spotlight"}:
         query = query.filter(MarketAdvert.placement == placement)
     rows = query.order_by(MarketAdvert.is_featured.desc(), MarketAdvert.created_at.desc()).all()
-    for item in rows:
-        item.impressions = (item.impressions or 0) + 1
-    db.commit()
     return [_advert_payload(item) for item in rows]
 
 
@@ -4639,6 +4775,7 @@ async def create_market_advert(
     image_limit = 2 if transport_service else 1
     image_urls = await _upload_market_images(files, image_limit, "market_adverts", 8 * 1024 * 1024)
     video_url = None
+    premium_asset = None
     if video and video.filename:
         if not (video.content_type or "").startswith("video/"):
             raise HTTPException(status_code=400, detail="Please choose a valid advert video")
@@ -4646,7 +4783,7 @@ async def create_market_advert(
         if len(video_bytes) > 40 * 1024 * 1024:
             raise HTTPException(status_code=413, detail="Advert videos must be 40 MB or smaller")
         try:
-            video_url = upload_video_bytes(video_bytes, folder="market_adverts/videos")
+            video_url, premium_asset = upload_video_variants(video_bytes, folder="market_adverts/videos")
         except Exception:
             raise HTTPException(status_code=502, detail="The advert video could not be uploaded. Try a smaller MP4 file")
     now = datetime.now(timezone.utc).isoformat()
@@ -4655,11 +4792,14 @@ async def create_market_advert(
         business_name=business_name.strip()[:160], headline=headline.strip()[:180], description=description.strip(),
         category=category.strip()[:80], campus=campus.strip()[:120], contact=contact.strip()[:160],
         website_url=website[:500], placement=placement, image_url=image_urls[0] if image_urls else None,
-        image_urls=json.dumps(image_urls), video_url=video_url,
+        image_urls=json.dumps(image_urls), video_url=video_url, premium_video_asset=premium_asset,
         starts_at=start, expires_at=end, status="pending", is_featured=False, impressions=0, clicks=0,
         created_at=now, updated_at=now,
     )
-    db.add(item); db.commit(); db.refresh(item)
+    db.add(item)
+    if video_url:
+        db.add(MediaUploadEvent(kind="advert", owner_type="student" if student else "provider", owner_id=student.id if student else landlord.id, source_bytes=len(video_bytes), premium_created=bool(premium_asset), created_at=now))
+    db.commit(); db.refresh(item)
     return {"ok": True, "message": "Advert submitted for review", "advert": _advert_payload(item)}
 
 
@@ -4731,7 +4871,53 @@ def admin_delete_market_advert(advert_id: int, _pin_ok: bool = Depends(require_l
     item = db.query(MarketAdvert).filter(MarketAdvert.id == advert_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Advert not found")
+    db.query(MarketListingView).filter_by(kind="adverts", listing_id=item.id).delete()
+    db.query(MarketListingRating).filter_by(kind="adverts", listing_id=item.id).delete()
     db.delete(item); db.commit()
+    return {"ok": True}
+
+
+_media_usage_cache: dict = {"at": 0, "data": None}
+
+
+@app.get("/admin/media-finance")
+def admin_media_finance(month: str = "", _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    month = month or datetime.now(timezone.utc).strftime("%Y-%m")
+    if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", month):
+        raise HTTPException(status_code=400, detail="Choose a valid month")
+    entries = db.query(MediaFinanceEntry).filter(MediaFinanceEntry.month == month).order_by(MediaFinanceEntry.created_at.desc()).all()
+    income = sum(entry.amount_cents for entry in entries if entry.kind == "income")
+    expenses = sum(entry.amount_cents for entry in entries if entry.kind == "expense")
+    if time.time() - _media_usage_cache["at"] > 300:
+        try:
+            usage = cloudinary.api.usage()
+            _media_usage_cache.update(at=time.time(), data={key: usage.get(key) for key in ("plan", "credits", "storage", "bandwidth", "transformations", "video_seconds") if key in usage})
+        except Exception:
+            _media_usage_cache.update(at=time.time(), data=None)
+    return {
+        "month": month, "income_cents": income, "expense_cents": expenses, "net_cents": income - expenses,
+        "entries": [{"id": entry.id, "kind": entry.kind, "category": entry.category, "amount_cents": entry.amount_cents, "note": entry.note or ""} for entry in entries],
+        "uploads": {"lessons": db.query(MediaUploadEvent).filter_by(kind="lesson").filter(MediaUploadEvent.created_at.like(f"{month}%")).count(), "community_videos": db.query(MediaUploadEvent).filter_by(kind="community").filter(MediaUploadEvent.created_at.like(f"{month}%")).count(), "advert_videos": db.query(MediaUploadEvent).filter_by(kind="advert").filter(MediaUploadEvent.created_at.like(f"{month}%")).count(), "source_bytes": db.query(func.coalesce(func.sum(MediaUploadEvent.source_bytes), 0)).filter(MediaUploadEvent.created_at.like(f"{month}%")).scalar()},
+        "unique_listing_views": db.query(MarketListingView).filter(MarketListingView.viewed_at.like(f"{month}%")).count(),
+        "cloudinary_rolling_usage": _media_usage_cache["data"],
+    }
+
+
+@app.post("/admin/media-finance")
+def admin_add_media_finance(payload: MediaFinanceInput, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", payload.month) or payload.kind not in {"income", "expense"} or payload.category not in {"advert", "cloudinary", "hosting", "other"}:
+        raise HTTPException(status_code=400, detail="Choose a valid month, type and category")
+    entry = MediaFinanceEntry(month=payload.month, kind=payload.kind, category=payload.category, amount_cents=payload.amount_cents, note=payload.note.strip()[:240], created_at=datetime.now(timezone.utc).isoformat())
+    db.add(entry); db.commit()
+    return {"ok": True, "id": entry.id}
+
+
+@app.delete("/admin/media-finance/{entry_id}")
+def admin_delete_media_finance(entry_id: int, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    entry = db.query(MediaFinanceEntry).filter(MediaFinanceEntry.id == entry_id).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="Entry not found")
+    db.delete(entry); db.commit()
     return {"ok": True}
 
 
@@ -4946,7 +5132,7 @@ def _fun_post_payload(post: FunPost, students_by_id: dict, current_student_id: i
         "parent_id": post.parent_id,
         "content": post.content,
         "image_url": post.image_url,
-        "video_url": post.video_url,
+        "video_url": _free_video_url(post.video_url), "premium_available": bool(post.premium_video_asset),
         "sticker_code": post.sticker_code,
         "is_pinned": post.is_pinned,
         "is_official": False,
@@ -5053,25 +5239,35 @@ async def create_fun_post(
         image_url = upload_image_bytes(image_bytes, folder="fun_page/images")
 
     video_url = None
+    premium_asset = None
     if has_video:
+        db.query(Student).filter(Student.id == student.id).with_for_update().first()
+        month = datetime.now(timezone.utc).strftime("%Y-%m")
+        recorded = db.query(MediaUploadEvent).filter_by(kind="community", owner_type="student", owner_id=student.id).filter(MediaUploadEvent.created_at.like(f"{month}%")).count()
+        legacy = db.query(FunPost).filter(FunPost.author_student_id == student.id, FunPost.video_url.isnot(None), FunPost.created_at.like(f"{month}%")).count()
+        existing = max(recorded, legacy)
+        if existing >= MAX_COMMUNITY_VIDEOS_PER_MONTH:
+            raise HTTPException(status_code=429, detail="You can share up to 10 community videos per month. Try again next month")
         if not (video.content_type or "").startswith("video/"):
             raise HTTPException(status_code=400, detail="Please choose a valid video file")
         video_bytes = await video.read()
         if len(video_bytes) > 50 * 1024 * 1024:
             raise HTTPException(status_code=400, detail="Videos must be 50 MB or smaller")
-        video_url = upload_video_bytes(video_bytes, folder="fun_page/videos")
+        video_url, premium_asset = upload_video_variants(video_bytes, folder="fun_page/videos")
 
     post = FunPost(
         author_student_id=student.id,
         parent_id=parent_id,
         content=content,
         image_url=image_url,
-        video_url=video_url,
+        video_url=video_url, premium_video_asset=premium_asset,
         sticker_code=sticker or None,
         is_anonymous=is_anonymous,
         created_at=datetime.utcnow().isoformat() + "Z",
     )
     db.add(post)
+    if video_url:
+        db.add(MediaUploadEvent(kind="community", owner_type="student", owner_id=student.id, source_bytes=len(video_bytes), premium_created=bool(premium_asset), created_at=datetime.now(timezone.utc).isoformat()))
     # A tag is a private notification as well as visible text in the post.
     # Match complete display names only, so @Ann does not notify @Annette.
     tagged_students = db.query(Student).filter(
