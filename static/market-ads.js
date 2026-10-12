@@ -20,12 +20,19 @@
     document.body.appendChild(dialog);
     const providerStep = document.createElement('div');
     providerStep.className = 'market-auth-step hidden'; providerStep.dataset.authStep = 'provider';
-    providerStep.innerHTML = `<button class="provider-auth-close" type="button" aria-label="Close account popup">&times;</button><span class="market-kicker">Provider account</span><h2>Sign in or create an account</h2><p>Continue with a provider account to submit your advert for review.</p><div id="marketProviderAuthHost"></div><div id="marketAuthMessage"></div><a class="btn secondary market-student-auth" href="/static/student.html">Use a student account instead</a>`;
+    providerStep.innerHTML = `<button class="provider-auth-close" type="button" aria-label="Close account popup">&times;</button><span class="market-kicker">Provider account</span><h2>Sign in or create an account</h2><p>Your listing details are saved on this page. Create a provider account to publish them.</p><div id="marketProviderAuthHost"></div><div id="marketAuthMessage"></div><a class="btn secondary market-student-auth" href="/static/student.html">Use a student account instead</a>`;
     dialog.appendChild(providerStep);
     const providerGuest = document.getElementById('landlordGuest');
     if (providerGuest) providerStep.querySelector('#marketProviderAuthHost').appendChild(providerGuest);
     const showStep = name => dialog.querySelectorAll('[data-auth-step]').forEach(step => step.classList.toggle('hidden', step.dataset.authStep !== name));
     const close = () => { pendingAuthAction = ''; if (dialog.open) dialog.close(); else dialog.removeAttribute('open'); showStep('start'); };
+    window.openMarketProviderForm = (mode = 'register') => {
+      if (typeof setDesk === 'function') setDesk(mode);
+      providerGuest?.classList.remove('hidden');
+      showStep('provider');
+      if (typeof dialog.showModal === 'function') dialog.showModal(); else dialog.setAttribute('open', '');
+      dialog.querySelector(mode === 'register' ? '#landlordRegisterForm input[name="full_name"]' : '#landlordEmail')?.focus();
+    };
     dialog.querySelector('[data-auth-next]').addEventListener('click', () => showStep('role'));
     dialog.querySelector('[data-auth-back]').addEventListener('click', () => showStep('start'));
     dialog.querySelectorAll('[data-auth-cancel]').forEach(button => button.addEventListener('click', close));
@@ -179,7 +186,7 @@
     advertDialog.querySelector('.provider-auth-close').addEventListener('click', closeAdvertDialog);
     advertDialog.addEventListener('click', event => { if (event.target === advertDialog) closeAdvertDialog(); });
     const open = () => {
-      if (!studentToken() && !landlordToken()) {
+      if (!studentToken() && !landlordToken() && !new URLSearchParams(location.search).has('create')) {
         showMarketAuthDialog({afterAuth:'advert'}); return;
       }
       wrap.classList.remove('hidden');
@@ -190,7 +197,14 @@
     advertDialog.querySelector('#cancelAdvertForm').addEventListener('click', closeAdvertDialog);
     document.addEventListener('click', event => { if (event.target.closest('.promote-trigger')) { event.preventDefault(); if(event.target.closest('.transport-promote'))advertDialog.querySelector('[name="category"]').value='Ride & transport'; desk.scrollIntoView({behavior:'smooth'}); open(); } });
     advertDialog.querySelector('#advertForm').addEventListener('submit', async event => {
-      event.preventDefault(); const message = advertDialog.querySelector('#advertDialogMessage'); message.textContent = 'Submitting advert…';
+      event.preventDefault();
+      if (!studentToken() && !landlordToken()) {
+        pendingAuthAction = 'advert';
+        closeAdvertDialog();
+        window.openMarketProviderForm?.('register');
+        return;
+      }
+      const message = advertDialog.querySelector('#advertDialogMessage'); message.textContent = 'Submitting advert…';
       try {
         const result = await api('/marketing/adverts', {method:'POST', headers:authHeaders(), body:new FormData(event.target)});
         desk.querySelector('#advertMessage').innerHTML = `<div class="success">${esc(result.message)}. You can track it below.</div>`;
@@ -215,6 +229,30 @@
   function init() {
     installMarketAuthDialog();
     installAdvertDesk();
+    if (new URLSearchParams(location.search).has('create')) {
+      document.body.classList.add('market-create-mode');
+      document.querySelector('.market-hero h1').textContent = 'Create your listing.';
+      document.querySelector('.market-hero p').textContent = 'Add accommodation, products, transport, or services for your campus.';
+      document.querySelector('.market-side > .landlord-desk h2').textContent = 'Sell or list on campus';
+      const openCreateForm = providerType => {
+        if (landlordToken()) {
+          if (!providerType) return;
+          if (pendingAuthAction === 'advert') return;
+          if (document.getElementById('marketAuthDialog')?.open) {
+            document.addEventListener('market-provider-authenticated', () => openCreateForm(providerType), {once:true});
+            return;
+          }
+          if (providerType === 'residence') {
+            document.getElementById('listingForm')?.scrollIntoView({block:'start'});
+            document.querySelector('#listingForm input[name="title"]')?.focus({preventScroll:true});
+          } else document.getElementById('openAdvertForm')?.click();
+        } else if (studentToken()) document.getElementById('openAdvertForm')?.click();
+        else window.showGuestListingForm?.();
+      };
+      document.addEventListener('market-provider-panel-ready', event => openCreateForm(event.detail?.providerType));
+      document.addEventListener('market-provider-session-expired', () => openCreateForm());
+      openCreateForm(document.getElementById('landlordPanel')?.dataset.providerType);
+    }
     ensureTransportSection();
     document.querySelectorAll('.market-side .ad-card').forEach(card => card.remove());
     const feed = document.getElementById('listingFeed');

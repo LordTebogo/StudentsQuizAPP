@@ -1,4 +1,4 @@
-const OFFLINE_VERSION = "v18";
+const OFFLINE_VERSION = "v19";
 const SHELL_CACHE = `nucleocampus-shell-${OFFLINE_VERSION}`;
 const DATA_CACHE = `nucleocampus-data-${OFFLINE_VERSION}`;
 const EXTERNAL_CACHE = `nucleocampus-external-${OFFLINE_VERSION}`;
@@ -23,7 +23,7 @@ const APP_SHELL = [
   "/static/experience.js", "/static/loading.js", "/static/pwa.js?v=16",
   "/static/student-module-enrollment.js", "/static/student-messaging.js",
   "/static/lecturer-messaging.js", "/static/admin-messaging.js",
-  "/static/admin-market-ads.js", "/static/market-ads.js",
+  "/static/admin-market-ads.js", "/static/market-ads.js?v=5",
   "/static/market-gallery.js", "/static/market-messaging.js",
   "/static/lesson-insights.js", "/static/quiz-builder.js?v=15",
   "/static/quiz-import-template.csv", "/static/standard-quiz-template.json",

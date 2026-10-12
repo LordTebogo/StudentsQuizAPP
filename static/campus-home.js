@@ -21,7 +21,7 @@
     $('campusListings').innerHTML = filtered.map(entry => {
       const title = entry.title || entry.headline, src = image(entry);
       return `<article class="campus-card"><div class="campus-card-media">${src ? `<img src="${esc(src)}" alt="${esc(title)}" loading="lazy">` : `<span>${categories[entry.kind]}</span>`}</div><div class="campus-card-body"><span class="card-kind">${categories[entry.kind]}${entry.kind !== 'rooms' ? ' · Sponsored' : ''}</span><h3>${esc(title)}</h3><p>${esc(entry.campus || 'Campus not specified')}${entry.area ? ' · ' + esc(entry.area) : ''}</p><p>${esc(entry.kind === 'rooms' ? roomPrice(entry) : entry.business_name)}</p><button type="button" class="card-action" data-offer="${esc(entry.key)}">View ${entry.kind === 'rooms' ? 'room' : 'listing'} →</button></div></article>`;
-    }).join('') || (loading || failures === 2 ? '' : '<div class="market-empty"><h3>No listings here yet</h3><p>Try another campus or category, or be the first to list something.</p><a href="/static/marketing.html">Sell or list on campus →</a></div>');
+    }).join('') || (loading || failures === 2 ? '' : '<div class="market-empty"><h3>No listings here yet</h3><p>Try another campus or category, or be the first to list something.</p><a href="/static/marketing.html?create=1">Sell or list on campus →</a></div>');
     $('campusListings').querySelectorAll('img').forEach(img => img.addEventListener('error', () => { img.replaceWith(document.createTextNode('Photo unavailable')); }));
   }
   async function load() {
