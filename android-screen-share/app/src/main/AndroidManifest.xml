@@ -9,7 +9,7 @@
 
     <application
         android:allowBackup="false"
-        android:label="NucleoCampus"
+        android:label="Arounus"
         android:theme="@style/AppTheme"
         android:usesCleartextTraffic="false">
         <activity

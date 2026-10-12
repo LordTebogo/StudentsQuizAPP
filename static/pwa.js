@@ -48,7 +48,7 @@ function showNotificationHelp() {
   panel.className = "notification-help";
   panel.setAttribute("role", "dialog");
   panel.setAttribute("aria-labelledby", "notificationHelpTitle");
-  panel.innerHTML = '<h2 id="notificationHelpTitle">Notifications are blocked</h2><p>Your browser is currently preventing NucleoCampus alerts. Open the site settings beside the address bar, change Notifications to Allow, then reload this page.</p><button class="btn secondary" type="button">Got it</button>';
+  panel.innerHTML = '<h2 id="notificationHelpTitle">Notifications are blocked</h2><p>Your browser is currently preventing Arounus alerts. Open the site settings beside the address bar, change Notifications to Allow, then reload this page.</p><button class="btn secondary" type="button">Got it</button>';
   panel.querySelector("button").addEventListener("click", () => panel.remove());
   document.body.appendChild(panel);
   window.setTimeout(() => document.addEventListener("pointerdown", event => {
@@ -70,7 +70,7 @@ async function setupStudentPushNotifications() {
   button.type = "button";
   button.id = "notificationToggle";
   button.className = "notification-toggle";
-  button.title = "Manage NucleoCampus notifications on this device";
+  button.title = "Manage Arounus notifications on this device";
   const accountActions = document.getElementById("studentHomeActions");
   (accountActions || navigation).appendChild(button);
 
@@ -99,7 +99,7 @@ async function setupStudentPushNotifications() {
     button.disabled = true;
     try {
       if (subscription) {
-        if (!window.confirm("Turn off NucleoCampus notifications on this device?")) return;
+        if (!window.confirm("Turn off Arounus notifications on this device?")) return;
         await fetch("/student/notifications/subscribe", {
           method: "DELETE",
           headers: { "Content-Type": "application/json", "X-Student-Token": studentToken },
@@ -137,14 +137,14 @@ async function setupStudentPushNotifications() {
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", async () => {
     try {
-      const registration = await navigator.serviceWorker.register("/service-worker.js?v=15", { updateViaCache: "none" });
+      const registration = await navigator.serviceWorker.register("/service-worker.js?v=16", { updateViaCache: "none" });
       await registration.update();
       if (registration.waiting) registration.waiting.postMessage({ type: "SKIP_WAITING" });
     } catch (_) { /* The app remains usable without offline caching. */ }
   });
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (sessionStorage.getItem("nucleocampusCacheV15Reloaded")) return;
-    sessionStorage.setItem("nucleocampusCacheV15Reloaded", "true");
+    if (sessionStorage.getItem("nucleocampusCacheV16Reloaded")) return;
+    sessionStorage.setItem("nucleocampusCacheV16Reloaded", "true");
     window.location.reload();
   });
 }
@@ -160,7 +160,7 @@ window.addEventListener("appinstalled", () => {
   const button = document.getElementById("installAppBtn");
   const hint = document.getElementById("installHint");
   if (button) button.remove();
-  if (hint) hint.textContent = "NucleoCampus is installed with offline access on this device.";
+  if (hint) hint.textContent = "Arounus is installed with offline access on this device.";
 });
 
 window.addEventListener("online", syncConnectivityStatus);

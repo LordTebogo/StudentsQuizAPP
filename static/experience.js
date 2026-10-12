@@ -39,10 +39,10 @@
   body.classList.add('nucleocampus-ui');
   document.querySelectorAll('#appWrap .profile-strip').forEach(strip => strip.closest('.card')?.classList.add('hidden'));
   document.querySelectorAll('.brand').forEach(brand => {
-    brand.innerHTML = 'Nucleo<span>Campus</span>';
-    brand.setAttribute('aria-label', 'NucleoCampus');
+    brand.innerHTML = 'Aroun<span>us</span>';
+    brand.setAttribute('aria-label', 'Arounus');
   });
-  if (!document.title.includes('NucleoCampus')) document.title += ' — NucleoCampus';
+  if (!document.title.includes('Arounus')) document.title += ' — Arounus';
   const main = document.querySelector('main, .wrap, .market-wrap');
   if (main && !main.id) main.id = 'main-content';
   if (main) {

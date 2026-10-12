@@ -1,6 +1,6 @@
-# NucleoCampus Android screen sharing
+# Arounus Android screen sharing
 
-This native Android shell loads the existing NucleoCampus site and implements whole-device screen sharing with Android MediaProjection and LiveKit. Browser and PWA screen sharing remains unchanged.
+This native Android shell loads the existing Arounus site and implements whole-device screen sharing with Android MediaProjection and LiveKit. Browser and PWA screen sharing remains unchanged.
 
 ## Configure and build
 

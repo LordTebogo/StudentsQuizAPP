@@ -1,9 +1,9 @@
-const OFFLINE_VERSION = "v17";
+const OFFLINE_VERSION = "v18";
 const SHELL_CACHE = `nucleocampus-shell-${OFFLINE_VERSION}`;
 const DATA_CACHE = `nucleocampus-data-${OFFLINE_VERSION}`;
 const EXTERNAL_CACHE = `nucleocampus-external-${OFFLINE_VERSION}`;
 
-// Everything required to open every NucleoCampus workspace is downloaded when
+// Everything required to open every Arounus workspace is downloaded when
 // the app is installed. Keep this list limited to files that ship with the app.
 const APP_SHELL = [
   "/", "/students", "/lecturers", "/students/lessons", "/lecturers/lessons",
@@ -20,7 +20,7 @@ const APP_SHELL = [
   "/static/market-ads.css", "/static/market-advert-dialog.css",
   "/static/lesson-insights.css", "/static/quiz-builder.css",
   "/static/quiz-math-tools.css",
-  "/static/experience.js", "/static/loading.js", "/static/pwa.js?v=15",
+  "/static/experience.js", "/static/loading.js", "/static/pwa.js?v=16",
   "/static/student-module-enrollment.js", "/static/student-messaging.js",
   "/static/lecturer-messaging.js", "/static/admin-messaging.js",
   "/static/admin-market-ads.js", "/static/market-ads.js",
@@ -183,9 +183,9 @@ self.addEventListener("fetch", event => {
 self.addEventListener("push", event => {
   let payload = {};
   try { payload = event.data ? event.data.json() : {}; } catch (_) { payload = {}; }
-  const title = payload.title || "NucleoCampus";
+  const title = payload.title || "Arounus";
   const options = {
-    body: payload.body || "You have a new NucleoCampus update.",
+    body: payload.body || "You have a new Arounus update.",
     icon: "/static/icons/icon-192x192.png",
     badge: "/static/icons/favicon-96x96.png",
     tag: payload.tag || "nucleocampus-update",

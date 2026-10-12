@@ -3781,7 +3781,7 @@ def admin_delete_src_president(president_id: int, _pin_ok: bool = Depends(requir
 
 def _message_person(db: Session, kind: str, person_id: Optional[int]) -> str:
     if kind == "admin":
-        return "NucleoCampus Admin"
+        return "Arounus Admin"
     if kind == "src_president":
         president = db.query(SrcPresident).filter(SrcPresident.id == person_id).first()
         return f"{president.party_name} SRC president" if president else "Former SRC president"
@@ -3881,7 +3881,7 @@ def _create_direct_message(db: Session, sender_type: str, sender_id: Optional[in
         _notify_students_by_push(
             db,
             [recipient.id],
-            "New NucleoCampus message",
+            "New Arounus message",
             f"You have a new message from {_message_person(db, sender_type, sender_id)}.",
             "/static/student.html",
             f"message-{message.id}",
@@ -4170,8 +4170,8 @@ def admin_broadcast_message(payload: AdminBroadcastMessage, _pin_ok: bool = Depe
     _notify_students_by_push(
         db,
         [student.id for student in recipients],
-        "New NucleoCampus message",
-        "NucleoCampus Admin sent you a new message.",
+        "New Arounus message",
+        "Arounus Admin sent you a new message.",
         "/static/student.html",
         f"admin-broadcast-{now}",
     )
@@ -4972,7 +4972,7 @@ def _official_fun_post_payload(post: FunOfficialPost) -> dict:
         "is_official": True,
         "can_reply": False,
         "is_anonymous": False,
-        "author_name": "NucleoCampus Admin",
+        "author_name": "Arounus Admin",
         "author_image_url": None,
         "created_at": post.created_at,
         "is_author": False,
@@ -5222,7 +5222,7 @@ def admin_create_lesson_comment(lesson_id: int, payload: AdminOfficialComment, _
     if len(content) > 1500:
         raise HTTPException(status_code=400, detail="Official comments can be up to 1,500 characters")
     comment = LessonComment(
-        lesson_id=lesson.id, author_name="NucleoCampus Admin", is_lecturer=True,
+        lesson_id=lesson.id, author_name="Arounus Admin", is_lecturer=True,
         is_official=True, is_pinned=False, comment_text=content,
         created_at=datetime.utcnow().isoformat() + "Z",
     )

@@ -16,7 +16,7 @@
     if (document.getElementById('marketAuthDialog')) return;
     const dialog = document.createElement('dialog');
     dialog.id = 'marketAuthDialog'; dialog.className = 'market-auth-dialog';
-    dialog.innerHTML = `<div class="market-auth-step" data-auth-step="start"><span class="market-kicker">Account required</span><h2>Sign in to continue</h2><p>Your account keeps transport listings reviewed and connected to a verified provider.</p><div class="market-auth-actions"><button class="btn" type="button" data-auth-next>Sign in</button><button class="btn secondary" type="button" data-auth-cancel>Cancel</button></div></div><div class="market-auth-step hidden" data-auth-step="role"><button class="market-auth-back" type="button" data-auth-back>← Back</button><span class="market-kicker">Choose account type</span><h2>How are you signing in?</h2><p>Select the account that you use on NucleoCampus.</p><div class="market-role-grid"><button type="button" data-auth-role="student"><strong>Student</strong><span>Use your student account</span></button><button type="button" data-auth-role="landlord"><strong>Landlord</strong><span>Manage residences and listings</span></button><button type="button" data-auth-role="business"><strong>Businessman</strong><span>Publish transport or delivery services</span></button></div><button class="btn secondary market-auth-cancel" type="button" data-auth-cancel>Cancel</button></div>`;
+    dialog.innerHTML = `<div class="market-auth-step" data-auth-step="start"><span class="market-kicker">Account required</span><h2>Sign in to continue</h2><p>Your account keeps transport listings reviewed and connected to a verified provider.</p><div class="market-auth-actions"><button class="btn" type="button" data-auth-next>Sign in</button><button class="btn secondary" type="button" data-auth-cancel>Cancel</button></div></div><div class="market-auth-step hidden" data-auth-step="role"><button class="market-auth-back" type="button" data-auth-back>← Back</button><span class="market-kicker">Choose account type</span><h2>How are you signing in?</h2><p>Select the account that you use on Arounus.</p><div class="market-role-grid"><button type="button" data-auth-role="student"><strong>Student</strong><span>Use your student account</span></button><button type="button" data-auth-role="landlord"><strong>Landlord</strong><span>Manage residences and listings</span></button><button type="button" data-auth-role="business"><strong>Businessman</strong><span>Publish transport or delivery services</span></button></div><button class="btn secondary market-auth-cancel" type="button" data-auth-cancel>Cancel</button></div>`;
     document.body.appendChild(dialog);
     const providerStep = document.createElement('div');
     providerStep.className = 'market-auth-step hidden'; providerStep.dataset.authStep = 'provider';
@@ -151,7 +151,7 @@
     if (!side || document.getElementById('advertDesk')) return;
     const desk = document.createElement('section');
     desk.className = 'landlord-desk advert-desk'; desk.id = 'advertDesk';
-    desk.innerHTML = `<span class="market-kicker">Campus promotion</span><h2>Advertise on NucleoCampus</h2>
+    desk.innerHTML = `<span class="market-kicker">Campus promotion</span><h2>Advertise on Arounus</h2>
       <p class="notice">Student businesses, services and events can apply. Every advert is reviewed before it appears.</p>
       <button class="btn" type="button" id="openAdvertForm">Create an advert</button>
       <div id="advertFormWrap" class="hidden"><form id="advertForm">

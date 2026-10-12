@@ -93,7 +93,7 @@ class MainActivity : AppCompatActivity() {
         val configured = currentSiteUrl()
         if (configured.contains("your-nucleocampus-domain.example")) {
             val input = EditText(this).apply { hint = "https://your-app.example" }
-            AlertDialog.Builder(this).setTitle("NucleoCampus website address").setView(input)
+            AlertDialog.Builder(this).setTitle("Arounus website address").setView(input)
                 .setCancelable(false)
                 .setPositiveButton("Open") { _, _ ->
                     val value = input.text.toString().trim().trimEnd('/')

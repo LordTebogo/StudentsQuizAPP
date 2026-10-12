@@ -1,5 +1,5 @@
 /* =====================================================================
-   NucleoCampus — Neon Campus
+   Arounus — Neon Campus
    A cinematic, high-contrast interface with calm typography and luminous
    accents. Designed to work across quiz, lesson, lecturer and student views.
    ===================================================================== */
@@ -29,7 +29,7 @@
   --font-mono: "DM Mono", Consolas, monospace;
 }
 
-/* NucleoCampus identity -------------------------------------------------- */
+/* Arounus identity -------------------------------------------------- */
 .nucleocampus-ui {
   --cyan: #5ee7e2;
   --cyan-deep: #13b8b2;
@@ -235,7 +235,7 @@ textarea { min-height: 110px; resize: vertical; }
 }
 
 /* =====================================================================
-   2026 product system — shared across every NucleoCampus workspace
+   2026 product system — shared across every Arounus workspace
    ===================================================================== */
 :root {
   --night: #07111f;
