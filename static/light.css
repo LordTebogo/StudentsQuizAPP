@@ -32,6 +32,11 @@ body.nucleocampus-ui::before { opacity: .22; }
 a { color: var(--cyan); }
 a:hover { color: #075c53; }
 
+/* Status messages need readable text against the daylight palette. */
+.msg.ok,
+.msg.success { color: #145b46; border-color: #8ecab1; background: #e5f5ed; }
+.msg.error { color: #842539; border-color: #dfa4b0; background: #fff0f2; }
+
 header.top,
 body.nucleocampus-ui header.top,
 body.nucleocampus-ui #welcome .top,
