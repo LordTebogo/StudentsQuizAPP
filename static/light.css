@@ -1,0 +1,261 @@
+/* Shared daylight palette. Loaded after the existing product and page styles. */
+:root,
+body.nucleocampus-ui {
+  color-scheme: light;
+  --night: #f5f8f6;
+  --night-raised: #ffffff;
+  --surface: #ffffff;
+  --surface-solid: #ffffff;
+  --surface-hover: #edf5f1;
+  --line: #d5e3dd;
+  --line-strong: #85bca9;
+  --border: #d5e3dd;
+  --text: #19312e;
+  --text-muted: #526b65;
+  --muted: #526b65;
+  --cyan: #087f70;
+  --cyan-deep: #066f63;
+  --violet: #6b57ad;
+  --green: #238363;
+  --shadow: 0 12px 35px rgba(29, 67, 54, .09);
+}
+
+body,
+body.nucleocampus-ui {
+  color: var(--text);
+  color-scheme: light;
+  background: radial-gradient(circle at 7% 0%, #e1f6ed 0, transparent 29rem),
+    radial-gradient(circle at 98% 12%, #eef0ff 0, transparent 27rem), #f5f8f6 !important;
+}
+body::before,
+body.nucleocampus-ui::before { opacity: .22; }
+a { color: var(--cyan); }
+a:hover { color: #075c53; }
+
+header.top,
+body.nucleocampus-ui header.top,
+body.nucleocampus-ui #welcome .top,
+.mobile-tabbar,
+.workflow-nav,
+.tutor-task-nav,
+.quiz-progress-shell,
+.quiz-page-actions {
+  border-color: var(--line) !important;
+  background: rgba(255, 255, 255, .96) !important;
+  box-shadow: var(--shadow) !important;
+}
+header.top nav a,
+.experience-nav a,
+.nav-more summary { color: var(--text-muted); }
+header.top nav a:hover,
+.experience-nav a:hover,
+.nav-more summary:hover { color: var(--cyan); background: #e7f5ee; }
+header.top nav a[aria-current=page],
+body.nucleocampus-ui header.top nav a[aria-current=page],
+.mobile-tabbar a[aria-current=page],
+body.nucleocampus-ui .mobile-tabbar a[aria-current=page],
+.tutor-task-nav button.active,
+body.nucleocampus-ui .tutor-task-nav button.active { color: #ffffff !important; background: var(--cyan) !important; }
+.brand span,
+body.nucleocampus-ui .brand span,
+.kicker,
+body.nucleocampus-ui .kicker { color: var(--cyan); }
+.brand-tagline,
+body.nucleocampus-ui .brand-tagline { color: var(--text-muted); }
+.nav-more { background: transparent !important; }
+
+.card,
+body.nucleocampus-ui .card,
+.role-card,
+body.nucleocampus-ui .role-card,
+.entry-shell,
+body.nucleocampus-ui .entry-shell,
+.learner-command-center,
+.tutor-command-center,
+.market-filter-panel,
+.status-grid a,
+.listing-card,
+.landlord-desk,
+.admin-stat,
+.advert-review-card,
+.quiz-review-panel,
+.question-editor,
+.quiz-preview-question,
+.message-bubble,
+.message-bubble.sent,
+.message-bubble.received {
+  color: var(--text);
+  border-color: var(--line) !important;
+  background: #ffffff !important;
+  box-shadow: var(--shadow);
+}
+.role-card:hover,
+body.nucleocampus-ui .role-card:hover,
+.card:hover { border-color: var(--line-strong) !important; }
+.public-intro,
+.market-hero,
+.comrade-hero { background: linear-gradient(115deg, #e3f7ee, #edf0ff) !important; border-color: var(--line-strong) !important; }
+.public-intro h1,
+.market-hero h1,
+.comrade-hero h1,
+body.nucleocampus-ui h1,
+body.nucleocampus-ui h2,
+body.nucleocampus-ui h3 { color: var(--text); }
+.public-intro .lede,
+.market-hero p,
+.role-card p,
+.muted,
+body.nucleocampus-ui .muted,
+body.nucleocampus-ui small { color: var(--text-muted); }
+
+label,
+.field-name { color: #395a52; }
+input:not([type=checkbox]):not([type=radio]),
+select,
+textarea,
+body.nucleocampus-ui input:not([type=checkbox]):not([type=radio]),
+body.nucleocampus-ui select,
+body.nucleocampus-ui textarea,
+.market-tools input,
+.market-filter-row input,
+.admin-inline-search {
+  color: var(--text) !important;
+  border-color: #bfd5ca !important;
+  background: #ffffff !important;
+  color-scheme: light;
+}
+input::placeholder,
+textarea::placeholder,
+.market-tools input::placeholder,
+.market-filter-row input::placeholder { color: #718a81 !important; }
+input:focus,
+select:focus,
+textarea:focus { border-color: var(--cyan) !important; outline-color: var(--cyan); }
+
+.btn:not(.secondary):not(.danger),
+body.nucleocampus-ui .btn:not(.secondary):not(.danger),
+.entry-tab.active,
+body.nucleocampus-ui .entry-tab.active { color: #ffffff !important; border-color: var(--cyan) !important; background: var(--cyan) !important; box-shadow: none !important; }
+.btn.secondary,
+body.nucleocampus-ui .btn.secondary,
+.entry-tab,
+.filter-collapse,
+.row-download-btn { color: var(--cyan) !important; border-color: var(--line-strong) !important; background: #eef8f2 !important; }
+.btn:hover,
+body.nucleocampus-ui .btn:hover { filter: brightness(.94); }
+.btn:not(.secondary):not(.danger):hover,
+body.nucleocampus-ui .btn:not(.secondary):not(.danger):hover { color: #ffffff !important; }
+.btn.secondary:hover,
+body.nucleocampus-ui .btn.secondary:hover { color: var(--cyan) !important; }
+.notification-toggle,
+.answer-mode-toggle,
+.add-math-line,
+.reply-signal,
+.retry-button { color: var(--cyan); background: #edf8f2; }
+
+.nav-more-menu,
+.account-sheet,
+.mobile-more-sheet,
+.notification-help,
+.quiz-submit-dialog,
+.quiz-preview-dialog,
+.market-auth-dialog,
+.provider-thread-view,
+.home-inbox,
+.home-profile-menu,
+.mention-menu {
+  color: var(--text) !important;
+  border-color: var(--line) !important;
+  background: #ffffff !important;
+  box-shadow: 0 20px 55px rgba(29, 67, 54, .15);
+}
+.mobile-more-sheet nav a,
+.mobile-more-sheet nav button,
+.market-role-grid button,
+.provider-thread-list button,
+.provider-recipient,
+.manage-item,
+.builder-tool-panel,
+.advanced-quiz-import,
+.quiz-review-map button,
+.math-toolbar,
+.math-symbol,
+.quiz-math-field,
+.anonymous-choice,
+.message-mode,
+.market-tools,
+.market-filter-row,
+.market-comment,
+.reply-box,
+.fun-post,
+.fun-post.reply,
+.account-panel,
+.announcement,
+.reply,
+.comrade-composer,
+.transport-services,
+.provider-broadcast {
+  color: var(--text);
+  border-color: var(--line) !important;
+  background: #f8fbf9 !important;
+}
+.market-role-grid button:hover,
+.provider-thread-list button.active,
+.message-mode button.active { background: #e7f5ee !important; }
+.quiz-math-field { color-scheme: light; }
+.message-bubble.sent { background: #e5f5ed !important; }
+.quiz-review-map button.answered { color: #ffffff; background: var(--cyan) !important; }
+.market-kicker,
+.rent,
+.host-badge,
+.post-byline,
+.desk-symbol + strong { color: var(--cyan) !important; }
+.host-fallback { color: var(--cyan); background: #e5f5ed; }
+.fun-question-fields h4,
+.fun-level-chip { color: var(--violet); }
+.page-card,
+.page-dialog { color: var(--text); border-color: var(--line); background: #ffffff; }
+.quiz-submit-dialog::backdrop,
+.quiz-preview-dialog::backdrop,
+.market-auth-dialog::backdrop { background: rgba(25, 49, 46, .35); }
+
+/* The campus market home is a separate layout and does not load experience.js. */
+body.campus-home { color: var(--text); background: #f5f8f6 !important; }
+.campus-header,
+.campus-footer { border-color: var(--line); }
+.campus-brand { color: var(--text); }
+.campus-brand strong,
+.campus-intro em,
+.eyebrow,
+.campus-card .card-kind,
+.campus-card .card-action,
+#offerDetails a { color: var(--cyan); }
+.campus-brand small,
+.campus-intro p,
+.campus-card p,
+#marketStatus,
+.campus-footer,
+.market-empty,
+.campus-cta p { color: var(--text-muted); }
+.campus-search,
+.campus-card,
+#offerDialog { color: var(--text); border-color: var(--line); background: #ffffff; box-shadow: var(--shadow); }
+.campus-search label { color: #395a52; }
+.campus-home input { color: var(--text) !important; border-color: #bfd5ca !important; background: #ffffff !important; }
+.campus-card-media { color: var(--cyan); background: #e4f2e9; }
+.market-categories button,
+#clearFilters,
+#retryListings { color: var(--text); border-color: var(--line); background: #ffffff; }
+.market-categories button[aria-pressed=true],
+.campus-search button,
+.campus-header a.academic-link,
+.campus-cta>a { color: #ffffff; border-color: var(--cyan); background: var(--cyan); }
+.campus-cta { border-color: var(--line-strong); background: #e7f5ed; }
+.market-empty h3 { color: var(--text); }
+.market-skip:focus { background: #ffffff; }
+#offerDialog::backdrop { background: rgba(25, 49, 46, .35); }
+
+/* Keep the video and slide canvas dark so media remains legible. */
+body.nucleocampus-ui #callArea .slide-deck-stage,
+body.nucleocampus-ui #callArea .slide-deck-viewport,
+.video-grid { color-scheme: dark; }

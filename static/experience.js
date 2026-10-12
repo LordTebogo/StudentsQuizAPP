@@ -28,6 +28,12 @@
     themeStyles.href = '/static/theme.css?v=2';
     document.head.appendChild(themeStyles);
   }
+  if (!document.querySelector('link[href^="/static/light.css"]')) {
+    const lightStyles = document.createElement('link');
+    lightStyles.rel = 'stylesheet';
+    lightStyles.href = '/static/light.css?v=1';
+    document.head.appendChild(lightStyles);
+  }
   const body = document.body;
   if (!body) return;
   body.classList.add('nucleocampus-ui');
