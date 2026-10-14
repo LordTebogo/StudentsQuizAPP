@@ -33,13 +33,14 @@
       try{const lessons=await api('/lecturer/lessons',{},true);analytics=new Map(lessons.map(item=>[String(item.id),item]));document.querySelectorAll('#lessonSelect option[value]').forEach(option=>{const item=analytics.get(option.value);if(item&&!option.dataset.analytics){option.textContent+=` · ${item.unique_viewers} viewer${item.unique_viewers===1?'':'s'}`;option.dataset.analytics='true';}});showMetric(document.getElementById('lessonSelect')?.value);}catch(_){}
     }
     function showMetric(lessonId){
-      const item=analytics.get(String(lessonId));if(!item)return;let metric=document.getElementById('lessonViewMetric');if(!metric){metric=document.createElement('div');metric.id='lessonViewMetric';metric.className='lesson-view-metric';document.getElementById('previewDescription')?.insertAdjacentElement('afterend',metric);}metric.innerHTML=`<strong>${item.unique_viewers}</strong><span>unique video viewer${item.unique_viewers===1?'':'s'}</span><small>${item.video_starts} total play${item.video_starts===1?'':'s'}</small>`;
+      const item=analytics.get(String(lessonId));if(!item)return;let metric=document.getElementById('lessonViewMetric');if(!metric){metric=document.createElement('div');metric.id='lessonViewMetric';metric.className='lesson-view-metric';document.getElementById('previewDescription')?.insertAdjacentElement('afterend',metric);}metric.innerHTML=`<strong>${item.unique_viewers}</strong><span>unique video viewer${item.unique_viewers===1?'':'s'}</span><small>${item.video_starts} video start${item.video_starts===1?'':'s'}</small>`;
     }
     function addSubmissionDownloads(){
       const header=document.querySelector('#submissionsTable thead tr');if(header&&!header.querySelector('[data-script-heading]')){const th=document.createElement('th');th.dataset.scriptHeading='true';th.textContent='Script';header.appendChild(th);}
       document.querySelectorAll('#submissionsBody tr[data-id]').forEach(row=>{if(row.querySelector('[data-lesson-submission-pdf]'))return;const cell=document.createElement('td');cell.innerHTML=`<button class="row-download-btn" type="button" data-lesson-submission-pdf="${escapeText(row.dataset.id)}">PDF</button>`;const button=cell.querySelector('button');button.addEventListener('click',async event=>{event.preventDefault();event.stopPropagation();button.disabled=true;try{await downloadPdf(`/lecturer/lesson/submission/${button.dataset.lessonSubmissionPdf}/pdf`,{'X-Lecturer-Token':sessionStorage.getItem('lecturerToken')||''},`lesson_submission_${button.dataset.lessonSubmissionPdf}.pdf`);}catch(error){alert(error.message);}finally{button.disabled=false;}});row.appendChild(cell);});
     }
     const select=document.getElementById('lessonSelect');if(select){new MutationObserver(loadAnalytics).observe(select,{childList:true});select.addEventListener('change',()=>setTimeout(loadAnalytics,0));}
+    document.addEventListener('arounus:lesson-selected',event=>showMetric(event.detail.lessonId));
     const body=document.getElementById('submissionsBody');if(body)new MutationObserver(addSubmissionDownloads).observe(body,{childList:true});
     loadAnalytics();addSubmissionDownloads();
   }

@@ -109,7 +109,7 @@ from models import (
     ComradePost, ComradeReply, ComradeSrcReply,
 )
 from quiz_spreadsheet import QuizSpreadsheetError, parse_quiz_spreadsheet
-from cloudinary_utils import upload_image_bytes, upload_video_variants, premium_video_url
+from cloudinary_utils import upload_image_bytes, upload_video_variants, premium_video_url, delete_lesson_video_variants
 
 # Matplotlib is loaded lazily for equation rendering. Give it a writable
 # cache in local and cloud environments where the default home may be read-only.
@@ -2841,7 +2841,54 @@ def list_my_lessons(lecturer: Lecturer = Depends(require_lecturer_account), db: 
         ).filter(LessonView.lesson_id.in_(lesson_ids)).group_by(LessonView.lesson_id).all()
         analytics = {lesson_id: {"unique_viewers": viewers, "video_starts": starts} for lesson_id, viewers, starts in counts}
     return [{"id": l.id, "title": l.title, "description": l.description, "module_code": l.module_code,
-             "created_at": l.created_at, **analytics.get(l.id, {"unique_viewers": 0, "video_starts": 0})} for l in rows]
+             "created_at": l.created_at, "question_count": len(l.questions), "submission_count": len(l.submissions),
+             **analytics.get(l.id, {"unique_viewers": 0, "video_starts": 0})} for l in rows]
+
+
+class LecturerLessonEdit(BaseModel):
+    title: str
+    description: str = ""
+    questions: List[AdminQuestionInput]
+
+
+@app.get("/lecturer/lesson/{lesson_id}/edit")
+def get_owned_lesson_for_edit(lesson_id: int, lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db)):
+    lesson = _require_owned_lesson(db, lesson_id, lecturer)
+    return {"id": lesson.id, "title": lesson.title, "description": lesson.description or "",
+            "questions": [_admin_question_dict(q) for q in lesson.questions],
+            "submission_count": len(lesson.submissions)}
+
+
+@app.put("/lecturer/lesson/{lesson_id}/edit")
+def edit_owned_lesson(lesson_id: int, payload: LecturerLessonEdit, lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db)):
+    lesson = _require_owned_lesson(db, lesson_id, lecturer)
+    if lesson.submissions:
+        raise HTTPException(status_code=409, detail="Students have already submitted answers. To keep their marks accurate, upload a revised lesson instead.")
+    if not payload.title.strip():
+        raise HTTPException(status_code=400, detail="Lesson title is required")
+    _validate_admin_questions(payload.questions)
+    lesson.title = payload.title.strip()
+    lesson.description = payload.description.strip()
+    for question in list(lesson.questions):
+        db.delete(question)
+    db.flush()
+    _add_lesson_questions(db, lesson.id, payload.questions)
+    db.commit()
+    return {"id": lesson.id, "title": lesson.title, "question_count": len(payload.questions)}
+
+
+@app.delete("/lecturer/lesson/{lesson_id}")
+def delete_owned_lesson(lesson_id: int, lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db)):
+    lesson = _require_owned_lesson(db, lesson_id, lecturer)
+    video_url, premium_asset = lesson.video_url, lesson.premium_video_asset
+    db.query(LessonView).filter(LessonView.lesson_id == lesson.id).delete(synchronize_session=False)
+    db.delete(lesson)
+    db.commit()
+    try:
+        media_deleted = delete_lesson_video_variants(video_url, premium_asset)
+    except Exception:
+        media_deleted = False
+    return {"ok": True, "media_deleted": media_deleted}
 
 
 @app.post("/student/lessons/{lesson_id}/view")

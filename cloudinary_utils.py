@@ -23,6 +23,7 @@ import os
 import json
 import time
 from typing import Optional
+from urllib.parse import unquote, urlsplit
 
 import cloudinary
 import cloudinary.uploader
@@ -106,3 +107,32 @@ def premium_video_url(asset_json: str) -> str:
         asset["public_id"], asset["format"], resource_type="video",
         type="authenticated", expires_at=int(time.time()) + 900,
     )
+
+
+def delete_lesson_video_variants(free_url: str, premium_asset: Optional[str]) -> bool:
+    """Remove managed lesson uploads without touching external video URLs."""
+    targets = []
+    parsed = urlsplit(free_url or "")
+    prefix = f"/{CLOUDINARY_CLOUD_NAME}/video/upload/"
+    if parsed.hostname == "res.cloudinary.com" and parsed.path.startswith(prefix):
+        path = unquote(parsed.path[len(prefix):])
+        if path.split("/", 1)[0].startswith("v") and path.split("/", 1)[0][1:].isdigit():
+            path = path.split("/", 1)[1]
+        public_id = path.rsplit(".", 1)[0]
+        if public_id.startswith("lesson_videos/") and "/free/" in public_id:
+            targets.append((public_id, "upload"))
+    if premium_asset:
+        asset = json.loads(premium_asset)
+        public_id = asset.get("public_id", "")
+        if public_id.startswith("lesson_videos/") and "/premium/" in public_id:
+            targets.append((public_id, "authenticated"))
+    if not targets:
+        return False
+    results = []
+    for public_id, delivery_type in targets:
+        try:
+            result = cloudinary.uploader.destroy(public_id, resource_type="video", type=delivery_type, invalidate=True)
+            results.append(result.get("result") in ("ok", "not found"))
+        except Exception:
+            results.append(False)
+    return len(targets) == 1 + bool(premium_asset) and all(results)

@@ -22,6 +22,14 @@
   }
   .comment .comment-meta .lecturer-tag { color: var(--pen-red); }
   .comment.reply { margin: 10px 0 0 20px; padding: 10px 0 0 12px; border-left: 2px solid var(--accent); }
+  .my-lesson-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:12px; margin-top:18px; }
+  .my-lesson { padding:14px; border:1px solid var(--line); border-radius:12px; background:#f8fbf9; }
+  .my-lesson strong,.my-lesson span { display:block; }
+  .my-lesson span { margin:6px 0 12px; color:var(--text-muted); font-size:.84rem; }
+  .lesson-manage-actions { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
+  .lesson-question-editor { padding:14px; margin:12px 0; border:1px solid var(--line); border-radius:12px; background:#f8fbf9; }
+  .lesson-question-editor label { margin-top:10px; }
+  .lesson-question-editor .btn { margin-top:10px; }
 </style>
 </head>
 <body>
@@ -78,19 +86,39 @@
 
   <!-- Choose lesson -->
   <div class="card">
-    <h2>2. Choose a lesson to review</h2>
+    <h2>2. Your uploaded videos</h2>
     <label for="moduleFilterSelect">Filter by module</label>
     <select id="moduleFilterSelect"><option value="">All modules</option></select>
     <label for="lessonSelect">Lesson</label>
     <select id="lessonSelect"><option value="">Loading lessons…</option></select>
     <button class="btn secondary" id="refreshLessonsBtn">Refresh list</button>
+    <div class="my-lesson-grid" id="myLessonList"></div>
   </div>
 
   <!-- Selected lesson preview + comments -->
   <div class="card hidden" id="previewCard">
     <h2 id="previewTitle"></h2>
     <p class="muted" id="previewDescription"></p>
-    <video id="previewVideo" controls></video>
+    <video id="previewVideo" controls controlslist="nodownload noplaybackrate" disablepictureinpicture disableremoteplayback></video>
+    <div class="lesson-manage-actions">
+      <button class="btn secondary" id="editLessonBtn" type="button">Edit questions</button>
+      <button class="btn secondary" id="deleteLessonBtn" type="button">Delete video</button>
+    </div>
+    <div id="lessonManageMsg"></div>
+
+    <div id="lessonEditor" class="hidden">
+      <h2>Edit this lesson</h2>
+      <p class="muted">You can edit questions until a learner submits answers. Saved marks stay linked to the original questions.</p>
+      <label for="editLessonTitle">Title</label><input id="editLessonTitle" type="text">
+      <label for="editLessonDescription">Description</label><textarea id="editLessonDescription"></textarea>
+      <div id="editLessonQuestions"></div>
+      <div class="lesson-manage-actions">
+        <button class="btn secondary" id="addLessonQuestionBtn" type="button">Add question</button>
+        <button class="btn" id="saveLessonQuestionsBtn" type="button">Save changes</button>
+        <button class="btn secondary" id="cancelLessonEditBtn" type="button">Cancel</button>
+      </div>
+      <div id="lessonEditMsg"></div>
+    </div>
 
     <h2>Discussion (visible to everyone)</h2>
     <div id="commentsList" class="muted">No comments yet.</div>
@@ -129,6 +157,7 @@
 const $ = (id) => document.getElementById(id);
 let currentLessonId = null;
 let currentSubmissionId = null;
+let editableLesson = null;
 let LECTURER_TOKEN = sessionStorage.getItem('lecturerToken') || null;
 
 function formatSAST(isoString) {
@@ -267,14 +296,31 @@ async function loadLessons() {
     const filteredLessons = moduleFilter ? lessons.filter(lesson => lesson.module_code === moduleFilter) : lessons;
     if (!filteredLessons.length) {
       select.innerHTML = '<option value="">No lessons in this module yet</option>';
+      $('myLessonList').innerHTML = '<p class="muted">No uploaded videos in this module yet.</p>';
       return;
     }
-    select.innerHTML = lessons.map(l => `<option value="${l.id}">[${escapeHtml(l.module_code)}] #${l.id} — ${escapeHtml(l.title)}</option>`).join('');
+    const previous = select.value || String(currentLessonId || '');
+    select.innerHTML = filteredLessons.map(l => `<option value="${l.id}">[${escapeHtml(l.module_code)}] #${l.id} — ${escapeHtml(l.title)}</option>`).join('');
+    if (filteredLessons.some(lesson => String(lesson.id) === previous)) select.value = previous;
+    $('myLessonList').innerHTML = filteredLessons.map(lesson => `
+      <div class="my-lesson">
+        <strong>${escapeHtml(lesson.title)}</strong>
+        <span>${escapeHtml(lesson.module_code)} · ${lesson.unique_viewers} unique viewer${lesson.unique_viewers === 1 ? '' : 's'} · ${lesson.video_starts} video start${lesson.video_starts === 1 ? '' : 's'}<br>${lesson.question_count} question${lesson.question_count === 1 ? '' : 's'} · ${lesson.submission_count} submission${lesson.submission_count === 1 ? '' : 's'}</span>
+        <button type="button" class="btn secondary" data-open-lesson="${lesson.id}">Open video</button>
+      </div>`).join('');
   } catch (err) {
     select.innerHTML = '<option value="">Could not load lessons</option>';
+    $('myLessonList').textContent = `Could not load your videos: ${err.message}`;
   }
 }
 $('refreshLessonsBtn').addEventListener('click', () => { loadModules(); loadLessons(); });
+$('myLessonList').addEventListener('click', event => {
+  const button = event.target.closest('[data-open-lesson]');
+  if (button) {
+    $('lessonSelect').value = button.dataset.openLesson;
+    selectLesson(button.dataset.openLesson).then(() => $('previewCard').scrollIntoView({behavior:'smooth',block:'start'}));
+  }
+});
 $('lessonSelect').addEventListener('change', (e) => {
   if (e.target.value) selectLesson(e.target.value);
 });
@@ -282,20 +328,113 @@ $('lessonSelect').addEventListener('change', (e) => {
 async function selectLesson(lessonId) {
   currentLessonId = lessonId;
   $('gradingCard').classList.add('hidden');
+  $('lessonEditor').classList.add('hidden');
+  $('lessonManageMsg').innerHTML = '';
   try {
-    const lesson = await api(`/lesson/${lessonId}`);
+    const [lesson, owned] = await Promise.all([
+      api(`/lesson/${lessonId}`), api(`/lecturer/lesson/${lessonId}/edit`, {}, true),
+    ]);
+    editableLesson = owned;
     $('previewCard').classList.remove('hidden');
     $('previewTitle').textContent = lesson.title;
     $('previewDescription').textContent = lesson.description || '';
     const videoEl = $('previewVideo');
     videoEl.src = lesson.video_url;
     videoEl.load();
+    $('editLessonBtn').disabled = owned.submission_count > 0;
+    $('editLessonBtn').title = owned.submission_count ? 'Questions cannot change after students submit answers.' : '';
+    document.dispatchEvent(new CustomEvent('arounus:lesson-selected', {detail:{lessonId}}));
     await loadComments(lessonId);
     await loadSubmissions(lessonId);
   } catch (err) {
     showMsg($('uploadMsg'), `Could not load lesson: ${err.message}`, 'error');
   }
 }
+
+function lessonQuestionEditor(question = {}) {
+  const type = question.type || 'mcq';
+  const options = (question.options || []).join('\n');
+  return `<div class="lesson-question-editor">
+    <strong>Question</strong>
+    <label>Type</label><select data-question-type>
+      <option value="mcq" ${type === 'mcq' ? 'selected' : ''}>Multiple choice</option>
+      <option value="short" ${type === 'short' ? 'selected' : ''}>Short answer</option>
+      <option value="long" ${type === 'long' ? 'selected' : ''}>Long answer</option>
+    </select>
+    <label>Question text</label><textarea data-question-text>${escapeHtml(question.question || '')}</textarea>
+    <div data-mcq-fields><label>Options, one per line</label><textarea data-question-options>${escapeHtml(options)}</textarea></div>
+    <div data-answer-fields><label>Correct answer</label><input data-question-answer value="${escapeHtml(question.correct_answer || '')}"></div>
+    <label>Marks</label><input data-question-marks type="number" min="0.5" step="0.5" value="${Number(question.marks) || 1}">
+    <label>Image URL (optional)</label><input data-question-image value="${escapeHtml(question.image_url || '')}">
+    <button type="button" class="btn secondary" data-remove-question>Remove question</button>
+  </div>`;
+}
+
+function updateQuestionFields(card) {
+  const type = card.querySelector('[data-question-type]').value;
+  card.querySelector('[data-mcq-fields]').classList.toggle('hidden', type !== 'mcq');
+  card.querySelector('[data-answer-fields]').classList.toggle('hidden', type === 'long');
+}
+
+$('editLessonBtn').addEventListener('click', () => {
+  if (!editableLesson || editableLesson.submission_count) return;
+  $('editLessonTitle').value = editableLesson.title;
+  $('editLessonDescription').value = editableLesson.description || '';
+  $('editLessonQuestions').innerHTML = editableLesson.questions.map(lessonQuestionEditor).join('');
+  $('editLessonQuestions').querySelectorAll('.lesson-question-editor').forEach(updateQuestionFields);
+  $('lessonEditMsg').innerHTML = '';
+  $('lessonEditor').classList.remove('hidden');
+});
+$('cancelLessonEditBtn').addEventListener('click', () => $('lessonEditor').classList.add('hidden'));
+$('addLessonQuestionBtn').addEventListener('click', () => {
+  $('editLessonQuestions').insertAdjacentHTML('beforeend', lessonQuestionEditor());
+  updateQuestionFields($('editLessonQuestions').lastElementChild);
+});
+$('editLessonQuestions').addEventListener('change', event => {
+  if (event.target.matches('[data-question-type]')) updateQuestionFields(event.target.closest('.lesson-question-editor'));
+});
+$('editLessonQuestions').addEventListener('click', event => {
+  if (event.target.matches('[data-remove-question]')) event.target.closest('.lesson-question-editor').remove();
+});
+$('saveLessonQuestionsBtn').addEventListener('click', async () => {
+  if (!currentLessonId) return;
+  const questions = [...$('editLessonQuestions').querySelectorAll('.lesson-question-editor')].map(card => {
+    const type = card.querySelector('[data-question-type]').value;
+    return {
+      type,
+      question: card.querySelector('[data-question-text]').value.trim(),
+      options: type === 'mcq' ? card.querySelector('[data-question-options]').value.split('\n').map(value => value.trim()).filter(Boolean) : [],
+      correct_answer: type === 'long' ? '' : card.querySelector('[data-question-answer]').value.trim(),
+      marks: Number(card.querySelector('[data-question-marks]').value),
+      image_url: card.querySelector('[data-question-image]').value.trim(),
+    };
+  });
+  const button = $('saveLessonQuestionsBtn'); button.disabled = true;
+  try {
+    await api(`/lecturer/lesson/${currentLessonId}/edit`, {
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({title:$('editLessonTitle').value.trim(), description:$('editLessonDescription').value.trim(), questions}),
+    }, true);
+    $('lessonEditor').classList.add('hidden');
+    await loadLessons();
+    await selectLesson(currentLessonId);
+    showMsg($('lessonManageMsg'), 'Lesson and questions saved.', 'ok');
+  } catch (err) { showMsg($('lessonEditMsg'), `Could not save changes: ${escapeHtml(err.message)}`, 'error'); }
+  finally { button.disabled = false; }
+});
+$('deleteLessonBtn').addEventListener('click', async () => {
+  if (!currentLessonId || !confirm('Delete this video lesson, its questions, comments and all student submissions permanently?')) return;
+  const button = $('deleteLessonBtn'); button.disabled = true;
+  try {
+    const result = await api(`/lecturer/lesson/${currentLessonId}`, {method:'DELETE'}, true);
+    currentLessonId = null; editableLesson = null;
+    const videoEl = $('previewVideo'); videoEl.pause(); videoEl.removeAttribute('src'); videoEl.load();
+    $('previewCard').classList.add('hidden'); $('submissionsCard').classList.add('hidden'); $('gradingCard').classList.add('hidden');
+    await loadLessons();
+    showMsg($('uploadMsg'), result.media_deleted ? 'Video lesson deleted.' : 'Video lesson deleted from Arounus. Its stored media could not be confirmed removed.', result.media_deleted ? 'ok' : 'error');
+  } catch (err) { showMsg($('lessonManageMsg'), `Could not delete video: ${escapeHtml(err.message)}`, 'error'); }
+  finally { button.disabled = false; }
+});
 
 // ---- Comments (public read, lecturer-flagged post) -----------------------
 async function loadComments(lessonId) {
