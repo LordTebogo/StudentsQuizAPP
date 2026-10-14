@@ -37,6 +37,7 @@ test('video uses custom controls and asks for premium on higher quality', async 
   assert.equal(video.hasAttribute('src'), false);
   assert.equal(video.hasAttribute('controls'), false);
   assert.equal(video.getAttribute('controlslist'), 'nodownload noplaybackrate');
+  assert.equal(video.hasAttribute('disablepictureinpicture'), false);
   assert.equal(w.document.querySelector('.arounus-player button[aria-label="Video settings"]').textContent, '⚙');
   w.document.querySelector('.arounus-player button[aria-label="Video settings"]').click();
   w.document.querySelector('.premium-quality').click();
@@ -64,4 +65,40 @@ test('approved premium access opens the protected HD source from settings', asyn
   await tick();
   assert.equal(w.document.querySelector('video').src, 'https://example.test/protected-hd.mp4');
   assert.equal(w.document.querySelector('.premium-quality').getAttribute('aria-checked'), 'true');
+});
+
+test('video volume, full screen and picture in picture controls can enter and exit', async () => {
+  const dom = new JSDOM('<html><head></head><body><video data-free-video="https://example.test/480.mp4"></video></body></html>', {url:'https://arounus.test', runScripts:'outside-only'});
+  const w = dom.window;
+  w.HTMLMediaElement.prototype.pause = () => {};
+  w.HTMLMediaElement.prototype.load = () => {};
+  w.HTMLMediaElement.prototype.play = () => Promise.resolve();
+  let fullscreenElement = null;
+  Object.defineProperty(w.document, 'fullscreenElement', {get:()=>fullscreenElement});
+  w.HTMLElement.prototype.requestFullscreen = async function () { fullscreenElement = this; w.document.dispatchEvent(new w.Event('fullscreenchange')); };
+  w.document.exitFullscreen = async () => { fullscreenElement = null; w.document.dispatchEvent(new w.Event('fullscreenchange')); };
+  let pipElement = null;
+  Object.defineProperty(w.document, 'pictureInPictureElement', {get:()=>pipElement});
+  w.HTMLVideoElement.prototype.requestPictureInPicture = async function () { pipElement = this; this.dispatchEvent(new w.Event('enterpictureinpicture')); };
+  w.document.exitPictureInPicture = async () => { const video = pipElement; pipElement = null; video.dispatchEvent(new w.Event('leavepictureinpicture')); };
+  w.eval(videos); await tick();
+  const video = w.document.querySelector('video');
+  const slider = w.document.querySelector('[aria-label="Volume"]');
+  slider.value = '25'; slider.dispatchEvent(new w.Event('input'));
+  assert.equal(video.volume, 0.25);
+  w.document.querySelector('[aria-label="Mute video"]').click();
+  assert.equal(video.muted, true);
+  w.document.querySelector('[aria-label="Unmute video"]').click();
+  assert.equal(video.muted, false);
+  assert.equal(video.volume, 0.25);
+  const fullButton = w.document.querySelector('[aria-label="Enter full screen"]');
+  fullButton.click(); await tick();
+  assert.equal(fullscreenElement, w.document.querySelector('.arounus-player'));
+  w.document.querySelector('[aria-label="Exit full screen"]').click(); await tick();
+  assert.equal(fullscreenElement, null);
+  w.document.querySelector('[aria-label="Play video"]').click();
+  w.document.querySelector('[aria-label="Enter picture in picture"]').click(); await tick();
+  assert.equal(pipElement, video);
+  w.document.querySelector('[aria-label="Exit picture in picture"]').click(); await tick();
+  assert.equal(pipElement, null);
 });

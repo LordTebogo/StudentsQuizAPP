@@ -188,7 +188,7 @@
   </main>
 
   <script src="/static/media-url.js?v=1"></script>
-<script src="/static/video-access.js?v=2"></script>
+<script src="/static/video-access.js?v=3"></script>
   <script>
     const $ = id => document.getElementById(id);
     const token = sessionStorage.getItem('studentToken');
@@ -256,7 +256,7 @@
     function clearMediaPreviews(owner) { ['image', 'video'].forEach(kind => removeMediaPreview(owner, kind)); }
     function mediaHtml(post) {
       const image = post.image_url ? `<img src="${escapeHtml(window.arounusThumb?.(post.image_url, 720) || post.image_url)}" alt="Post attachment" draggable="false">` : '';
-      const video = post.video_url ? `<video controls controlslist="nodownload noplaybackrate" disablepictureinpicture disableremoteplayback preload="none" data-free-video="${escapeHtml(post.video_url)}" data-video-kind="post" data-video-id="${post.id}" data-premium-available="${Boolean(post.premium_available)}">Your browser cannot play this video.</video>` : '';
+      const video = post.video_url ? `<video controls controlslist="nodownload noplaybackrate" disableremoteplayback preload="none" data-free-video="${escapeHtml(post.video_url)}" data-video-kind="post" data-video-id="${post.id}" data-premium-available="${Boolean(post.premium_available)}">Your browser cannot play this video.</video>` : '';
       return image || video ? `<div class="post-media">${image}${video}</div>` : '';
     }
     function replyToggleContent(count, expanded) { return `<span class="thread-signal" aria-hidden="true"></span><span>Reply signal</span><span class="thread-state">${expanded ? 'hide' : 'show'}</span><span class="thread-count">${count}</span>`; }
