@@ -26,7 +26,7 @@ test('opening the same product repeatedly records one view and ratings update in
   assert.match(w.document.querySelector('.market-metrics').textContent, /★ 5 \(1\)/);
 });
 
-test('video source is assigned only after Play is chosen', async () => {
+test('video uses custom controls and asks for premium on higher quality', async () => {
   const dom = new JSDOM('<html><head></head><body><video controls data-free-video="https://example.test/480.mp4" data-video-kind="advert" data-video-id="4" data-premium-available="true"></video></body></html>', {url:'https://arounus.test', runScripts:'outside-only'});
   const w = dom.window;
   w.HTMLMediaElement.prototype.pause = () => {};
@@ -35,6 +35,33 @@ test('video source is assigned only after Play is chosen', async () => {
   w.eval(videos); await tick();
   const video = w.document.querySelector('video');
   assert.equal(video.hasAttribute('src'), false);
-  w.document.querySelector('.arounus-video-actions button').click();
+  assert.equal(video.hasAttribute('controls'), false);
+  assert.equal(video.getAttribute('controlslist'), 'nodownload noplaybackrate');
+  assert.equal(w.document.querySelector('.arounus-player button[aria-label="Video settings"]').textContent, '⚙');
+  w.document.querySelector('.arounus-player button[aria-label="Video settings"]').click();
+  w.document.querySelector('.premium-quality').click();
+  assert.match(w.document.querySelector('.arounus-player-notice').textContent, /Join Premium/);
+  assert.equal(video.hasAttribute('src'), false);
+  w.document.querySelector('.arounus-player button[aria-label="Play video"]').click();
   assert.equal(video.src, 'https://example.test/480.mp4');
+});
+
+test('approved premium access opens the protected HD source from settings', async () => {
+  const dom = new JSDOM('<html><head></head><body><video controls data-free-video="https://example.test/480.mp4" data-video-kind="lesson" data-video-id="9" data-premium-available="true"></video></body></html>', {url:'https://arounus.test', runScripts:'outside-only'});
+  const w = dom.window;
+  w.HTMLMediaElement.prototype.pause = () => {};
+  w.HTMLMediaElement.prototype.load = () => {};
+  w.HTMLMediaElement.prototype.play = () => Promise.resolve();
+  w.sessionStorage.setItem('studentToken', 'approved-token');
+  w.fetch = async (url, options) => {
+    assert.equal(url, '/media/premium/lesson/9');
+    assert.equal(options.headers['X-Student-Token'], 'approved-token');
+    return {ok:true, status:200, json:async()=>({url:'https://example.test/protected-hd.mp4'})};
+  };
+  w.eval(videos); await tick();
+  w.document.querySelector('[aria-label="Video settings"]').click();
+  w.document.querySelector('.premium-quality').click();
+  await tick();
+  assert.equal(w.document.querySelector('video').src, 'https://example.test/protected-hd.mp4');
+  assert.equal(w.document.querySelector('.premium-quality').getAttribute('aria-checked'), 'true');
 });
