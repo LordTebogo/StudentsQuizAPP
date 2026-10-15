@@ -73,6 +73,9 @@ test('video volume, full screen and picture in picture controls can enter and ex
   w.HTMLMediaElement.prototype.pause = () => {};
   w.HTMLMediaElement.prototype.load = () => {};
   w.HTMLMediaElement.prototype.play = () => Promise.resolve();
+  let autoCloseVolume;
+  w.setTimeout = callback => { autoCloseVolume = callback; return 1; };
+  w.clearTimeout = () => {};
   let fullscreenElement = null;
   Object.defineProperty(w.document, 'fullscreenElement', {get:()=>fullscreenElement});
   w.HTMLElement.prototype.requestFullscreen = async function () { fullscreenElement = this; w.document.dispatchEvent(new w.Event('fullscreenchange')); };
@@ -83,6 +86,11 @@ test('video volume, full screen and picture in picture controls can enter and ex
   w.document.exitPictureInPicture = async () => { const video = pipElement; pipElement = null; video.dispatchEvent(new w.Event('leavepictureinpicture')); };
   w.eval(videos); await tick();
   const video = w.document.querySelector('video');
+  const panel = w.document.querySelector('.arounus-player-volume-panel');
+  assert.equal(panel.hidden, true);
+  const speaker = w.document.querySelector('[aria-label="Volume controls"]');
+  speaker.click();
+  assert.equal(panel.hidden, false);
   const slider = w.document.querySelector('[aria-label="Volume"]');
   slider.value = '25'; slider.dispatchEvent(new w.Event('input'));
   assert.equal(video.volume, 0.25);
@@ -91,6 +99,12 @@ test('video volume, full screen and picture in picture controls can enter and ex
   w.document.querySelector('[aria-label="Unmute video"]').click();
   assert.equal(video.muted, false);
   assert.equal(video.volume, 0.25);
+  autoCloseVolume();
+  assert.equal(panel.hidden, true);
+  speaker.click();
+  assert.equal(panel.hidden, false);
+  w.document.dispatchEvent(new w.Event('pointerdown'));
+  assert.equal(panel.hidden, true);
   const fullButton = w.document.querySelector('[aria-label="Enter full screen"]');
   fullButton.click(); await tick();
   assert.equal(fullscreenElement, w.document.querySelector('.arounus-player'));

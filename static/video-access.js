@@ -7,9 +7,13 @@
     .arounus-player:fullscreen video{width:100%;height:100%;max-height:none;object-fit:contain}
     .arounus-player-bar{position:absolute;right:0;bottom:0;left:0;display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px;background:linear-gradient(transparent,rgba(0,0,0,.9));color:#fff}
     .arounus-player-bar button{flex:none;min-width:36px;min-height:36px;padding:5px 8px;border:0;border-radius:7px;background:rgba(0,0,0,.5);color:#fff;font:inherit;cursor:pointer}
-    .arounus-player-bar>button:hover,.arounus-player-bar>button:focus-visible,.arounus-player-settings>button:hover,.arounus-player-settings>button:focus-visible{background:#087f70;outline:2px solid #fff;outline-offset:2px}
+    .arounus-player-bar>button:hover,.arounus-player-bar>button:focus-visible,.arounus-player-audio>button:hover,.arounus-player-audio>button:focus-visible,.arounus-player-settings>button:hover,.arounus-player-settings>button:focus-visible{background:#087f70;outline:2px solid #fff;outline-offset:2px}
     .arounus-player-bar input[type=range]{flex:1;min-width:35px;accent-color:#50dbc0;cursor:pointer}
-    .arounus-player-bar .arounus-player-volume{flex:0 0 76px;min-width:55px}
+    .arounus-player-audio{position:relative;flex:none}
+    .arounus-player-volume-panel{position:absolute;left:0;bottom:44px;z-index:3;display:flex;align-items:center;gap:8px;width:175px;padding:9px;border:1px solid #526b65;border-radius:9px;background:#172724;box-shadow:0 12px 26px rgba(0,0,0,.35)}
+    .arounus-player-volume-panel[hidden]{display:none}
+    .arounus-player-bar .arounus-player-volume{flex:1;min-width:65px}
+    .arounus-player-volume-panel button{min-width:45px;font-size:.75rem}
     .arounus-player-time{flex:none;font:12px/1.2 sans-serif;white-space:nowrap}
     .arounus-player-settings{position:relative;flex:none}
     .arounus-player-menu{position:absolute;right:0;bottom:44px;z-index:2;min-width:190px;padding:8px;border:1px solid #526b65;border-radius:10px;background:#fff;color:#19312e;box-shadow:0 12px 26px rgba(0,0,0,.35)}
@@ -21,7 +25,7 @@
     .arounus-player-menu button.premium-quality{color:#a01f35;font-weight:700}
     .arounus-player-menu button.premium-quality:hover,.arounus-player-menu button.premium-quality:focus-visible{background:#fff0f2;color:#842539}
     .arounus-player-notice{position:absolute;right:12px;bottom:64px;left:12px;z-index:1;margin:0;padding:8px 11px;border-radius:8px;background:rgba(0,0,0,.85);color:#fff;font-size:.85rem}
-    @media(max-width:540px){.arounus-player-bar{flex-wrap:wrap;gap:4px;padding:8px}.arounus-player-bar button{min-width:32px;padding:4px}.arounus-player-time{font-size:10px}.arounus-player-bar .arounus-player-volume{flex:0 0 58px}}
+    @media(max-width:540px){.arounus-player-bar{flex-wrap:wrap;gap:4px;padding:8px}.arounus-player-bar button{min-width:32px;padding:4px}.arounus-player-time{font-size:10px}}
   `;
   document.head.appendChild(style);
 
@@ -30,6 +34,7 @@
 
   function setup(video) {
     if (!video?.dataset.freeVideo) return;
+    clearTimeout(video._arounusVolumeTimer);
     video._arounusEvents?.abort();
     const events = new AbortController();
     video._arounusEvents = events;
@@ -60,8 +65,12 @@
     const play = document.createElement('button'); play.type = 'button'; play.textContent = '▶'; play.setAttribute('aria-label', 'Play video');
     const seek = document.createElement('input'); seek.type = 'range'; seek.min = '0'; seek.max = '100'; seek.value = '0'; seek.setAttribute('aria-label', 'Video position');
     const clock = document.createElement('span'); clock.className = 'arounus-player-time'; clock.textContent = '0:00 / 0:00';
-    const mute = document.createElement('button'); mute.type = 'button'; mute.textContent = '🔊'; mute.setAttribute('aria-label', 'Mute video');
+    const audio = document.createElement('div'); audio.className = 'arounus-player-audio';
+    const mute = document.createElement('button'); mute.type = 'button'; mute.textContent = '🔊'; mute.setAttribute('aria-label', 'Volume controls'); mute.setAttribute('aria-expanded', 'false');
+    const volumePanel = document.createElement('div'); volumePanel.className = 'arounus-player-volume-panel'; volumePanel.hidden = true;
     const volume = document.createElement('input'); volume.type = 'range'; volume.min = '0'; volume.max = '100'; volume.value = String(Math.round(video.volume * 100)); volume.className = 'arounus-player-volume'; volume.setAttribute('aria-label', 'Volume');
+    const muteAction = document.createElement('button'); muteAction.type = 'button'; muteAction.textContent = 'Mute';
+    volumePanel.append(volume, muteAction); audio.append(mute, volumePanel);
     const pip = document.createElement('button'); pip.type = 'button'; pip.textContent = '▣'; pip.setAttribute('aria-label', 'Enter picture in picture'); pip.title = 'Picture in picture';
     const fullscreen = document.createElement('button'); fullscreen.type = 'button'; fullscreen.textContent = '⤢'; fullscreen.setAttribute('aria-label', 'Enter full screen'); fullscreen.title = 'Full screen';
     const settings = document.createElement('div'); settings.className = 'arounus-player-settings';
@@ -72,7 +81,7 @@
     const premium = document.createElement('button'); premium.type = 'button'; premium.className = 'premium-quality'; premium.textContent = 'HD (above 480p) · Premium'; premium.setAttribute('aria-checked', 'false');
     menu.append(heading, free, premium); settings.append(gear, menu);
     const notice = document.createElement('p'); notice.className = 'arounus-player-notice'; notice.hidden = true; notice.setAttribute('role', 'status');
-    bar.append(play, seek, clock, mute, volume, settings, pip, fullscreen); player.append(bar, notice);
+    bar.append(play, seek, clock, audio, settings, pip, fullscreen); player.append(bar, notice);
 
     const showNotice = message => { notice.textContent = message; notice.hidden = !message; };
     const closeMenu = () => { menu.hidden = true; gear.setAttribute('aria-expanded', 'false'); };
@@ -107,20 +116,34 @@
       const level = video.muted ? 0 : video.volume;
       volume.value = String(Math.round(level * 100));
       mute.textContent = level === 0 ? '🔇' : level < 0.5 ? '🔈' : '🔊';
-      mute.setAttribute('aria-label', level === 0 ? 'Unmute video' : 'Mute video');
+      muteAction.textContent = level === 0 ? 'Unmute' : 'Mute';
+      muteAction.setAttribute('aria-label', level === 0 ? 'Unmute video' : 'Mute video');
     };
+    const closeVolume = () => { volumePanel.hidden = true; mute.setAttribute('aria-expanded', 'false'); clearTimeout(video._arounusVolumeTimer); };
+    const scheduleVolumeClose = () => { clearTimeout(video._arounusVolumeTimer); video._arounusVolumeTimer = setTimeout(closeVolume, 4000); };
     on(mute, 'click', () => {
+      volumePanel.hidden = !volumePanel.hidden;
+      mute.setAttribute('aria-expanded', String(!volumePanel.hidden));
+      if (volumePanel.hidden) clearTimeout(video._arounusVolumeTimer);
+      else scheduleVolumeClose();
+    });
+    on(muteAction, 'click', () => {
       if (video.muted || video.volume === 0) { video.volume = video.volume || previousVolume; video.muted = false; }
       else { previousVolume = video.volume; video.muted = true; }
       syncVolume();
+      scheduleVolumeClose();
     });
     on(volume, 'input', () => {
       video.volume = Number(volume.value) / 100;
       video.muted = video.volume === 0;
       if (video.volume) previousVolume = video.volume;
       syncVolume();
+      scheduleVolumeClose();
     });
+    on(volumePanel, 'pointermove', scheduleVolumeClose);
+    on(document, 'pointerdown', event => { if (!audio.contains(event.target)) closeVolume(); });
     on(video, 'volumechange', syncVolume);
+    syncVolume();
     const syncFullscreen = () => {
       const active = document.fullscreenElement === player;
       fullscreen.textContent = active ? '⤡' : '⤢';
