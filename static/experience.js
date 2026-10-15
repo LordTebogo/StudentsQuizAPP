@@ -61,10 +61,10 @@
     ['/static/admin.html#adminOverview', 'Overview'], ['/static/admin.html#adminContent', 'Content'],
     ['/static/admin.html#adminPeople', 'Users'], ['/static/admin.html#marketAdvertAdmin', 'Approvals'],
   ] : activeRole === 'lecturer' ? [
-    ['/static/index.html', 'Overview'], ['/static/lecturer.html', 'Quizzes'],
+    ['/static/lecturer.html', 'Overview'], ['/static/lecturer.html#create', 'Quizzes'],
     ['/static/lessons_lecturer.html', 'Lessons'], ['/static/live_lesson.html', 'Live classroom'],
   ] : activeRole === 'student' ? [
-    ['/static/index.html', 'Home'], ['/static/student.html', 'Quizzes'],
+    ['/static/student.html', 'Home'], ['/static/student.html#moduleCard', 'Quizzes'],
     ['/static/lessons_student.html', 'Lessons'], ['/static/live_lesson.html', 'Live'],
     ['/static/fun.html', 'Community'],
   ] : [
@@ -249,4 +249,24 @@
   });
   const friendlyPath = friendlyPaths[location.pathname];
   if (friendlyPath) history.replaceState(history.state, '', `${friendlyPath}${location.search}${location.hash}`);
+
+  document.addEventListener('click', event => {
+    const link = event.target.closest?.('a[href]');
+    if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || link.hasAttribute('download') || (link.target && link.target !== '_self')) return;
+    const destination = new URL(link.href, location.href);
+    if (destination.origin !== location.origin || destination.pathname !== location.pathname || destination.search !== location.search) return;
+    if (destination.hash) {
+      const target = document.getElementById(decodeURIComponent(destination.hash.slice(1)));
+      if (!target) return;
+      const card = target.matches('.card') ? target : target.closest('.card');
+      if (card?.classList.contains('collapsed')) card.querySelector('.card-toggle')?.click();
+      event.preventDefault();
+      if (location.hash !== destination.hash) history.pushState(history.state, '', destination.hash);
+      target.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      return;
+    }
+    event.preventDefault();
+    if (location.hash) history.pushState(history.state, '', destination.pathname + destination.search);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
 })();

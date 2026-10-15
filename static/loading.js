@@ -39,7 +39,9 @@
   document.addEventListener('click', event => {
     if (!(event.target instanceof Element)) return;
     const navigation = event.target.closest('a[href]');
-    if (navigation && !navigation.getAttribute('href').startsWith('#') && !navigation.hasAttribute('download')) {
+    const destination = navigation && new URL(navigation.href, location.href);
+    const samePage = destination && destination.origin === location.origin && destination.pathname === location.pathname && destination.search === location.search;
+    if (navigation && !samePage && !navigation.hasAttribute('download') && (!navigation.target || navigation.target === '_self') && !event.defaultPrevented) {
       navigation.classList.add('is-navigating');
       navigation.setAttribute('aria-busy', 'true');
     }

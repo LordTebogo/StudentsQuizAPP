@@ -23,7 +23,7 @@
 <body>
 <script>if(!sessionStorage.getItem('studentToken')&&!sessionStorage.getItem('lecturerToken'))location.replace('/static/index.html?role=learner')</script>
 <main class="wrap">
-  <header class="top"><div class="brand-group"><img class="brand-logo" src="/branding/logo" alt=""><div class="brand-text"><div class="brand">Aroun<span>us</span></div><div class="brand-tagline">Document workspace</div></div></div><nav><a id="workspaceLink" href="/static/index.html">My workspace</a><a href="/static/index.html">Home</a></nav></header>
+  <header class="top"><div class="brand-group"><img class="brand-logo" src="/branding/logo" alt=""><div class="brand-text"><div class="brand">Aroun<span>us</span></div><div class="brand-tagline">Document workspace</div></div></div><nav><a id="workspaceLink" href="/static/index.html">My workspace</a><a id="homeLink" href="/static/index.html">Home</a></nav></header>
   <div class="document-hero"><span class="kicker">Learner and tutor utility</span><h1>Document tools</h1><p class="lede">Preview and organise PDF pages, split documents, and convert between PDF, Word, PowerPoint, and picture formats.</p></div>
   <div id="accessMessage"></div>
   <div id="tools">
@@ -53,6 +53,7 @@
 const studentToken=sessionStorage.getItem('studentToken')||'',lecturerToken=sessionStorage.getItem('lecturerToken')||'';
 const access=document.getElementById('accessMessage'),tools=document.getElementById('tools'),workspace=document.getElementById('workspaceLink');
 if(studentToken)workspace.href='/static/student.html';else if(lecturerToken)workspace.href='/static/lecturer.html';else{tools.classList.add('hidden');access.innerHTML='<div class="msg error">Sign in as a student or lecturer before using document tools.</div>'}
+document.getElementById('homeLink').href=workspace.href;
 const authHeaders=()=>studentToken?{'X-Student-Token':studentToken}:{'X-Lecturer-Token':lecturerToken};
 const safe=value=>String(value??'').replace(/[&<>"']/g,character=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]));
 function filenameFrom(response,fallback){const match=(response.headers.get('content-disposition')||'').match(/filename="?([^";]+)"?/i);return match?match[1]:fallback}
