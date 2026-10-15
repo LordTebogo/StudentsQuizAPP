@@ -1062,6 +1062,22 @@ async def update_lecturer_me(
     return _lecturer_profile(lecturer)
 
 
+class UsernameSuggestionRequest(BaseModel):
+    full_name: str = Field(default="", max_length=100)
+
+
+@app.post("/students/username-suggestion")
+def suggest_student_username(payload: UsernameSuggestionRequest, db: Session = Depends(get_db)):
+    name = re.sub(r"[^A-Z0-9]", "", payload.full_name.upper())[:20] or "LEARNER"
+    if len(name) < 3:
+        name = "LEARNER"
+    for _ in range(12):
+        username = f"{name}-{secrets.randbelow(900000) + 100000}"
+        if not db.query(Student.id).filter(Student.student_number == username).first():
+            return JSONResponse({"username": username}, headers={"Cache-Control": "no-store"})
+    raise HTTPException(status_code=503, detail="Could not generate a username. Please try again.")
+
+
 @app.post("/students/register")
 async def register_student(
     username: Optional[str] = Form(None), student_number: Optional[str] = Form(None), full_name: str = Form(...), email: str = Form(...),
@@ -1076,8 +1092,10 @@ async def register_student(
         raise HTTPException(status_code=400, detail="Provide a full name, valid email, and a password of at least 8 characters")
     if password != confirm_password:
         raise HTTPException(status_code=400, detail="The password confirmation does not match")
-    if db.query(Student).filter((Student.student_number == chosen_username) | (Student.email == email)).first():
-        raise HTTPException(status_code=409, detail="An account already uses this username or email")
+    if db.query(Student.id).filter(Student.student_number == chosen_username).first():
+        raise HTTPException(status_code=409, detail="This username is taken. Choose another or use Generate username.")
+    if db.query(Student.id).filter(Student.email == email).first():
+        raise HTTPException(status_code=409, detail="An account already uses this email. Sign in or use another email.")
     image_url = upload_image_bytes(await profile_image.read(), folder="student_profiles") if profile_image and profile_image.filename else None
     student = Student(student_number=chosen_username, full_name=full_name.strip(), email=email,
                       phone=phone.strip(), institution=institution.strip(), bio=bio.strip(), profile_image_url=image_url,

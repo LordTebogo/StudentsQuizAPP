@@ -100,6 +100,21 @@ class LessonManagementTest(unittest.TestCase):
             self.assertFalse(cloudinary_utils.delete_lesson_video_variants("https://other.test/video.mp4", None))
             destroy.assert_not_called()
 
+    def test_username_suggestion_skips_an_existing_learner(self):
+        with main.SessionLocal() as db:
+            taken = Student(student_number="ALICE-100000", full_name="Taken", email="taken-name@example.test", password_hash="unused", approved=True, active=True, created_at="2026-10-01T00:00:00Z")
+            db.add(taken); db.commit()
+        try:
+            with patch.object(main.secrets, "randbelow", side_effect=[0, 1]):
+                response = self.client.post("/students/username-suggestion", json={"full_name": "Alice"})
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()["username"], "ALICE-100001")
+            self.assertEqual(response.headers["cache-control"], "no-store")
+        finally:
+            with main.SessionLocal() as db:
+                db.query(Student).filter(Student.student_number == "ALICE-100000").delete()
+                db.commit()
+
 
 if __name__ == "__main__":
     unittest.main()
