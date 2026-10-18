@@ -100,6 +100,30 @@ class LessonManagementTest(unittest.TestCase):
             self.assertFalse(cloudinary_utils.delete_lesson_video_variants("https://other.test/video.mp4", None))
             destroy.assert_not_called()
 
+    def test_app_guide_is_available_to_every_learner(self):
+        with main.SessionLocal() as db:
+            learner = Student(student_number="GUIDE001", full_name="New learner", email="guide@example.test", password_hash="unused", approved=True, active=True, created_at="2026-10-01T00:00:00Z")
+            tutorial = Lesson(title="Getting started", description="Arounus walkthrough", module_code="AROUNUS", video_url="https://example.test/tutorial.mp4", created_at="2026-10-01T00:00:00Z")
+            db.add_all([learner, tutorial]); db.commit()
+            learner_id, tutorial_id = learner.id, tutorial.id
+        headers = {"X-Student-Token": main._issue_student_token(learner_id)}
+        try:
+            modules = self.client.get("/student/modules", headers=headers).json()
+            self.assertIn("AROUNUS", modules["module_codes"])
+            self.assertFalse(modules["completed"])
+            enrollment = self.client.get("/student/module-enrollment", headers=headers).json()
+            self.assertNotIn("AROUNUS", [item["module_code"] for item in enrollment["available_modules"]])
+            video_modules = self.client.get("/student/lesson-modules", headers=headers).json()
+            self.assertEqual(video_modules[0], {"module_code": "AROUNUS", "lesson_count": 1, "is_app_guide": True})
+            lessons = self.client.get("/student/lessons?module_code=AROUNUS", headers=headers).json()
+            self.assertEqual([item["id"] for item in lessons], [tutorial_id])
+            self.assertEqual(self.client.get(f"/student/lesson/{tutorial_id}", headers=headers).status_code, 200)
+        finally:
+            with main.SessionLocal() as db:
+                db.query(Lesson).filter(Lesson.id == tutorial_id).delete()
+                db.query(Student).filter(Student.id == learner_id).delete()
+                db.commit()
+
     def test_username_suggestion_skips_an_existing_learner(self):
         with main.SessionLocal() as db:
             taken = Student(student_number="ALICE-100000", full_name="Taken", email="taken-name@example.test", password_hash="unused", approved=True, active=True, created_at="2026-10-01T00:00:00Z")

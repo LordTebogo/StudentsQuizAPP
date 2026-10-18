@@ -54,7 +54,7 @@
         <h1 id="moduleEnrollmentTitle">Choose your modules</h1>
         <p class="module-enrollment-intro">Select every subject you are currently studying. Your quiz and video lesson pages will then show only content for these modules.</p>
         <div class="module-enrollment-list" id="moduleEnrollmentList"></div>
-        <div class="module-enrollment-note"><span aria-hidden="true">🔒</span><span>This is a one-time selection. To add another module later, contact your lecturer or administrator.</span></div>
+        <div class="module-enrollment-note"><span aria-hidden="true">🔒</span><span>This is a one-time selection. To add another module later, contact your lecturer or administrator. The <a href="/static/arounus-guide.html">AROUNUS app guide</a> is already included for you.</span></div>
         <div class="module-enrollment-actions"><button class="module-enrollment-save" type="button" disabled>Save my modules</button><span class="module-enrollment-count">Choose at least one module</span></div>
         <div class="module-enrollment-message" role="alert" aria-live="polite"></div>
       </section>`;

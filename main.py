@@ -861,7 +861,7 @@ def _student_profile(student: Student) -> dict:
             "bio": student.bio or "", "profile_image_url": student.profile_image_url,
             "approved": student.approved, "active": student.active, "premium_video": bool(student.premium_video),
             "module_selection_completed": bool(student.module_selection_completed),
-            "module_codes": sorted(item.module_code for item in student.modules), "created_at": student.created_at}
+            "module_codes": sorted(_student_module_codes(student)), "created_at": student.created_at}
 
 
 def _src_president_profile(president: SrcPresident) -> dict:
@@ -888,11 +888,15 @@ def _active_src_party_exists(db: Session, party_name: str, exclude_id: Optional[
     return query.first() is not None
 
 
+AROUNUS_MODULE_CODE = "AROUNUS"
+
+
 def _set_student_modules(db: Session, student: Student, codes: List[str]):
-    wanted = {code.strip().upper() for code in codes if code and code.strip()}
+    # The app guide is universal, so it is never an editable enrollment row.
+    wanted = {code.strip().upper() for code in codes if code and code.strip()} - {AROUNUS_MODULE_CODE}
     existing = {item.module_code: item for item in student.modules}
     for code, item in existing.items():
-        if code not in wanted: db.delete(item)
+        if code not in wanted and code != AROUNUS_MODULE_CODE: db.delete(item)
     for code in wanted - set(existing): db.add(StudentModule(student_id=student.id, module_code=code))
 
 
@@ -905,12 +909,12 @@ def _available_module_catalog(db: Session) -> list[dict]:
     }
     return [
         {"module_code": code, "quiz_count": quiz_counts.get(code, 0), "lesson_count": lesson_counts.get(code, 0)}
-        for code in sorted(code for code in codes if code)
+        for code in sorted(code for code in codes if code and code != AROUNUS_MODULE_CODE)
     ]
 
 
 def _student_module_codes(student: Student) -> set[str]:
-    return {item.module_code for item in student.modules}
+    return {item.module_code for item in student.modules} | {AROUNUS_MODULE_CODE}
 
 
 def _require_student_module(student: Student, module_code: str) -> str:
@@ -2118,7 +2122,7 @@ def update_student_modules(payload: ModuleSelection, student: Student = Depends(
     _set_student_modules(db, student, list(wanted))
     student.module_selection_completed = True
     db.commit()
-    return {"module_codes": sorted(wanted), "completed": True}
+    return {"module_codes": sorted(_student_module_codes(student)), "completed": True}
 
 
 @app.put("/student/module-enrollment")
@@ -2143,7 +2147,9 @@ def list_student_lesson_modules(student: Student = Depends(require_student_accou
         return []
     rows = (db.query(Lesson.module_code, func.count(Lesson.id).label("lesson_count"))
             .filter(Lesson.module_code.in_(assigned)).group_by(Lesson.module_code).order_by(Lesson.module_code.asc()).all())
-    return [{"module_code": code, "lesson_count": count} for code, count in rows]
+    modules = [{"module_code": code, "lesson_count": count} for code, count in rows if code != AROUNUS_MODULE_CODE]
+    guide_video_count = next((count for code, count in rows if code == AROUNUS_MODULE_CODE), 0)
+    return [{"module_code": AROUNUS_MODULE_CODE, "lesson_count": guide_video_count, "is_app_guide": True}, *modules]
 
 
 @app.get("/quizzes/by-module/{module_code}")
@@ -3578,7 +3584,8 @@ def admin_get_lesson(lesson_id: int, _pin_ok: bool = Depends(require_lecturer_pi
 
 @app.post("/admin/lessons")
 def admin_create_lesson(payload: AdminLessonInput, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
-    _validate_admin_questions(payload.questions)
+    if payload.questions or payload.module_code.strip().upper() != AROUNUS_MODULE_CODE:
+        _validate_admin_questions(payload.questions)
     if not payload.title.strip() or not payload.module_code.strip() or not payload.video_url.strip():
         raise HTTPException(status_code=400, detail="Title, module code, and video URL are required")
     lesson = Lesson(title=payload.title.strip(), description=payload.description.strip(), module_code=payload.module_code.strip().upper(), video_url=payload.video_url.strip(), created_at=datetime.utcnow().isoformat() + "Z")
@@ -3596,7 +3603,8 @@ def admin_update_lesson(lesson_id: int, payload: AdminLessonInput, _pin_ok: bool
         raise HTTPException(status_code=404, detail="Lesson not found")
     if lesson.submissions:
         raise HTTPException(status_code=409, detail="This lesson has submissions and cannot be changed. Create a new version instead.")
-    _validate_admin_questions(payload.questions)
+    if payload.questions or payload.module_code.strip().upper() != AROUNUS_MODULE_CODE:
+        _validate_admin_questions(payload.questions)
     if not payload.title.strip() or not payload.module_code.strip() or not payload.video_url.strip():
         raise HTTPException(status_code=400, detail="Title, module code, and video URL are required")
     lesson.title, lesson.description = payload.title.strip(), payload.description.strip()

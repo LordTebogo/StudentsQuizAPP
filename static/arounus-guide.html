@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#f5f8f6">
+<title>AROUNUS · App guide</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+  .guide-hero { padding: clamp(24px, 5vw, 48px); background: linear-gradient(135deg, #e5f7f0, #eef4ff); border: 1px solid var(--border); border-radius: 22px; margin: 26px 0; }
+  .guide-hero h1 { margin: 8px 0; }
+  .guide-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+  .guide-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px; }
+  .guide-grid .card { margin: 0; }
+  .guide-grid h2 { font-size: 1.3rem; }
+  .guide-grid ol, .guide-grid ul { padding-left: 22px; line-height: 1.7; }
+  .guide-video { display: block; padding: 16px 0; border-top: 1px solid var(--border); color: var(--ink); text-decoration: none; }
+  .guide-video strong { display: block; }
+  .guide-video:hover strong { color: var(--accent); }
+  @media print { .top, .guide-actions, #videoSection { display: none !important; } .wrap { max-width: none; } .guide-hero, .guide-grid .card { box-shadow: none; break-inside: avoid; } }
+</style>
+</head>
+<body>
+<script>if (!sessionStorage.getItem('studentToken')) location.replace('/static/index.html?role=learner');</script>
+<div class="wrap">
+  <header class="top">
+    <div class="brand-group"><img class="brand-logo" src="/branding/logo" alt=""><div class="brand-text"><div class="brand">Aroun<span>us</span></div><div class="brand-tagline">Learner guide</div></div></div>
+    <nav><a href="/static/student.html">Home</a><a href="/static/lessons_student.html">Lessons</a></nav>
+  </header>
+  <section class="guide-hero">
+    <span class="kicker">Your permanent module</span>
+    <h1>Learn to use Arounus</h1>
+    <p class="lede">This guide is included for every learner. Read the steps below, watch a tutorial when one is available, or save these instructions as a document.</p>
+    <div class="guide-actions"><button class="btn" type="button" id="printGuide">Print or save as PDF</button><a class="btn secondary" href="/static/lessons_student.html?module=AROUNUS">Open AROUNUS module</a></div>
+  </section>
+  <div class="guide-grid">
+    <section class="card"><h2>1. Find your learning space</h2><ol><li>Sign in with your learner account.</li><li>Choose your subjects when asked the first time. The AROUNUS guide is added automatically.</li><li>Use <strong>Home</strong> for your learner workspace and <strong>Lessons</strong> to see videos for your subjects.</li></ol></section>
+    <section class="card"><h2>2. Take a quiz</h2><ol><li>From your learner home, choose a subject and open a quiz.</li><li>Answer each question. Your progress saves as you work.</li><li>Submit when you are finished, then open <strong>My results &amp; scripts</strong> to see your results and download your script.</li></ol></section>
+    <section class="card"><h2>3. Watch a video lesson</h2><ol><li>Open <strong>Lessons</strong>, choose a module, and select a lesson.</li><li>Press play. Use the player settings to choose quality; quality above 480p requires premium access.</li><li>Answer the questions below the video and submit your work. You can also join the discussion.</li></ol></section>
+    <section class="card"><h2>4. Get help</h2><ul><li>If you cannot sign in, ask your lecturer or administrator to help recover your account.</li><li>If a subject is missing after your first selection, ask your lecturer or administrator to add it.</li><li>Use the <strong>Support &amp; account recovery</strong> link for general help and privacy information.</li></ul><a href="/static/trust.html#support">Support &amp; account recovery</a></section>
+  </div>
+  <section class="card" id="videoSection" style="margin-top:20px"><h2>Video tutorials</h2><p class="muted">Tutorial videos published by the Arounus team appear here.</p><div id="guideVideos" aria-live="polite">Loading tutorials…</div></section>
+</div>
+<script>
+document.getElementById('printGuide').addEventListener('click', () => window.print());
+const videos = document.getElementById('guideVideos');
+fetch('/student/lessons?module_code=AROUNUS', { headers: { 'X-Student-Token': sessionStorage.getItem('studentToken') || '' } })
+  .then(async response => { if (!response.ok) throw new Error('Tutorials could not load.'); return response.json(); })
+  .then(rows => {
+    videos.replaceChildren();
+    if (!rows.length) { videos.textContent = 'No video tutorials have been published yet. The written guide above is ready to use.'; return; }
+    for (const row of rows) {
+      const link = document.createElement('a'); link.className = 'guide-video'; link.href = '/static/lessons_student.html?lesson=' + encodeURIComponent(row.id);
+      const title = document.createElement('strong'); title.textContent = row.title;
+      const detail = document.createElement('span'); detail.className = 'muted'; detail.textContent = row.description || 'Watch tutorial';
+      link.append(title, detail); videos.appendChild(link);
+    }
+  })
+  .catch(error => { videos.textContent = error.message; });
+</script>
+<script src="/static/loading.js"></script>
+</body>
+</html>

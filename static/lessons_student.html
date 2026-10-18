@@ -65,7 +65,7 @@
   </header>
 
   <h1>Video lessons</h1>
-  <p class="lede">Choose a module and continue learning. Answers are private; comments are public.</p>
+  <p class="lede">Choose a module and continue learning. The AROUNUS module includes a guide to using the app. Answers are private; comments are public.</p>
 
   <!-- Module selection -->
   <div class="card" id="moduleCard">
@@ -202,8 +202,8 @@ async function loadModuleList() {
     }
     box.innerHTML = modules.map(m => `
       <a class="lesson-list-item" data-code="${escapeHtml(m.module_code)}">
-        <div class="lesson-list-title">${escapeHtml(m.module_code)}</div>
-        <p class="muted">${m.lesson_count} lesson${m.lesson_count === 1 ? '' : 's'}</p>
+        <div class="lesson-list-title">${m.is_app_guide ? 'AROUNUS · How to use the app' : escapeHtml(m.module_code)}</div>
+        <p class="muted">${m.is_app_guide ? 'Written guide and printable document · ' : ''}${m.lesson_count} video${m.lesson_count === 1 ? '' : 's'}</p>
       </a>
     `).join('');
     box.querySelectorAll('.lesson-list-item').forEach(el => {
@@ -219,7 +219,7 @@ function openModule(moduleCode) {
   currentModule = moduleCode;
   $('moduleCard').classList.add('hidden');
   $('listCard').classList.remove('hidden');
-  $('listCardTitle').textContent = `${moduleCode} — lessons`;
+  $('listCardTitle').textContent = moduleCode === 'AROUNUS' ? 'AROUNUS — app guide and tutorials' : `${moduleCode} — lessons`;
   loadLessonList(moduleCode);
   history.replaceState(null, '', `?module=${encodeURIComponent(moduleCode)}`);
 }
@@ -238,11 +238,12 @@ async function loadLessonList(moduleCode) {
   try {
     const path = moduleCode ? `/student/lessons?module_code=${encodeURIComponent(moduleCode)}` : '/student/lessons';
     const lessons = await api(path);
+    const guideLink = moduleCode === 'AROUNUS' ? '<a class="lesson-list-item" href="/static/arounus-guide.html"><div class="lesson-list-title">How to use Arounus</div><p class="muted">Read the guide or print and save it as a document</p></a>' : '';
     if (!lessons.length) {
-      box.innerHTML = '<p class="muted">No lessons in this module yet — check back soon.</p>';
+      box.innerHTML = guideLink + (moduleCode === 'AROUNUS' ? '<p class="muted">Video tutorials will appear here when the Arounus team publishes them.</p>' : '<p class="muted">No lessons in this module yet — check back soon.</p>');
       return;
     }
-    box.innerHTML = lessons.map(l => {
+    box.innerHTML = guideLink + lessons.map(l => {
       const progress = l.completed
         ? `<span class="badge done">Completed · ${l.total_score} / ${l.max_score}</span><p class="muted">${l.fully_marked ? 'Final result' : 'Awaiting final marking'}</p>`
         : `<span class="badge pending">Not completed</span>`;
@@ -271,7 +272,7 @@ async function openLesson(lessonId) {
     $('moduleCard').classList.add('hidden');
     $('listCard').classList.add('hidden');
     $('lessonCard').classList.remove('hidden');
-    $('questionsCard').classList.remove('hidden');
+    $('questionsCard').classList.toggle('hidden', lesson.questions.length === 0);
     $('commentsCard').classList.remove('hidden');
     $('myResultCard').classList.add('hidden');
 
