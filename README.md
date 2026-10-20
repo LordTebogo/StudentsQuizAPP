@@ -1,5 +1,37 @@
 # Quiz + Video Lessons App (cloud-deployable version)
 
+## Document workspace
+
+PDF tools support previews, merge/reorder, selection, rotation, extraction and
+undo. The organiser accepts up to 20 PDFs (25 MB each) and 200 pages total.
+Other conversions retain their displayed operation-specific limits. PDF to
+Word/PowerPoint exports page images; use Recognise text for editable Word.
+OCR supports English, Afrikaans, or both, and runs in the browser. Retained
+page artwork and recognised text are uploaded to the app server only for Word
+assembly; generated downloads are held in memory, not saved to the library.
+
+Full Office rendering and private Word/PowerPoint previews require LibreOffice.
+Use the included Dockerfile on your hosting provider (select Docker as the
+deployment runtime), or install LibreOffice on the server and optionally set
+`LIBREOFFICE_PATH` to its `soffice` executable. Changing the Git repository alone
+does not change an existing Python hosting service to Docker. Each conversion
+uses an isolated temporary LibreOffice profile, cleaned up after processing.
+Without LibreOffice, this app's editable OCR Word exports can still be converted
+back to PDF; ordinary Word files return an explicit renderer-unavailable message
+instead of losing layout. PowerPoint keeps its existing simplified fallback.
+
+Cancel stops browser OCR and aborts requests. Already-started server processing
+may finish, but its result is discarded. Word preview uploads remain on the same
+app server; documents are never sent to an external preview provider.
+
+Document regression checks (no production database required):
+
+```powershell
+python -m unittest discover -s tests -p test_document_tools.py -v
+npm ci
+npm test
+```
+
 ## Media and marketplace sustainability
 
 - New lesson, community, and advert video uploads create a public copy capped at 480p. If the uploaded original is higher resolution, its HD copy is stored as a Cloudinary authenticated asset. Videos load only after a viewer chooses Play.

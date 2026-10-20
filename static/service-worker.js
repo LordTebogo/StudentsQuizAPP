@@ -1,4 +1,4 @@
-const OFFLINE_VERSION = "v33";
+const OFFLINE_VERSION = "v34";
 const SHELL_CACHE = `nucleocampus-shell-${OFFLINE_VERSION}`;
 const DATA_CACHE = `nucleocampus-data-${OFFLINE_VERSION}`;
 const EXTERNAL_CACHE = `nucleocampus-external-${OFFLINE_VERSION}`;
@@ -14,7 +14,7 @@ const APP_SHELL = [
   "/static/lessons_student.html", "/static/lessons_lecturer.html",
   "/static/live_lesson.html", "/static/fun.html", "/static/comrade.html",
   "/static/marketing.html", "/static/admin.html", "/static/pdf_tools.html",
-  "/static/trust.html", "/static/tutor_guide.html",
+  "/static/document-organizer.js", "/static/trust.html", "/static/tutor_guide.html",
   "/static/style.css", "/static/product.css", "/static/theme.css?v=2",
   "/static/light.css?v=2", "/static/messaging.css",
   "/static/market-ads.css", "/static/market-advert-dialog.css",
