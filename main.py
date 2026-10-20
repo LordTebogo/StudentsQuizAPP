@@ -43,6 +43,7 @@ import threading
 import urllib.request
 import urllib.error
 import zipfile
+from pathlib import Path
 import cloudinary.api
 from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
@@ -5564,18 +5565,18 @@ async def _document_bytes(upload: UploadFile) -> bytes:
 
 
 def _download(data: bytes, media_type: str, filename: str) -> StreamingResponse:
-    return StreamingResponse(io.BytesIO(data), media_type=media_type, headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+    return StreamingResponse(io.BytesIO(data), media_type=media_type, headers={"Content-Disposition": f'attachment; filename="{filename}"', "Cache-Control": "no-store"})
 
 
-def _validated_pdf_reader(data: bytes, label: str = "The PDF") -> PdfReader:
+def _validated_pdf_reader(data: bytes, label: str = "The PDF", max_pages: int = 100) -> PdfReader:
     if not data.startswith(b"%PDF"):
         raise HTTPException(status_code=400, detail=f"{label} is not a PDF")
     try:
         reader = PdfReader(io.BytesIO(data))
         if reader.is_encrypted:
             raise HTTPException(status_code=400, detail=f"{label} is password protected")
-        if len(reader.pages) > 100:
-            raise HTTPException(status_code=400, detail="Document workspace operations are limited to 100 PDF pages")
+        if len(reader.pages) > max_pages:
+            raise HTTPException(status_code=400, detail=f"This operation is limited to {max_pages} PDF pages per document")
         return reader
     except HTTPException:
         raise
@@ -5761,68 +5762,77 @@ def _pdf_to_powerpoint_bytes(data: bytes) -> bytes:
 
 
 def _word_to_pdf_bytes(data: bytes) -> bytes:
+    # A full Office renderer preserves headers, page breaks, fonts and drawings.
+    rendered = _office_to_pdf_bytes(data, "docx")
+    if rendered:
+        return rendered
+    # Our OCR export uses positioned text boxes. Render those explicitly on
+    # hosts without LibreOffice instead of silently dropping recognised text.
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        from lxml import etree
+        root = etree.fromstring(archive.read("word/document.xml"))
+        namespaces = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
+                      "v": "urn:schemas-microsoft-com:vml"}
+        if root.xpath('//v:shape[starts-with(@id,"ocr_text_")]', namespaces=namespaces):
+            return _ocr_word_to_pdf_bytes(data)
+    raise HTTPException(status_code=503, detail="Word to PDF needs the Office renderer on this server. Please try again later or export as PDF from Word.")
+
+
+def _ocr_word_to_pdf_bytes(data: bytes) -> bytes:
+    """Render this app's OCR DOCX without losing editable positioned text."""
     from docx import Document
-    from docx.table import Table as DocxTable
-    from docx.text.paragraph import Paragraph as DocxParagraph
-    from reportlab.lib.utils import ImageReader
-
-    document = Document(io.BytesIO(data))
-    first_section = document.sections[0]
-    page_size = (first_section.page_width.pt, first_section.page_height.pt)
-    styles = getSampleStyleSheet()
-    story = []
-    for child in document.element.body.iterchildren():
-        if child.tag.endswith("}p"):
-            paragraph = DocxParagraph(child, document)
-            text_value = paragraph.text.strip()
-            if not text_value:
-                story.append(Spacer(1, 6)); continue
-            style_name = (paragraph.style.name if paragraph.style else "").lower()
-            style = styles["Title"] if "title" in style_name else styles["Heading1"] if "heading 1" in style_name else styles["Heading2"] if "heading 2" in style_name else styles["BodyText"]
-            prefix = "- " if "list" in style_name else ""
-            story.append(Paragraph(_pdf_escape(prefix + text_value).replace(chr(10), "<br/>"), style))
-        elif child.tag.endswith("}tbl"):
-            table = DocxTable(child, document)
-            rows = [[Paragraph(_pdf_escape(cell.text), styles["BodyText"]) for cell in row.cells] for row in table.rows]
-            if rows:
-                rendered = Table(rows, repeatRows=1, hAlign="LEFT")
-                rendered.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), .35, colors.HexColor("#94a3b8")), ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e2e8f0")), ("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 6), ("RIGHTPADDING", (0, 0), (-1, -1), 6), ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5)]))
-                story.extend([rendered, Spacer(1, 9)])
-    seen_images = set()
-    for relationship in document.part.rels.values():
-        if "image" not in relationship.reltype:
-            continue
-        blob = relationship.target_part.blob
-        digest = hashlib.sha256(blob).hexdigest()
-        if digest in seen_images: continue
-        seen_images.add(digest)
-        try:
-            picture = PILImage.open(io.BytesIO(blob)); width, height = picture.size
-            scale = min(450 / max(width, 1), 600 / max(height, 1), 1)
-            story.extend([RLImage(io.BytesIO(blob), width=width * scale, height=height * scale), Spacer(1, 8)])
-        except Exception:
-            continue
-    if not story:
-        raise HTTPException(status_code=400, detail="The Word document does not contain readable content")
-    output = io.BytesIO()
-    SimpleDocTemplate(output, pagesize=page_size, rightMargin=54, leftMargin=54, topMargin=54, bottomMargin=54).build(story)
-    return output.getvalue()
+    from lxml import etree
+    namespaces = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
+                  "v": "urn:schemas-microsoft-com:vml",
+                  "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
+                  "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships"}
+    word = Document(io.BytesIO(data))
+    result = pymupdf.open()
+    try:
+        for paragraph in word.paragraphs:
+            element = etree.fromstring(etree.tostring(paragraph._p))
+            pictures = element.xpath('.//a:blip', namespaces=namespaces)
+            if not pictures:
+                continue
+            page_index = len(result)
+            section = word.sections[min(page_index, len(word.sections) - 1)]
+            page = result.new_page(width=section.page_width.pt, height=section.page_height.pt)
+            relation = pictures[0].get(f'{{{namespaces["r"]}}}embed')
+            page.insert_image(page.rect, stream=word.part.related_parts[relation].blob)
+            for shape in element.xpath('.//v:shape', namespaces=namespaces):
+                style = dict(part.split(':', 1) for part in shape.get('style', '').split(';') if ':' in part)
+                def points(key):
+                    return float(style.get(key, '0pt').removesuffix('pt'))
+                text_value = ' '.join(shape.xpath('.//w:t/text()', namespaces=namespaces))
+                if not text_value:
+                    continue
+                sizes = shape.xpath('.//w:sz/@w:val', namespaces=namespaces)
+                size = float(sizes[0]) / 2 if sizes else 10
+                x, y = points('margin-left'), points('margin-top')
+                # Baseline placement preserves the line's original position.
+                page.insert_text((x, y + min(points('height'), size)), text_value,
+                                 fontsize=size, fontname='hebo' if shape.xpath('.//w:b', namespaces=namespaces) else 'helv')
+        if not len(result):
+            raise HTTPException(status_code=400, detail="The OCR Word document contains no page artwork")
+        return result.tobytes()
+    finally:
+        result.close()
 
 
-def _powerpoint_to_pdf_with_office_suite(data: bytes) -> Optional[bytes]:
-    """Use a real presentation renderer when available for maximum fidelity."""
+def _office_to_pdf_bytes(data: bytes, extension: str) -> Optional[bytes]:
+    """Render Office files in an isolated profile, including concurrent requests."""
     configured = os.getenv("LIBREOFFICE_PATH", "").strip()
     executable = configured or shutil.which("soffice") or shutil.which("libreoffice")
     if not executable:
         return None
     try:
         with tempfile.TemporaryDirectory(prefix="nucleocampus-slides-") as directory:
-            source = os.path.join(directory, "presentation.pptx")
-            output = os.path.join(directory, "presentation.pdf")
+            source = os.path.join(directory, f"document.{extension}")
+            output = os.path.join(directory, "document.pdf")
             with open(source, "wb") as presentation_file:
                 presentation_file.write(data)
             subprocess.run(
-                [executable, "--headless", "--convert-to", "pdf", "--outdir", directory, source],
+                [executable, f"-env:UserInstallation={Path(directory, 'profile').as_uri()}", "--headless", "--convert-to", "pdf", "--outdir", directory, source],
                 check=True,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
@@ -5833,6 +5843,10 @@ def _powerpoint_to_pdf_with_office_suite(data: bytes) -> Optional[bytes]:
             return pdf_data if pdf_data.startswith(b"%PDF") else None
     except (OSError, subprocess.SubprocessError):
         return None
+
+
+def _powerpoint_to_pdf_with_office_suite(data: bytes) -> Optional[bytes]:
+    return _office_to_pdf_bytes(data, "pptx")
 
 
 def _powerpoint_to_pdf_bytes(data: bytes) -> bytes:
@@ -5897,10 +5911,12 @@ async def merge_pdf_files(files: List[UploadFile] = File(...), _user: str = Depe
             data = await _document_bytes(upload)
             if not data.startswith(b"%PDF"):
                 raise HTTPException(status_code=400, detail=f"{upload.filename or 'A selected file'} is not a PDF")
-            reader = PdfReader(io.BytesIO(data))
+            reader = _validated_pdf_reader(data, max_pages=200)
             if reader.is_encrypted:
                 raise HTTPException(status_code=400, detail=f"{upload.filename or 'A PDF'} is password protected")
             for page in reader.pages:
+                if len(writer.pages) >= 200:
+                    raise HTTPException(status_code=400, detail="Keep at most 200 pages in the output")
                 writer.add_page(page)
         output = io.BytesIO(); writer.write(output)
         return _download(output.getvalue(), "application/pdf", "merged-document.pdf")
@@ -5917,7 +5933,7 @@ async def organize_pdf_pages(files: List[UploadFile] = File(...), page_order: st
     readers = []
     for upload in files:
         data = await _document_bytes(upload)
-        readers.append(_validated_pdf_reader(data, upload.filename or "A selected file"))
+        readers.append(_validated_pdf_reader(data, upload.filename or "A selected file", max_pages=200))
     try:
         order = json.loads(page_order)
     except json.JSONDecodeError as exc:
@@ -5926,19 +5942,33 @@ async def organize_pdf_pages(files: List[UploadFile] = File(...), page_order: st
         raise HTTPException(status_code=400, detail="Keep between 1 and 200 pages in the output")
     writer = PdfWriter()
     for item in order:
-        if not isinstance(item, list) or len(item) != 2 or not all(isinstance(value, int) for value in item):
+        if not isinstance(item, list) or len(item) not in (2, 3) or not all(type(value) is int for value in item):
             raise HTTPException(status_code=400, detail="The page order is invalid")
-        file_index, page_index = item
+        file_index, page_index = item[:2]
+        rotation = item[2] if len(item) == 3 else 0
+        if rotation not in (0, 90, 180, 270):
+            raise HTTPException(status_code=400, detail="Page rotation must be 0, 90, 180 or 270 degrees")
         if file_index < 0 or file_index >= len(readers) or page_index < 0 or page_index >= len(readers[file_index].pages):
             raise HTTPException(status_code=400, detail="A selected page no longer exists")
-        writer.add_page(readers[file_index].pages[page_index])
+        output_page = writer.add_page(readers[file_index].pages[page_index])
+        if rotation:
+            output_page.rotate(rotation)
     output = io.BytesIO(); writer.write(output)
     return _download(output.getvalue(), "application/pdf", "organised-document.pdf")
 
 
 def _split_page_groups(specification: str, page_count: int) -> List[List[int]]:
+    if len(specification) > 10000 or specification.count(';') >= 100:
+        raise HTTPException(status_code=400, detail="Use at most 100 page groups and 10,000 characters")
     if not specification.strip():
         return [[index] for index in range(page_count)]
+    def page_number(value: str) -> int:
+        if len(value) > 6 or not value.isascii() or not value.isdigit():
+            raise HTTPException(status_code=400, detail=f"Choose page numbers between 1 and {page_count}")
+        number = int(value)
+        if number < 1 or number > page_count:
+            raise HTTPException(status_code=400, detail=f"Choose page numbers between 1 and {page_count}")
+        return number
     groups = []
     for raw_group in specification.split(";"):
         pages = []
@@ -5949,11 +5979,11 @@ def _split_page_groups(specification: str, page_count: int) -> List[List[int]]:
                 start_text, end_text = token.split("-", 1)
                 if not start_text.isdigit() or not end_text.isdigit():
                     raise HTTPException(status_code=400, detail="Use ranges such as 1-3; 4-6; 7,9")
-                start, end = int(start_text), int(end_text)
+                start, end = page_number(start_text), page_number(end_text)
                 if start > end: start, end = end, start
                 pages.extend(range(start - 1, end))
             elif token.isdigit():
-                pages.append(int(token) - 1)
+                pages.append(page_number(token) - 1)
             else:
                 raise HTTPException(status_code=400, detail="Use ranges such as 1-3; 4-6; 7,9")
         unique = list(dict.fromkeys(pages))
@@ -6027,7 +6057,7 @@ async def convert_document(file: UploadFile = File(...), target: str = Form(...)
     if target == "word-to-pdf":
         _validate_office_archive(data, "word/document.xml", "Word DOCX")
         try:
-            return _download(_word_to_pdf_bytes(data), "application/pdf", "word-document.pdf")
+            return _download(await asyncio.to_thread(_word_to_pdf_bytes, data), "application/pdf", "word-document.pdf")
         except HTTPException:
             raise
         except Exception as exc:
@@ -6035,12 +6065,28 @@ async def convert_document(file: UploadFile = File(...), target: str = Form(...)
     if target == "powerpoint-to-pdf":
         _validate_office_archive(data, "ppt/presentation.xml", "PowerPoint PPTX")
         try:
-            return _download(_powerpoint_to_pdf_bytes(data), "application/pdf", "powerpoint-presentation.pdf")
+            return _download(await asyncio.to_thread(_powerpoint_to_pdf_bytes, data), "application/pdf", "powerpoint-presentation.pdf")
         except HTTPException:
             raise
         except Exception as exc:
             raise HTTPException(status_code=400, detail="The PowerPoint is damaged or contains unsupported content") from exc
     raise HTTPException(status_code=400, detail="Choose a supported conversion")
+
+
+@app.post("/document-tools/preview-office")
+async def preview_office_document(file: UploadFile = File(...), _user: str = Depends(require_document_tool_user)):
+    """Return a PDF preview without sending documents to an external viewer."""
+    data = await _document_bytes(file)
+    extension = os.path.splitext(file.filename or "")[1].lower()
+    if extension == ".docx":
+        _validate_office_archive(data, "word/document.xml", "Word DOCX")
+        output = await asyncio.to_thread(_word_to_pdf_bytes, data)
+    elif extension == ".pptx":
+        _validate_office_archive(data, "ppt/presentation.xml", "PowerPoint PPTX")
+        output = await asyncio.to_thread(_powerpoint_to_pdf_bytes, data)
+    else:
+        raise HTTPException(status_code=400, detail="Choose a Word DOCX or PowerPoint PPTX document")
+    return _download(output, "application/pdf", "document-preview.pdf")
 
 
 def _cleanup_ocr_jobs() -> None:
