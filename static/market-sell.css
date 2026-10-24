@@ -1,0 +1,37 @@
+.campus-home .sell-link,.campus-home .campus-cta button,.campus-home .market-empty button{border:0;border-radius:10px;background:#087f70;color:#fff;padding:13px 20px;font-weight:700;cursor:pointer}
+.campus-home .sell-link{font-size:14px}
+.campus-home .campus-cta button{white-space:nowrap}
+#sellDialog{width:min(650px,calc(100% - 24px));max-height:min(90vh,900px);padding:28px;border:1px solid #bfd5ca;border-radius:20px;background:#fff;color:#19312e;box-shadow:0 25px 80px #142d2840;overflow:auto}
+#sellDialog::backdrop{background:#091915aa}
+.sell-dialog-head{display:flex;justify-content:space-between;gap:16px;align-items:start}
+.sell-dialog-head h2{margin:8px 0;font-size:clamp(26px,4vw,36px)}
+.sell-dialog-head p{margin:0 0 20px;color:#526b65}
+#closeSell{background:transparent;border:0;font-size:32px;line-height:1;color:#395a52;padding:0 4px}
+.sell-tabs,.sell-choice,.sell-account-actions{display:flex;gap:10px;flex-wrap:wrap}
+.sell-tabs{margin-bottom:18px}
+.sell-tabs button,.sell-account-actions button,.sell-back,.sell-manage button{border:1px solid #85bca9;border-radius:10px;background:#eef7f2;color:#087f70;padding:11px 15px;font-weight:700}
+.sell-tabs button[aria-pressed=true]{background:#087f70;color:#fff}
+.sell-form{display:grid;gap:15px}
+.sell-form label{display:grid;gap:7px;font-weight:700;color:#395a52}
+.sell-form label span{font-weight:400;color:#526b65}
+.sell-form input,.sell-form select,.sell-form textarea{width:100%;min-height:46px;padding:11px 13px;border:1px solid #bfd5ca;border-radius:9px;background:#fff;color:#19312e;font:inherit}
+.sell-form textarea{min-height:110px;resize:vertical}
+.sell-form button[type=submit]{min-height:48px;border:0;border-radius:10px;background:#087f70;color:#fff;font-weight:700}
+.sell-choice{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));margin:6px 0 22px}
+.sell-choice button{min-height:125px;border:1px solid #85bca9;border-radius:13px;background:#f4faf7;color:#19312e;text-align:left;padding:18px}
+.sell-choice strong,.sell-choice span{display:block}
+.sell-choice strong{font-size:17px;margin-bottom:9px}
+.sell-choice span{color:#526b65;line-height:1.4}
+.sell-back{margin-bottom:18px}
+.sell-manage{display:grid;gap:10px}
+.sell-manage article{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;border:1px solid #d5e3dd;border-radius:10px;padding:13px}
+.sell-manage article span{color:#526b65}
+.sell-inbox{display:grid;gap:16px}.sell-inbox section{border:1px solid #d5e3dd;border-radius:12px;padding:15px}.sell-inbox h3{margin:0 0 12px}.sell-thread{max-height:230px;overflow:auto;background:#f4faf7;padding:10px;border-radius:8px}.sell-thread p{margin:6px 0;line-height:1.4}.sell-inbox form{display:grid;gap:9px;margin-top:12px}.sell-inbox textarea{min-height:76px;width:100%;padding:10px;border:1px solid #bfd5ca;border-radius:8px}.sell-inbox button[type=submit]{justify-self:start;border:0;border-radius:8px;padding:10px 16px;background:#087f70;color:white;font-weight:700}
+#sellMessage{min-height:20px;color:#087f70;font-weight:700}
+#sellMessage.error{color:#a93232}
+#offerDetails [data-contact-provider]{border:0;border-radius:8px;background:#087f70;color:white;padding:11px 16px;font-weight:700}
+#contactDialog{width:min(520px,calc(100% - 24px));border:1px solid #bfd5ca;border-radius:16px;padding:24px;background:#fff;color:#19312e}
+#contactDialog::backdrop{background:#091915aa}
+#closeContact{float:right;border:0;background:transparent;color:#395a52;font-size:28px}
+#contactForm{display:grid;gap:12px}#contactForm textarea{min-height:125px;border:1px solid #bfd5ca;border-radius:8px;padding:12px;font:inherit}#contactForm button{justify-self:start;border:0;border-radius:8px;background:#087f70;color:white;padding:11px 16px;font-weight:700}
+@media(max-width:600px){#sellDialog{padding:20px}.sell-choice{grid-template-columns:1fr}.sell-choice button{min-height:90px}}

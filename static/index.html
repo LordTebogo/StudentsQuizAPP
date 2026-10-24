@@ -11,9 +11,12 @@
 <link rel="stylesheet" href="/static/style.css">
 <link rel="stylesheet" href="/static/campus-home.css">
 <link rel="stylesheet" href="/static/light.css?v=3">
-<script>if (new URLSearchParams(location.search).has('role') || new URLSearchParams(location.search).has('mode') || location.hash === '#register') location.replace('/static/academics.html' + location.search + location.hash);</script>
+<link rel="stylesheet" href="/static/market-sell.css?v=1">
+<script>{const p=new URLSearchParams(location.search);if((p.has('role')&&p.get('role')!=='advertiser')||(p.has('mode')&&!p.has('sell')&&!p.has('create')&&p.get('role')!=='advertiser')||location.hash==='#register')location.replace('/static/academics.html'+location.search+location.hash)}</script>
 <script src="/static/media-url.js?v=1" defer></script>
 <script src="/static/campus-home.js" defer></script>
+<script src="/static/market-sell.js?v=1" defer></script>
+<script src="/static/market-contact.js?v=1" defer></script>
 <script src="/static/video-access.js?v=4" defer></script>
 <script src="/static/market-metrics.js?v=1" defer></script>
 <script src="/static/pwa.js?v=16" defer></script>
@@ -23,7 +26,7 @@
 <div class="campus-shell">
 <header class="campus-header">
 <a class="campus-brand" href="/" aria-label="Arounus home"><img src="/branding/logo" alt="" onerror="this.hidden=true"><span>Aroun<strong>us</strong><small>Around us · campus life</small></span></a>
-<nav aria-label="Main navigation"><a class="academic-link" href="/static/academics.html">Learning <span>↗</span></a><a class="sell-link" href="/static/marketing.html?create=1">Sell or list</a></nav>
+<nav aria-label="Main navigation"><a class="academic-link" href="/static/academics.html">Learning <span>↗</span></a><button class="sell-link" type="button" data-open-sell>Sell or list</button></nav>
 </header>
 <main id="market">
 <section class="campus-intro"><span class="eyebrow">YOUR CAMPUS. YOUR COMMUNITY.</span><h1>Campus life,<br><em>all in one place.</em></h1><p>Find a room, catch a ride, or shop what students are selling around your university or college.</p></section>
@@ -35,10 +38,12 @@
 <p id="marketStatus" role="status" aria-live="polite">Loading campus listings…</p><button id="retryListings" type="button" hidden>Retry loading listings</button>
 <div id="campusListings" class="campus-listings" aria-busy="true"></div>
 </section>
-<section class="campus-cta"><div><span class="eyebrow">MAKE CAMPUS CONNECTIONS</span><h2>Have something to offer?</h2><p>List a room, promote your transport service, or sell to your campus community.</p></div><a href="/static/marketing.html?create=1">Sell or list →</a></section>
+<section class="campus-cta"><div><span class="eyebrow">MAKE CAMPUS CONNECTIONS</span><h2>Have something to offer?</h2><p>List a room, promote your transport service, or sell to your campus community.</p></div><button type="button" data-open-sell>Sell or list →</button></section>
 </main>
 <footer class="campus-footer"><span>Arounus · Bioscientist</span><nav aria-label="Footer"><a href="/static/academics.html">Learning</a><a href="/static/trust.html#support">Support</a><a href="/static/trust.html#privacy">Privacy</a><button id="installAppBtn" type="button">Install app</button></nav></footer>
 </div>
 <dialog id="offerDialog" aria-labelledby="offerTitle"><button id="closeOffer" type="button" aria-label="Close listing">×</button><div id="offerDetails"></div></dialog>
+<dialog id="sellDialog" aria-labelledby="sellTitle"><div class="sell-dialog-head"><div><span class="eyebrow">CAMPUS MARKET</span><h2 id="sellTitle">Sell or list</h2><p id="sellIntro">One advertiser account for rooms, rides, items, and services.</p></div><button type="button" id="closeSell" aria-label="Close sell or list">×</button></div><div id="sellContent"></div><p id="sellMessage" role="status" aria-live="polite"></p></dialog>
+<dialog id="contactDialog" aria-labelledby="contactTitle"><button type="button" id="closeContact" aria-label="Close message">×</button><h2 id="contactTitle">Message provider</h2><div id="contactContent"></div><p id="contactStatus" role="status" aria-live="polite"></p></dialog>
 </body>
 </html>

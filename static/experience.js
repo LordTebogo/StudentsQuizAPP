@@ -69,16 +69,16 @@
     ['/static/fun.html', 'Community'],
   ] : [
     ['/static/index.html', 'Home'], ['/static/academics.html', 'Learning'],
-    ['/static/marketing.html', 'Market'],
+    ['/market', 'Market'],
   ];
   const moreLinks = activeRole === 'admin' ? [
     ['/static/admin.html#liveMonitorCard','Live sessions'], ['/static/admin.html#adminScripts','Submissions'],
     ['/static/admin.html#adminModeration','Moderation'], ['/static/trust.html#support','Support'],
   ] : activeRole === 'lecturer' ? [
     ['/static/tutor_guide.html', 'Tutor guide'], ['/static/pdf_tools.html', 'PDF tools'], ['/static/fun.html', 'Community'],
-    ['/static/marketing.html', 'Market'],
+    ['/market', 'Market'],
   ] : activeRole === 'student' ? [
-    ['/static/marketing.html', 'Market'], ['/static/pdf_tools.html', 'PDF tools'],
+    ['/market', 'Market'], ['/static/pdf_tools.html', 'PDF tools'],
   ] : [['/static/fun.html', 'Community']];
   function toggleMobileMenu(open) {
     let sheet=document.querySelector('.mobile-more-sheet'),scrim=document.querySelector('.mobile-more-scrim');
@@ -94,7 +94,7 @@
       if(!primary){primary=document.createElement('div');primary.className='primary-nav-links';nav.appendChild(primary)}
       primary.replaceChildren();
       roleLinks.forEach(([href,label])=>{const link=document.createElement('a');link.href=href;link.textContent=label;if(cleanPath(new URL(link.href,location.href).pathname)===cleanPath(location.pathname))link.setAttribute('aria-current','page');primary.appendChild(link)});
-      const more=document.createElement('a');more.href=activeRole==='lecturer'?'/static/lecturer.html#lecturerMessagesCard':'/static/marketing.html';more.textContent=activeRole==='lecturer'?'Messages':'More';primary.appendChild(more);
+      const more=document.createElement('a');more.href=activeRole==='lecturer'?'/static/lecturer.html#lecturerMessagesCard':'/market';more.textContent=activeRole==='lecturer'?'Messages':'More';primary.appendChild(more);
       return;
     }
     nav.replaceChildren();

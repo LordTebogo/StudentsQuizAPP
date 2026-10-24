@@ -4219,7 +4219,7 @@ def provider_broadcast_message(payload: ProviderBroadcastMessage, landlord: Land
             if message.sender_id in student_ids and message.read_at is None:
                 message.read_at = now
     db.commit()
-    _notify_students_by_push(db, [student.id for student in students], "Marketplace provider update", "A provider you contacted sent an update.", "/static/marketing.html", f"provider-broadcast-{landlord.id}-{now}")
+    _notify_students_by_push(db, [student.id for student in students], "Marketplace provider update", "A provider you contacted sent an update.", "/market", f"provider-broadcast-{landlord.id}-{now}")
     return {"ok": True, "recipient_count": len(students)}
 
 
@@ -4547,7 +4547,7 @@ def _accommodation_coordinates(latitude: str, longitude: str) -> tuple[Optional[
 
 
 @app.post("/marketing/landlords/register")
-async def register_landlord(full_name: str = Form(...), business_name: str = Form(""), provider_type: str = Form("residence"), email: str = Form(...), phone: str = Form(...), password: str = Form(...), confirm_password: str = Form(...), profile_image: Optional[UploadFile] = File(None), db: Session = Depends(get_db)):
+async def register_landlord(full_name: str = Form(...), business_name: str = Form(""), provider_type: str = Form("other"), email: str = Form(...), phone: str = Form(...), password: str = Form(...), confirm_password: str = Form(...), profile_image: Optional[UploadFile] = File(None), db: Session = Depends(get_db)):
     email = email.strip().lower()
     if not full_name.strip() or not phone.strip() or "@" not in email or len(password) < 8:
         raise HTTPException(status_code=400, detail="Provide your name, contact number, valid email, and a password of at least 8 characters")
@@ -6787,7 +6787,7 @@ FRONTEND_PAGES = {
     "/live": "live_lesson.html",
     "/community": "fun.html",
     "/src": "index.html",
-    "/market": "marketing.html",
+    "/market": "index.html",
     "/admin": "admin.html",
     "/tools/pdf": "pdf_tools.html",
     "/trust": "trust.html",
@@ -6837,6 +6837,11 @@ for friendly_path, filename in FRONTEND_PAGES.items():
         name=f"legacy_frontend_{route_name}",
         include_in_schema=False,
     )
+
+app.add_api_route(
+    "/static/marketing.html", _legacy_frontend_redirect("/market"),
+    methods=["GET"], name="legacy_market_page", include_in_schema=False,
+)
 
 
 # ---------------------------------------------------------------------------

@@ -459,6 +459,6 @@ below) need an `X-Lecturer-Pin: 90435` header.
 
 ## Campus marketplace home
 
-The root page and installed app now open the public campus market. Visitors can filter available rooms and approved adverts by university/college, category and search text. The chosen campus is remembered on the device. Transport and items use the existing reviewed advert categories; posting continues through the existing market workspace. The Academics button opens `static/academics.html`, preserving learner/tutor sign-in and learning tools. Legacy home links with account role or registration parameters continue to open account entry.
+The root page, `/market`, and installed app open one public campus market. Visitors can filter available rooms and approved offers by university/college, category, search text, and price. The chosen campus is remembered on the device. "Sell or list" opens advertiser registration or sign in on this page; one provider account can publish accommodation and submit transport, item, or service offers for review. Providers can manage listings and reply to customer messages there. The Academics button opens `static/academics.html` for learner and tutor tools. The retired `/static/marketing.html` URL redirects to `/market` so old links still work.
 
 Run frontend regression checks with `npm ci --prefix tests` then `npm test --prefix tests`.
