@@ -248,6 +248,7 @@ body.campus-home { color: var(--text); background: #f5f8f6 !important; }
 .campus-search label { color: #395a52; }
 .campus-home input { color: var(--text) !important; border-color: #bfd5ca !important; background: #ffffff !important; }
 .campus-card-media { color: var(--cyan); background: #e4f2e9; }
+.campus-home .campus-card p.card-price { color: #19312e !important; }
 .market-categories button,
 #clearFilters,
 #retryListings { color: var(--text); border-color: var(--line); background: #ffffff; }
