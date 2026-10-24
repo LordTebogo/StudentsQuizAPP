@@ -20,7 +20,8 @@
   body.market-create-mode .market-grid { display:block !important; }
   body.market-create-mode .market-grid > main { display:none; }
   body.market-create-mode .market-side { display:block; width:min(100%,760px); margin:0 auto; }
-  body.market-create-mode .market-side > :not(:first-child) { display:none; }
+  body.market-create-mode .market-side > :not(.market-create-chooser):not(.landlord-desk),
+  body.market-create-mode .market-side > .advert-desk { display:none; }
   body.market-create-mode .landlord-desk { grid-column:auto; }
   body.market-create-mode .landlord-desk { scroll-margin-top:90px; }
   body.market-create-mode #listingForm > :is(input, textarea, select, label) { display:block; width:100%; margin:10px 0; }
