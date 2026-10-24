@@ -76,7 +76,8 @@
     return `<article class="market-advert ${compact ? 'compact' : ''}" data-market-ad="${ad.id}" data-market-kind="adverts" data-market-id="${ad.id}" data-market-views="${ad.views||0}" data-market-rating="${ad.rating||''}" data-market-rating-count="${ad.rating_count||0}">
       ${galleryMarkup(ad.image_urls?.length ? ad.image_urls : (ad.image_url ? [ad.image_url] : []), ad.business_name)}
       ${ad.video_url ? `<video controls playsinline preload="none" data-free-video="${esc(ad.video_url)}" data-video-kind="advert" data-video-id="${ad.id}" data-premium-available="${Boolean(ad.premium_available)}" style="width:100%;max-height:260px"></video>` : ''}
-      <div class="advert-copy"><div class="advert-label">${ad.is_featured ? 'Featured · ' : ''}Sponsored · ${esc(ad.category)}</div><h3>${esc(ad.headline)}</h3>
+      <div class="advert-copy"><div class="advert-label">${ad.is_featured ? 'Featured · ' : ''}${esc(ad.category)}</div><h3>${esc(ad.headline)}</h3>
+      <p class="advert-price">${ad.price !== null && ad.price !== undefined ? `R${Number(ad.price).toLocaleString('en-ZA')}` : 'Ask for price'}</p>
       <p>${esc(ad.description)}</p><div class="advert-meta">${esc(ad.business_name)}${ad.campus ? ` · ${esc(ad.campus)}` : ''}</div>
       <div class="advert-actions">${ad.provider_id ? `<button class="btn secondary provider-message-trigger" type="button" data-provider-message="${ad.provider_id}" data-provider-name="${esc(ad.business_name)}">Private message</button>` : ''}${link ? `<a class="btn secondary advert-cta" href="${esc(link)}" target="_blank" rel="noopener" data-ad-click="${ad.id}">${ad.website_url ? 'Visit business' : 'Contact advertiser'}</a>` : ''}</div></div></article>`;
   };
@@ -166,6 +167,7 @@
         <input name="business_name" placeholder="Business or event name" maxlength="160" required>
         <input name="headline" placeholder="Short, catchy headline" maxlength="180" required>
         <textarea name="description" placeholder="What are you offering?" maxlength="1200" required></textarea>
+        <label class="notice">Price in rand (optional for services)<input name="price" type="number" min="0" max="100000000" inputmode="numeric" placeholder="For example, 250"></label>
         <select name="category" required><option value="">Choose category</option><option>Ride & transport</option><option>Delivery & courier</option><option>Campus shuttle</option><option>Sales & retail</option><option>Student service</option><option>Food & delivery</option><option>Tutoring</option><option>Event</option><option>Technology</option><option>Beauty & lifestyle</option><option>Other</option></select>
         <input name="campus" placeholder="Campus or area">
         <input name="contact" placeholder="WhatsApp number (required if there is no website)">
@@ -233,8 +235,27 @@
     if (new URLSearchParams(location.search).has('create')) {
       document.body.classList.add('market-create-mode');
       document.querySelector('.market-hero h1').textContent = 'Create your listing.';
-      document.querySelector('.market-hero p').textContent = 'Add accommodation, products, transport, or services for your campus.';
+      document.querySelector('.market-hero p').textContent = 'Choose what you offer, add the details, then publish or submit for review.';
       document.querySelector('.market-side > .landlord-desk h2').textContent = 'Sell or list on campus';
+      const desk = document.querySelector('.market-side > .landlord-desk');
+      const chooser = document.createElement('section');
+      chooser.className = 'market-create-chooser';
+      chooser.innerHTML = '<h2>What would you like to list?</h2><p>Choose one to see the right details.</p><div><button class="btn secondary" type="button" data-create-kind="room">A room or accommodation</button><button class="btn secondary" type="button" data-create-kind="advert">An item, ride, or service</button></div>';
+      desk.parentElement.insertBefore(chooser, desk);
+      desk.classList.add('hidden');
+      chooser.addEventListener('click', event => {
+        const choice = event.target.closest('[data-create-kind]')?.dataset.createKind;
+        if (!choice) return;
+        chooser.querySelectorAll('[data-create-kind]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.createKind === choice)));
+        if (choice === 'room') {
+          desk.classList.remove('hidden');
+          if (!landlordToken()) window.showGuestListingForm?.();
+          else document.querySelector('#listingForm input[name="title"]')?.focus();
+        } else {
+          desk.classList.add('hidden');
+          document.getElementById('openAdvertForm')?.click();
+        }
+      });
       const openCreateForm = providerType => {
         if (landlordToken()) {
           if (!providerType) return;
@@ -252,7 +273,6 @@
       };
       document.addEventListener('market-provider-panel-ready', event => openCreateForm(event.detail?.providerType));
       document.addEventListener('market-provider-session-expired', () => openCreateForm());
-      openCreateForm(document.getElementById('landlordPanel')?.dataset.providerType);
     }
     ensureTransportSection();
     document.querySelectorAll('.market-side .ad-card').forEach(card => card.remove());

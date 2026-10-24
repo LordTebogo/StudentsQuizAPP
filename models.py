@@ -221,6 +221,7 @@ class MarketAdvert(Base):
     headline = Column(String, nullable=False)
     description = Column(Text, nullable=False)
     category = Column(String, nullable=False)
+    price = Column(Integer)
     campus = Column(String)
     contact = Column(String)
     website_url = Column(Text)

@@ -342,6 +342,17 @@ def ensure_market_advert_video_schema():
 ensure_market_advert_video_schema()
 
 
+def ensure_market_advert_price_schema():
+    if "market_adverts" not in inspect(engine).get_table_names():
+        return
+    if "price" not in {column["name"] for column in inspect(engine).get_columns("market_adverts")}:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE market_adverts ADD COLUMN price INTEGER"))
+
+
+ensure_market_advert_price_schema()
+
+
 def ensure_market_metrics_schema():
     """Keep older installations compatible with listing analytics and ratings."""
     for table in ("accommodations", "market_adverts"):
@@ -4765,7 +4776,7 @@ def _advert_payload(item: MarketAdvert, owner_name: str = "") -> dict:
     image_urls = _market_image_urls(item)
     return {
         "id": item.id, "business_name": item.business_name, "headline": item.headline,
-        "description": item.description, "category": item.category, "campus": item.campus or "",
+        "description": item.description, "category": item.category, "price": item.price, "campus": item.campus or "",
         "contact": item.contact or "", "website_url": item.website_url or "",
         "placement": item.placement, "image_url": image_urls[0] if image_urls else None, "image_urls": image_urls,
         "video_url": _free_video_url(item.video_url), "premium_available": bool(item.premium_video_asset), "starts_at": item.starts_at,
@@ -4824,7 +4835,7 @@ def list_market_adverts(placement: str = "", db: Session = Depends(get_db)):
 @app.post("/marketing/adverts")
 async def create_market_advert(
     business_name: str = Form(...), headline: str = Form(...), description: str = Form(...),
-    category: str = Form(...), campus: str = Form(""), contact: str = Form(""), website_url: str = Form(""),
+    category: str = Form(...), price: Optional[int] = Form(None), campus: str = Form(""), contact: str = Form(""), website_url: str = Form(""),
     placement: str = Form("spotlight"), starts_at: str = Form(""), expires_at: str = Form(""),
     images: Optional[List[UploadFile]] = File(None), image: Optional[UploadFile] = File(None),
     video: Optional[UploadFile] = File(None), x_student_token: Optional[str] = Header(None, alias="X-Student-Token"),
@@ -4835,6 +4846,8 @@ async def create_market_advert(
         raise HTTPException(status_code=400, detail="Add a business name, headline, description and category")
     if len(description.strip()) > 1200:
         raise HTTPException(status_code=400, detail="Advert descriptions can be up to 1,200 characters")
+    if price is not None and (price < 0 or price > 100000000):
+        raise HTTPException(status_code=400, detail="Enter a price between R0 and R100,000,000")
     website = website_url.strip()
     contact_digits = re.sub(r"\D", "", contact)
     if not website and len(contact_digits) < 8:
@@ -4864,7 +4877,7 @@ async def create_market_advert(
     item = MarketAdvert(
         owner_student_id=student.id if student else None, owner_landlord_id=landlord.id if landlord else None,
         business_name=business_name.strip()[:160], headline=headline.strip()[:180], description=description.strip(),
-        category=category.strip()[:80], campus=campus.strip()[:120], contact=contact.strip()[:160],
+        category=category.strip()[:80], price=price, campus=campus.strip()[:120], contact=contact.strip()[:160],
         website_url=website[:500], placement=placement, image_url=image_urls[0] if image_urls else None,
         image_urls=json.dumps(image_urls), video_url=video_url, premium_video_asset=premium_asset,
         starts_at=start, expires_at=end, status="pending", is_featured=False, impressions=0, clicks=0,
