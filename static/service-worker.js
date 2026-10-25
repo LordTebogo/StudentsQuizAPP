@@ -1,4 +1,4 @@
-const OFFLINE_VERSION = "v38";
+const OFFLINE_VERSION = "v39";
 const SHELL_CACHE = `nucleocampus-shell-${OFFLINE_VERSION}`;
 const DATA_CACHE = `nucleocampus-data-${OFFLINE_VERSION}`;
 const EXTERNAL_CACHE = `nucleocampus-external-${OFFLINE_VERSION}`;
@@ -30,7 +30,7 @@ const APP_SHELL = [
   "/static/quiz-import-template.csv", "/static/standard-quiz-template.json",
   "/static/fun-quiz-template.json", "/static/fun-quiz-images-scenario-template.json",
   "/static/lesson.json", "/static/manifest.webmanifest",
-  "/favicon.ico", "/branding/logo", "/static/icons/favicon.ico",
+  "/favicon.ico", "/branding/logo", "/branding/logo?v=metallic-us", "/static/icons/favicon.ico",
   "/static/icons/favicon-96x96.png", "/static/icons/apple-touch-icon.png",
   "/static/icons/icon-192x192.png", "/static/icons/icon-512x512.png",
   "/static/icons/bioscientistapp-sticker.png"
