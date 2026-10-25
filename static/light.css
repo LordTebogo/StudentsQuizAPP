@@ -226,6 +226,7 @@ body.nucleocampus-ui .btn.secondary:hover { color: var(--cyan) !important; }
 
 /* The campus market home is a separate layout and does not load experience.js. */
 body.campus-home { color: var(--text); background: #f5f8f6 !important; }
+.nucleocampus-ui header.top .brand-logo { background: #f2efe3 !important; border-radius: 50% !important; }
 .campus-header,
 .campus-footer { border-color: var(--line); }
 .campus-brand { color: var(--text); }

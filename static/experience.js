@@ -31,7 +31,7 @@
   if (!document.querySelector('link[href^="/static/light.css"]')) {
     const lightStyles = document.createElement('link');
     lightStyles.rel = 'stylesheet';
-    lightStyles.href = '/static/light.css?v=2';
+    lightStyles.href = '/static/light.css?v=4';
     document.head.appendChild(lightStyles);
   }
   const body = document.body;

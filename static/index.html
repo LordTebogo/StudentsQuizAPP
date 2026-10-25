@@ -4,14 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#f5f8f6">
-<link rel="icon" type="image/png" href="/static/icons/favicon-96x96.png?v=3">
+<link rel="icon" type="image/png" href="/static/icons/favicon-96x96.png?v=4">
 <link rel="manifest" href="/static/manifest.webmanifest">
-<link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png?v=3">
+<link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png?v=4">
 <title>Campus Market — Arounus</title>
 <link rel="stylesheet" href="/static/style.css">
 <link rel="stylesheet" href="/static/campus-home.css">
-<link rel="stylesheet" href="/static/light.css?v=3">
+<link rel="stylesheet" href="/static/light.css?v=4">
 <link rel="stylesheet" href="/static/market-sell.css?v=1">
+<link rel="stylesheet" href="/static/brand-intro.css?v=1">
 <script>{const p=new URLSearchParams(location.search);if((p.has('role')&&p.get('role')!=='advertiser')||(p.has('mode')&&!p.has('sell')&&!p.has('create')&&p.get('role')!=='advertiser')||location.hash==='#register')location.replace('/static/academics.html'+location.search+location.hash)}</script>
 <script src="/static/media-url.js?v=1" defer></script>
 <script src="/static/campus-home.js" defer></script>
@@ -19,9 +20,10 @@
 <script src="/static/market-contact.js?v=1" defer></script>
 <script src="/static/video-access.js?v=4" defer></script>
 <script src="/static/market-metrics.js?v=1" defer></script>
-<script src="/static/pwa.js?v=16" defer></script>
+<script src="/static/pwa.js?v=17" defer></script>
 </head>
-<body class="campus-home">
+<body class="campus-home brand-intro-active">
+<div class="brand-intro" id="brandIntro" aria-hidden="true"><div class="brand-intro__mark"><img src="/branding/logo" alt=""><span class="brand-intro__light"></span><span class="brand-intro__glint"></span><span class="brand-intro__star">✦</span></div></div>
 <a class="market-skip" href="#market">Skip to listings</a>
 <div class="campus-shell">
 <header class="campus-header">
@@ -45,5 +47,6 @@
 <dialog id="offerDialog" aria-labelledby="offerTitle"><button id="closeOffer" type="button" aria-label="Close listing">×</button><div id="offerDetails"></div></dialog>
 <dialog id="sellDialog" aria-labelledby="sellTitle"><div class="sell-dialog-head"><div><span class="eyebrow">CAMPUS MARKET</span><h2 id="sellTitle">Sell or list</h2><p id="sellIntro">One advertiser account for rooms, rides, items, and services.</p></div><button type="button" id="closeSell" aria-label="Close sell or list">×</button></div><div id="sellContent"></div><p id="sellMessage" role="status" aria-live="polite"></p></dialog>
 <dialog id="contactDialog" aria-labelledby="contactTitle"><button type="button" id="closeContact" aria-label="Close message">×</button><h2 id="contactTitle">Message provider</h2><div id="contactContent"></div><p id="contactStatus" role="status" aria-live="polite"></p></dialog>
+<script src="/static/brand-intro.js?v=1"></script>
 </body>
 </html>
