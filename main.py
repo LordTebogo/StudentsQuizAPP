@@ -301,6 +301,27 @@ def ensure_accommodation_location_schema():
 ensure_accommodation_location_schema()
 
 
+def ensure_market_listing_fields_schema():
+    """Preserve existing public rooms and add the new advert location fields."""
+    tables = inspect(engine).get_table_names()
+    if "accommodations" in tables:
+        columns = {column["name"] for column in inspect(engine).get_columns("accommodations")}
+        if "is_approved" not in columns:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE accommodations ADD COLUMN is_approved BOOLEAN DEFAULT TRUE NOT NULL"))
+    if "market_adverts" in tables:
+        columns = {column["name"] for column in inspect(engine).get_columns("market_adverts")}
+        with engine.begin() as conn:
+            for name, definition in (("service_detail", "VARCHAR(160)"), ("area", "VARCHAR(160)"), ("latitude", "FLOAT"), ("longitude", "FLOAT")):
+                if name not in columns:
+                    conn.execute(text(f"ALTER TABLE market_adverts ADD COLUMN {name} {definition}"))
+            if "service_detail" not in columns:
+                conn.execute(text("UPDATE market_adverts SET status = 'approved' WHERE status = 'pending'"))
+
+
+ensure_market_listing_fields_schema()
+
+
 def ensure_market_provider_type_schema():
     """Allow the existing provider account to serve residences or transport."""
     if "landlords" not in inspect(engine).get_table_names():
@@ -4492,7 +4513,7 @@ def _accommodation_payload(item: Accommodation, landlord: Landlord) -> dict:
     if item.latitude is not None and item.longitude is not None:
         directions_url = f"https://www.google.com/maps/dir/?api=1&destination={item.latitude},{item.longitude}"
     image_urls = _market_image_urls(item)
-    return {"id": item.id, "title": item.title, "campus": item.campus, "area": item.area, "monthly_rent": item.monthly_rent, "bedrooms": item.bedrooms or "", "description": item.description, "contact": item.contact or landlord.phone, "image_url": image_urls[0] if image_urls else None, "image_urls": image_urls, "latitude": item.latitude, "longitude": item.longitude, "directions_url": directions_url, "is_available": item.is_available, "created_at": item.created_at, "views": item.view_count or 0, "rating": round((item.rating_total or 0) / item.rating_count, 1) if item.rating_count else None, "rating_count": item.rating_count or 0, "landlord": {"id": landlord.id, "name": landlord.full_name, "business_name": landlord.business_name or "", "profile_image_url": landlord.profile_image_url}}
+    return {"id": item.id, "title": item.title, "campus": item.campus, "area": item.area, "monthly_rent": item.monthly_rent, "bedrooms": item.bedrooms or "", "description": item.description, "contact": item.contact or "", "image_url": image_urls[0] if image_urls else None, "image_urls": image_urls, "latitude": item.latitude, "longitude": item.longitude, "directions_url": directions_url, "is_available": item.is_available, "is_approved": item.is_approved, "created_at": item.created_at, "views": item.view_count or 0, "rating": round((item.rating_total or 0) / item.rating_count, 1) if item.rating_count else None, "rating_count": item.rating_count or 0, "landlord": {"id": landlord.id, "name": landlord.full_name, "business_name": landlord.business_name or "", "profile_image_url": landlord.profile_image_url}}
 
 
 def _market_image_urls(item) -> List[str]:
@@ -4584,7 +4605,7 @@ def landlord_me(landlord: Landlord = Depends(require_landlord_account)):
 
 def _market_item(kind: str, listing_id: int, db: Session):
     if kind == "rooms":
-        item = db.query(Accommodation).filter(Accommodation.id == listing_id).first()
+        item = db.query(Accommodation).filter(Accommodation.id == listing_id, Accommodation.is_approved == True, Accommodation.is_available == True).first()  # noqa: E712
     elif kind == "adverts":
         item = db.query(MarketAdvert).filter(MarketAdvert.id == listing_id, MarketAdvert.status == "approved").first()
     else:
@@ -4641,7 +4662,7 @@ def rate_market_listing(kind: str, listing_id: int, payload: MarketRatingInput, 
 
 @app.get("/marketing/listings")
 def list_accommodations(search: str = "", campus: str = "", db: Session = Depends(get_db)):
-    query = db.query(Accommodation, Landlord).join(Landlord, Landlord.id == Accommodation.landlord_id).filter(Landlord.active == True)  # noqa: E712
+    query = db.query(Accommodation, Landlord).join(Landlord, Landlord.id == Accommodation.landlord_id).filter(Landlord.active == True, Accommodation.is_approved == True)  # noqa: E712
     # Keep the former campus parameter as a compatible alias while making the
     # market search useful for listing/accommodation names as well.
     term = (search or campus).strip().lower()
@@ -4669,10 +4690,28 @@ def landlord_listings(landlord: Landlord = Depends(require_landlord_account), db
     return [_accommodation_payload(item, landlord) for item in rows]
 
 
+@app.get("/admin/market-rooms")
+def admin_market_rooms(_pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    rows = db.query(Accommodation, Landlord).join(Landlord, Landlord.id == Accommodation.landlord_id).order_by(Accommodation.created_at.desc()).all()
+    return [{**_accommodation_payload(item, landlord), "registration_contact": landlord.phone, "owner_name": landlord.full_name} for item, landlord in rows]
+
+
+@app.put("/admin/market-rooms/{listing_id}/approval")
+def admin_approve_market_room(listing_id: int, approved: bool, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    item = db.query(Accommodation).filter(Accommodation.id == listing_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Room listing not found")
+    item.is_approved = approved
+    db.commit()
+    return {"ok": True, "is_approved": item.is_approved}
+
+
 @app.post("/marketing/listings")
-async def create_accommodation(title: str = Form(...), campus: str = Form(...), area: str = Form(...), monthly_rent: str = Form(""), bedrooms: str = Form(""), description: str = Form(...), contact: str = Form(""), latitude: str = Form(""), longitude: str = Form(""), images: Optional[List[UploadFile]] = File(None), image: Optional[UploadFile] = File(None), landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
+async def create_accommodation(title: str = Form(...), campus: str = Form(...), area: str = Form(...), monthly_rent: str = Form(""), bedrooms: str = Form(""), description: str = Form(...), contact: str = Form(...), latitude: str = Form(""), longitude: str = Form(""), images: Optional[List[UploadFile]] = File(None), image: Optional[UploadFile] = File(None), landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
     if not title.strip() or not campus.strip() or not area.strip() or not description.strip():
         raise HTTPException(status_code=400, detail="Add a title, campus, area, and description")
+    if len(re.sub(r"\D", "", contact)) < 8:
+        raise HTTPException(status_code=400, detail="Add a valid contact number for this room")
     if len(description.strip()) > 2500:
         raise HTTPException(status_code=400, detail="Accommodation descriptions can be up to 2,500 characters")
     try:
@@ -4684,9 +4723,9 @@ async def create_accommodation(title: str = Form(...), campus: str = Form(...), 
     lat, lng = _accommodation_coordinates(latitude, longitude)
     files = list(images or []) + ([image] if image and image.filename else [])
     image_urls = await _upload_market_images(files, 3, "accommodation_listings", 10 * 1024 * 1024)
-    item = Accommodation(landlord_id=landlord.id, title=title.strip()[:180], campus=campus.strip()[:120], area=area.strip()[:160], monthly_rent=rent, bedrooms=bedrooms.strip()[:80], description=description.strip(), contact=contact.strip()[:160], image_url=image_urls[0] if image_urls else None, image_urls=json.dumps(image_urls), latitude=lat, longitude=lng, is_available=True, created_at=datetime.now(timezone.utc).isoformat())
+    item = Accommodation(landlord_id=landlord.id, title=title.strip()[:180], campus=campus.strip()[:120], area=area.strip()[:160], monthly_rent=rent, bedrooms=bedrooms.strip()[:80], description=description.strip(), contact=contact.strip()[:160], image_url=image_urls[0] if image_urls else None, image_urls=json.dumps(image_urls), latitude=lat, longitude=lng, is_available=True, is_approved=False, created_at=datetime.now(timezone.utc).isoformat())
     db.add(item); db.commit()
-    return {"ok": True, "listing": _accommodation_payload(item, landlord)}
+    return {"ok": True, "message": "Room submitted for approval", "listing": _accommodation_payload(item, landlord)}
 
 
 @app.put("/marketing/listings/{listing_id}")
@@ -4694,6 +4733,8 @@ async def update_accommodation(listing_id: int, title: str = Form(...), campus: 
     item = db.query(Accommodation).filter(Accommodation.id == listing_id, Accommodation.landlord_id == landlord.id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Accommodation listing not found")
+    if not contact.strip() or len(re.sub(r"\D", "", contact)) < 8:
+        raise HTTPException(status_code=400, detail="Add a valid contact number for this room")
     if not title.strip() or not campus.strip() or not area.strip() or not description.strip():
         raise HTTPException(status_code=400, detail="Add a title, campus, area, and description")
     try:
@@ -4772,11 +4813,12 @@ def create_accommodation_comment(listing_id: int, payload: AccommodationCommentC
     return {"ok": True, "id": comment.id}
 
 
-def _advert_payload(item: MarketAdvert, owner_name: str = "") -> dict:
+def _advert_payload(item: MarketAdvert, owner_name: str = "", registration_contact: str = "") -> dict:
     image_urls = _market_image_urls(item)
+    directions_url = f"https://www.google.com/maps/dir/?api=1&destination={item.latitude},{item.longitude}" if item.latitude is not None and item.longitude is not None else None
     return {
         "id": item.id, "business_name": item.business_name, "headline": item.headline,
-        "description": item.description, "category": item.category, "price": item.price, "campus": item.campus or "",
+        "description": item.description, "category": item.category, "service_detail": item.service_detail or "", "price": item.price, "campus": item.campus or "", "area": item.area or "", "latitude": item.latitude, "longitude": item.longitude, "directions_url": directions_url,
         "contact": item.contact or "", "website_url": item.website_url or "",
         "placement": item.placement, "image_url": image_urls[0] if image_urls else None, "image_urls": image_urls,
         "video_url": _free_video_url(item.video_url), "premium_available": bool(item.premium_video_asset), "starts_at": item.starts_at,
@@ -4787,6 +4829,7 @@ def _advert_payload(item: MarketAdvert, owner_name: str = "") -> dict:
         "rating_count": item.rating_count or 0,
         "created_at": item.created_at, "updated_at": item.updated_at, "owner_name": owner_name,
         "provider_id": item.owner_landlord_id,
+        **({"registration_contact": registration_contact} if registration_contact else {}),
     }
 
 
@@ -4835,7 +4878,7 @@ def list_market_adverts(placement: str = "", db: Session = Depends(get_db)):
 @app.post("/marketing/adverts")
 async def create_market_advert(
     business_name: str = Form(...), headline: str = Form(...), description: str = Form(...),
-    category: str = Form(...), price: Optional[int] = Form(None), campus: str = Form(""), contact: str = Form(""), website_url: str = Form(""),
+    category: str = Form(...), service_detail: str = Form(""), price: Optional[int] = Form(None), campus: str = Form(""), area: str = Form(""), latitude: str = Form(""), longitude: str = Form(""), contact: str = Form(...), website_url: str = Form(""),
     placement: str = Form("spotlight"), starts_at: str = Form(""), expires_at: str = Form(""),
     images: Optional[List[UploadFile]] = File(None), image: Optional[UploadFile] = File(None),
     video: Optional[UploadFile] = File(None), x_student_token: Optional[str] = Header(None, alias="X-Student-Token"),
@@ -4850,16 +4893,20 @@ async def create_market_advert(
         raise HTTPException(status_code=400, detail="Enter a price between R0 and R100,000,000")
     website = website_url.strip()
     contact_digits = re.sub(r"\D", "", contact)
-    if not website and len(contact_digits) < 8:
-        raise HTTPException(status_code=400, detail="Add a website or WhatsApp number so people can respond to the advert")
+    if len(contact_digits) < 8:
+        raise HTTPException(status_code=400, detail="Add a valid contact number for this listing")
+    if category.strip().lower() == "other" and not service_detail.strip():
+        raise HTTPException(status_code=400, detail="Describe the activity or service for Other")
+    if category.strip().lower() == "churches" and not area.strip():
+        raise HTTPException(status_code=400, detail="Add the church location or area")
     if website and not re.match(r"^(?:https?://)?[^\s]+\.[^\s]+$", website, re.IGNORECASE):
         raise HTTPException(status_code=400, detail="Enter a valid website address, or leave it blank and add a WhatsApp number")
     if placement not in {"feed", "spotlight"}:
         raise HTTPException(status_code=400, detail="Choose feed or spotlight placement")
     start, end = _clean_advert_dates(starts_at, expires_at)
+    lat, lng = _accommodation_coordinates(latitude, longitude)
     files = list(images or []) + ([image] if image and image.filename else [])
-    transport_service = bool(re.search(r"transport|ride|taxi|uber|shuttle|courier|delivery", category, re.IGNORECASE))
-    image_limit = 2 if transport_service else 1
+    image_limit = 3
     image_urls = await _upload_market_images(files, image_limit, "market_adverts", 8 * 1024 * 1024)
     video_url = None
     premium_asset = None
@@ -4877,17 +4924,17 @@ async def create_market_advert(
     item = MarketAdvert(
         owner_student_id=student.id if student else None, owner_landlord_id=landlord.id if landlord else None,
         business_name=business_name.strip()[:160], headline=headline.strip()[:180], description=description.strip(),
-        category=category.strip()[:80], price=price, campus=campus.strip()[:120], contact=contact.strip()[:160],
+        category=category.strip()[:80], service_detail=service_detail.strip()[:160], price=price, campus=campus.strip()[:120], area=area.strip()[:160], latitude=lat, longitude=lng, contact=contact.strip()[:160],
         website_url=website[:500], placement=placement, image_url=image_urls[0] if image_urls else None,
         image_urls=json.dumps(image_urls), video_url=video_url, premium_video_asset=premium_asset,
-        starts_at=start, expires_at=end, status="pending", is_featured=False, impressions=0, clicks=0,
+        starts_at=start, expires_at=end, status="approved", is_featured=False, impressions=0, clicks=0,
         created_at=now, updated_at=now,
     )
     db.add(item)
     if video_url:
         db.add(MediaUploadEvent(kind="advert", owner_type="student" if student else "provider", owner_id=student.id if student else landlord.id, source_bytes=len(video_bytes), premium_created=bool(premium_asset), created_at=now))
     db.commit(); db.refresh(item)
-    return {"ok": True, "message": "Advert submitted for review", "advert": _advert_payload(item)}
+    return {"ok": True, "message": "Listing published", "advert": _advert_payload(item)}
 
 
 @app.get("/marketing/my-adverts")
@@ -4931,9 +4978,9 @@ def admin_market_adverts(_pin_ok: bool = Depends(require_lecturer_pin), db: Sess
     rows = db.query(MarketAdvert).order_by(MarketAdvert.created_at.desc()).all()
     student_ids = {item.owner_student_id for item in rows if item.owner_student_id}
     landlord_ids = {item.owner_landlord_id for item in rows if item.owner_landlord_id}
-    students = {item.id: item.full_name for item in db.query(Student).filter(Student.id.in_(student_ids)).all()} if student_ids else {}
-    landlords = {item.id: item.full_name for item in db.query(Landlord).filter(Landlord.id.in_(landlord_ids)).all()} if landlord_ids else {}
-    return [_advert_payload(item, students.get(item.owner_student_id, "") or landlords.get(item.owner_landlord_id, "")) for item in rows]
+    students = {item.id: item for item in db.query(Student).filter(Student.id.in_(student_ids)).all()} if student_ids else {}
+    landlords = {item.id: item for item in db.query(Landlord).filter(Landlord.id.in_(landlord_ids)).all()} if landlord_ids else {}
+    return [_advert_payload(item, getattr(students.get(item.owner_student_id), "full_name", "") or getattr(landlords.get(item.owner_landlord_id), "full_name", ""), getattr(students.get(item.owner_student_id), "phone", "") or getattr(landlords.get(item.owner_landlord_id), "phone", "")) for item in rows]
 
 
 @app.put("/admin/market-adverts/{advert_id}")

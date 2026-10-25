@@ -63,8 +63,8 @@
   }
   function scheduleScan() { if (!scheduled) { scheduled = true; queueMicrotask(scan); } }
   document.addEventListener('click', async event => {
-    const offer = event.target.closest('[data-offer]');
-    if (offer) { const card = offer.closest(selector); if (card) recordView(card); }
+    const cardOpened = event.target.closest('.campus-card');
+    if (cardOpened && !event.target.closest('.market-stars button')) recordView(cardOpened);
     const star = event.target.closest('.market-stars button');
     if (!star) return;
     event.stopPropagation();

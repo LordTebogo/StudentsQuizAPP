@@ -1,0 +1,35 @@
+const {JSDOM} = require('jsdom');
+const {test} = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const html = fs.readFileSync(path.join(__dirname, '../static/index.html'), 'utf8');
+const script = fs.readFileSync(path.join(__dirname, '../static/campus-home.js'), 'utf8');
+
+test('a listing previews its photos and opens the full gallery with listing contact', async () => {
+  const dom = new JSDOM(html, {url:'https://arounus.test/market', runScripts:'outside-only'});
+  const w = dom.window;
+  w.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
+  w.matchMedia = () => ({matches:false});
+  w.AbortSignal.timeout = () => undefined;
+  let previewTick;
+  w.setInterval = callback => { previewTick = callback; return 1; };
+  w.clearInterval = () => {};
+  w.fetch = async url => ({ok:true, json:async () => url === '/marketing/listings' ? [{id:1,title:'Room',campus:'UL',area:'Center',description:'Nice room',monthly_rent:1000,contact:'0723456789',is_available:true,image_urls:['https://example.test/1.jpg','https://example.test/2.jpg','https://example.test/3.jpg']}] : []});
+  w.eval(script);
+  await new Promise(resolve => setTimeout(resolve, 30));
+  const card = w.document.querySelector('.campus-card');
+  assert.ok(card);
+  assert.match(card.querySelector('.campus-card-media img').src, /1\.jpg/);
+  card.dispatchEvent(new w.Event('pointerover', {bubbles:true}));
+  previewTick();
+  assert.match(card.querySelector('.campus-card-media img').src, /2\.jpg/);
+  card.querySelector('h3').click();
+  assert.equal(w.document.getElementById('offerDialog').open, true);
+  assert.equal(w.document.querySelectorAll('.offer-gallery-thumbs button').length, 3);
+  assert.match(w.document.getElementById('offerDetails').textContent, /0723456789/);
+  w.document.querySelector('[data-gallery-index="2"]').click();
+  assert.match(w.document.querySelector('.offer-gallery-main').src, /3\.jpg/);
+  dom.window.close();
+});

@@ -32,7 +32,7 @@ test('sell or list opens one advertiser registration and uses its login for room
   assert.equal(w.sessionStorage.getItem('landlordToken'), 'one-provider-token');
   w.document.querySelector('[data-sell-kind="room"]').click();
   const room = w.document.getElementById('sellListingForm');
-  for (const [name,value] of Object.entries({title:'Campus room',campus:'UL',area:'Mankweng',monthly_rent:'1500',description:'Near campus'})) room.elements[name].value = value;
+  for (const [name,value] of Object.entries({title:'Campus room',campus:'UL',area:'Mankweng',monthly_rent:'1500',description:'Near campus',contact:'0723456789'})) room.elements[name].value = value;
   room.dispatchEvent(new w.Event('submit', {bubbles:true,cancelable:true}));
   await tick();
   w.document.querySelector('[data-sell-kind="advert"]').click();

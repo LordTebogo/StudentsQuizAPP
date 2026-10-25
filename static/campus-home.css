@@ -192,10 +192,19 @@
   background:#121c2b;
   display:flex;
   flex-direction:column;
-  min-width:0
+  min-width:0;
+  cursor:pointer
 }
 .campus-card-media {
   height:190px;
+  min-height:190px;
+  max-height:190px;
+  flex:0 0 190px;
+  width:100%;
+  position:relative;
+  overflow:hidden;
+  padding:0;
+  border:0;
   background:linear-gradient(145deg,#234238,#152437);
   display:grid;
   place-items:center;
@@ -203,11 +212,29 @@
   font-size:25px
 }
 .campus-card-media img {
+  display:block;
+  position:absolute;
+  inset:0;
   height:100%;
   width:100%;
   object-fit:cover
 }
+.campus-card-media .photo-count {
+  position:absolute;
+  right:10px;
+  bottom:10px;
+  z-index:1;
+  border-radius:20px;
+  padding:5px 9px;
+  background:#0a1f1bd9;
+  color:#fff;
+  font-size:12px
+}
 .campus-card-body {
+  min-height:0;
+  position:relative;
+  z-index:1;
+  background:inherit;
   padding:20px;
   display:flex;
   flex-direction:column;
@@ -333,6 +360,14 @@
   object-fit:contain;
   border-radius:10px
 }
+.offer-gallery-main{display:block;width:100%;height:320px;object-fit:contain;background:#e4f2e9}
+.offer-gallery-controls{display:flex;justify-content:center;align-items:center;gap:15px;margin:9px 0}
+.offer-gallery-controls button,.offer-gallery-thumbs button{border:1px solid #bfd5ca;border-radius:8px;background:#fff;color:#19312e;cursor:pointer}
+.offer-gallery-controls button{font-size:24px;width:38px;height:38px}
+.offer-gallery-thumbs{display:flex;gap:8px;flex-wrap:wrap}
+.offer-gallery-thumbs button{padding:3px}
+.offer-gallery-thumbs button[aria-pressed=true]{border:3px solid #087f70}
+#offerDetails .offer-gallery-thumbs img{display:block;width:64px;height:64px;object-fit:cover;border-radius:5px}
 #offerDetails p {
   white-space:pre-wrap;
   overflow-wrap:anywhere;

@@ -13,6 +13,9 @@
 .sell-tabs button[aria-pressed=true]{background:#087f70;color:#fff}
 .sell-form{display:grid;gap:15px}
 .sell-form label{display:grid;gap:7px;font-weight:700;color:#395a52}
+.sell-form [hidden]{display:none!important}
+.sell-location{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.sell-location button{grid-column:1/-1;justify-self:start;border:1px solid #85bca9;border-radius:8px;background:#eef7f2;color:#087f70;padding:9px 12px}
 .sell-form label span{font-weight:400;color:#526b65}
 .sell-form input,.sell-form select,.sell-form textarea{width:100%;min-height:46px;padding:11px 13px;border:1px solid #bfd5ca;border-radius:9px;background:#fff;color:#19312e;font:inherit}
 .sell-form textarea{min-height:110px;resize:vertical}

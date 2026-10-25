@@ -4,25 +4,39 @@
   async function load() {
     const list = document.getElementById('marketAdvertAdminList'); if (!list) return;
     try {
-      const ads = await api('/admin/market-adverts');
+      const [rooms, ads] = await Promise.all([api('/admin/market-rooms'), api('/admin/market-adverts')]);
+      const roomList = document.getElementById('marketRoomAdminList');
+      roomList.innerHTML = rooms.length ? rooms.map(room => `<article class="moderation-item advert-review-card" data-admin-room="${room.id}">
+        ${room.image_url ? `<img class="advert-review-image" src="${esc(room.image_url)}" alt="Room preview for ${esc(room.title)}">` : '<div class="advert-review-image advert-placeholder">No media</div>'}
+        <div class="advert-review-copy"><div class="advert-review-head"><div><span class="kicker">Room · ${esc(room.campus)}</span><h3>${esc(room.title)}</h3></div><span class="status-chip advert-status ${room.is_approved ? 'approved' : 'pending'}">${room.is_approved ? 'Approved' : 'Awaiting approval'}</span></div>
+        <p>${esc(room.description)}</p><dl class="review-meta"><div><dt>Area</dt><dd>${esc(room.area)}</dd></div><div><dt>Submitted by</dt><dd>${esc(room.owner_name)}</dd></div><div><dt>Listing contact</dt><dd>${esc(room.contact || 'Missing')}</dd></div><div><dt>Registration contact</dt><dd>${esc(room.registration_contact || 'Missing')}</dd></div></dl>
+        <div class="actions review-actions"><button class="btn approve-room" type="button" ${room.is_approved ? 'disabled' : ''}>Approve room</button><button class="btn secondary unapprove-room" type="button" ${room.is_approved ? '' : 'disabled'}>Remove approval</button></div></div>
+      </article>`).join('') : '<div class="empty-state"><strong>No room submissions yet</strong></div>';
       list.innerHTML = ads.length ? ads.map(ad => `<article class="moderation-item advert-review-card" data-admin-ad="${ad.id}">
         ${ad.video_url?`<video class="advert-review-image" src="${esc(ad.video_url)}" controls muted playsinline aria-label="Advert video for ${esc(ad.business_name)}"></video>`:ad.image_url?`<img class="advert-review-image" src="${esc(ad.image_url)}" alt="Advert preview for ${esc(ad.business_name)}">`:'<div class="advert-review-image advert-placeholder">No media</div>'}
         <div class="advert-review-copy"><div class="advert-review-head"><div><span class="kicker">${esc(ad.category)} · ${esc(ad.placement)}</span><h3>${esc(ad.headline)}</h3></div><span class="status-chip advert-status ${esc(ad.status)}">${esc(ad.status)}</span></div>
-        <p>${esc(ad.description)}</p><dl class="review-meta"><div><dt>Business</dt><dd>${esc(ad.business_name)}</dd></div><div><dt>Submitted by</dt><dd>${esc(ad.owner_name||'Unknown account')}</dd></div><div><dt>Submitted</dt><dd>${esc(ad.created_at.slice(0,10))}</dd></div><div><dt>Engagement</dt><dd>${ad.impressions} views · ${ad.clicks} clicks</dd></div></dl>
+        <p>${esc(ad.description)}</p><dl class="review-meta"><div><dt>Business</dt><dd>${esc(ad.business_name)}</dd></div><div><dt>Submitted by</dt><dd>${esc(ad.owner_name||'Unknown account')}</dd></div><div><dt>Registration contact</dt><dd>${esc(ad.registration_contact||'See account')}</dd></div><div><dt>Submitted</dt><dd>${esc(ad.created_at.slice(0,10))}</dd></div><div><dt>Engagement</dt><dd>${ad.impressions} views · ${ad.clicks} clicks</dd></div></dl>
         <p class="muted"><strong>Destination:</strong> ${esc(ad.website_url||ad.contact||'Missing')}</p>
-        <div class="actions review-actions"><button class="btn approve-ad" type="button">Approve</button><button class="btn secondary reject-ad" type="button">Reject</button><button class="btn secondary feature-ad${ad.is_featured?' is-featured':''}" type="button" data-featured="${ad.is_featured?'true':'false'}" aria-describedby="feature-help-${ad.id}" title="${ad.is_featured?'Return this advert to normal ordering':'Show this approved advert before regular adverts'}">${ad.is_featured?'★ Featured':'☆ Feature advert'}</button><button class="btn danger delete-ad" type="button">Delete</button></div>
+        <div class="actions review-actions">${ad.status !== 'approved' ? '<button class="btn approve-ad" type="button">Publish</button>' : ''}<button class="btn secondary feature-ad${ad.is_featured?' is-featured':''}" type="button" data-featured="${ad.is_featured?'true':'false'}" aria-describedby="feature-help-${ad.id}" title="${ad.is_featured?'Return this advert to normal ordering':'Show this approved advert before regular adverts'}">${ad.is_featured?'★ Featured':'☆ Feature advert'}</button><button class="btn danger delete-ad" type="button">Delete</button></div>
         <p class="feature-help" id="feature-help-${ad.id}"><span aria-hidden="true">★</span><span><strong>${ad.is_featured?'This advert is featured.':'What does Feature do?'}</strong> ${ad.is_featured?'It is shown before regular approved adverts in its selected Campus Market placement.':'It moves an approved advert ahead of regular adverts in its selected Campus Market placement. It does not approve the advert or change its dates.'}</span></p></div>
-      </article>`).join('') : '<div class="empty-state"><strong>No advert submissions</strong><span>New adverts awaiting review will appear here.</span></div>';
+      </article>`).join('') : '<div class="empty-state"><strong>No other listings</strong></div>';
     } catch (error) { list.innerHTML = `<div class="error">${esc(error.message)}</div>`; }
   }
   function install() {
     if (installed || !document.getElementById('appWrap')) return; installed = true;
     const card = document.createElement('section'); card.className = 'card'; card.id = 'marketAdvertAdmin';
-    card.innerHTML = '<div class="admin-editor-heading"><div><span class="kicker">Campus market</span><h2>Advert approvals</h2><p class="muted">Review the advert preview, submitter and destination before making a decision.</p></div><button class="btn secondary" type="button" id="refreshMarketAds">Refresh adverts</button></div><div id="marketAdvertAdminList" class="stack-list"></div>';
+    card.innerHTML = '<div class="admin-editor-heading"><div><span class="kicker">Campus market</span><h2>Room approvals</h2><p class="muted">Rooms appear publicly only after approval. Other listings publish automatically.</p></div><button class="btn secondary" type="button" id="refreshMarketAds">Refresh listings</button></div><div id="marketRoomAdminList" class="stack-list"></div><h2>Other listings</h2><div id="marketAdvertAdminList" class="stack-list"></div>';
     const cards = document.querySelectorAll('#appWrap .card');
     (cards[1] || cards[0])?.insertAdjacentElement('afterend', card);
     card.querySelector('#refreshMarketAds').addEventListener('click', load);
     card.addEventListener('click', async event => {
+      const room = event.target.closest('[data-admin-room]');
+      if (room && (event.target.closest('.approve-room') || event.target.closest('.unapprove-room'))) {
+        const approved = Boolean(event.target.closest('.approve-room'));
+        await api(`/admin/market-rooms/${room.dataset.adminRoom}/approval?approved=${approved}`, {method:'PUT'});
+        load();
+        return;
+      }
       const row = event.target.closest('[data-admin-ad]'); if (!row) return;
       const id = row.dataset.adminAd; let body;
       if (event.target.closest('.approve-ad')) body = {status:'approved'};

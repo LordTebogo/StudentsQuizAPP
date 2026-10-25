@@ -27,7 +27,7 @@ class MarketFeaturesTest(unittest.TestCase):
             db.add_all([student, landlord]); db.flush()
             cls.student_id = student.id
             cls.room_id = None
-            room = Accommodation(landlord_id=landlord.id, title="Test room", campus="Test campus", area="Center", description="Room", is_available=True, created_at="2026-10-01T00:00:00Z")
+            room = Accommodation(landlord_id=landlord.id, title="Test room", campus="Test campus", area="Center", description="Room", is_available=True, is_approved=True, created_at="2026-10-01T00:00:00Z")
             advert = MarketAdvert(owner_student_id=student.id, business_name="Test Shop", headline="Test product", description="Item", category="Sales", status="approved", placement="feed", premium_video_asset='{"public_id":"test/video","format":"mp4"}', video_url="https://example.test/free-480.mp4", created_at="2026-10-01T00:00:00Z", updated_at="2026-10-01T00:00:00Z")
             db.add_all([room, advert]); db.commit()
             cls.room_id, cls.advert_id = room.id, advert.id
@@ -48,6 +48,52 @@ class MarketFeaturesTest(unittest.TestCase):
         self.assertEqual(self.client.put(rating_path, json={"stars": 6}, headers=headers).status_code, 422)
         self.assertEqual(self.client.put(f"/marketing/adverts/{self.advert_id}/rating", json={"stars": 5}, headers=headers).status_code, 403)
 
+    def test_room_approval_and_listing_contact_are_separate_from_registration(self):
+        with main.SessionLocal() as db:
+            landlord = db.query(Landlord).first()
+            token = main._issue_landlord_token(landlord.id)
+            registration_phone = landlord.phone
+        form = {"title":"New room", "campus":"Test campus", "area":"Center", "description":"Near campus", "contact":"0791112233"}
+        missing = self.client.post("/marketing/listings", headers={"X-Landlord-Token":token}, data={**form, "contact":""})
+        self.assertIn(missing.status_code, (400, 422))
+        created = self.client.post("/marketing/listings", headers={"X-Landlord-Token":token}, data=form)
+        self.assertEqual(created.status_code, 200)
+        room = created.json()["listing"]
+        self.assertFalse(room["is_approved"])
+        self.assertEqual(room["contact"], form["contact"])
+        self.assertNotIn(room["id"], [item["id"] for item in self.client.get("/marketing/listings").json()])
+        admin_headers = {"X-Lecturer-Pin":main.LECTURER_PIN}
+        admin_room = next(item for item in self.client.get("/admin/market-rooms", headers=admin_headers).json() if item["id"] == room["id"])
+        self.assertEqual(admin_room["registration_contact"], registration_phone)
+        self.assertEqual(self.client.put(f"/admin/market-rooms/{room['id']}/approval?approved=true", headers=admin_headers).status_code, 200)
+        public_room = next(item for item in self.client.get("/marketing/listings").json() if item["id"] == room["id"])
+        self.assertEqual(public_room["contact"], form["contact"])
+        self.assertNotIn("registration_contact", public_room)
+
+    def test_church_and_other_listings_publish_without_approval(self):
+        with main.SessionLocal() as db:
+            landlord = db.query(Landlord).first()
+            token = main._issue_landlord_token(landlord.id)
+            registration_phone = landlord.phone
+        headers = {"X-Landlord-Token":token}
+        base = {"business_name":"Community church", "headline":"Sunday service", "description":"Everyone welcome", "campus":"Test campus", "contact":"0782223344", "placement":"feed"}
+        missing_location = self.client.post("/marketing/adverts", headers=headers, data={**base, "category":"Churches"})
+        self.assertEqual(missing_location.status_code, 400)
+        created = self.client.post("/marketing/adverts", headers=headers, data={**base, "category":"Churches", "area":"Center", "latitude":"-23.9", "longitude":"29.4"})
+        self.assertEqual(created.status_code, 200)
+        advert = created.json()["advert"]
+        self.assertEqual(advert["status"], "approved")
+        public = next(item for item in self.client.get("/marketing/adverts").json() if item["id"] == advert["id"])
+        self.assertEqual((public["area"], public["contact"]), ("Center", base["contact"]))
+        self.assertTrue(public["directions_url"])
+        self.assertNotIn("registration_contact", public)
+        admin = next(item for item in self.client.get("/admin/market-adverts", headers={"X-Lecturer-Pin":main.LECTURER_PIN}).json() if item["id"] == advert["id"])
+        self.assertEqual(admin["registration_contact"], registration_phone)
+        self.assertEqual(self.client.post("/marketing/adverts", headers=headers, data={**base, "category":"Other"}).status_code, 400)
+        other = self.client.post("/marketing/adverts", headers=headers, data={**base, "category":"Other", "service_detail":"Tailoring"})
+        self.assertEqual(other.status_code, 200)
+        self.assertEqual(other.json()["advert"]["service_detail"], "Tailoring")
+
     def test_premium_requires_admin_grant(self):
         path = f"/media/premium/advert/{self.advert_id}"
         headers = {"X-Student-Token": self.token}
@@ -60,7 +106,7 @@ class MarketFeaturesTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["url"], "https://example.test/signed-hd.mp4")
         self.assertIn("no-store", response.headers["cache-control"])
-        public = self.client.get("/marketing/adverts").json()[0]
+        public = next(item for item in self.client.get("/marketing/adverts").json() if item["id"] == self.advert_id)
         self.assertTrue(public["premium_available"])
         self.assertNotIn("premium_video_asset", public)
 

@@ -46,27 +46,31 @@
     kind = selected;
     const room = selected === 'room';
     document.getElementById('sellTitle').textContent = room ? 'List accommodation' : 'List an item, ride, or service';
-    document.getElementById('sellIntro').textContent = room ? 'Add the details students need to compare rooms.' : 'Your offer will appear after review.';
+    document.getElementById('sellIntro').textContent = room ? 'Add the details students need to compare rooms. An admin will approve this room before it appears.' : 'Your listing will appear as soon as you publish it.';
     content.innerHTML = `<button class="sell-back" type="button" data-sell-back>← Choose another listing type</button><form id="sellListingForm" class="sell-form" enctype="multipart/form-data">
       ${room ? `<label>Listing title<input name="title" maxlength="180" placeholder="For example, Bachelor room near campus" required></label>
-        <label>University or college<input name="campus" maxlength="120" required></label>
+        <label>Nearest University/college or company<input name="campus" maxlength="120" required></label>
         <label>Area or suburb<input name="area" maxlength="160" required></label>
+        <div class="sell-location"><label>Latitude <span>(optional)</span><input name="latitude" type="number" step="any" min="-90" max="90"></label><label>Longitude <span>(optional)</span><input name="longitude" type="number" step="any" min="-180" max="180"></label><button type="button" data-use-location>Use my current location</button></div>
         <label>Monthly rent (R)<input name="monthly_rent" type="number" min="0" inputmode="numeric" required></label>
         <label>Room type <span>(optional)</span><input name="bedrooms" maxlength="80" placeholder="Single, shared, bachelor…"></label>
-        <label>Contact number <span>(optional)</span><input name="contact" type="tel"></label>
+        <label>Contact number for this listing<input name="contact" type="tel" autocomplete="tel" required></label>
         <label>Description<textarea name="description" maxlength="2500" placeholder="Utilities, rules, availability, and what is included" required></textarea></label>
         <label>Photos <span>(up to 3, optional)</span><input name="images" type="file" accept="image/*" multiple data-max-files="3"></label>` : `
         <label>Business or seller name<input name="business_name" maxlength="160" value="${escapeHtml(profile.business_name || profile.full_name)}" required></label>
         <label>Listing title<input name="headline" maxlength="180" required></label>
-        <label>Category<select name="category" required><option value="">Choose a category</option><option>Sales & retail</option><option>Technology</option><option>Ride & transport</option><option>Delivery & courier</option><option>Campus shuttle</option><option>Student service</option><option>Food & delivery</option><option>Tutoring</option><option>Event</option><option>Beauty & lifestyle</option><option>Other</option></select></label>
+        <label>Category<select name="category" required><option value="">Choose a category</option><option>Sales & retail</option><option>Technology</option><option>Ride & transport</option><option>Delivery & courier</option><option>Campus shuttle</option><option>Student service</option><option>Food & delivery</option><option>Tutoring</option><option>Event</option><option>Beauty & lifestyle</option><option>Churches</option><option>Other</option></select></label>
+        <label id="otherServiceField" hidden>Actual activity or service<input name="service_detail" maxlength="160" disabled></label>
         <label>Price (R) <span>(optional for services)</span><input name="price" type="number" min="0" max="100000000" inputmode="numeric"></label>
-        <label>University or college<input name="campus" maxlength="120"></label>
+        <label>Nearest University/college or company<input name="campus" maxlength="120"></label>
+        <label id="churchLocationField" hidden>Church location or area<input name="area" maxlength="160" disabled></label>
+        <div class="sell-location" id="churchCoordinatesField" hidden><label>Latitude <span>(optional)</span><input name="latitude" type="number" step="any" min="-90" max="90" disabled></label><label>Longitude <span>(optional)</span><input name="longitude" type="number" step="any" min="-180" max="180" disabled></label><button type="button" data-use-location>Use my current location</button></div>
         <label>Description<textarea name="description" maxlength="1200" required></textarea></label>
-        <label>WhatsApp or contact number<input name="contact" type="tel"></label>
-        <label>Website or social link <span>(optional if a contact number is provided)</span><input name="website_url" type="url" placeholder="https://…"></label>
-        <label>Photo <span>(optional)</span><input name="images" type="file" accept="image/*"></label>
+        <label>Contact number for this listing<input name="contact" type="tel" autocomplete="tel" required></label>
+        <label>Website or social link <span>(optional)</span><input name="website_url" type="url" placeholder="https://…"></label>
+        <label>Photos <span>(up to 3, optional)</span><input name="images" type="file" accept="image/*" multiple data-max-files="3"></label>
         <input type="hidden" name="placement" value="feed">`}
-      <button type="submit">${room ? 'Publish room' : 'Submit listing for review'}</button>
+      <button type="submit">${room ? 'Submit room for approval' : 'Publish listing'}</button>
     </form>`;
   }
   async function renderMyListings() {
@@ -75,7 +79,7 @@
     content.innerHTML = '<button class="sell-back" type="button" data-sell-back>← Add another listing</button><p>Loading your listings…</p>';
     try {
       const [rooms, adverts] = await Promise.all([request('/marketing/landlord/listings'), request('/marketing/my-adverts')]);
-      content.innerHTML = `<button class="sell-back" type="button" data-sell-back>← Add another listing</button><div class="sell-manage">${rooms.map(item => `<article><strong>${escapeHtml(item.title)}</strong><span>Room · ${item.is_available ? 'Available' : 'Filled'}</span><button type="button" data-toggle-room="${item.id}">${item.is_available ? 'Mark filled' : 'Mark available'}</button></article>`).join('')}${adverts.map(item => `<article><strong>${escapeHtml(item.headline)}</strong><span>${escapeHtml(item.category)} · ${escapeHtml(item.status)}</span>${item.status === 'approved' ? `<button type="button" data-pause-ad="${item.id}">Pause listing</button>` : ''}</article>`).join('') || (!rooms.length ? '<p>You have no listings yet.</p>' : '')}</div>`;
+      content.innerHTML = `<button class="sell-back" type="button" data-sell-back>← Add another listing</button><div class="sell-manage">${rooms.map(item => `<article><strong>${escapeHtml(item.title)}</strong><span>Room · ${item.is_approved ? (item.is_available ? 'Published' : 'Filled') : 'Awaiting approval'}</span><button type="button" data-toggle-room="${item.id}">${item.is_available ? 'Mark filled' : 'Mark available'}</button></article>`).join('')}${adverts.map(item => `<article><strong>${escapeHtml(item.headline)}</strong><span>${escapeHtml(item.category)} · ${escapeHtml(item.status)}</span>${item.status === 'approved' ? `<button type="button" data-pause-ad="${item.id}">Pause listing</button>` : ''}</article>`).join('') || (!rooms.length ? '<p>You have no listings yet.</p>' : '')}</div>`;
       content.dataset.rooms = JSON.stringify(rooms);
     } catch (error) { status(error.message, true); renderChoice(); }
   }
@@ -120,6 +124,16 @@
     if (modeButton) { mode = modeButton.dataset.authMode; status(''); renderAuth(); return; }
     const choice = event.target.closest('[data-sell-kind]');
     if (choice) { status(''); renderForm(choice.dataset.sellKind); return; }
+    if (event.target.closest('[data-use-location]')) {
+      if (!navigator.geolocation) { status('Location is unavailable on this device. You can enter coordinates manually.', true); return; }
+      navigator.geolocation.getCurrentPosition(position => {
+        const form = event.target.closest('form');
+        form.elements.latitude.value = position.coords.latitude.toFixed(6);
+        form.elements.longitude.value = position.coords.longitude.toFixed(6);
+        status('Location added to this listing.');
+      }, () => status('Location was not shared. You can enter coordinates manually.', true));
+      return;
+    }
     if (event.target.closest('[data-sell-back]')) { status(''); renderChoice(); return; }
     if (event.target.closest('[data-my-listings]')) { status(''); await renderMyListings(); return; }
     if (event.target.closest('[data-sell-messages]')) { status(''); await renderMessages(); return; }
@@ -138,6 +152,19 @@
     if (pause) {
       try { await request(`/marketing/adverts/${pause.dataset.pauseAd}/pause`, {method:'PUT'}); await renderMyListings(); document.dispatchEvent(new Event('market-listing-changed')); }
       catch (error) { status(error.message, true); }
+    }
+  });
+  dialog.addEventListener('change', event => {
+    if (event.target.name !== 'category') return;
+    const form = event.target.form;
+    for (const [id, active] of [['otherServiceField', event.target.value === 'Other'], ['churchLocationField', event.target.value === 'Churches'], ['churchCoordinatesField', event.target.value === 'Churches']]) {
+      const field = form.querySelector(`#${id}`);
+      field.hidden = !active;
+      field.querySelectorAll('input').forEach(input => {
+        input.disabled = !active;
+        input.required = active && (id === 'otherServiceField' || id === 'churchLocationField');
+        if (!active) input.value = '';
+      });
     }
   });
   dialog.addEventListener('submit', async event => {
@@ -171,12 +198,12 @@
       } else if (form.id === 'sellListingForm') {
         const data = new FormData(form);
         const files = [...(form.elements.images?.files || [])];
-        if (files.length > (kind === 'room' ? 3 : 1)) throw new Error(`Choose no more than ${kind === 'room' ? 3 : 1} photo${kind === 'room' ? 's' : ''}.`);
-        if (kind === 'advert' && !String(data.get('contact') || '').trim() && !String(data.get('website_url') || '').trim()) throw new Error('Add a contact number or website.');
+        if (files.length > 3) throw new Error('Choose no more than 3 photos.');
+        if (String(data.get('contact') || '').replace(/\D/g, '').length < 8) throw new Error('Add a valid contact number for this listing.');
         await request(kind === 'room' ? '/marketing/listings' : '/marketing/adverts', {method:'POST', body:data});
         document.dispatchEvent(new Event('market-listing-changed'));
         renderChoice();
-        status(kind === 'room' ? 'Your room is published.' : 'Your listing was submitted for review.');
+        status(kind === 'room' ? 'Your room was submitted for admin approval.' : 'Your listing is published.');
       }
     } catch (error) { status(error.message, true); }
     finally { if (form.isConnected) submit.disabled = false; }

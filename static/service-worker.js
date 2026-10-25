@@ -1,4 +1,4 @@
-const OFFLINE_VERSION = "v41";
+const OFFLINE_VERSION = "v42";
 const SHELL_CACHE = `nucleocampus-shell-${OFFLINE_VERSION}`;
 const DATA_CACHE = `nucleocampus-data-${OFFLINE_VERSION}`;
 const EXTERNAL_CACHE = `nucleocampus-external-${OFFLINE_VERSION}`;
