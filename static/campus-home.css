@@ -29,9 +29,15 @@
   font-size:23px;
   letter-spacing:-1px
 }
+.campus-brand-copy {
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start
+}
 .campus-brand img {
-  height:42px;
-  width:42px;
+  height:auto;
+  width:190px;
+  max-width:100%;
   object-fit:contain
 }
 .campus-brand strong {
@@ -369,7 +375,7 @@
   font-size:18px
 }
 .campus-brand img {
-  display:none
+  width:140px
 }
 .campus-header nav {
   gap:10px;
