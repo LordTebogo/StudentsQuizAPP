@@ -6816,6 +6816,7 @@ def service_worker():
     return FileResponse(
         os.path.join("static", "service-worker.js"),
         media_type="application/javascript",
+        headers={"Cache-Control": "no-store"},
     )
 
 
