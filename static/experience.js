@@ -7,13 +7,14 @@
     '/static/lessons_lecturer.html': '/lecturers/lessons',
     '/static/tutor_guide.html': '/lecturers/guide',
     '/static/live_lesson.html': '/live',
-    '/static/fun.html': '/community',
+    '/static/fun.html': '/posts',
     '/static/marketing.html': '/market',
     '/static/admin.html': '/admin',
     '/static/pdf_tools.html': '/tools/pdf',
     '/static/trust.html': '/trust',
   };
   const legacyPaths = Object.fromEntries(Object.entries(friendlyPaths).map(([legacy, friendly]) => [friendly, legacy]));
+  legacyPaths['/community'] = '/static/fun.html';
   const pagePath = legacyPaths[location.pathname] || location.pathname;
   const cleanPath = path => friendlyPaths[path] || path;
   if (!document.querySelector('link[href="/static/product.css"]')) {
@@ -66,7 +67,7 @@
   ] : activeRole === 'student' ? [
     ['/static/student.html', 'Home'], ['/static/student.html#moduleCard', 'Quizzes'],
     ['/static/lessons_student.html', 'Lessons'], ['/static/live_lesson.html', 'Live'],
-    ['/static/fun.html', 'Community'],
+    ['/static/fun.html', 'Posts'],
   ] : [
     ['/static/index.html', 'Home'], ['/static/academics.html', 'Learning'],
     ['/market', 'Market'],
@@ -75,11 +76,11 @@
     ['/static/admin.html#liveMonitorCard','Live sessions'], ['/static/admin.html#adminScripts','Submissions'],
     ['/static/admin.html#adminModeration','Moderation'], ['/static/trust.html#support','Support'],
   ] : activeRole === 'lecturer' ? [
-    ['/static/tutor_guide.html', 'Tutor guide'], ['/static/pdf_tools.html', 'PDF tools'], ['/static/fun.html', 'Community'],
+    ['/static/tutor_guide.html', 'Tutor guide'], ['/static/pdf_tools.html', 'PDF tools'], ['/static/fun.html', 'Posts'],
     ['/market', 'Market'],
   ] : activeRole === 'student' ? [
     ['/market', 'Market'], ['/static/pdf_tools.html', 'PDF tools'],
-  ] : [['/static/fun.html', 'Community']];
+  ] : [['/static/fun.html', 'Posts']];
   function toggleMobileMenu(open) {
     let sheet=document.querySelector('.mobile-more-sheet'),scrim=document.querySelector('.mobile-more-scrim');
     if(!sheet){scrim=document.createElement('button');scrim.type='button';scrim.className='mobile-more-scrim';scrim.setAttribute('aria-label','Close menu');sheet=document.createElement('section');sheet.className='mobile-more-sheet';sheet.setAttribute('aria-label','More navigation');const all=[...moreLinks];if(activeRole!=='public')all.push([activeRole==='admin'?'/static/admin.html':activeRole==='lecturer'?'/static/lecturer.html':'/static/student.html',activeRole==='admin'?'Administration overview':'Profile & settings'],['/static/trust.html#support','Help & support']);sheet.innerHTML='<div class="mobile-sheet-handle"></div><div class="mobile-sheet-head"><strong>More</strong><button type="button" aria-label="Close menu">×</button></div><nav></nav>';const list=sheet.querySelector('nav');all.forEach(([href,label])=>{const a=document.createElement('a');a.href=href;a.textContent=label;list.appendChild(a)});if(activeRole!=='public'){const signout=document.createElement('button');signout.type='button';signout.className='mobile-signout';signout.textContent=activeRole==='admin'?'Lock administration':'Sign out';signout.addEventListener('click',()=>{sessionStorage.removeItem(activeSessionKey);sessionStorage.removeItem('activeRole');location.href=activeRole==='admin'?'/static/admin.html':'/static/index.html'});list.appendChild(signout)}document.body.append(scrim,sheet);scrim.addEventListener('click',()=>toggleMobileMenu(false));sheet.querySelector('.mobile-sheet-head button').addEventListener('click',()=>toggleMobileMenu(false))}
@@ -213,7 +214,7 @@
   if (pagePath.endsWith('/admin.html') && document.getElementById('appWrap')) {
     const app=document.getElementById('appWrap'),heading=app.querySelector('h1'),lede=app.querySelector('.lede');if(heading)heading.id='adminOverview';
     const findCard=text=>[...app.querySelectorAll('.card')].find(card=>card.querySelector('h2')?.textContent.includes(text));
-    const quizCard=findCard('Quizzes');if(quizCard?.parentElement)quizCard.parentElement.id='adminContent';const people=findCard('Tutor management');if(people)people.id='adminPeople';const scripts=findCard('All student scripts');if(scripts)scripts.id='adminScripts';const moderation=findCard('Community moderation');if(moderation)moderation.id='adminModeration';
+    const quizCard=findCard('Quizzes');if(quizCard?.parentElement)quizCard.parentElement.id='adminContent';const people=findCard('Tutor management');if(people)people.id='adminPeople';const scripts=findCard('All student scripts');if(scripts)scripts.id='adminScripts';const moderation=findCard('Posts moderation');if(moderation)moderation.id='adminModeration';
     if(lede&&!document.getElementById('adminDashboard')){const dashboard=document.createElement('section');dashboard.id='adminDashboard';dashboard.className='admin-dashboard';dashboard.innerHTML='<div class="admin-stat"><span>Live now</span><strong id="dashLive">0</strong><small>active classrooms</small></div><div class="admin-stat"><span>Approvals</span><strong id="dashApprovals">—</strong><small>adverts awaiting review</small></div><div class="admin-stat"><span>Students</span><strong id="dashStudents">—</strong><small>registered accounts</small></div><div class="admin-stat"><span>Content</span><strong id="dashContent">—</strong><small>quizzes and lessons</small></div>';lede.after(dashboard);const setCounter=(id,value)=>{const element=document.getElementById(id),next=String(value);if(element&&element.textContent!==next)element.textContent=next};const update=()=>{const live=document.getElementById('activeLiveCount')?.textContent||'0',pending=[...document.querySelectorAll('[data-admin-ad] .status-chip')].filter(e=>e.textContent.trim()==='pending').length,students=typeof studentAdminRows!=='undefined'&&studentAdminRows.length?studentAdminRows.length:document.querySelectorAll('#studentList .account-row').length,content=document.querySelectorAll('#quizList .admin-list-item,#lessonList .admin-list-item').length;setCounter('dashLive',live);setCounter('dashApprovals',pending);setCounter('dashStudents',students);setCounter('dashContent',content)};let updateQueued=false;const scheduleUpdate=()=>{if(updateQueued)return;updateQueued=true;requestAnimationFrame(()=>{updateQueued=false;update()})};new MutationObserver(scheduleUpdate).observe(app,{childList:true,subtree:true});update()}
     if(!document.getElementById('adminActivity')){const activity=document.createElement('section');activity.id='adminActivity';activity.className='card admin-activity';activity.innerHTML='<span class="kicker">Accountability</span><h2>Recent activity</h2><p class="muted">Actions taken in this administrator session.</p><div id="adminActivityList" class="admin-list"><p class="muted">No actions yet.</p></div>';app.appendChild(activity);const render=()=>{const rows=JSON.parse(sessionStorage.getItem('adminSessionActivity')||'[]');document.getElementById('adminActivityList').innerHTML=rows.length?rows.map(row=>`<div class="activity-row"><strong>${row.action}</strong><span>${row.time}</span></div>`).join(''):'<p class="muted">No actions yet.</p>'};app.addEventListener('click',event=>{const button=event.target.closest('button');if(!button||button.classList.contains('card-toggle')||button.id==='refreshLiveSessionsBtn')return;const label=button.textContent.trim().replace(/\s+/g,' ').slice(0,80);if(!label)return;const rows=JSON.parse(sessionStorage.getItem('adminSessionActivity')||'[]');rows.unshift({action:label,time:new Date().toLocaleString()});sessionStorage.setItem('adminSessionActivity',JSON.stringify(rows.slice(0,20)));render()});render()}
     const searchable=[['quizList','Search quizzes'],['lessonList','Search lessons'],['lecturerList','Search lecturers'],['adminScriptsList','Search submissions']];searchable.forEach(([id,placeholder])=>{const list=document.getElementById(id);if(!list||document.querySelector(`[data-search-for="${id}"]`))return;const input=document.createElement('input');input.type='search';input.className='admin-inline-search';input.dataset.searchFor=id;input.placeholder=placeholder;input.setAttribute('aria-label',placeholder);list.before(input);const apply=()=>{const query=input.value.trim().toLowerCase();[...list.children].forEach(row=>row.classList.toggle('hidden',Boolean(query&&!row.textContent.toLowerCase().includes(query))))};input.addEventListener('input',apply);new MutationObserver(apply).observe(list,{childList:true})});

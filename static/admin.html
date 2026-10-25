@@ -140,12 +140,12 @@
   </section>
 
   <section class="card">
-    <div class="admin-editor-heading"><div><span class="kicker">Safe community</span><h2>Community moderation</h2></div><button class="btn secondary" id="refreshCommunityBtn">Refresh discussions</button></div>
+    <div class="admin-editor-heading"><div><span class="kicker">Safe posts</span><h2>Posts moderation</h2></div><button class="btn secondary" id="refreshCommunityBtn">Refresh posts</button></div>
     <p class="muted">Publish official notices, pin important discussion items, or remove inappropriate posts and comments.</p>
     <div class="admin-grid">
       <div>
-        <h3>Fun Page</h3>
-        <label for="officialFunText">Official Fun Page comment</label><textarea id="officialFunText" maxlength="1500" placeholder="A notice from Arounus Admin…"></textarea>
+        <h3>Posts</h3>
+        <label for="officialFunText">Official post</label><textarea id="officialFunText" maxlength="1500" placeholder="A notice from Arounus Admin…"></textarea>
         <button class="btn" id="postOfficialFunBtn">Post official comment</button><div id="officialFunMsg"></div>
         <div id="funModerationList" class="admin-list"></div>
       </div>
@@ -471,7 +471,7 @@ function renderModerationItem(item, area) {
 function bindModerationActions() { document.querySelectorAll('[data-moderate-action]').forEach(button => button.addEventListener('click', () => moderateItem(button.dataset.moderateArea, button.dataset.moderateKind, button.dataset.moderateId, button.dataset.moderateAction))); }
 async function loadCommunityModeration(lessons = null) {
   if (lessons) { const selected = $('officialLessonSelect').value; $('officialLessonSelect').innerHTML = lessons.length ? lessons.map(item => `<option value="${item.id}">${escapeHtml(item.title)} · ${escapeHtml(item.module_code)}</option>`).join('') : '<option value="">No lessons available</option>'; if (selected) $('officialLessonSelect').value = selected; }
-  try { const [funPosts, lessonComments] = await Promise.all([api('/admin/fun/posts'), api('/admin/lesson-comments')]); $('funModerationList').innerHTML = funPosts.length ? funPosts.map(item => renderModerationItem(item, 'fun')).join('') : '<p class="muted">No Fun Page posts yet.</p>'; $('lessonModerationList').innerHTML = lessonComments.length ? lessonComments.map(item => renderModerationItem(item, 'lesson')).join('') : '<p class="muted">No lesson comments yet.</p>'; bindModerationActions(); }
+  try { const [funPosts, lessonComments] = await Promise.all([api('/admin/fun/posts'), api('/admin/lesson-comments')]); $('funModerationList').innerHTML = funPosts.length ? funPosts.map(item => renderModerationItem(item, 'fun')).join('') : '<p class="muted">No posts yet.</p>'; $('lessonModerationList').innerHTML = lessonComments.length ? lessonComments.map(item => renderModerationItem(item, 'lesson')).join('') : '<p class="muted">No lesson comments yet.</p>'; bindModerationActions(); }
   catch (err) { showMsg($('officialFunMsg'), `Could not load discussions: ${err.message}`, 'error'); }
 }
 async function moderateItem(area, kind, id, action) {
@@ -482,7 +482,7 @@ async function moderateItem(area, kind, id, action) {
   try { if (action === 'pin') { const items = await (area === 'fun' ? api('/admin/fun/posts') : api('/admin/lesson-comments')); const current = items.find(row => String(row.id) === String(id)); await api(url + '/pin', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pinned: !(current && current.is_pinned)})}); } else await api(url, {method:'DELETE'}); await loadCommunityModeration(); }
   catch (err) { showMsg($('officialFunMsg'), err.message, 'error'); }
 }
-async function postOfficialFun() { const content = $('officialFunText').value.trim(); if (!content) { showMsg($('officialFunMsg'), 'Write an official comment first.', 'error'); return; } try { await api('/admin/fun/official-posts', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({content})}); $('officialFunText').value = ''; showMsg($('officialFunMsg'), 'Official Fun Page comment posted.', 'ok'); await loadCommunityModeration(); } catch (err) { showMsg($('officialFunMsg'), err.message, 'error'); } }
+async function postOfficialFun() { const content = $('officialFunText').value.trim(); if (!content) { showMsg($('officialFunMsg'), 'Write an official post first.', 'error'); return; } try { await api('/admin/fun/official-posts', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({content})}); $('officialFunText').value = ''; showMsg($('officialFunMsg'), 'Official post published.', 'ok'); await loadCommunityModeration(); } catch (err) { showMsg($('officialFunMsg'), err.message, 'error'); } }
 async function postOfficialLesson() { const lessonId = $('officialLessonSelect').value, content = $('officialLessonText').value.trim(); if (!lessonId || !content) { showMsg($('officialLessonMsg'), 'Choose a lesson and write an official comment.', 'error'); return; } try { await api(`/admin/lessons/${lessonId}/comments`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({content})}); $('officialLessonText').value = ''; showMsg($('officialLessonMsg'), 'Official lesson comment posted.', 'ok'); await loadCommunityModeration(); } catch (err) { showMsg($('officialLessonMsg'), err.message, 'error'); } }
 function selectStudent(id, students) { const student = students.find(item => item.id === Number(id)); if (!student) return; selectedStudentId = student.id; $('studentModules').value = (student.module_codes || []).join(', '); $('studentResetPassword').value = ''; $('studentAdminCard').classList.remove('hidden'); $('studentMsg').innerHTML = ''; const modules=(student.module_codes || []).join(', ') || 'No modules assigned'; $('selectedStudentBanner').innerHTML=`<strong>Editing: ${escapeHtml(student.full_name)}</strong><small>${escapeHtml(student.student_number)} · ${escapeHtml(student.email || 'No email')} · ${escapeHtml(modules)}</small>`; $('selectedStudentBanner').classList.remove('hidden'); loadStudents(); }
 async function saveStudent() { if (!selectedStudentId) return; try { await api(`/admin/students/${selectedStudentId}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({module_codes:$('studentModules').value.split(',').map(code=>code.trim()).filter(Boolean)})}); showMsg($('studentMsg'), 'Student modules saved.', 'ok'); loadStudents(); } catch (err) { showMsg($('studentMsg'), err.message, 'error'); } }

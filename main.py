@@ -5334,7 +5334,7 @@ async def create_fun_post(
         legacy = db.query(FunPost).filter(FunPost.author_student_id == student.id, FunPost.video_url.isnot(None), FunPost.created_at.like(f"{month}%")).count()
         existing = max(recorded, legacy)
         if existing >= MAX_COMMUNITY_VIDEOS_PER_MONTH:
-            raise HTTPException(status_code=429, detail="You can share up to 10 community videos per month. Try again next month")
+            raise HTTPException(status_code=429, detail="You can share up to 10 videos in Posts per month. Try again next month")
         if not (video.content_type or "").startswith("video/"):
             raise HTTPException(status_code=400, detail="Please choose a valid video file")
         video_bytes = await video.read()
@@ -5368,7 +5368,7 @@ async def create_fun_post(
                 sender_id=student.id,
                 recipient_type="student",
                 recipient_id=tagged.id,
-                content=f"{student.full_name} mentioned you in a Fun Page post: {content[:300]}",
+                content=f"{student.full_name} mentioned you in a post: {content[:300]}",
                 created_at=datetime.now(timezone.utc).isoformat(),
             ))
     db.commit()
@@ -5440,7 +5440,7 @@ def admin_create_fun_official_post(payload: AdminOfficialComment, _pin_ok: bool 
 def admin_pin_fun_post(post_id: int, payload: PinUpdate, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
     post = db.query(FunPost).filter(FunPost.id == post_id).first()
     if not post:
-        raise HTTPException(status_code=404, detail="Fun Page post not found")
+        raise HTTPException(status_code=404, detail="Post not found")
     post.is_pinned = payload.pinned
     db.commit()
     return {"ok": True, "pinned": post.is_pinned}
@@ -5450,7 +5450,7 @@ def admin_pin_fun_post(post_id: int, payload: PinUpdate, _pin_ok: bool = Depends
 def admin_pin_official_fun_post(post_id: int, payload: PinUpdate, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
     post = db.query(FunOfficialPost).filter(FunOfficialPost.id == post_id).first()
     if not post:
-        raise HTTPException(status_code=404, detail="Official Fun Page post not found")
+        raise HTTPException(status_code=404, detail="Official post not found")
     post.is_pinned = payload.pinned
     db.commit()
     return {"ok": True, "pinned": post.is_pinned}
@@ -5460,7 +5460,7 @@ def admin_pin_official_fun_post(post_id: int, payload: PinUpdate, _pin_ok: bool 
 def admin_delete_fun_post(post_id: int, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
     post = db.query(FunPost).filter(FunPost.id == post_id).first()
     if not post:
-        raise HTTPException(status_code=404, detail="Fun Page post not found")
+        raise HTTPException(status_code=404, detail="Post not found")
     _delete_fun_post_thread(db, post)
     db.commit()
     return {"ok": True}
@@ -5470,7 +5470,7 @@ def admin_delete_fun_post(post_id: int, _pin_ok: bool = Depends(require_lecturer
 def admin_delete_official_fun_post(post_id: int, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
     post = db.query(FunOfficialPost).filter(FunOfficialPost.id == post_id).first()
     if not post:
-        raise HTTPException(status_code=404, detail="Official Fun Page post not found")
+        raise HTTPException(status_code=404, detail="Official post not found")
     db.delete(post)
     db.commit()
     return {"ok": True}
@@ -6785,6 +6785,7 @@ FRONTEND_PAGES = {
     "/lecturers/lessons": "lessons_lecturer.html",
     "/lecturers/guide": "tutor_guide.html",
     "/live": "live_lesson.html",
+    "/posts": "fun.html",
     "/community": "fun.html",
     "/src": "index.html",
     "/market": "index.html",

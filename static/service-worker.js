@@ -1,4 +1,4 @@
-const OFFLINE_VERSION = "v40";
+const OFFLINE_VERSION = "v41";
 const SHELL_CACHE = `nucleocampus-shell-${OFFLINE_VERSION}`;
 const DATA_CACHE = `nucleocampus-data-${OFFLINE_VERSION}`;
 const EXTERNAL_CACHE = `nucleocampus-external-${OFFLINE_VERSION}`;
@@ -7,7 +7,7 @@ const EXTERNAL_CACHE = `nucleocampus-external-${OFFLINE_VERSION}`;
 // the app is installed. Keep this list limited to files that ship with the app.
 const APP_SHELL = [
   "/", "/students", "/lecturers", "/students/lessons", "/lecturers/lessons",
-  "/lecturers/guide", "/live", "/community", "/src", "/market", "/admin",
+  "/lecturers/guide", "/live", "/posts", "/community", "/src", "/market", "/admin",
   "/tools/pdf", "/trust",
   "/static/academics.html", "/static/campus-home.css", "/static/campus-home.js",
   "/static/index.html", "/static/student.html", "/static/lecturer.html",
