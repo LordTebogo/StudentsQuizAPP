@@ -93,6 +93,18 @@ class MarketFeaturesTest(unittest.TestCase):
             self.assertEqual(db.query(MarketListingView).filter_by(kind="rooms", listing_id=room_id).count(), 0)
             self.assertEqual(db.query(MarketListingRating).filter_by(kind="rooms", listing_id=room_id).count(), 0)
 
+    def test_market_api_keeps_local_listing_photo_gallery(self):
+        with main.SessionLocal() as db:
+            room = db.get(Accommodation, self.room_id)
+            room.image_url = "/static/demo-market/sample-room.jpg"
+            room.image_urls = '["/static/demo-market/sample-room.jpg", "/static/demo-market/sample-room-2.jpg"]'
+            db.commit()
+        room = next(item for item in self.client.get("/marketing/listings").json() if item["id"] == self.room_id)
+        self.assertEqual(room["image_urls"], [
+            "/static/demo-market/sample-room.jpg",
+            "/static/demo-market/sample-room-2.jpg",
+        ])
+
     def test_church_and_other_listings_publish_without_approval(self):
         with main.SessionLocal() as db:
             landlord = db.query(Landlord).first()

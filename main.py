@@ -4720,7 +4720,7 @@ def _market_image_urls(item) -> List[str]:
         urls = json.loads(item.image_urls or "[]")
     except (TypeError, json.JSONDecodeError):
         urls = []
-    urls = [str(url) for url in urls if str(url).startswith(("http://", "https://"))]
+    urls = [str(url) for url in urls if str(url).startswith(("http://", "https://", "/static/"))]
     if not urls and item.image_url:
         urls = [item.image_url]
     return urls
