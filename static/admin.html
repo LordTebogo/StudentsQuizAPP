@@ -41,34 +41,36 @@
   .account-type-badge { display:inline-block; margin-right:7px; color:#67e8f9; font:700 .65rem var(--font-mono,monospace); letter-spacing:.06em; text-transform:uppercase; }
   @media(max-width:700px){.account-directory-fields{grid-template-columns:1fr}.account-directory-fields .wide{grid-column:auto}}
 </style>
+<link rel="stylesheet" href="/static/light.css?v=4">
+<link rel="stylesheet" href="/static/admin-workspace.css?v=1">
 </head>
 <body>
-<div class="wrap" id="gateWrap">
+<div class="wrap admin-gate" id="gateWrap">
   <header class="top"><div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Aroun<span>us</span></div><div class="brand-tagline">Administration</div></div></div><nav><a href="/static/index.html">Home</a><a href="/static/lecturer.html">Tutor</a></nav></header>
-  <h1>Admin sign-in</h1>
-  <p class="lede">Manage platform content, accounts, submissions, and moderation from one protected workspace.</p>
-  <aside class="safety-banner"><strong>Restricted access:</strong> Use the administrator PIN supplied privately by the platform owner. Failed attempts are rate-limited and the PIN is never displayed.</aside>
+  <div class="admin-gate-hero"><span class="kicker">Arounus control room</span><h1>Welcome back, admin.</h1><p class="lede">A calm place to run learning, people, the campus market, and your platform.</p></div>
+  <aside class="safety-banner"><strong>Protected workspace</strong><span>Enter your administrator PIN to continue. Your PIN stays private and failed attempts are limited.</span></aside>
   <div class="card"><label for="pinInput">Administrator PIN</label><input id="pinInput" type="password" inputmode="numeric" autocomplete="current-password" placeholder="Enter administrator PIN"><button class="btn" id="unlockBtn">Open administration</button><div id="pinMsg"></div></div>
 </div>
 
-<main class="wrap hidden" id="appWrap">
+<main class="wrap hidden admin-app" id="appWrap">
   <header class="top"><div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Aroun<span>us</span></div><div class="brand-tagline">Content control</div></div></div><nav><a href="/static/index.html">Home</a><a href="/static/lecturer.html">Tutor</a><a href="#" id="lockBtn">Lock</a></nav></header>
-  <h1>Content studio</h1>
-  <p class="lede">Create, edit, or remove quizzes and video lessons. Editing is deliberately locked after students have submitted work, preserving their results.</p>
+  <section class="admin-intro"><div><span class="kicker">Arounus administration</span><h1 id="adminAreaTitle">Overview</h1><p id="adminAreaDescription">Your workspaces, live activity, and the next task at a glance.</p></div><span class="admin-private-pill">● Protected workspace</span></section>
+  <div class="admin-layout"><nav class="admin-sidebar" aria-label="Admin sections"><span class="admin-sidebar-label">WORKSPACES</span><button type="button" class="active" data-admin-nav="overview">Overview</button><button type="button" data-admin-nav="learning">Learning content</button><button type="button" data-admin-nav="people">People &amp; access</button><button type="button" data-admin-nav="community">Community</button><button type="button" data-admin-nav="market">Campus market</button><button type="button" data-admin-nav="finance">Finance</button><div class="admin-sidebar-note">Choose a workspace to focus on one task at a time.</div></nav><div class="admin-content">
+  <section class="admin-dashboard" data-admin-area="overview"><div class="admin-welcome"><span class="kicker">Today at Arounus</span><h2>Everything in its place.</h2><p>Open a workspace to manage its records and actions. Your learning content remains protected once learners submit work.</p></div><div class="admin-shortcuts"><button type="button" data-admin-go="learning"><span class="shortcut-icon">✦</span><strong>Learning content</strong><small>Quizzes, lessons, and scripts</small><span class="shortcut-arrow">→</span></button><button type="button" data-admin-go="people"><span class="shortcut-icon">◎</span><strong>People &amp; access</strong><small>Learners, tutors, and accounts</small><span class="shortcut-arrow">→</span></button><button type="button" data-admin-go="community"><span class="shortcut-icon">◌</span><strong>Community</strong><small>Posts and conversations</small><span class="shortcut-arrow">→</span></button><button type="button" data-admin-go="market"><span class="shortcut-icon">▣</span><strong>Campus market</strong><small>Rooms and advertisements</small><span class="shortcut-arrow">→</span></button><button type="button" data-admin-go="finance"><span class="shortcut-icon">▥</span><strong>Finance</strong><small>Costs and promotion income</small><span class="shortcut-arrow">→</span></button></div></section>
 
-  <section class="card" id="liveMonitorCard">
+  <section class="card admin-panel" id="liveMonitorCard" data-admin-area="overview">
     <div class="admin-editor-heading"><div><span class="kicker">Live activity</span><h2>Live classroom monitor</h2></div><button class="btn secondary" id="refreshLiveSessionsBtn" type="button">Refresh</button></div>
     <p class="muted">See active room codes and attendance totals. Audio, video, and chat are not opened or recorded here.</p>
     <div class="live-summary"><div class="live-stat"><strong id="activeLiveCount">0</strong><span>active classrooms</span></div><div class="live-stat"><strong id="activeParticipantCount">0</strong><span>people connected</span></div></div>
     <div id="liveSessionList"><p class="muted">Checking live classrooms...</p></div><div id="liveSessionMsg"></div>
   </section>
 
-  <div class="admin-grid">
+  <div class="admin-grid admin-panel" data-admin-area="learning">
     <section class="card"><h2>Quizzes</h2><button class="btn" id="newQuizBtn">New quiz</button><div id="quizList" class="admin-list"></div></section>
     <section class="card"><h2>Video lessons</h2><button class="btn" id="newLessonBtn">New lesson</button><div id="lessonList" class="admin-list"></div></section>
   </div>
 
-  <section class="card">
+  <section class="card admin-panel" data-admin-area="people">
     <div class="admin-editor-heading"><div><span class="kicker">People & permissions</span><h2>Tutor management</h2></div><button class="btn secondary" id="newLecturerBtn">New tutor</button></div>
     <div class="admin-grid">
       <div>
@@ -87,7 +89,7 @@
     </div>
   </section>
 
-  <section class="card">
+  <section class="card admin-panel" data-admin-area="people">
     <div class="admin-editor-heading"><div><span class="kicker">Learner access</span><h2>Learner management</h2></div><span><button class="btn secondary" id="activateAllStudentsBtn">Activate all</button><button class="btn secondary" id="inactivateAllStudentsBtn">Inactivate all</button><button class="btn secondary" id="refreshStudentsBtn">Refresh</button></span></div>
     <p class="muted">Select a learner to manage modules or reset a password. Access controls appear immediately beneath the selected learner.</p>
     <div class="admin-list-tools"><label for="studentAdminSearch">Search learners<input id="studentAdminSearch" type="search" placeholder="Name, username or email"></label><label for="studentAdminStatus">Account status<select id="studentAdminStatus"><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="unapproved">Not approved</option></select></label></div><div class="admin-page-head"><strong id="studentResultSummary">Learners</strong><div><button class="btn secondary" type="button" id="studentPrevPage">Previous</button><button class="btn secondary" type="button" id="studentNextPage">Next</button></div></div>
@@ -102,7 +104,7 @@
     <div id="srcPresidentAdminCard" class="hidden"><div id="srcPresidentMsg"></div></div>
   </section>
 
-  <section class="card" id="allAccountsCard">
+  <section class="card admin-panel" data-admin-area="people" id="allAccountsCard">
     <div class="admin-editor-heading"><div><span class="kicker">Read, update & delete</span><h2>All registered accounts</h2></div><button class="btn secondary" id="refreshAllAccountsBtn" type="button">Refresh</button></div>
     <p class="muted">Manage every learner, tutor and marketplace account, including accommodation, transport, sales and other businesses.</p>
     <div class="admin-list-tools"><label for="allAccountSearch">Search accounts<input id="allAccountSearch" type="search" placeholder="Name, email, business or username"></label><label for="allAccountType">Account type<select id="allAccountType"><option value="all">All accounts</option><option value="student">Learners</option><option value="lecturer">Tutors</option><option value="provider">Businesses and providers</option></select></label><label for="allAccountStatus">Status<select id="allAccountStatus"><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="unapproved">Not approved</option></select></label></div>
@@ -132,14 +134,14 @@
     </div>
   </section>
 
-  <section class="card">
+  <section class="card admin-panel" data-admin-area="learning">
     <div class="admin-editor-heading"><div><span class="kicker">Assessment archive</span><h2>All student scripts</h2></div><button class="btn secondary" id="refreshScriptsBtn">Refresh scripts</button></div>
     <p class="muted">Every quiz script submitted across every module. Download a complete PDF including answers, marks, and expected answers.</p>
     <div id="adminScriptsList" class="admin-list"></div><div id="adminScriptsMsg"></div>
     <div id="adminMarkCard" class="hidden"><h3>Mark selected script</h3><p class="muted">Score short or long answers below. Multiple-choice scores remain automatic.</p><div id="adminMarkQuestions"></div><button class="btn" id="saveAdminMarksBtn">Save marks</button><div id="adminMarkMsg"></div></div>
   </section>
 
-  <section class="card">
+  <section class="card admin-panel" data-admin-area="community">
     <div class="admin-editor-heading"><div><span class="kicker">Safe posts</span><h2>Posts moderation</h2></div><button class="btn secondary" id="refreshCommunityBtn">Refresh posts</button></div>
     <p class="muted">Publish official notices, pin important discussion items, or remove inappropriate posts and comments.</p>
     <div class="admin-grid">
@@ -159,7 +161,7 @@
     </div>
   </section>
 
-  <section class="card hidden" id="editorCard">
+  <section class="card hidden admin-panel" id="editorCard" data-admin-area="learning">
     <div class="admin-editor-heading"><div><span class="kicker" id="editorKicker">Create</span><h2 id="editorTitle">New content</h2></div><button class="btn secondary" id="closeEditorBtn">Close</button></div>
     <div id="quizFields">
       <label for="contentTitle">Quiz title</label><input id="contentTitle" type="text" placeholder="e.g. Cell Biology: Week 1">
@@ -176,7 +178,7 @@
     <p class="muted">Each question needs <code>type</code>, <code>question</code>, and <code>marks</code>. MCQs also need <code>options</code> and <code>correct_answer</code>; short answers need <code>correct_answer</code>. Optional: <code>image_url</code>.</p>
     <button class="btn" id="saveBtn">Save</button><button class="btn secondary hidden" id="deleteBtn">Delete permanently</button><div id="editorMsg"></div>
   </section>
-  <section class="card" id="mediaFinanceCard">
+  <section class="card admin-panel" id="mediaFinanceCard" data-admin-area="finance">
     <div class="admin-editor-heading"><div><span class="kicker">Sustainable media</span><h2>Media costs and promotion income</h2></div><button class="btn secondary" id="refreshMediaFinance" type="button">Refresh</button></div>
     <p class="muted">Compare recorded advert income with Cloudinary, hosting and other costs. Enter actual invoice amounts below. Cloudinary usage is a rolling account report.</p>
     <label for="mediaFinanceMonth">Month</label><input id="mediaFinanceMonth" type="month">
@@ -190,6 +192,7 @@
     </form>
     <div id="mediaFinanceEntries"></div><div id="mediaFinanceMessage" role="status"></div>
   </section>
+  </div></div>
 </main>
 
 <script>
@@ -237,6 +240,7 @@ async function unlock(value) {
   } catch (error) { showMsg($('pinMsg'), error.message || 'Could not open administration.', 'error'); }
 }
 function openEditor(kind, item = null) {
+  showAdminArea('learning', false);
   editor = { kind, id: item ? item.id : null };
   $('editorCard').classList.remove('hidden'); $('editorMsg').innerHTML = '';
   $('quizFields').classList.toggle('hidden', kind !== 'quiz'); $('lessonFields').classList.toggle('hidden', kind !== 'lesson');
@@ -552,17 +556,6 @@ document.querySelectorAll('#appWrap .card:not(#editorCard)').forEach(card => {
   toggle.addEventListener('click', () => { const collapsed = card.classList.toggle('collapsed'); toggle.textContent = collapsed ? '+' : '−'; toggle.title = collapsed ? 'Expand this panel' : 'Collapse this panel'; });
   card.appendChild(toggle);
 });
-document.querySelectorAll('#appWrap .card:not(#editorCard)').forEach(card => {
-  const heading = card.querySelector('h2, h3');
-  const kicker = card.querySelector('.kicker');
-  const label = heading ? heading.textContent.trim() : (kicker ? kicker.textContent.trim() : 'Admin panel');
-  const detail = kicker && kicker.textContent.trim() !== label ? kicker.textContent.trim() : 'Tap to open this workspace';
-  const summary = document.createElement('div'); summary.className = 'card-summary';
-  summary.innerHTML = `<strong>${escapeHtml(label)}</strong><small>${escapeHtml(detail)}</small>`;
-  card.appendChild(summary); card.classList.add('collapsed');
-  const toggle = card.querySelector('.card-toggle');
-  if (toggle) { toggle.textContent = '+'; toggle.title = 'Expand this panel'; toggle.setAttribute('aria-label', `Expand ${label}`); }
-});
 function addAdminMessageButtons() {
   [['lecturerList','lecturer'], ['studentList','student']].forEach(([listId, type]) => {
     const list = $(listId); if (!list) return;
@@ -580,6 +573,7 @@ if (pin) unlock(pin);
 setInterval(() => { if (pin && !$('appWrap').classList.contains('hidden')) loadLiveSessions(); }, 15000);
 </script>
 <script src="/static/admin-market-ads.js"></script>
+<script src="/static/admin-workspace.js?v=1"></script>
 <script src="/static/admin-finance.js?v=1"></script>
 <script src="/static/experience.js"></script>
 <script src="/static/loading.js"></script>

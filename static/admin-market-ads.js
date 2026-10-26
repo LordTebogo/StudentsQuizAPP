@@ -26,8 +26,12 @@
     if (installed || !document.getElementById('appWrap')) return; installed = true;
     const card = document.createElement('section'); card.className = 'card'; card.id = 'marketAdvertAdmin';
     card.innerHTML = '<div class="admin-editor-heading"><div><span class="kicker">Campus market</span><h2>Room approvals</h2><p class="muted">Rooms appear publicly only after approval. Other listings publish automatically.</p></div><button class="btn secondary" type="button" id="refreshMarketAds">Refresh listings</button></div><div id="marketRoomAdminList" class="stack-list"></div><h2>Other listings</h2><div id="marketAdvertAdminList" class="stack-list"></div>';
-    const cards = document.querySelectorAll('#appWrap .card');
-    (cards[1] || cards[0])?.insertAdjacentElement('afterend', card);
+    const content = document.querySelector('#appWrap .admin-content');
+    if (content) content.insertBefore(card, document.getElementById('mediaFinanceCard'));
+    else {
+      const cards = document.querySelectorAll('#appWrap .card');
+      (cards[1] || cards[0])?.insertAdjacentElement('afterend', card);
+    }
     card.querySelector('#refreshMarketAds').addEventListener('click', load);
     card.addEventListener('click', async event => {
       const room = event.target.closest('[data-admin-room]');

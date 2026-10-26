@@ -1,0 +1,35 @@
+/* A focused admin workspace layered over the shared Arounus theme. */
+body.nucleocampus-ui:has(.admin-app),body:has(.admin-app){background:#f3f7f4!important;color:#173d36!important}
+.admin-gate,.admin-app{color:#173d36}.admin-gate h1,.admin-app h1,.admin-gate h2,.admin-app h2,.admin-gate label,.admin-app label{color:#173d36!important}
+.admin-gate .lede,.admin-app .lede{color:#526b65!important}
+.admin-gate input,.admin-app input,.admin-app select,.admin-app textarea{background:#fff!important;color:#173d36!important;border-color:#cbded3!important}
+.admin-gate .btn,.admin-app .btn{color:#fff!important}.admin-gate .btn.secondary,.admin-app .btn.secondary{color:#087f70!important}
+.admin-app.wrap{width:min(1460px,calc(100% - 48px));max-width:none;padding-top:20px}
+.admin-app .top,.admin-gate .top{border-radius:20px}
+.admin-intro{display:flex;align-items:end;justify-content:space-between;gap:18px;margin:32px 0 23px}
+.admin-intro h1{margin:5px 0 3px;font-size:clamp(2rem,4vw,3.25rem);letter-spacing:-.055em}
+.admin-intro p{margin:0;color:#5b716b}
+.admin-private-pill{padding:10px 13px;border:1px solid #c9e6d8;border-radius:999px;background:#eaf8f0;color:#166950;font-size:.78rem;font-weight:700;white-space:nowrap}
+.admin-layout{display:grid;grid-template-columns:220px minmax(0,1fr);gap:25px;align-items:start}
+.admin-sidebar{position:sticky;top:16px;display:grid;gap:5px;padding:17px 11px;border:1px solid #dce9e1;border-radius:20px;background:#fff;box-shadow:0 14px 38px #193d3010}
+.admin-sidebar-label{padding:8px 12px 10px;color:#779188;font-size:.64rem;font-weight:800;letter-spacing:.16em}
+.admin-sidebar button{width:100%;min-height:45px;padding:10px 13px;border:0;border-radius:11px;background:transparent;color:#49665c;text-align:left;font-size:.88rem;font-weight:650;cursor:pointer}
+.admin-sidebar button:hover{background:#eef6f0;color:#155b4e}
+.admin-sidebar button.active{background:#087f70;color:#fff;box-shadow:0 6px 14px #087f7030}
+.admin-sidebar-note{margin:13px 10px 4px;padding-top:16px;border-top:1px solid #e5eee8;color:#789087;font-size:.75rem;line-height:1.5}
+.admin-content{min-width:0}.admin-content [hidden]{display:none!important}
+.admin-dashboard{margin-bottom:20px}.admin-welcome{padding:28px 32px;border:1px solid #b9ded0;border-radius:23px;background:radial-gradient(circle at 100% 0,#d7f2df 0,transparent 42%),linear-gradient(125deg,#f6fff8,#e8f5ee);box-shadow:0 15px 36px #1b5c3410}
+.admin-welcome h2{margin:7px 0;font-size:clamp(1.6rem,3vw,2.25rem);letter-spacing:-.04em}.admin-welcome p{max-width:680px;margin:0;color:#527268;line-height:1.6}
+.admin-shortcuts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:15px}
+.admin-shortcuts button{position:relative;display:flex;flex-direction:column;align-items:flex-start;min-height:150px;padding:19px;border:1px solid #dae9e0;border-radius:18px;background:#fff;color:#173d36;text-align:left;box-shadow:0 7px 22px #173d3609;cursor:pointer;transition:transform .18s,box-shadow .18s,border-color .18s}
+.admin-shortcuts button:hover{transform:translateY(-3px);border-color:#8ccbb0;box-shadow:0 14px 30px #173d3617}
+.admin-shortcuts button:focus-visible,.admin-sidebar button:focus-visible{outline:3px solid #72bda5;outline-offset:2px}
+.shortcut-icon{display:grid;place-items:center;width:33px;height:33px;margin-bottom:14px;border-radius:10px;background:#e5f5ec;color:#0b7a65;font-size:1.2rem}.admin-shortcuts strong{font-size:.95rem}.admin-shortcuts small{margin-top:4px;color:#6a8378;font-size:.76rem}.shortcut-arrow{position:absolute;right:17px;top:21px;color:#0c7c67}
+.admin-app .card{border:1px solid #dbe9e0;border-radius:20px;background:#fff;box-shadow:0 8px 25px #173d360b}.admin-app .card::after{display:none}
+.admin-app .card h2{letter-spacing:-.025em}.admin-app .card .muted{color:#627a70}.admin-app .card-toggle{background:#ecf6ef;color:#0a7564;border-color:#cce9da}.admin-app .card.collapsed{min-height:74px;padding:17px 60px 17px 22px}
+.admin-app .admin-grid{gap:16px}.admin-app .admin-grid .card{min-width:0}.admin-app .live-stat{border-color:#d8eade;background:#f6fbf7}.admin-app .live-stat strong{color:#087f70}
+.admin-app .inline-account-actions,.admin-app .account-directory-editor{background:#f7fbf8}.admin-app .student-selected-banner{background:#eaf8f0;border-color:#95cfad}.admin-app .student-selected-banner strong{color:#0c7657}
+.admin-gate.wrap{max-width:940px;padding-top:30px}.admin-gate-hero{max-width:700px;margin:50px 0 27px}.admin-gate-hero h1{font-size:clamp(2.3rem,6vw,4.2rem);letter-spacing:-.055em;line-height:1.08}.admin-gate-hero .lede{max-width:620px}.admin-gate .safety-banner{display:flex;gap:12px;align-items:baseline;padding:16px 20px;border:1px solid #c5dfd0;border-radius:15px;background:#ebf7ef;color:#335b4a}.admin-gate .safety-banner strong{color:#155e48;white-space:nowrap}.admin-gate>.card{max-width:650px;padding:27px;border:1px solid #d8e8dd;border-radius:19px;background:#fff;box-shadow:0 14px 38px #234b3414}.admin-gate #unlockBtn{min-height:46px}
+@media(max-width:1000px){.admin-layout{grid-template-columns:1fr}.admin-sidebar{position:static;display:flex;gap:5px;overflow-x:auto;padding:10px;scrollbar-width:thin}.admin-sidebar-label,.admin-sidebar-note{display:none}.admin-sidebar button{flex:0 0 auto;width:auto;white-space:nowrap;padding-inline:15px}}
+@media(max-width:720px){.admin-app.wrap{width:min(100% - 24px,1460px)}.admin-intro{align-items:start;margin-top:22px}.admin-private-pill{display:none}.admin-shortcuts{grid-template-columns:repeat(2,minmax(0,1fr))}.admin-app .admin-grid{grid-template-columns:1fr}.admin-gate-hero{margin-top:32px}.admin-gate .safety-banner{display:block}.admin-gate .safety-banner span{display:block;margin-top:4px}}
+@media(max-width:480px){.admin-shortcuts{grid-template-columns:1fr}.admin-shortcuts button{min-height:118px}.admin-welcome{padding:22px}.admin-gate.wrap{width:calc(100% - 24px)}.admin-gate>.card{padding:19px}}
