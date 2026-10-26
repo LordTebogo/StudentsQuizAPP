@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Premium HD | Arounus</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    body{margin:0;background:#f0f7f3;color:#17332d;font-family:system-ui,sans-serif}
+    main{max-width:1040px;margin:auto;padding:clamp(20px,5vw,60px)}
+    .back{color:#006c60;text-decoration:none;font-weight:700}
+    h1{font-size:clamp(2rem,5vw,3.5rem);margin:30px 0 8px;letter-spacing:-.05em}
+    .intro{font-size:1.1rem;color:#526b65;max-width:650px;line-height:1.6}
+    .plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin:34px 0}
+    .plan{background:white;border:1px solid #c9dcd2;border-radius:20px;padding:24px;box-shadow:0 12px 30px #163d3010}
+    .plan h2{font-size:1.15rem;margin:0 0 18px}.price{font-size:2.6rem;font-weight:800;letter-spacing:-.06em;margin:0}
+    .plan p{color:#526b65;min-height:48px}.plan button{width:100%;border:0;border-radius:11px;padding:14px;background:#007868;color:white;font:700 1rem system-ui;cursor:pointer}
+    .plan button:disabled{opacity:.55;cursor:not-allowed}
+    .status{background:#e1f3e9;border:1px solid #a8d5bd;border-radius:12px;padding:15px;line-height:1.5;max-width:700px}
+    .spinner{display:inline-block;width:16px;height:16px;border:2px solid #ffffff80;border-top-color:white;border-radius:50%;animation:spin .7s linear infinite;vertical-align:-3px;margin-right:8px}
+    @keyframes spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.spinner{animation:none}}
+  </style>
+</head>
+<body>
+<main>
+  <a class="back" href="/students/lessons">← Back to lessons</a>
+  <h1>Watch in Premium HD</h1>
+  <p class="intro">Choose the access period that suits you. Each option unlocks higher quality video on your learner account. Pay securely on PayU’s checkout page.</p>
+  <div id="status" class="status" role="status" aria-live="polite">Checking Premium HD availability…</div>
+  <div class="plans" id="plans"></div>
+  <p class="intro">The 30 day and 365 day options are prepaid access periods. They do not renew automatically. The one-time option gives lifetime access.</p>
+</main>
+<script>
+const statusBox=document.getElementById('status'), plansBox=document.getElementById('plans');
+const token=sessionStorage.getItem('studentToken');
+const descriptions={monthly:'30 days of Premium HD access',annual:'365 days of Premium HD access',once:'One payment for lifetime access'};
+const names={monthly:'30 days',annual:'365 days',once:'One-time'};
+const payment=new URLSearchParams(location.search).get('payment');
+if(payment==='paid') statusBox.textContent='Payment confirmed. Premium HD is ready on your account.';
+else if(payment==='pending') statusBox.textContent='Payment is still processing. Please check again shortly.';
+else if(payment==='failed') statusBox.textContent='The payment was not completed. You can choose a plan again.';
+else if(payment==='mismatch') statusBox.textContent='We could not validate that payment. Please contact support.';
+async function load(){
+  try{
+    const response=await fetch('/billing/premium/plans',{cache:'no-store'});
+    if(!response.ok) throw Error('Plans could not be loaded.');
+    const data=await response.json();
+    if(!payment) statusBox.textContent=data.checkout_available?'Choose a plan to continue to PayU.':'Checkout is being set up. Plans are shown below, but payment is not available yet.';
+    if(!token) statusBox.innerHTML='Sign in as a learner to purchase Premium HD. <a href="/students">Go to learner sign in</a>.';
+    let hasLifetime=false;
+    if(token){
+      const current=await fetch('/billing/premium/me',{headers:{'X-Student-Token':token},cache:'no-store'});
+      if(current.ok){const access=await current.json();hasLifetime=access.lifetime;if(access.active&&(!payment||payment==='pending'))statusBox.textContent=access.lifetime?'Your lifetime Premium HD access is active.':`Your Premium HD access is active${access.until?' until '+new Date(access.until).toLocaleDateString():''}.`;}
+    }
+    plansBox.innerHTML='';
+    for(const plan of data.plans){
+      const card=document.createElement('section');card.className='plan';
+      const title=document.createElement('h2');title.textContent=names[plan.id]||plan.label;
+      const price=document.createElement('div');price.className='price';price.textContent=`R${plan.amount_cents/100}`;
+      const description=document.createElement('p');description.textContent=descriptions[plan.id]||plan.label;
+      const button=document.createElement('button');button.type='button';button.textContent=hasLifetime?'Already active':'Continue to PayU';button.disabled=!token||!data.checkout_available||hasLifetime;
+      button.addEventListener('click',async()=>{
+        button.disabled=true;button.innerHTML='<span class="spinner" aria-hidden="true"></span>Opening checkout…';statusBox.textContent='Setting up your secure checkout…';
+        try{
+          const result=await fetch('/billing/premium/checkout',{method:'POST',headers:{'Content-Type':'application/json','X-Student-Token':token},body:JSON.stringify({plan:plan.id})});
+          const body=await result.json();if(!result.ok||!body.checkout_url)throw Error(body.detail||'Checkout could not open.');
+          location.assign(body.checkout_url);
+        }catch(error){statusBox.textContent=error.message||'Checkout could not open.';button.disabled=false;button.textContent='Continue to PayU';}
+      });
+      card.append(title,price,description,button);plansBox.append(card);
+    }
+  }catch(error){statusBox.textContent=error.message||'Plans could not be loaded.';}
+}
+load();
+</script>
+</body>
+</html>

@@ -100,6 +100,8 @@ class Student(Base):
     approved = Column(Boolean, nullable=False, default=False)
     active = Column(Boolean, nullable=False, default=True)
     premium_video = Column(Boolean, nullable=False, default=False)
+    premium_until = Column(String)
+    premium_lifetime = Column(Boolean, nullable=False, default=False)
     module_selection_completed = Column(Boolean, nullable=False, default=False)
     created_at = Column(String, nullable=False)
 
@@ -113,6 +115,20 @@ class StudentModule(Base):
     student_id = Column(Integer, ForeignKey("students.id"), nullable=False, index=True)
     module_code = Column(String, nullable=False, index=True)
     student = relationship("Student", back_populates="modules")
+
+
+class PremiumPayment(Base):
+    __tablename__ = "premium_payments"
+
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer, ForeignKey("students.id"), nullable=False, index=True)
+    merchant_reference = Column(String, nullable=False, unique=True, index=True)
+    payu_reference = Column(String, unique=True)
+    plan = Column(String, nullable=False)
+    amount_cents = Column(Integer, nullable=False)
+    status = Column(String, nullable=False, default="pending")
+    created_at = Column(String, nullable=False)
+    confirmed_at = Column(String)
 
 
 class DirectMessage(Base):

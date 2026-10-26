@@ -185,12 +185,12 @@
       closeMenu();
       if (video.dataset.premiumAvailable !== 'true') { showNotice('Higher quality is not available for this video.'); return; }
       const token = sessionStorage.getItem('studentToken');
-      if (!token) { showNotice('Join Premium to see higher quality. Sign in as a learner first.'); return; }
+      if (!token) { window.location.assign('/premium'); return; }
       premium.disabled = true;
       try {
         const response = await fetch(`/media/premium/${encodeURIComponent(video.dataset.videoKind)}/${encodeURIComponent(video.dataset.videoId)}`, {headers:{'X-Student-Token':token},cache:'no-store'});
         const result = await response.json();
-        if (response.status === 403) { showNotice('Join Premium to see higher quality.'); return; }
+        if (response.status === 403) { window.location.assign('/premium'); return; }
         if (!response.ok || !result.url) throw new Error(result.detail || 'Higher quality is unavailable right now.');
         showNotice(''); select(premium, result.url);
         video.play().catch(() => showNotice('This video could not play. Please try again.'));

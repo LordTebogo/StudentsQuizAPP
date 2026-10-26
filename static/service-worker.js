@@ -1,4 +1,4 @@
-const OFFLINE_VERSION = "v46";
+const OFFLINE_VERSION = "v47";
 const SHELL_CACHE = `nucleocampus-shell-${OFFLINE_VERSION}`;
 const DATA_CACHE = `nucleocampus-data-${OFFLINE_VERSION}`;
 const EXTERNAL_CACHE = `nucleocampus-external-${OFFLINE_VERSION}`;
@@ -8,12 +8,12 @@ const EXTERNAL_CACHE = `nucleocampus-external-${OFFLINE_VERSION}`;
 const APP_SHELL = [
   "/", "/students", "/lecturers", "/students/lessons", "/lecturers/lessons",
   "/lecturers/guide", "/live", "/posts", "/community", "/src", "/market", "/admin",
-  "/tools/pdf", "/trust",
+  "/tools/pdf", "/trust", "/premium",
   "/static/academics.html", "/static/campus-home.css", "/static/campus-home.js",
   "/static/index.html", "/static/student.html", "/static/lecturer.html",
   "/static/lessons_student.html", "/static/lessons_lecturer.html",
   "/static/live_lesson.html", "/static/fun.html", "/static/comrade.html",
-  "/static/admin.html", "/static/pdf_tools.html", "/static/media_compressor.html",
+  "/static/admin.html", "/static/pdf_tools.html", "/static/media_compressor.html", "/static/premium.html",
   "/static/media-compressor.js?v=2", "/static/admin-workspace.css?v=3", "/static/admin-workspace.js?v=1",
   "/static/document-organizer.js", "/static/trust.html", "/static/tutor_guide.html",
   "/static/style.css", "/static/product.css", "/static/theme.css?v=2",
@@ -26,7 +26,7 @@ const APP_SHELL = [
   "/static/student-module-enrollment.js", "/static/username-suggestion.js", "/static/student-messaging.js",
   "/static/lecturer-messaging.js", "/static/admin-messaging.js",
   "/static/admin-market-ads.js", "/static/market-sell.js?v=2", "/static/market-contact.js?v=1",
-  "/static/market-metrics.js?v=1", "/static/video-access.js?v=4", "/static/media-url.js?v=1",
+  "/static/market-metrics.js?v=1", "/static/video-access.js?v=5", "/static/media-url.js?v=1",
   "/static/lesson-insights.js", "/static/admin-finance.js?v=1", "/static/quiz-builder.js?v=15",
   "/static/quiz-import-template.csv", "/static/standard-quiz-template.json",
   "/static/fun-quiz-template.json", "/static/fun-quiz-images-scenario-template.json",

@@ -103,6 +103,7 @@ from models import (
     QuizDraft,
     Submission,
     Student,
+    PremiumPayment,
     PushSubscription,
     StudentModule,
     Landlord, Accommodation, AccommodationComment, MarketAdvert, MarketListingView, MarketListingRating, MediaFinanceEntry, MediaUploadEvent,
@@ -111,6 +112,7 @@ from models import (
 )
 from quiz_spreadsheet import QuizSpreadsheetError, parse_quiz_spreadsheet
 from cloudinary_utils import upload_image_bytes, upload_video_variants, premium_video_url, delete_lesson_video_variants
+from payu_checkout import PLANS as PREMIUM_PLANS, PayUError, configured as payu_configured, start as payu_start, verify as payu_verify
 
 # Matplotlib is loaded lazily for equation rendering. Give it a writable
 # cache in local and cloud environments where the default home may be read-only.
@@ -388,6 +390,18 @@ def ensure_market_metrics_schema():
 
 
 ensure_market_metrics_schema()
+
+
+def ensure_premium_billing_schema():
+    columns = {column["name"] for column in inspect(engine).get_columns("students")}
+    with engine.begin() as conn:
+        if "premium_until" not in columns:
+            conn.execute(text("ALTER TABLE students ADD COLUMN premium_until VARCHAR"))
+        if "premium_lifetime" not in columns:
+            conn.execute(text("ALTER TABLE students ADD COLUMN premium_lifetime BOOLEAN DEFAULT FALSE NOT NULL"))
+
+
+ensure_premium_billing_schema()
 
 
 def ensure_premium_media_schema():
@@ -3007,7 +3021,7 @@ def get_lesson(lesson_id: int, db: Session = Depends(get_db)):
 
 @app.get("/media/premium/{kind}/{item_id}")
 def get_premium_video(kind: str, item_id: int, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
-    if not student.premium_video:
+    if not _has_premium_video(student):
         raise HTTPException(status_code=403, detail="Premium HD video access has not been granted to your account")
     if kind == "lesson":
         item = db.query(Lesson).filter(Lesson.id == item_id).first()
@@ -3022,6 +3036,136 @@ def get_premium_video(kind: str, item_id: int, student: Student = Depends(requir
     if not item or not item.premium_video_asset:
         raise HTTPException(status_code=404, detail="Premium video is unavailable")
     response = JSONResponse({"url": premium_video_url(item.premium_video_asset), "expires_in": 900})
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
+
+
+def _has_premium_video(student: Student) -> bool:
+    if student.premium_video or student.premium_lifetime:
+        return True
+    if not student.premium_until:
+        return False
+    try:
+        return datetime.fromisoformat(student.premium_until) > datetime.now(timezone.utc)
+    except ValueError:
+        return False
+
+
+@app.get("/billing/premium/plans")
+def premium_plans():
+    response = JSONResponse({
+        "currency": "ZAR",
+        "plans": [{"id": key, "label": value["label"], "amount_cents": value["amount_cents"]}
+                  for key, value in PREMIUM_PLANS.items()],
+        "checkout_available": bool(payu_configured() and os.getenv("PUBLIC_BASE_URL", "").startswith("https://")),
+        "google_pay_available": False,
+    })
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.get("/billing/premium/me")
+def premium_status(student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+    pending = db.query(PremiumPayment).filter(PremiumPayment.student_id == student.id,
+                                               PremiumPayment.status == "pending").order_by(PremiumPayment.id.desc()).first()
+    if pending and pending.payu_reference:
+        _confirm_premium_payment(pending.merchant_reference, db)
+        db.refresh(student)
+    response = JSONResponse({"active": _has_premium_video(student), "until": student.premium_until,
+                             "lifetime": bool(student.premium_lifetime), "admin_granted": bool(student.premium_video)})
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
+
+
+class PremiumCheckoutRequest(BaseModel):
+    plan: str
+
+
+@app.post("/billing/premium/checkout")
+def premium_checkout(payload: PremiumCheckoutRequest, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+    plan = PREMIUM_PLANS.get(payload.plan)
+    if not plan:
+        raise HTTPException(status_code=400, detail="Choose a valid Premium HD plan")
+    public_base = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
+    if not payu_configured() or not public_base.startswith("https://"):
+        raise HTTPException(status_code=503, detail="Premium checkout is being set up. Please try again later.")
+    reference = "AR" + secrets.token_hex(16).upper()
+    payment = PremiumPayment(student_id=student.id, merchant_reference=reference, plan=payload.plan,
+                             amount_cents=plan["amount_cents"], status="pending", created_at=datetime.now(timezone.utc).isoformat())
+    db.add(payment)
+    db.commit()
+    try:
+        payu_reference, checkout_url = payu_start(reference, payment.amount_cents,
+            f"{public_base}/billing/premium/return?reference={reference}",
+            f"{public_base}/billing/premium/return?reference={reference}&cancelled=1", student.email)
+    except PayUError as exc:
+        payment.status = "setup_failed"
+        db.commit()
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    payment.payu_reference = payu_reference
+    db.commit()
+    response = JSONResponse({"checkout_url": checkout_url})
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
+
+
+def _confirm_premium_payment(reference: str, db: Session) -> str:
+    payment = db.query(PremiumPayment).filter(PremiumPayment.merchant_reference == reference).with_for_update().first()
+    if not payment:
+        return "unknown"
+    if payment.status == "paid":
+        return "paid"
+    if not payment.payu_reference:
+        return "pending"
+    try:
+        result = payu_verify(reference)
+    except PayUError:
+        return "pending"
+    if (result["merchant_reference"] != reference or result["payu_reference"] != payment.payu_reference
+            or result["amount_cents"] != str(payment.amount_cents) or result["currency"] != "ZAR"
+            or result["transaction_type"] != "PAYMENT"):
+        payment.status = "mismatch"
+        db.commit()
+        return "mismatch"
+    if result["state"] == "FAILED":
+        payment.status = "failed"
+        db.commit()
+        return "failed"
+    if result["state"] != "SUCCESSFUL" or not result["successful"]:
+        return "pending"
+    student = db.query(Student).filter(Student.id == payment.student_id).first()
+    if not student:
+        return "unknown"
+    if payment.plan == "once":
+        student.premium_lifetime = True
+    else:
+        now = datetime.now(timezone.utc)
+        try:
+            current_until = datetime.fromisoformat(student.premium_until) if student.premium_until else now
+        except ValueError:
+            current_until = now
+        student.premium_until = (max(now, current_until) + timedelta(days=PREMIUM_PLANS[payment.plan]["days"])).isoformat()
+    payment.status = "paid"
+    payment.confirmed_at = datetime.now(timezone.utc).isoformat()
+    db.commit()
+    return "paid"
+
+
+@app.get("/billing/premium/return")
+def premium_payment_return(reference: str, db: Session = Depends(get_db)):
+    if not re.fullmatch(r"AR[A-F0-9]{32}", reference):
+        raise HTTPException(status_code=400, detail="Invalid payment reference")
+    status = _confirm_premium_payment(reference, db)
+    return RedirectResponse(url=f"/premium?payment={status}&reference={reference}", status_code=303)
+
+
+@app.post("/billing/premium/verify")
+def premium_payment_verify(reference: str = Form(...), student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+    payment = db.query(PremiumPayment).filter(PremiumPayment.merchant_reference == reference,
+                                               PremiumPayment.student_id == student.id).first()
+    if not payment:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    response = JSONResponse({"status": _confirm_premium_payment(reference, db)})
     response.headers["Cache-Control"] = "private, no-store"
     return response
 
@@ -6839,6 +6983,7 @@ FRONTEND_PAGES = {
     "/admin": "admin.html",
     "/tools/pdf": "pdf_tools.html",
     "/trust": "trust.html",
+    "/premium": "premium.html",
 }
 
 
