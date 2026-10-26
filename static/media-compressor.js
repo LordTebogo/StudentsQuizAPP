@@ -22,6 +22,26 @@
   }
   const quality = $('imageQuality');
   quality.addEventListener('input', () => $('imageQualityValue').textContent = `${quality.value}%`);
+  async function compressVideoFast(file, maxWidth, bitrate, onProgress) {
+    if (typeof VideoEncoder === 'undefined' || typeof VideoDecoder === 'undefined') throw Error('Native video encoding is unavailable.');
+    const {Input, Output, ALL_FORMATS, BlobSource, BufferTarget, Mp4OutputFormat, Conversion} = await import('https://cdn.jsdelivr.net/npm/mediabunny@1.62.1/+esm');
+    const input = new Input({source: new BlobSource(file), formats: ALL_FORMATS});
+    try {
+      const videoTrack = await input.getPrimaryVideoTrack();
+      if (!videoTrack) throw Error('No video track was found.');
+      const sourceWidth = await videoTrack.getDisplayWidth();
+      const output = new Output({format: new Mp4OutputFormat(), target: new BufferTarget()});
+      const conversion = await Conversion.init({
+        input, output, tracks: 'primary',
+        video: {width: Math.min(sourceWidth, maxWidth), codec: 'avc', bitrate, frameRate: 24, hardwareAcceleration: 'prefer-hardware', forceTranscode: true},
+      });
+      if (!conversion.isValid || conversion.discardedTracks.length) throw Error('This browser cannot keep every track in fast mode.');
+      conversion.onProgress = progress => onProgress(Math.round(progress * 100));
+      await conversion.execute();
+      if (!output.target.buffer?.byteLength) throw Error('Fast encoding produced an empty file.');
+      return new Blob([output.target.buffer], {type: 'video/mp4'});
+    } finally { input.dispose(); }
+  }
   $('compressImage').addEventListener('click', async () => {
     const file = $('imageFile').files[0]; if (!file) return message('imageResult', 'Choose an image first.');
     const button = $('compressImage'); button.disabled = true; clear('imageResult'); message('imageResult', 'Compressing image…');
@@ -41,10 +61,20 @@
   });
   $('compressVideo').addEventListener('click', async () => {
     const file = $('videoFile').files[0]; if (!file) return message('videoResult', 'Choose a video first.');
+    const button = $('compressVideo'), progress = $('videoProgress'); button.disabled = true; progress.hidden = false; progress.value = 0; clear('videoResult'); message('videoResult', 'Preparing fast compression…');
+    try {
+      const blob = await compressVideoFast(file, Number($('videoSize').value), Number($('videoBitrate').value), value => { progress.value = value; });
+      ready('videoResult', file, blob, 'mp4');
+      button.disabled = false; progress.hidden = true;
+      return;
+    } catch (_) {
+      progress.value = 0;
+      message('videoResult', 'Fast encoding is unavailable for this file or browser. Using compatible compression…');
+    }
     const types = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm;codecs=vp8', 'video/mp4'];
     const mimeType = typeof MediaRecorder !== 'undefined' && types.find(type => MediaRecorder.isTypeSupported(type));
-    if (!mimeType || !HTMLCanvasElement.prototype.captureStream) return message('videoResult', 'Video compression is unavailable in this browser. Try a current version of Chrome, Edge, or Firefox.');
-    const button = $('compressVideo'), progress = $('videoProgress'); button.disabled = true; progress.hidden = false; progress.value = 0; clear('videoResult'); message('videoResult', 'Preparing video…');
+    if (!mimeType || !HTMLCanvasElement.prototype.captureStream) { button.disabled = false; progress.hidden = true; return message('videoResult', 'Video compression is unavailable in this browser. Try a current version of Chrome, Edge, or Firefox.'); }
+    message('videoResult', 'Preparing video…');
     const sourceUrl = URL.createObjectURL(file), video = document.createElement('video'); video.src = sourceUrl; video.playsInline = true; video.preload = 'auto';
     let context, stream, timer, recorder;
     try {
