@@ -74,12 +74,12 @@
   ];
   const moreLinks = activeRole === 'admin' ? [
     ['/static/admin.html#liveMonitorCard','Live sessions'], ['/static/admin.html#adminScripts','Submissions'],
-    ['/static/admin.html#adminModeration','Moderation'], ['/static/trust.html#support','Support'],
+    ['/static/admin.html#adminModeration','Moderation'], ['/static/media_compressor.html','Compress videos & images'], ['/static/trust.html#support','Support'],
   ] : activeRole === 'lecturer' ? [
-    ['/static/tutor_guide.html', 'Tutor guide'], ['/static/pdf_tools.html', 'PDF tools'], ['/static/fun.html', 'Posts'],
+    ['/static/tutor_guide.html', 'Tutor guide'], ['/static/pdf_tools.html', 'PDF tools'], ['/static/media_compressor.html','Compress videos & images'], ['/static/fun.html', 'Posts'],
     ['/market', 'Market'],
   ] : activeRole === 'student' ? [
-    ['/market', 'Market'], ['/static/pdf_tools.html', 'PDF tools'],
+    ['/market', 'Market'], ['/static/pdf_tools.html', 'PDF tools'], ['/static/media_compressor.html','Compress videos & images'],
   ] : [['/static/fun.html', 'Posts']];
   function toggleMobileMenu(open) {
     let sheet=document.querySelector('.mobile-more-sheet'),scrim=document.querySelector('.mobile-more-scrim');
@@ -183,7 +183,7 @@
       const libraryCards=[...workbench.querySelectorAll(':scope > .card')], builder=document.getElementById('quizBuilderCard'), roster=app.querySelector('.lecturer-roster'), messages=document.getElementById('lecturerMessagesCard'), submissions=document.getElementById('submissionsCard'), grading=document.getElementById('gradingCard');
       // Keep the builder's ID stable: quiz-builder.js initializes after this layout.
       if(libraryCards[0])libraryCards[0].id='quizLibrary';
-      const intro=document.createElement('section');intro.className='tutor-command-center';intro.innerHTML='<div><span class="kicker">Tutor workspace</span><h1>What would you like to do?</h1><p>Choose one task. Your teaching tools stay focused and easy to scan.</p></div><a class="btn" href="/static/live_lesson.html">Start live classroom</a>';
+      const intro=document.createElement('section');intro.className='tutor-command-center';intro.innerHTML='<div><span class="kicker">Tutor workspace</span><h1>What would you like to do?</h1><p>Choose one task. Your teaching tools stay focused and easy to scan.</p></div><div class="tutor-hero-actions"><a class="btn" href="/static/live_lesson.html">Start live classroom</a><a class="btn secondary" href="/static/media_compressor.html">Compress videos &amp; images</a></div>';
       const tabs=document.createElement('nav');tabs.className='tutor-task-nav';tabs.setAttribute('aria-label','Tutor workspace tasks');tabs.innerHTML='<button type="button" data-tutor-view="create">Create quiz</button><button type="button" data-tutor-view="library">Quiz library</button><button type="button" data-tutor-view="submissions">Submissions</button><button type="button" data-tutor-view="students">Students</button><button type="button" data-tutor-view="messages">Messages</button>';
       const views=document.createElement('div');views.className='tutor-task-views';
       const makeView=(name,title,description)=>{const section=document.createElement('section');section.className='tutor-task-view';section.dataset.tutorViewPanel=name;section.innerHTML=`<header class="task-view-heading"><span class="kicker">${title}</span><p>${description}</p></header>`;views.appendChild(section);return section};

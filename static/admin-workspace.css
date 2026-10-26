@@ -22,6 +22,7 @@ body:has(.admin-app) .mobile-tabbar{display:none!important}
 .admin-content{min-width:0}.admin-content [hidden]{display:none!important}
 .admin-dashboard{margin-bottom:20px}.admin-welcome{padding:28px 32px;border:1px solid #b9ded0;border-radius:23px;background:radial-gradient(circle at 100% 0,#d7f2df 0,transparent 42%),linear-gradient(125deg,#f6fff8,#e8f5ee);box-shadow:0 15px 36px #1b5c3410}
 .admin-welcome h2{margin:7px 0;font-size:clamp(1.6rem,3vw,2.25rem);letter-spacing:-.04em}.admin-welcome p{max-width:680px;margin:0;color:#527268;line-height:1.6}
+.admin-media-link{display:inline-flex;align-items:center;gap:14px;margin-top:20px;padding:11px 16px;border-radius:11px;background:#087f70;color:#fff!important;font-size:.84rem;font-weight:750;text-decoration:none}.admin-media-link:hover{background:#066f63;color:#fff!important}
 .admin-shortcuts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:15px}
 .admin-shortcuts button{position:relative;display:flex;flex-direction:column;align-items:flex-start;min-height:150px;padding:19px;border:1px solid #dae9e0;border-radius:18px;background:#fff;color:#173d36;text-align:left;box-shadow:0 7px 22px #173d3609;cursor:pointer;transition:transform .18s,box-shadow .18s,border-color .18s}
 .admin-shortcuts button:hover{transform:translateY(-3px);border-color:#8ccbb0;box-shadow:0 14px 30px #173d3617}
