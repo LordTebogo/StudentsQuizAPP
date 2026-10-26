@@ -942,6 +942,25 @@ def _active_src_party_exists(db: Session, party_name: str, exclude_id: Optional[
 
 AROUNUS_MODULE_CODE = "AROUNUS"
 
+# Codes remain stable so existing quizzes, lessons, and enrollments keep working.
+MODULE_NAMES = {
+    "SBIA021": "Introduction to Biochemistry",
+    "SBIA022": "Biochemistry II",
+    "SBIA031": "Biochemistry III",
+    "SMIB032": "Molecular Biology",
+    "SBTB031": "Biotechnology I",
+    "SBTA032": "Immunology I",
+    "ADVANCED_BIOLOGY": "Advanced Biology",
+    "ADVANCED_IMMUNOLOGY": "Advanced Immunology",
+    "ADVANCED_INDUSTRIAL_BIOTECHNOLOGY": "Advanced Industrial Biotechnology",
+    "ENVIRONMENTAL_BIOTECHNOLOGY": "Environmental Biotechnology",
+    "BIOLOGICAL_PRODUCTS_AND_PROCESSES": "Biological Products and Processes",
+}
+
+
+def _module_name(code: str) -> str:
+    return MODULE_NAMES.get(code, code)
+
 
 def _set_student_modules(db: Session, student: Student, codes: List[str]):
     # The app guide is universal, so it is never an editable enrollment row.
@@ -956,11 +975,11 @@ def _available_module_catalog(db: Session) -> list[dict]:
     """Return all subjects known through teaching assignments or published content."""
     quiz_counts = dict(db.query(Quiz.module_code, func.count(Quiz.id)).group_by(Quiz.module_code).all())
     lesson_counts = dict(db.query(Lesson.module_code, func.count(Lesson.id)).group_by(Lesson.module_code).all())
-    codes = set(quiz_counts) | set(lesson_counts) | {
+    codes = set(MODULE_NAMES) | set(quiz_counts) | set(lesson_counts) | {
         code for (code,) in db.query(LecturerModule.module_code).distinct().all()
     }
     return [
-        {"module_code": code, "quiz_count": quiz_counts.get(code, 0), "lesson_count": lesson_counts.get(code, 0)}
+        {"module_code": code, "module_name": _module_name(code), "quiz_count": quiz_counts.get(code, 0), "lesson_count": lesson_counts.get(code, 0)}
         for code in sorted(code for code in codes if code and code != AROUNUS_MODULE_CODE)
     ]
 
@@ -2143,7 +2162,7 @@ def list_quiz_modules(db: Session = Depends(get_db)):
         db.query(Quiz.module_code, func.count(Quiz.id).label("quiz_count"))
         .group_by(Quiz.module_code).order_by(Quiz.module_code.asc()).all()
     )
-    return [{"module_code": code, "quiz_count": count} for code, count in rows]
+    return [{"module_code": code, "module_name": _module_name(code), "quiz_count": count} for code, count in rows]
 
 
 @app.get("/student/modules")
@@ -2189,7 +2208,7 @@ def list_student_quiz_modules(student: Student = Depends(require_student_account
         return []
     rows = (db.query(Quiz.module_code, func.count(Quiz.id).label("quiz_count"))
             .filter(Quiz.module_code.in_(assigned)).group_by(Quiz.module_code).order_by(Quiz.module_code.asc()).all())
-    return [{"module_code": code, "quiz_count": count} for code, count in rows]
+    return [{"module_code": code, "module_name": _module_name(code), "quiz_count": count} for code, count in rows]
 
 
 @app.get("/student/lesson-modules")
@@ -2199,7 +2218,7 @@ def list_student_lesson_modules(student: Student = Depends(require_student_accou
         return []
     rows = (db.query(Lesson.module_code, func.count(Lesson.id).label("lesson_count"))
             .filter(Lesson.module_code.in_(assigned)).group_by(Lesson.module_code).order_by(Lesson.module_code.asc()).all())
-    modules = [{"module_code": code, "lesson_count": count} for code, count in rows if code != AROUNUS_MODULE_CODE]
+    modules = [{"module_code": code, "module_name": _module_name(code), "lesson_count": count} for code, count in rows if code != AROUNUS_MODULE_CODE]
     guide_video_count = next((count for code, count in rows if code == AROUNUS_MODULE_CODE), 0)
     return [{"module_code": AROUNUS_MODULE_CODE, "lesson_count": guide_video_count, "is_app_guide": True}, *modules]
 

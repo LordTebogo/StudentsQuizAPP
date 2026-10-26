@@ -202,7 +202,7 @@ async function loadModuleList() {
     }
     box.innerHTML = modules.map(m => `
       <a class="lesson-list-item" data-code="${escapeHtml(m.module_code)}">
-        <div class="lesson-list-title">${m.is_app_guide ? 'AROUNUS · How to use the app' : escapeHtml(m.module_code)}</div>
+        <div class="lesson-list-title">${m.is_app_guide ? 'AROUNUS · How to use the app' : escapeHtml(m.module_name || m.module_code)}</div>
         <p class="muted">${m.is_app_guide ? 'Written guide and printable document · ' : ''}${m.lesson_count} video${m.lesson_count === 1 ? '' : 's'}</p>
       </a>
     `).join('');
