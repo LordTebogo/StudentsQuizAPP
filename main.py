@@ -113,6 +113,7 @@ from models import (
 from quiz_spreadsheet import QuizSpreadsheetError, parse_quiz_spreadsheet
 from cloudinary_utils import upload_image_bytes, upload_video_variants, premium_video_url, delete_lesson_video_variants
 from payu_checkout import PLANS as PREMIUM_PLANS, PayUError, configured as payu_configured, start as payu_start, verify as payu_verify
+from paystack_checkout import PaystackError, configured as paystack_configured, start as paystack_start, verify as paystack_verify
 
 # Matplotlib is loaded lazily for equation rendering. Give it a writable
 # cache in local and cloud environments where the default home may be read-only.
@@ -399,6 +400,10 @@ def ensure_premium_billing_schema():
             conn.execute(text("ALTER TABLE students ADD COLUMN premium_until VARCHAR"))
         if "premium_lifetime" not in columns:
             conn.execute(text("ALTER TABLE students ADD COLUMN premium_lifetime BOOLEAN DEFAULT FALSE NOT NULL"))
+        if "premium_payments" in inspect(engine).get_table_names():
+            payment_columns = {column["name"] for column in inspect(engine).get_columns("premium_payments")}
+            if "provider" not in payment_columns:
+                conn.execute(text("ALTER TABLE premium_payments ADD COLUMN provider VARCHAR DEFAULT 'payu' NOT NULL"))
 
 
 ensure_premium_billing_schema()
@@ -3058,7 +3063,7 @@ def premium_plans():
         "plans": [{"id": key, "label": value["label"], "amount_cents": value["amount_cents"]}
                   for key, value in PREMIUM_PLANS.items()],
         "checkout_available": bool(payu_configured() and os.getenv("PUBLIC_BASE_URL", "").startswith("https://")),
-        "google_pay_available": False,
+        "google_pay_available": bool(paystack_configured() and os.getenv("PUBLIC_BASE_URL", "").startswith("https://")),
     })
     response.headers["Cache-Control"] = "no-store"
     return response
@@ -3068,7 +3073,7 @@ def premium_plans():
 def premium_status(student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
     pending = db.query(PremiumPayment).filter(PremiumPayment.student_id == student.id,
                                                PremiumPayment.status == "pending").order_by(PremiumPayment.id.desc()).first()
-    if pending and pending.payu_reference:
+    if pending and (pending.provider == "paystack" or pending.payu_reference):
         _confirm_premium_payment(pending.merchant_reference, db)
         db.refresh(student)
     response = JSONResponse({"active": _has_premium_video(student), "until": student.premium_until,
@@ -3079,6 +3084,7 @@ def premium_status(student: Student = Depends(require_student_account), db: Sess
 
 class PremiumCheckoutRequest(BaseModel):
     plan: str
+    provider: str = "payu"
 
 
 @app.post("/billing/premium/checkout")
@@ -3086,23 +3092,32 @@ def premium_checkout(payload: PremiumCheckoutRequest, student: Student = Depends
     plan = PREMIUM_PLANS.get(payload.plan)
     if not plan:
         raise HTTPException(status_code=400, detail="Choose a valid Premium HD plan")
+    if payload.provider not in ("payu", "paystack"):
+        raise HTTPException(status_code=400, detail="Choose PayU or Google Pay")
     public_base = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
-    if not payu_configured() or not public_base.startswith("https://"):
+    if (not public_base.startswith("https://") or
+            (payload.provider == "payu" and not payu_configured()) or
+            (payload.provider == "paystack" and not paystack_configured())):
         raise HTTPException(status_code=503, detail="Premium checkout is being set up. Please try again later.")
     reference = "AR" + secrets.token_hex(16).upper()
     payment = PremiumPayment(student_id=student.id, merchant_reference=reference, plan=payload.plan,
-                             amount_cents=plan["amount_cents"], status="pending", created_at=datetime.now(timezone.utc).isoformat())
+                             provider=payload.provider, amount_cents=plan["amount_cents"], status="pending",
+                             created_at=datetime.now(timezone.utc).isoformat())
     db.add(payment)
     db.commit()
     try:
-        payu_reference, checkout_url = payu_start(reference, payment.amount_cents,
-            f"{public_base}/billing/premium/return?reference={reference}",
-            f"{public_base}/billing/premium/return?reference={reference}&cancelled=1", student.email)
-    except PayUError as exc:
+        if payload.provider == "payu":
+            payu_reference, checkout_url = payu_start(reference, payment.amount_cents,
+                f"{public_base}/billing/premium/return?reference={reference}",
+                f"{public_base}/billing/premium/return?reference={reference}&cancelled=1", student.email)
+            payment.payu_reference = payu_reference
+        else:
+            checkout_url = paystack_start(reference, student.email, payment.amount_cents,
+                                          f"{public_base}/billing/premium/paystack/return")
+    except (PayUError, PaystackError) as exc:
         payment.status = "setup_failed"
         db.commit()
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    payment.payu_reference = payu_reference
     db.commit()
     response = JSONResponse({"checkout_url": checkout_url})
     response.headers["Cache-Control"] = "private, no-store"
@@ -3115,27 +3130,37 @@ def _confirm_premium_payment(reference: str, db: Session) -> str:
         return "unknown"
     if payment.status == "paid":
         return "paid"
-    if not payment.payu_reference:
+    if payment.provider == "payu" and not payment.payu_reference:
         return "pending"
     try:
-        result = payu_verify(reference)
-    except PayUError:
-        return "pending"
-    if (result["merchant_reference"] != reference or result["payu_reference"] != payment.payu_reference
-            or result["amount_cents"] != str(payment.amount_cents) or result["currency"] != "ZAR"
-            or result["transaction_type"] != "PAYMENT"):
-        payment.status = "mismatch"
-        db.commit()
-        return "mismatch"
-    if result["state"] == "FAILED":
-        payment.status = "failed"
-        db.commit()
-        return "failed"
-    if result["state"] != "SUCCESSFUL" or not result["successful"]:
+        result = paystack_verify(reference) if payment.provider == "paystack" else payu_verify(reference)
+    except (PayUError, PaystackError):
         return "pending"
     student = db.query(Student).filter(Student.id == payment.student_id).first()
     if not student:
         return "unknown"
+    if payment.provider == "paystack":
+        if result["status"] not in ("success", "failed"):
+            return "pending"
+        valid = (result["reference"] == reference and result["amount_cents"] == payment.amount_cents
+                 and result["currency"] == "ZAR" and result["domain"] == "live"
+                 and (result["email"] or "").lower() == student.email.lower())
+        state = "SUCCESSFUL" if result["status"] == "success" else "FAILED"
+    else:
+        valid = (result["merchant_reference"] == reference and result["payu_reference"] == payment.payu_reference
+                 and result["amount_cents"] == str(payment.amount_cents) and result["currency"] == "ZAR"
+                 and result["transaction_type"] == "PAYMENT")
+        state = result["state"] if result["successful"] else "PROCESSING"
+    if not valid:
+        payment.status = "mismatch"
+        db.commit()
+        return "mismatch"
+    if state == "FAILED":
+        payment.status = "failed"
+        db.commit()
+        return "failed"
+    if state != "SUCCESSFUL":
+        return "pending"
     if payment.plan == "once":
         student.premium_lifetime = True
     else:
@@ -3155,6 +3180,18 @@ def _confirm_premium_payment(reference: str, db: Session) -> str:
 def premium_payment_return(reference: str, db: Session = Depends(get_db)):
     if not re.fullmatch(r"AR[A-F0-9]{32}", reference):
         raise HTTPException(status_code=400, detail="Invalid payment reference")
+    status = _confirm_premium_payment(reference, db)
+    return RedirectResponse(url=f"/premium?payment={status}&reference={reference}", status_code=303)
+
+
+@app.get("/billing/premium/paystack/return")
+def premium_paystack_return(reference: str, db: Session = Depends(get_db)):
+    if not re.fullmatch(r"AR[A-F0-9]{32}", reference):
+        raise HTTPException(status_code=400, detail="Invalid payment reference")
+    payment = db.query(PremiumPayment).filter(PremiumPayment.merchant_reference == reference,
+                                               PremiumPayment.provider == "paystack").first()
+    if not payment:
+        raise HTTPException(status_code=404, detail="Payment not found")
     status = _confirm_premium_payment(reference, db)
     return RedirectResponse(url=f"/premium?payment={status}&reference={reference}", status_code=303)
 

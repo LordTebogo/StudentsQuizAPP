@@ -124,6 +124,7 @@ class PremiumPayment(Base):
     student_id = Column(Integer, ForeignKey("students.id"), nullable=False, index=True)
     merchant_reference = Column(String, nullable=False, unique=True, index=True)
     payu_reference = Column(String, unique=True)
+    provider = Column(String, nullable=False, default="payu")
     plan = Column(String, nullable=False)
     amount_cents = Column(Integer, nullable=False)
     status = Column(String, nullable=False, default="pending")
