@@ -1,4 +1,4 @@
-const OFFLINE_VERSION = "v43";
+const OFFLINE_VERSION = "v44";
 const SHELL_CACHE = `nucleocampus-shell-${OFFLINE_VERSION}`;
 const DATA_CACHE = `nucleocampus-data-${OFFLINE_VERSION}`;
 const EXTERNAL_CACHE = `nucleocampus-external-${OFFLINE_VERSION}`;
@@ -19,13 +19,13 @@ const APP_SHELL = [
   "/static/style.css", "/static/product.css", "/static/theme.css?v=2",
   "/static/brand-intro.css?v=1", "/static/brand-intro.js?v=1",
   "/static/light.css?v=4", "/static/messaging.css",
-  "/static/market-sell.css?v=1",
+  "/static/market-sell.css?v=2",
   "/static/lesson-insights.css", "/static/quiz-builder.css",
   "/static/quiz-math-tools.css",
   "/static/experience.js", "/static/loading.js", "/static/pwa.js?v=18",
   "/static/student-module-enrollment.js", "/static/username-suggestion.js", "/static/student-messaging.js",
   "/static/lecturer-messaging.js", "/static/admin-messaging.js",
-  "/static/admin-market-ads.js", "/static/market-sell.js?v=1", "/static/market-contact.js?v=1",
+  "/static/admin-market-ads.js", "/static/market-sell.js?v=2", "/static/market-contact.js?v=1",
   "/static/market-metrics.js?v=1", "/static/video-access.js?v=4", "/static/media-url.js?v=1",
   "/static/lesson-insights.js", "/static/admin-finance.js?v=1", "/static/quiz-builder.js?v=15",
   "/static/quiz-import-template.csv", "/static/standard-quiz-template.json",

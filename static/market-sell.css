@@ -16,6 +16,7 @@
 .sell-form [hidden]{display:none!important}
 .sell-location{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .sell-location button{grid-column:1/-1;justify-self:start;border:1px solid #85bca9;border-radius:8px;background:#eef7f2;color:#087f70;padding:9px 12px}
+.sell-location button.is-loading{display:inline-flex;align-items:center;gap:9px;opacity:.8;cursor:wait}.sell-location button.is-loading::before{content:"";width:14px;height:14px;border:2px solid #95c7b7;border-top-color:#087f70;border-radius:50%;animation:sell-location-spin .8s linear infinite}.sell-location-status{grid-column:1/-1;color:#087f70;font-weight:650}.sell-location-status.error{color:#a93232}@keyframes sell-location-spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.sell-location button.is-loading::before{animation:none}}
 .sell-form label span{font-weight:400;color:#526b65}
 .sell-form input,.sell-form select,.sell-form textarea{width:100%;min-height:46px;padding:11px 13px;border:1px solid #bfd5ca;border-radius:9px;background:#fff;color:#19312e;font:inherit}
 .sell-form textarea{min-height:110px;resize:vertical}

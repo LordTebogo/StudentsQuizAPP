@@ -51,7 +51,7 @@
       ${room ? `<label>Listing title<input name="title" maxlength="180" placeholder="For example, Bachelor room near campus" required></label>
         <label>Nearest University/college or company<input name="campus" maxlength="120" required></label>
         <label>Area or suburb<input name="area" maxlength="160" required></label>
-        <div class="sell-location"><label>Latitude <span>(optional)</span><input name="latitude" type="number" step="any" min="-90" max="90"></label><label>Longitude <span>(optional)</span><input name="longitude" type="number" step="any" min="-180" max="180"></label><button type="button" data-use-location>Use my current location</button></div>
+        <div class="sell-location"><label>Latitude <span>(optional)</span><input name="latitude" type="number" step="any" min="-90" max="90"></label><label>Longitude <span>(optional)</span><input name="longitude" type="number" step="any" min="-180" max="180"></label><button type="button" data-use-location>Use my current location</button><small class="sell-location-status" role="status" aria-live="polite" hidden></small></div>
         <label>Monthly rent (R)<input name="monthly_rent" type="number" min="0" inputmode="numeric" required></label>
         <label>Room type <span>(optional)</span><input name="bedrooms" maxlength="80" placeholder="Single, shared, bachelor…"></label>
         <label>Contact number for this listing<input name="contact" type="tel" autocomplete="tel" required></label>
@@ -64,7 +64,7 @@
         <label>Price (R) <span>(optional for services)</span><input name="price" type="number" min="0" max="100000000" inputmode="numeric"></label>
         <label>Nearest University/college or company<input name="campus" maxlength="120"></label>
         <label id="churchLocationField" hidden>Church location or area<input name="area" maxlength="160" disabled></label>
-        <div class="sell-location" id="churchCoordinatesField" hidden><label>Latitude <span>(optional)</span><input name="latitude" type="number" step="any" min="-90" max="90" disabled></label><label>Longitude <span>(optional)</span><input name="longitude" type="number" step="any" min="-180" max="180" disabled></label><button type="button" data-use-location>Use my current location</button></div>
+        <div class="sell-location" id="churchCoordinatesField" hidden><label>Latitude <span>(optional)</span><input name="latitude" type="number" step="any" min="-90" max="90" disabled></label><label>Longitude <span>(optional)</span><input name="longitude" type="number" step="any" min="-180" max="180" disabled></label><button type="button" data-use-location>Use my current location</button><small class="sell-location-status" role="status" aria-live="polite" hidden></small></div>
         <label>Description<textarea name="description" maxlength="1200" required></textarea></label>
         <label>Contact number for this listing<input name="contact" type="tel" autocomplete="tel" required></label>
         <label>Website or social link <span>(optional)</span><input name="website_url" type="url" placeholder="https://…"></label>
@@ -124,14 +124,45 @@
     if (modeButton) { mode = modeButton.dataset.authMode; status(''); renderAuth(); return; }
     const choice = event.target.closest('[data-sell-kind]');
     if (choice) { status(''); renderForm(choice.dataset.sellKind); return; }
-    if (event.target.closest('[data-use-location]')) {
-      if (!navigator.geolocation) { status('Location is unavailable on this device. You can enter coordinates manually.', true); return; }
-      navigator.geolocation.getCurrentPosition(position => {
-        const form = event.target.closest('form');
-        form.elements.latitude.value = position.coords.latitude.toFixed(6);
-        form.elements.longitude.value = position.coords.longitude.toFixed(6);
-        status('Location added to this listing.');
-      }, () => status('Location was not shared. You can enter coordinates manually.', true));
+    const locationButton = event.target.closest('[data-use-location]');
+    if (locationButton) {
+      const locationStatus = locationButton.parentElement.querySelector('.sell-location-status');
+      if (!navigator.geolocation) {
+        locationStatus.hidden = false;
+        locationStatus.textContent = 'Location is unavailable on this device. You can enter coordinates manually.';
+        locationStatus.classList.add('error');
+        status(locationStatus.textContent, true);
+        return;
+      }
+      const form = locationButton.closest('form');
+      locationButton.disabled = true;
+      locationButton.classList.add('is-loading');
+      locationButton.setAttribute('aria-busy', 'true');
+      locationButton.textContent = 'Fetching coordinates…';
+      locationStatus.hidden = false;
+      locationStatus.classList.remove('error');
+      locationStatus.textContent = 'Fetching coordinates…';
+      status('');
+      const finish = (text, error = false) => {
+        locationButton.disabled = false;
+        locationButton.classList.remove('is-loading');
+        locationButton.removeAttribute('aria-busy');
+        locationButton.textContent = 'Use my current location';
+        locationStatus.textContent = text;
+        locationStatus.classList.toggle('error', error);
+        if (form.isConnected) status(text, error);
+      };
+      try {
+        navigator.geolocation.getCurrentPosition(position => {
+          if (form.isConnected) {
+            form.elements.latitude.value = position.coords.latitude.toFixed(6);
+            form.elements.longitude.value = position.coords.longitude.toFixed(6);
+          }
+          finish('Location added to this listing.');
+        }, () => finish('Location was not shared. You can enter coordinates manually.', true), {timeout:15000});
+      } catch (_) {
+        finish('Location could not be fetched. You can enter coordinates manually.', true);
+      }
       return;
     }
     if (event.target.closest('[data-sell-back]')) { status(''); renderChoice(); return; }
