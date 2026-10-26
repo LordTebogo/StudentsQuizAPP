@@ -144,7 +144,6 @@ VAPID_SUBJECT = os.getenv("VAPID_SUBJECT", "mailto:admin@example.com").strip()
 GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY", "").strip()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
 OPENAI_QUIZ_MODEL = os.getenv("OPENAI_QUIZ_MODEL", "gpt-5.4-mini").strip() or "gpt-5.4-mini"
-MAX_LESSON_VIDEO_BYTES = 80 * 1024 * 1024
 MAX_COMMUNITY_VIDEOS_PER_MONTH = 10
 ADMIN_MAX_FAILURES = int(os.getenv("ADMIN_MAX_FAILURES", "5"))
 ADMIN_LOCKOUT_SECONDS = int(os.getenv("ADMIN_LOCKOUT_SECONDS", "300"))
@@ -2796,21 +2795,21 @@ async def upload_lesson(
     # Upload the video to Cloudinary first so we can create the Lesson row
     # in one step (no need for the old two-step "create row, then update
     # with the filename" dance that local-disk storage required).
-    video_bytes = await video.read()
-    if not video_bytes:
-        raise HTTPException(status_code=400, detail="The selected video file is empty")
-    if len(video_bytes) > MAX_LESSON_VIDEO_BYTES:
-        raise HTTPException(
-            status_code=413,
-            detail="Your video is too large. The maximum allowed size is 80 MB. Please compress the video or choose a smaller MP4.",
-        )
-    try:
-        video_url, premium_asset = upload_video_variants(video_bytes, folder=f"lesson_videos/{module_code}")
-    except Exception:
-        raise HTTPException(
-            status_code=502,
-            detail="Your video is too large. The maximum allowed size is 80 MB. Please compress the video or choose a smaller MP4.",
-        )
+    # Keep large uploads off the Python heap and send them to Cloudinary in chunks.
+    with tempfile.TemporaryDirectory() as staged_dir:
+        staged_path = os.path.join(staged_dir, "lesson_video" + Path(video.filename).suffix)
+        with open(staged_path, "wb") as staged_video:
+            shutil.copyfileobj(video.file, staged_video)
+            source_bytes = staged_video.tell()
+        if not source_bytes:
+            raise HTTPException(status_code=400, detail="The selected video file is empty")
+        try:
+            video_url, premium_asset = upload_video_variants(staged_path, folder=f"lesson_videos/{module_code}")
+        except Exception:
+            raise HTTPException(
+                status_code=502,
+                detail="The video could not be uploaded. Please retry or check your video storage plan's limits.",
+            )
 
     lesson = Lesson(
         title=title,
@@ -2822,7 +2821,7 @@ async def upload_lesson(
     )
     db.add(lesson)
     db.flush()
-    db.add(MediaUploadEvent(kind="lesson", owner_type="lecturer", owner_id=lecturer.id, source_bytes=len(video_bytes), premium_created=bool(premium_asset), created_at=datetime.now(timezone.utc).isoformat()))
+    db.add(MediaUploadEvent(kind="lesson", owner_type="lecturer", owner_id=lecturer.id, source_bytes=source_bytes, premium_created=bool(premium_asset), created_at=datetime.now(timezone.utc).isoformat()))
 
     resolved_cache = {}
     cloud_folder = f"lesson_{lesson.id}"

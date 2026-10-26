@@ -80,13 +80,14 @@ def upload_video_bytes(data: bytes, folder: str, public_id: Optional[str] = None
     return result["secure_url"]
 
 
-def upload_video_variants(data: bytes, folder: str) -> tuple[str, Optional[str]]:
+def upload_video_variants(data: bytes | str, folder: str) -> tuple[str, Optional[str]]:
     """Save a public 480p copy and protect the higher-resolution original."""
-    original = cloudinary.uploader.upload(
+    uploader = cloudinary.uploader.upload_large if isinstance(data, str) else cloudinary.uploader.upload
+    original = uploader(
         data, folder=f"{folder}/premium", resource_type="video", type="authenticated"
     )
     try:
-        free = cloudinary.uploader.upload(
+        free = uploader(
             data, folder=f"{folder}/free", resource_type="video",
             transformation={"height": 480, "crop": "limit", "quality": "auto"},
         )
