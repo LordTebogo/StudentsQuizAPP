@@ -2,7 +2,7 @@
 
 Run once with the app's DATABASE_URL configured. The shared password is generated
 locally and saved to demo_market_credentials.txt, which is ignored by Git.
-Subsequent runs add missing demo records without changing existing accounts.
+Subsequent runs add missing demo records and refresh only their sample photos.
 """
 
 import hashlib
@@ -71,38 +71,46 @@ def seed() -> tuple[int, int, int]:
                 counts[0] += 1
 
             room_title = f"DEMO: Student room example {index:02d}"
-            if not db.query(Accommodation).filter(
+            room_images = [f"{IMAGE_BASE}/sample-room.jpg", f"{IMAGE_BASE}/sample-room-2.jpg"]
+            room = db.query(Accommodation).filter(
                 Accommodation.landlord_id == provider.id,
                 Accommodation.title == room_title,
-            ).first():
-                db.add(Accommodation(
+            ).first()
+            if room is None:
+                room = Accommodation(
                     landlord_id=provider.id, title=room_title,
                     campus="Demo Campus", area="Sample Area",
                     monthly_rent=2800 + index * 150, bedrooms="1 room",
                     description="Illustrative listing only. This room is not available to rent. The photo was generated for the demo.",
-                    contact=PHONE, image_url=f"{IMAGE_BASE}/sample-room.webp",
-                    image_urls=json.dumps([f"{IMAGE_BASE}/sample-room.webp"]),
+                    contact=PHONE,
                     is_available=True, is_approved=True, created_at=now,
-                ))
+                )
+                db.add(room)
                 counts[1] += 1
+            room.image_url = room_images[0]
+            room.image_urls = json.dumps(room_images)
 
             headline = f"DEMO: {product}"
-            if not db.query(MarketAdvert).filter(
+            advert = db.query(MarketAdvert).filter(
                 MarketAdvert.owner_landlord_id == provider.id,
                 MarketAdvert.headline == headline,
-            ).first():
-                image = f"{IMAGE_BASE}/{slug}.webp"
-                db.add(MarketAdvert(
+            ).first()
+            if advert is None:
+                advert = MarketAdvert(
                     owner_landlord_id=provider.id,
                     business_name=provider.business_name, headline=headline,
                     description="Illustrative product listing only. This item is not for sale. The image was generated for the demo.",
                     category="Sales", price=price,
                     campus="Demo Campus", area="Sample Area", contact=PHONE,
-                    placement="feed", image_url=image, image_urls=json.dumps([image]),
+                    placement="feed",
                     status="approved", is_featured=False,
                     created_at=now, updated_at=now,
-                ))
+                )
+                db.add(advert)
                 counts[2] += 1
+            advert_images = [f"{IMAGE_BASE}/{slug}.jpg", f"{IMAGE_BASE}/{slug}-2.jpg"]
+            advert.image_url = advert_images[0]
+            advert.image_urls = json.dumps(advert_images)
         db.commit()
 
     if not CREDENTIALS.exists():

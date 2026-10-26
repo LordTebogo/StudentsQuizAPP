@@ -2,7 +2,7 @@
   const $ = id => document.getElementById(id);
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   const normalized = value => String(value || '').trim().toLocaleLowerCase();
-  const safeUrl = value => { try { const url = new URL(value); return ['https:', 'http:'].includes(url.protocol) ? url.href : ''; } catch { return ''; } };
+  const safeUrl = value => { try { if (!String(value || '').trim()) return ''; const url = new URL(value, location.origin); return ['https:', 'http:'].includes(url.protocol) ? url.href : ''; } catch { return ''; } };
   const categories = {rooms:'Rooms', transport:'Transport', items:'Items for sale', services:'Other services'};
   const classify = ad => /transport|ride|shuttle|courier|delivery/i.test(ad.category) ? 'transport' : /sales|retail|technology|second.?hand|textbook/i.test(ad.category) ? 'items' : 'services';
   let entries = [], category = 'all', failures = 0, loading = false;
@@ -15,6 +15,9 @@
   function stopPreview(card) {
     clearInterval(hoverTimers.get(card));
     hoverTimers.delete(card);
+    const entry = entries.find(item => item.key === card.dataset.entryKey);
+    const img = card.querySelector('.campus-card-media img');
+    if (img && entry && image(entry)) img.src = window.arounusThumb?.(image(entry), 560) || image(entry);
   }
   const roomPrice = entry => entry.monthly_rent !== null && entry.monthly_rent !== undefined && Number.isFinite(Number(entry.monthly_rent)) ? `R${Number(entry.monthly_rent).toLocaleString('en-ZA')} / month` : 'Price on request';
   const priceValue = entry => entry.kind === 'rooms' ? entry.monthly_rent : entry.price;
@@ -102,7 +105,7 @@
     $('offerDialog').showModal();
   });
   $('offerDetails').addEventListener('click', event => {
-    const selected = event.target.closest('[data-gallery-index]'), step = event.target.closest('[data-gallery-step]');
+    const selected = event.target.closest('.offer-gallery-thumbs [data-gallery-index]'), step = event.target.closest('.offer-gallery-controls [data-gallery-step]');
     if (!selected && !step) return;
     const gallery = JSON.parse($('offerDetails').dataset.gallery || '[]');
     if (!gallery.length) return;
