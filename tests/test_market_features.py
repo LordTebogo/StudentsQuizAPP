@@ -15,7 +15,7 @@ os.environ["CLOUDINARY_API_SECRET"] = "test-secret"
 
 import main  # noqa: E402
 import cloudinary_utils  # noqa: E402
-from models import Accommodation, FunPost, Landlord, MarketAdvert, MediaUploadEvent, Student  # noqa: E402
+from models import Accommodation, AccommodationComment, FunPost, Landlord, MarketAdvert, MarketListingRating, MarketListingView, MediaUploadEvent, Student  # noqa: E402
 
 
 class MarketFeaturesTest(unittest.TestCase):
@@ -69,6 +69,29 @@ class MarketFeaturesTest(unittest.TestCase):
         public_room = next(item for item in self.client.get("/marketing/listings").json() if item["id"] == room["id"])
         self.assertEqual(public_room["contact"], form["contact"])
         self.assertNotIn("registration_contact", public_room)
+
+    def test_admin_can_delete_any_room_and_its_activity(self):
+        with main.SessionLocal() as db:
+            provider = db.query(Landlord).first()
+            room = Accommodation(landlord_id=provider.id, title="Obsolete room", campus="Test campus", area="Center", description="Remove me", is_available=True, is_approved=True, created_at="2026-10-01T00:00:00Z")
+            db.add(room)
+            db.flush()
+            room_id = room.id
+            db.add_all([
+                AccommodationComment(accommodation_id=room_id, author_name="Tester", content="Old comment", created_at="2026-10-01T00:00:00Z"),
+                MarketListingView(kind="rooms", listing_id=room_id, viewer_key="test-viewer", viewed_at="2026-10-01T00:00:00Z"),
+                MarketListingRating(kind="rooms", listing_id=room_id, student_id=self.student_id, stars=4, created_at="2026-10-01T00:00:00Z"),
+            ])
+            db.commit()
+        path = f"/admin/market-rooms/{room_id}"
+        self.assertNotEqual(self.client.delete(path).status_code, 200)
+        self.assertEqual(self.client.delete(path, headers={"X-Lecturer-Pin": main.LECTURER_PIN}).status_code, 200)
+        self.assertEqual(self.client.delete(path, headers={"X-Lecturer-Pin": main.LECTURER_PIN}).status_code, 404)
+        with main.SessionLocal() as db:
+            self.assertIsNone(db.get(Accommodation, room_id))
+            self.assertEqual(db.query(AccommodationComment).filter_by(accommodation_id=room_id).count(), 0)
+            self.assertEqual(db.query(MarketListingView).filter_by(kind="rooms", listing_id=room_id).count(), 0)
+            self.assertEqual(db.query(MarketListingRating).filter_by(kind="rooms", listing_id=room_id).count(), 0)
 
     def test_church_and_other_listings_publish_without_approval(self):
         with main.SessionLocal() as db:

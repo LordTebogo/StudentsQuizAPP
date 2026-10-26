@@ -4905,6 +4905,15 @@ def admin_approve_market_room(listing_id: int, approved: bool, _pin_ok: bool = D
     return {"ok": True, "is_approved": item.is_approved}
 
 
+@app.delete("/admin/market-rooms/{listing_id}")
+def admin_delete_market_room(listing_id: int, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    item = db.query(Accommodation).filter(Accommodation.id == listing_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Room listing not found")
+    _delete_accommodation_record(db, item)
+    return {"ok": True}
+
+
 @app.post("/marketing/listings")
 async def create_accommodation(title: str = Form(...), campus: str = Form(...), area: str = Form(...), monthly_rent: str = Form(""), bedrooms: str = Form(""), description: str = Form(...), contact: str = Form(...), latitude: str = Form(""), longitude: str = Form(""), images: Optional[List[UploadFile]] = File(None), image: Optional[UploadFile] = File(None), landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
     if not title.strip() or not campus.strip() or not area.strip() or not description.strip():
@@ -4961,12 +4970,16 @@ def delete_accommodation(listing_id: int, landlord: Landlord = Depends(require_l
     item = db.query(Accommodation).filter(Accommodation.id == listing_id, Accommodation.landlord_id == landlord.id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Accommodation listing not found")
+    _delete_accommodation_record(db, item)
+    return {"ok": True}
+
+
+def _delete_accommodation_record(db: Session, item: Accommodation) -> None:
     for comment in db.query(AccommodationComment).filter(AccommodationComment.accommodation_id == item.id).all():
         db.delete(comment)
     db.query(MarketListingView).filter_by(kind="rooms", listing_id=item.id).delete()
     db.query(MarketListingRating).filter_by(kind="rooms", listing_id=item.id).delete()
     db.delete(item); db.commit()
-    return {"ok": True}
 
 
 @app.get("/marketing/listings/{listing_id}/comments")
