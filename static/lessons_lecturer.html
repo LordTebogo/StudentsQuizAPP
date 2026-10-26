@@ -30,6 +30,12 @@
   .lesson-question-editor { padding:14px; margin:12px 0; border:1px solid var(--line); border-radius:12px; background:#f8fbf9; }
   .lesson-question-editor label { margin-top:10px; }
   .lesson-question-editor .btn { margin-top:10px; }
+  .lesson-upload-progress{display:flex;align-items:center;gap:14px;margin-top:14px;padding:15px 17px;border:1px solid #a8d9c2;border-radius:14px;background:#eaf7ef;color:#164b3c}
+  .lesson-upload-spinner{flex:0 0 30px;width:30px;height:30px;border:3px solid #bde5d0;border-top-color:#087f70;border-radius:50%;animation:lesson-upload-spin .85s linear infinite}
+  .lesson-upload-copy{flex:1;min-width:0}.lesson-upload-copy strong,.lesson-upload-copy small{display:block}.lesson-upload-copy small{margin-top:3px;color:#527467}
+  .lesson-upload-track{height:5px;margin-top:10px;overflow:hidden;border-radius:999px;background:#c8e8d5}.lesson-upload-track span{display:block;width:35%;height:100%;border-radius:inherit;background:#087f70;animation:lesson-upload-travel 1.5s ease-in-out infinite}
+  @keyframes lesson-upload-spin{to{transform:rotate(360deg)}}@keyframes lesson-upload-travel{0%{transform:translateX(-110%)}50%{transform:translateX(180%)}100%{transform:translateX(390%)}}
+  @media(prefers-reduced-motion:reduce){.lesson-upload-spinner,.lesson-upload-track span{animation:none}}
 </style>
 </head>
 <body>
@@ -248,8 +254,10 @@ $('uploadLessonBtn').addEventListener('click', async () => {
   formData.append('module_code', moduleCode);
   for (const img of imagesInput.files) formData.append('images', img);
 
-  $('uploadLessonBtn').disabled = true;
-  showMsg(msgBox, 'Uploading — this may take a while for large videos…', 'ok');
+  const uploadButton = $('uploadLessonBtn');
+  uploadButton.disabled = true;
+  uploadButton.textContent = 'Uploading lesson…';
+  msgBox.innerHTML = '<div class="lesson-upload-progress" role="status" aria-live="polite"><span class="lesson-upload-spinner" aria-hidden="true"></span><div class="lesson-upload-copy"><strong>Uploading your lesson…</strong><small>Keep this page open. Large videos may take a few minutes.</small><div class="lesson-upload-track" aria-hidden="true"><span></span></div></div></div>';
   try {
     const result = await api('/lecturer/lesson/upload', { method: 'POST', body: formData }, true);
     showMsg(msgBox, `Uploaded "${result.title}" under module ${result.module_code} (${result.num_questions} questions) — lesson ID ${result.lesson_id}.`, 'ok');
@@ -266,7 +274,8 @@ $('uploadLessonBtn').addEventListener('click', async () => {
   } catch (err) {
     showMsg(msgBox, `Upload failed: ${err.message}`, 'error');
   } finally {
-    $('uploadLessonBtn').disabled = false;
+    uploadButton.disabled = false;
+    uploadButton.textContent = 'Upload lesson';
   }
 });
 
