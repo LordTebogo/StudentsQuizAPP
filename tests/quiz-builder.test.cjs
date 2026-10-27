@@ -46,6 +46,8 @@ test('workspace layout preserves the functioning quiz builder', async () => {
     // Run the real scripts in the order used by the lecturer page.
     const scripts = [...w.document.querySelectorAll('script[src]')].map(el => el.getAttribute('src').split('?')[0]);
     assert.ok(scripts.indexOf('/static/experience.js') < scripts.indexOf('/static/quiz-builder.js'));
+    assert.ok(scripts.indexOf('/static/module-names.js') < scripts.indexOf('/static/quiz-builder.js'));
+    w.eval(read('module-names.js'));
     w.eval(read('experience.js'));
     w.eval(read('quiz-builder.js'));
     await tick();

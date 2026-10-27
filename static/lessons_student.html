@@ -54,6 +54,7 @@
   .lesson-replies.hidden, .lesson-reply-composer.hidden { display: none; }
   @media (max-width: 560px) { .lesson-discussion-head { display: block; } .lesson-comment.reply { margin-left: 12px; } .lesson-composer-tools { align-items: stretch; } }
 </style>
+<script src="/static/module-names.js"></script>
 <script src="/static/student-module-enrollment.js"></script>
 </head>
 <body>
@@ -277,7 +278,7 @@ async function openLesson(lessonId) {
     $('myResultCard').classList.add('hidden');
 
     $('lessonTitle').textContent = lesson.title;
-    $('lessonDescription').textContent = `${lesson.module_code}${lesson.description ? ' — ' + lesson.description : ''}`;
+    $('lessonDescription').textContent = `${moduleLabel(lesson.module_code)}${lesson.description ? ' — ' + lesson.description : ''}`;
     const videoEl = $('lessonVideo');
     videoEl.dataset.freeVideo = lesson.video_url;
     videoEl.dataset.videoKind = 'lesson';

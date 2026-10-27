@@ -74,7 +74,7 @@
     <label for="moduleCodeInput">Module code</label>
     <input type="text" id="moduleCodeInput" list="moduleCodeOptions" placeholder="e.g. BIO101" autocapitalize="characters">
     <datalist id="moduleCodeOptions"></datalist>
-    <p class="muted">Students pick this module code on the lessons page to see only videos from it. Use the same code across lessons in the same module (not case-sensitive — stored as UPPERCASE).</p>
+    <p class="muted">Students pick the module name on the lessons page to see its videos. Use the assigned code across lessons in the same module (not case-sensitive — stored as UPPERCASE).</p>
     <label for="lessonFile">Lesson JSON file (title, description, questions)</label>
     <input type="file" id="lessonFile" accept="application/json">
     <label for="lessonVideo">Video file</label>
@@ -159,6 +159,7 @@
   </div>
 </div><!-- /appWrap -->
 
+<script src="/static/module-names.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
 let currentLessonId = null;
@@ -256,7 +257,7 @@ $('uploadLessonBtn').addEventListener('click', async () => {
   msgBox.innerHTML = '<div class="lesson-upload-progress" role="status" aria-live="polite"><span class="lesson-upload-spinner" aria-hidden="true"></span><div class="lesson-upload-copy"><strong>Uploading your lesson…</strong><small>Keep this page open. Large videos may take a few minutes.</small><div class="lesson-upload-track" aria-hidden="true"><span></span></div></div></div>';
   try {
     const result = await api('/lecturer/lesson/upload', { method: 'POST', body: formData }, true);
-    showMsg(msgBox, `Uploaded "${result.title}" under module ${result.module_code} (${result.num_questions} questions) — lesson ID ${result.lesson_id}.`, 'ok');
+    showMsg(msgBox, `Uploaded "${result.title}" under ${moduleLabel(result.module_code)} (${result.num_questions} questions) — lesson ID ${result.lesson_id}.`, 'ok');
     const link = `${window.location.origin}/static/lessons_student.html?lesson=${result.lesson_id}`;
     $('shareLink').textContent = link;
     $('shareBox').classList.remove('hidden');
@@ -280,11 +281,11 @@ async function loadModules() {
   try {
     const profile = await api('/lecturer/me', {}, true);
     const modules = profile.module_codes || [];
-    $('moduleCodeOptions').innerHTML = modules.map(code => `<option value="${escapeHtml(code)}">`).join('');
+    $('moduleCodeOptions').innerHTML = modules.map(code => `<option value="${escapeHtml(code)}" label="${escapeHtml(moduleName(code))}">`).join('');
     const filterSelect = $('moduleFilterSelect');
     const previousValue = filterSelect.value;
     filterSelect.innerHTML = '<option value="">All modules</option>' +
-      modules.map(code => `<option value="${escapeHtml(code)}">${escapeHtml(code)}</option>`).join('');
+      modules.map(code => `<option value="${escapeHtml(code)}">${escapeHtml(moduleLabel(code))}</option>`).join('');
     filterSelect.value = previousValue; // preserve selection across refreshes if still valid
   } catch (err) {
     // non-critical — just leave the datalist/filter empty
@@ -305,12 +306,12 @@ async function loadLessons() {
       return;
     }
     const previous = select.value || String(currentLessonId || '');
-    select.innerHTML = filteredLessons.map(l => `<option value="${l.id}">[${escapeHtml(l.module_code)}] #${l.id} — ${escapeHtml(l.title)}</option>`).join('');
+    select.innerHTML = filteredLessons.map(l => `<option value="${l.id}">[${escapeHtml(moduleLabel(l.module_code))}] #${l.id} — ${escapeHtml(l.title)}</option>`).join('');
     if (filteredLessons.some(lesson => String(lesson.id) === previous)) select.value = previous;
     $('myLessonList').innerHTML = filteredLessons.map(lesson => `
       <div class="my-lesson">
         <strong>${escapeHtml(lesson.title)}</strong>
-        <span>${escapeHtml(lesson.module_code)} · ${lesson.unique_viewers} unique viewer${lesson.unique_viewers === 1 ? '' : 's'} · ${lesson.video_starts} video start${lesson.video_starts === 1 ? '' : 's'}<br>${lesson.question_count} question${lesson.question_count === 1 ? '' : 's'} · ${lesson.submission_count} submission${lesson.submission_count === 1 ? '' : 's'}</span>
+        <span>${escapeHtml(moduleLabel(lesson.module_code))} · ${lesson.unique_viewers} unique viewer${lesson.unique_viewers === 1 ? '' : 's'} · ${lesson.video_starts} video start${lesson.video_starts === 1 ? '' : 's'}<br>${lesson.question_count} question${lesson.question_count === 1 ? '' : 's'} · ${lesson.submission_count} submission${lesson.submission_count === 1 ? '' : 's'}</span>
         <button type="button" class="btn secondary" data-open-lesson="${lesson.id}">Open video</button>
       </div>`).join('');
   } catch (err) {

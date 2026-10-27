@@ -21,7 +21,7 @@
     try {
       const [lecturers, messages] = await Promise.all([request('/student/message-lecturers'), request('/student/messages')]);
       const select = document.getElementById('studentMessageRecipient'); const selected = select.value;
-      select.innerHTML = '<option value="admin:0">Arounus administrator</option>' + lecturers.map(item => `<option value="lecturer:${item.id}">${esc(item.full_name)} · ${esc((item.module_codes || []).join(', '))}</option>`).join('');
+      select.innerHTML = '<option value="admin:0">Arounus administrator</option>' + lecturers.map(item => `<option value="lecturer:${item.id}">${esc(item.full_name)} · ${esc((item.module_codes || []).map(moduleLabel).join(', '))}</option>`).join('');
       if ([...select.options].some(option => option.value === selected)) select.value = selected;
       list.innerHTML = messages.length ? messages.map(message => {
         const sent = message.sender_type === 'student';

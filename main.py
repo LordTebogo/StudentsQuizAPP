@@ -1538,7 +1538,7 @@ def build_lesson_script_pdf(db: Session, lesson_id: int, styles) -> list:
 
     flow = [
         Paragraph(_pdf_escape(lesson.title), styles["QuizTitle"]),
-        Paragraph(f"Module: {_pdf_escape(lesson.module_code)}", styles["MetaLine"]),
+        Paragraph(f"Module: {_pdf_escape(_module_name(lesson.module_code))} ({_pdf_escape(lesson.module_code)})", styles["MetaLine"]),
     ]
     if lesson.description:
         for paragraph in re.split(r"\n\s*\n", lesson.description.strip()):
@@ -2136,7 +2136,7 @@ async def upload_quiz(
         db,
         [student_id for (student_id,) in assigned_students],
         "New quiz available",
-        f"A new {module_code} quiz is ready: {title}",
+        f"A new {_module_name(module_code)} quiz is ready: {title}",
         f"/static/student.html?module={module_code}",
         f"quiz-{quiz.id}",
     )
@@ -4511,7 +4511,7 @@ def lecturer_broadcast_message(payload: LecturerBroadcastMessage, lecturer: Lect
     for student in recipients:
         db.add(DirectMessage(sender_type="lecturer", sender_id=lecturer.id, recipient_type="student", recipient_id=student.id, content=content, is_anonymous=False, created_at=now))
     db.commit()
-    _notify_students_by_push(db, [student.id for student in recipients], "New module message", f"A new message was sent to {module_code} students.", "/static/student.html", f"module-message-{module_code}-{now}")
+    _notify_students_by_push(db, [student.id for student in recipients], "New module message", f"A new message was sent to {_module_name(module_code)} students.", "/static/student.html", f"module-message-{module_code}-{now}")
     return {"ok": True, "recipient_count": len(recipients), "module_code": module_code}
 
 

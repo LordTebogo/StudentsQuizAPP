@@ -181,7 +181,7 @@
 
   function populateModuleSelect(select, selectedValue = '') {
     select.innerHTML = state.modules.length
-      ? '<option value="">Choose a module</option>' + state.modules.map(code => `<option value="${attr(code)}">${html(code)}</option>`).join('')
+      ? '<option value="">Choose a module</option>' + state.modules.map(code => `<option value="${attr(code)}">${html(moduleLabel(code))}</option>`).join('')
       : '<option value="">No modules assigned</option>';
     select.disabled = !state.modules.length;
     if (selectedValue && state.modules.includes(selectedValue)) select.value = selectedValue;
@@ -241,7 +241,7 @@
     const drafts = await api('/lecturer/quiz-drafts', {}, true);
     const select = byId('quizDraftSelect');
     select.innerHTML = drafts.length
-      ? '<option value="">Choose a saved draft</option>' + drafts.map(draft => `<option value="${draft.id}">${html(draft.module_code || 'No module')} — ${html(draft.title)} (${draft.question_count})</option>`).join('')
+      ? '<option value="">Choose a saved draft</option>' + drafts.map(draft => `<option value="${draft.id}">${html(moduleLabel(draft.module_code) || 'No module')} — ${html(draft.title)} (${draft.question_count})</option>`).join('')
       : '<option value="">No saved drafts</option>';
     if (selectId && drafts.some(draft => draft.id === Number(selectId))) select.value = String(selectId);
     byId('loadQuizDraftBtn').disabled = !drafts.length;
@@ -523,7 +523,7 @@
       const link = `${location.origin}/static/student.html?module=${encodeURIComponent(result.module_code)}`;
       byId('shareLink').textContent = link;
       byId('shareBox').classList.remove('hidden');
-      showBuilderMessage(`Published “${result.title}” with ${result.num_questions} questions. Students in ${result.module_code} can now open it.`);
+      showBuilderMessage(`Published “${result.title}” with ${result.num_questions} questions. Students in ${moduleLabel(result.module_code)} can now open it.`);
     } catch (error) { showBuilderMessage(`Could not publish quiz: ${error.message}`, 'error'); }
     finally { button.disabled = false; }
   }

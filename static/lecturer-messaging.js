@@ -20,9 +20,9 @@
     const history = document.getElementById('lecturerSupportHistory');
     try {
       const [studentRows, messages] = await Promise.all([request('/lecturer/message-students'),request('/lecturer/messages')]); students = studentRows;
-      document.getElementById('lecturerSupportStudent').innerHTML = students.map(student => `<option value="${student.id}">${esc(student.full_name)} · ${esc(student.student_number)} · ${esc((student.module_codes||[]).join(', '))}</option>`).join('') || '<option value="">No students in your modules</option>';
+      document.getElementById('lecturerSupportStudent').innerHTML = students.map(student => `<option value="${student.id}">${esc(student.full_name)} · ${esc(student.student_number)} · ${esc((student.module_codes||[]).map(moduleLabel).join(', '))}</option>`).join('') || '<option value="">No students in your modules</option>';
       const modules = [...new Set(students.flatMap(student => student.module_codes || []))].sort();
-      document.getElementById('lecturerSupportModule').innerHTML = modules.map(code => `<option value="${esc(code)}">${esc(code)} · ${students.filter(student => (student.module_codes||[]).includes(code)).length} students</option>`).join('') || '<option value="">No assigned modules with students</option>';
+      document.getElementById('lecturerSupportModule').innerHTML = modules.map(code => `<option value="${esc(code)}">${esc(moduleLabel(code))} · ${students.filter(student => (student.module_codes||[]).includes(code)).length} students</option>`).join('') || '<option value="">No assigned modules with students</option>';
       history.innerHTML = messages.length ? messages.map(message => { const sent=message.sender_type==='lecturer'; return `<article class="message-bubble ${sent?'sent':'received'}"><header><strong>${esc(sent ? `To ${message.recipient_name}` : `From ${message.sender_name}`)}</strong>${message.is_anonymous?'<span class="privacy-pill">Anonymous</span>':''}<time>${esc(time(message.created_at))}</time></header><p>${esc(message.content)}</p></article>`; }).join('') : '<p class="muted">No messages yet.</p>';
     } catch (error) { history.innerHTML = `<div class="msg error">${esc(error.message)}</div>`; }
   }
@@ -31,7 +31,7 @@
     const content=document.getElementById('lecturerSupportText').value.trim(), status=document.getElementById('lecturerSupportMsg'); if(!content){status.textContent='Write a message first.';return;}
     try {
       if(mode==='individual'){const id=Number(document.getElementById('lecturerSupportStudent').value);if(!id)throw new Error('Choose a student.');await request('/lecturer/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({recipient_type:'student',recipient_id:id,content})});status.textContent='Message sent.';}
-      else {const module_code=document.getElementById('lecturerSupportModule').value;if(!module_code)throw new Error('Choose a module.');const result=await request('/lecturer/messages/broadcast',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({module_code,content})});status.textContent=`Sent to ${result.recipient_count} ${module_code} student${result.recipient_count===1?'':'s'}.`;}
+      else {const module_code=document.getElementById('lecturerSupportModule').value;if(!module_code)throw new Error('Choose a module.');const result=await request('/lecturer/messages/broadcast',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({module_code,content})});status.textContent=`Sent to ${result.recipient_count} ${moduleName(module_code)} student${result.recipient_count===1?'':'s'}.`;}
       document.getElementById('lecturerSupportText').value=''; await load();
     } catch(error){status.textContent=error.message;}
   });
