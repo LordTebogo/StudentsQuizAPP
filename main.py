@@ -308,13 +308,15 @@ def ensure_market_listing_fields_schema():
     tables = inspect(engine).get_table_names()
     if "accommodations" in tables:
         columns = {column["name"] for column in inspect(engine).get_columns("accommodations")}
-        if "is_approved" not in columns:
-            with engine.begin() as conn:
+        with engine.begin() as conn:
+            if "is_approved" not in columns:
                 conn.execute(text("ALTER TABLE accommodations ADD COLUMN is_approved BOOLEAN DEFAULT TRUE NOT NULL"))
+            if "booked_until" not in columns:
+                conn.execute(text("ALTER TABLE accommodations ADD COLUMN booked_until VARCHAR(10)"))
     if "market_adverts" in tables:
         columns = {column["name"] for column in inspect(engine).get_columns("market_adverts")}
         with engine.begin() as conn:
-            for name, definition in (("service_detail", "VARCHAR(160)"), ("service_availability", "TEXT"), ("area", "VARCHAR(160)"), ("latitude", "FLOAT"), ("longitude", "FLOAT")):
+            for name, definition in (("service_detail", "VARCHAR(160)"), ("service_availability", "TEXT"), ("stock_quantity", "INTEGER"), ("area", "VARCHAR(160)"), ("latitude", "FLOAT"), ("longitude", "FLOAT")):
                 if name not in columns:
                     conn.execute(text(f"ALTER TABLE market_adverts ADD COLUMN {name} {definition}"))
             if "service_detail" not in columns:
@@ -4736,7 +4738,7 @@ def _accommodation_payload(item: Accommodation, landlord: Landlord) -> dict:
     if item.latitude is not None and item.longitude is not None:
         directions_url = f"https://www.google.com/maps/dir/?api=1&destination={item.latitude},{item.longitude}"
     image_urls = _market_image_urls(item)
-    return {"id": item.id, "title": item.title, "campus": item.campus, "area": item.area, "monthly_rent": item.monthly_rent, "bedrooms": item.bedrooms or "", "description": item.description, "contact": item.contact or "", "image_url": image_urls[0] if image_urls else None, "image_urls": image_urls, "latitude": item.latitude, "longitude": item.longitude, "directions_url": directions_url, "is_available": item.is_available, "is_approved": item.is_approved, "created_at": item.created_at, "views": item.view_count or 0, "rating": round((item.rating_total or 0) / item.rating_count, 1) if item.rating_count else None, "rating_count": item.rating_count or 0, "landlord": {"id": landlord.id, "name": landlord.full_name, "business_name": landlord.business_name or "", "profile_image_url": landlord.profile_image_url}}
+    return {"id": item.id, "title": item.title, "campus": item.campus, "area": item.area, "monthly_rent": item.monthly_rent, "bedrooms": item.bedrooms or "", "description": item.description, "contact": item.contact or "", "image_url": image_urls[0] if image_urls else None, "image_urls": image_urls, "latitude": item.latitude, "longitude": item.longitude, "directions_url": directions_url, "is_available": item.is_available, "booked_until": item.booked_until, "is_approved": item.is_approved, "created_at": item.created_at, "views": item.view_count or 0, "rating": round((item.rating_total or 0) / item.rating_count, 1) if item.rating_count else None, "rating_count": item.rating_count or 0, "landlord": {"id": landlord.id, "name": landlord.full_name, "business_name": landlord.business_name or "", "profile_image_url": landlord.profile_image_url}}
 
 
 def _market_image_urls(item) -> List[str]:
@@ -4748,6 +4750,18 @@ def _market_image_urls(item) -> List[str]:
     if not urls and item.image_url:
         urls = [item.image_url]
     return urls
+
+
+def _retained_market_images(raw: str, existing: List[str]) -> List[str]:
+    if not raw:
+        return existing
+    try:
+        selected = json.loads(raw)
+    except (TypeError, json.JSONDecodeError):
+        raise HTTPException(status_code=400, detail="Choose valid existing photos")
+    if not isinstance(selected, list) or len(selected) != len(set(map(str, selected))) or any(url not in existing for url in selected):
+        raise HTTPException(status_code=400, detail="Choose photos from this listing only")
+    return selected
 
 
 def _free_video_url(value: Optional[str]) -> Optional[str]:
@@ -4961,7 +4975,7 @@ async def create_accommodation(title: str = Form(...), campus: str = Form(...), 
 
 
 @app.put("/marketing/listings/{listing_id}")
-async def update_accommodation(listing_id: int, title: str = Form(...), campus: str = Form(...), area: str = Form(...), monthly_rent: str = Form(""), bedrooms: str = Form(""), description: str = Form(...), contact: str = Form(""), latitude: str = Form(""), longitude: str = Form(""), is_available: bool = Form(True), images: Optional[List[UploadFile]] = File(None), image: Optional[UploadFile] = File(None), landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
+async def update_accommodation(listing_id: int, title: str = Form(...), campus: str = Form(...), area: str = Form(""), monthly_rent: str = Form(""), bedrooms: str = Form(""), description: str = Form(...), contact: str = Form(""), latitude: str = Form(""), longitude: str = Form(""), is_available: bool = Form(True), booked_until: str = Form(""), retained_image_urls: str = Form(""), images: Optional[List[UploadFile]] = File(None), image: Optional[UploadFile] = File(None), landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
     item = db.query(Accommodation).filter(Accommodation.id == listing_id, Accommodation.landlord_id == landlord.id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Accommodation listing not found")
@@ -4978,13 +4992,26 @@ async def update_accommodation(listing_id: int, title: str = Form(...), campus: 
     # Availability updates do not include the picker fields, so retain a
     # previously selected point unless the landlord supplies a new one.
     lat, lng = _accommodation_coordinates(latitude, longitude) if latitude.strip() or longitude.strip() else (item.latitude, item.longitude)
+    if len(description.strip()) > 2500:
+        raise HTTPException(status_code=400, detail="Accommodation descriptions can be up to 2,500 characters")
+    if booked_until.strip():
+        try:
+            if date.fromisoformat(booked_until.strip()).isoformat() != booked_until.strip():
+                raise ValueError()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Fully booked until must be a valid date")
+    existing_images = _market_image_urls(item)
+    kept_images = _retained_market_images(retained_image_urls, existing_images)
+    files = list(images or []) + ([image] if image and image.filename else [])
+    if len(kept_images) + len([file for file in files if file and file.filename]) > 3:
+        raise HTTPException(status_code=400, detail="Choose no more than 3 photos in total")
+    new_images = await _upload_market_images(files, 3, "accommodation_listings", 10 * 1024 * 1024)
+    image_urls = kept_images + new_images
     item.title, item.campus, item.area = title.strip()[:180], campus.strip()[:120], area.strip()[:160]
     item.monthly_rent, item.bedrooms, item.description = rent, bedrooms.strip()[:80], description.strip()[:2500]
-    item.contact, item.latitude, item.longitude, item.is_available = contact.strip()[:160], lat, lng, is_available
-    files = list(images or []) + ([image] if image and image.filename else [])
-    if any(file and file.filename for file in files):
-        image_urls = await _upload_market_images(files, 3, "accommodation_listings", 10 * 1024 * 1024)
-        item.image_url, item.image_urls = image_urls[0], json.dumps(image_urls)
+    item.contact, item.latitude, item.longitude, item.is_available, item.booked_until = contact.strip()[:160], lat, lng, is_available, booked_until.strip() or None
+    if retained_image_urls or new_images:
+        item.image_url, item.image_urls = image_urls[0] if image_urls else None, json.dumps(image_urls)
     db.commit()
     return {"ok": True, "listing": _accommodation_payload(item, landlord)}
 
@@ -5054,7 +5081,7 @@ def _advert_payload(item: MarketAdvert, owner_name: str = "", registration_conta
     directions_url = f"https://www.google.com/maps/dir/?api=1&destination={item.latitude},{item.longitude}" if item.latitude is not None and item.longitude is not None else None
     return {
         "id": item.id, "business_name": item.business_name, "headline": item.headline,
-        "description": item.description, "category": item.category, "service_detail": item.service_detail or "", "service_availability": json.loads(item.service_availability) if item.service_availability else {}, "price": item.price, "campus": item.campus or "", "area": item.area or "", "latitude": item.latitude, "longitude": item.longitude, "directions_url": directions_url,
+        "description": item.description, "category": item.category, "service_detail": item.service_detail or "", "service_availability": json.loads(item.service_availability) if item.service_availability else {}, "price": item.price, "stock_quantity": item.stock_quantity, "campus": item.campus or "", "area": item.area or "", "latitude": item.latitude, "longitude": item.longitude, "directions_url": directions_url,
         "contact": item.contact or "", "website_url": item.website_url or "",
         "placement": item.placement, "image_url": image_urls[0] if image_urls else None, "image_urls": image_urls,
         "video_url": _free_video_url(item.video_url), "premium_available": bool(item.premium_video_asset), "starts_at": item.starts_at,
@@ -5114,7 +5141,7 @@ def list_market_adverts(placement: str = "", db: Session = Depends(get_db)):
 @app.post("/marketing/adverts")
 async def create_market_advert(
     business_name: str = Form(...), headline: str = Form(...), description: str = Form(...),
-    category: str = Form(...), service_detail: str = Form(""), price: Optional[int] = Form(None), campus: str = Form(""), area: str = Form(""), latitude: str = Form(""), longitude: str = Form(""), contact: str = Form(...), website_url: str = Form(""),
+    category: str = Form(...), service_detail: str = Form(""), price: Optional[int] = Form(None), stock_quantity: Optional[int] = Form(None), campus: str = Form(""), area: str = Form(""), latitude: str = Form(""), longitude: str = Form(""), contact: str = Form(...), website_url: str = Form(""),
     placement: str = Form("spotlight"), starts_at: str = Form(""), expires_at: str = Form(""),
     images: Optional[List[UploadFile]] = File(None), image: Optional[UploadFile] = File(None),
     video: Optional[UploadFile] = File(None), x_student_token: Optional[str] = Header(None, alias="X-Student-Token"),
@@ -5127,6 +5154,8 @@ async def create_market_advert(
         raise HTTPException(status_code=400, detail="Advert descriptions can be up to 1,200 characters")
     if price is not None and (price < 0 or price > 100000000):
         raise HTTPException(status_code=400, detail="Enter a price between R0 and R100,000,000")
+    if stock_quantity is not None and not 0 <= stock_quantity <= 1000000:
+        raise HTTPException(status_code=400, detail="Enter a stock quantity between 0 and 1,000,000")
     website = website_url.strip()
     contact_digits = re.sub(r"\D", "", contact)
     if len(contact_digits) < 8:
@@ -5160,7 +5189,7 @@ async def create_market_advert(
     item = MarketAdvert(
         owner_student_id=student.id if student else None, owner_landlord_id=landlord.id if landlord else None,
         business_name=business_name.strip()[:160], headline=headline.strip()[:180], description=description.strip(),
-        category=category.strip()[:80], service_detail=service_detail.strip()[:160], price=price, campus=campus.strip()[:120], area=area.strip()[:160], latitude=lat, longitude=lng, contact=contact.strip()[:160],
+        category=category.strip()[:80], service_detail=service_detail.strip()[:160], price=price, stock_quantity=stock_quantity, campus=campus.strip()[:120], area=area.strip()[:160], latitude=lat, longitude=lng, contact=contact.strip()[:160],
         website_url=website[:500], placement=placement, image_url=image_urls[0] if image_urls else None,
         image_urls=json.dumps(image_urls), video_url=video_url, premium_video_asset=premium_asset,
         starts_at=start, expires_at=end, status="approved", is_featured=False, impressions=0, clicks=0,
@@ -5185,6 +5214,69 @@ def my_market_adverts(
     return [_advert_payload(item) for item in query.order_by(MarketAdvert.created_at.desc()).all()]
 
 
+@app.put("/marketing/adverts/{advert_id}")
+async def update_market_advert(
+    advert_id: int, business_name: str = Form(...), headline: str = Form(...), category: str = Form(...),
+    service_detail: str = Form(""), description: str = Form(...), price: str = Form(""), stock_quantity: str = Form(""),
+    campus: str = Form(""), area: str = Form(""), latitude: str = Form(""), longitude: str = Form(""),
+    contact: str = Form(...), website_url: str = Form(""), status: str = Form("approved"),
+    retained_image_urls: str = Form(""), images: Optional[List[UploadFile]] = File(None),
+    landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db),
+):
+    item = db.query(MarketAdvert).filter(MarketAdvert.id == advert_id, MarketAdvert.owner_landlord_id == landlord.id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Listing not found")
+    if not all(value.strip() for value in (business_name, headline, category, description)) or len(description.strip()) > 1200:
+        raise HTTPException(status_code=400, detail="Add a business name, title, category and description of up to 1,200 characters")
+    if len(re.sub(r"\D", "", contact)) < 8:
+        raise HTTPException(status_code=400, detail="Add a valid contact number")
+    if category.strip().lower() == "other" and not service_detail.strip():
+        raise HTTPException(status_code=400, detail="Describe the activity or service for Other")
+    if category.strip().lower() == "churches" and not area.strip():
+        raise HTTPException(status_code=400, detail="Add the church location or area")
+    if status not in {"approved", "paused"}:
+        raise HTTPException(status_code=400, detail="Choose published or paused")
+    try:
+        parsed_price = int(price) if price.strip() else None
+        parsed_stock = int(stock_quantity) if stock_quantity.strip() else None
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Price and stock must be whole numbers")
+    if parsed_price is not None and not 0 <= parsed_price <= 100000000:
+        raise HTTPException(status_code=400, detail="Enter a price between R0 and R100,000,000")
+    if parsed_stock is not None and not 0 <= parsed_stock <= 1000000:
+        raise HTTPException(status_code=400, detail="Enter a stock quantity between 0 and 1,000,000")
+    website = website_url.strip()
+    if website and not re.match(r"^(?:https?://)?[^\s]+\.[^\s]+$", website, re.IGNORECASE):
+        raise HTTPException(status_code=400, detail="Enter a valid website address")
+    lat, lng = _accommodation_coordinates(latitude, longitude) if latitude.strip() or longitude.strip() else (item.latitude, item.longitude)
+    kept_images = _retained_market_images(retained_image_urls, _market_image_urls(item))
+    files = list(images or [])
+    if len(kept_images) + len([file for file in files if file and file.filename]) > 3:
+        raise HTTPException(status_code=400, detail="Choose no more than 3 photos in total")
+    new_images = await _upload_market_images(files, 3, "market_adverts", 8 * 1024 * 1024)
+    urls = kept_images + new_images
+    item.business_name, item.headline, item.category = business_name.strip()[:160], headline.strip()[:180], category.strip()[:80]
+    item.service_detail, item.description = service_detail.strip()[:160], description.strip()
+    item.price, item.stock_quantity, item.campus, item.area = parsed_price, parsed_stock, campus.strip()[:120], area.strip()[:160]
+    item.latitude, item.longitude, item.contact, item.website_url = lat, lng, contact.strip()[:160], website[:500]
+    item.status, item.updated_at = status, datetime.now(timezone.utc).isoformat()
+    if retained_image_urls or new_images:
+        item.image_url, item.image_urls = urls[0] if urls else None, json.dumps(urls)
+    db.commit(); db.refresh(item)
+    return {"ok": True, "advert": _advert_payload(item)}
+
+
+@app.delete("/marketing/adverts/{advert_id}")
+def delete_market_advert(advert_id: int, landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
+    item = db.query(MarketAdvert).filter(MarketAdvert.id == advert_id, MarketAdvert.owner_landlord_id == landlord.id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Listing not found")
+    db.query(MarketListingView).filter_by(kind="adverts", listing_id=item.id).delete()
+    db.query(MarketListingRating).filter_by(kind="adverts", listing_id=item.id).delete()
+    db.delete(item); db.commit()
+    return {"ok": True}
+
+
 class ServiceAvailabilityUpdate(BaseModel):
     opening_hours: str = ""
     available_dates: List[str] = Field(default_factory=list)
@@ -5193,6 +5285,7 @@ class ServiceAvailabilityUpdate(BaseModel):
     consultations: bool = False
     consultation_minutes: Optional[int] = None
     consultation_mode: str = ""
+    booked_until: str = ""
 
 
 @app.put("/marketing/adverts/{advert_id}/availability")
@@ -5212,6 +5305,12 @@ def update_service_availability(
         raise HTTPException(status_code=400, detail="Availability details are too long")
     if payload.consultation_minutes is not None and not 5 <= payload.consultation_minutes <= 480:
         raise HTTPException(status_code=400, detail="Consultations must be 5 to 480 minutes")
+    if payload.booked_until:
+        try:
+            if date.fromisoformat(payload.booked_until).isoformat() != payload.booked_until:
+                raise ValueError()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Fully booked until must use YYYY-MM-DD")
     dates = {}
     for key in ("available_dates", "closed_dates"):
         values = getattr(payload, key)
@@ -5237,6 +5336,7 @@ def update_service_availability(
         "consultations": payload.consultations,
         "consultation_minutes": payload.consultation_minutes if payload.consultations else None,
         "consultation_mode": payload.consultation_mode.strip() if payload.consultations else "",
+        "booked_until": payload.booked_until,
     }
     item.service_availability = json.dumps(availability)
     item.updated_at = datetime.now(timezone.utc).isoformat()

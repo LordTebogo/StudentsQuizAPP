@@ -62,6 +62,7 @@
         <label>Category<select name="category" required><option value="">Choose a category</option><option>Sales & retail</option><option>Technology</option><option>Ride & transport</option><option>Delivery & courier</option><option>Campus shuttle</option><option>Student service</option><option>Food & delivery</option><option>Tutoring</option><option>Event</option><option>Beauty & lifestyle</option><option>Churches</option><option>Other</option></select></label>
         <label id="otherServiceField" hidden>Actual activity or service<input name="service_detail" maxlength="160" disabled></label>
         <label>Price (R) <span>(optional for services)</span><input name="price" type="number" min="0" max="100000000" inputmode="numeric"></label>
+        <label>Stock quantity <span>(optional for products)</span><input name="stock_quantity" type="number" min="0" max="1000000" inputmode="numeric"></label>
         <label>Nearest University/college or company<input name="campus" maxlength="120"></label>
         <label id="churchLocationField" hidden>Church location or area<input name="area" maxlength="160" disabled></label>
         <div class="sell-location" id="churchCoordinatesField" hidden><label>Latitude <span>(optional)</span><input name="latitude" type="number" step="any" min="-90" max="90" disabled></label><label>Longitude <span>(optional)</span><input name="longitude" type="number" step="any" min="-180" max="180" disabled></label><button type="button" data-use-location>Use my current location</button><small class="sell-location-status" role="status" aria-live="polite" hidden></small></div>
@@ -73,13 +74,29 @@
       <button type="submit">${room ? 'Submit room for approval' : 'Publish listing'}</button>
     </form>`;
   }
+  const isService = item => !/transport|ride|shuttle|courier|delivery|sales|retail|technology|second.?hand|textbook/i.test(item.category);
+  const listingPhotos = item => (item.image_urls || (item.image_url ? [item.image_url] : []));
+  function renderEditListing(type, item) {
+    const room = type === 'room', availability = item.service_availability || {};
+    const value = name => escapeHtml(item[name] ?? '');
+    const photos = listingPhotos(item);
+    document.getElementById('sellTitle').textContent = `Edit ${room ? 'room' : 'listing'}`;
+    document.getElementById('sellIntro').textContent = 'Update the details customers see. Save when finished.';
+    content.innerHTML = `<button class="sell-back" type="button" data-my-listings>← My listings</button><form id="editListingForm" class="sell-form" data-type="${type}" data-id="${item.id}" enctype="multipart/form-data">
+      ${room ? `<label>Listing title<input name="title" maxlength="180" value="${value('title')}" required></label><label>Nearest university, college or company<input name="campus" maxlength="120" value="${value('campus')}" required></label><label>Area or suburb<input name="area" maxlength="160" value="${value('area')}" required></label><label>Monthly rent (R)<input name="monthly_rent" type="number" min="0" value="${value('monthly_rent')}"></label><label>Room type<input name="bedrooms" maxlength="80" value="${value('bedrooms')}"></label>` : `<label>Business or seller name<input name="business_name" maxlength="160" value="${value('business_name')}" required></label><label>Listing title<input name="headline" maxlength="180" value="${value('headline')}" required></label><label>Category<select name="category" required>${['Sales & retail','Technology','Ride & transport','Delivery & courier','Campus shuttle','Student service','Food & delivery','Tutoring','Event','Beauty & lifestyle','Churches','Other'].map(category => `<option ${item.category === category ? 'selected' : ''}>${category}</option>`).join('')}</select></label><label>Activity or service<input name="service_detail" maxlength="160" value="${value('service_detail')}"></label><label>Price (R)<input name="price" type="number" min="0" max="100000000" value="${value('price')}"></label><label>Stock quantity (optional, for products)<input name="stock_quantity" type="number" min="0" max="1000000" value="${value('stock_quantity')}"></label><label>Nearest university, college or company<input name="campus" maxlength="120" value="${value('campus')}"></label><label>Area or suburb<input name="area" maxlength="160" value="${value('area')}"></label>`}
+      <label>Description<textarea name="description" maxlength="${room ? 2500 : 1200}" required>${value('description')}</textarea></label><label>Contact number<input name="contact" type="tel" value="${value('contact')}" required></label>${room ? `<label><input name="is_available" type="checkbox" ${item.is_available ? 'checked' : ''}> Available now</label><label>Fully booked until (optional)<input name="booked_until" type="date" value="${value('booked_until')}"></label>` : `<label>Website or social link<input name="website_url" type="url" value="${value('website_url')}"></label><label>Listing visibility<select name="status"><option value="approved" ${item.status === 'approved' ? 'selected' : ''}>Published</option><option value="paused" ${item.status === 'paused' ? 'selected' : ''}>Paused</option></select></label>`}
+      <div class="sell-photo-editor"><strong>Photos (up to 3)</strong>${photos.map((url, index) => `<label><input type="checkbox" data-keep-photo="${index}" checked><img src="${escapeHtml(url)}" alt="Listing photo ${index + 1}"> Keep photo ${index + 1}</label>`).join('') || '<p>No photos yet.</p>'}</div><label>Add photos<input name="images" type="file" accept="image/*" multiple></label>
+      ${!room && isService(item) ? `<fieldset class="sell-availability-fields"><legend>Service and consultation availability</legend><label>Opening hours and days<textarea name="opening_hours" maxlength="500">${escapeHtml(availability.opening_hours || '')}</textarea></label><label>Available dates (YYYY-MM-DD, comma separated)<textarea name="available_dates">${escapeHtml((availability.available_dates || []).join(', '))}</textarea></label><label>Available times (HH:MM, comma separated)<textarea name="available_times">${escapeHtml((availability.available_times || []).join(', '))}</textarea></label><label>Closed dates (YYYY-MM-DD, comma separated)<textarea name="closed_dates">${escapeHtml((availability.closed_dates || []).join(', '))}</textarea></label><label>Fully booked until<input name="booked_until" type="date" value="${escapeHtml(availability.booked_until || '')}"></label><label><input name="consultations" type="checkbox" ${availability.consultations ? 'checked' : ''}> Offer consultations</label><label>Consultation length (minutes)<input name="consultation_minutes" type="number" min="5" max="480" value="${escapeHtml(availability.consultation_minutes || '')}"></label><label>Consultation format<input name="consultation_mode" maxlength="80" value="${escapeHtml(availability.consultation_mode || '')}"></label></fieldset>` : ''}
+      <button type="submit">Save changes</button></form><button class="sell-delete" type="button" data-delete-listing="${type}" data-listing-id="${item.id}">Delete listing</button>`;
+    content.dataset.editPhotos = JSON.stringify(photos);
+  }
   async function renderMyListings() {
     document.getElementById('sellTitle').textContent = 'My listings';
     document.getElementById('sellIntro').textContent = 'Manage all your offers with the same advertiser account.';
     content.innerHTML = '<button class="sell-back" type="button" data-sell-back>← Add another listing</button><p>Loading your listings…</p>';
     try {
       const [rooms, adverts] = await Promise.all([request('/marketing/landlord/listings'), request('/marketing/my-adverts')]);
-      content.innerHTML = `<button class="sell-back" type="button" data-sell-back>← Add another listing</button><div class="sell-manage">${rooms.map(item => `<article><strong>${escapeHtml(item.title)}</strong><span>Room · ${item.is_approved ? (item.is_available ? 'Published' : 'Filled') : 'Awaiting approval'}</span><button type="button" data-toggle-room="${item.id}">${item.is_available ? 'Mark filled' : 'Mark available'}</button></article>`).join('')}${adverts.map(item => `<article><strong>${escapeHtml(item.headline)}</strong><span>${escapeHtml(item.category)} · ${escapeHtml(item.status)}</span>${/transport|ride|shuttle|courier|delivery|sales|retail|technology|second.?hand|textbook/i.test(item.category) ? '' : `<button type="button" data-edit-availability="${item.id}">Edit service availability</button>`}${item.status === 'approved' ? `<button type="button" data-pause-ad="${item.id}">Pause listing</button>` : ''}</article>`).join('') || (!rooms.length ? '<p>You have no listings yet.</p>' : '')}</div>`;
+      content.innerHTML = `<button class="sell-back" type="button" data-sell-back>← Add another listing</button><div class="sell-manage">${rooms.map(item => `<article><div><strong>${escapeHtml(item.title)}</strong><span>Room · ${item.is_approved ? (item.is_available ? 'Published' : item.booked_until ? `Fully booked until ${escapeHtml(item.booked_until)}` : 'Filled') : 'Awaiting approval'}</span></div><div class="sell-manage-actions"><button type="button" data-edit-room="${item.id}">Edit</button><button type="button" data-toggle-room="${item.id}">${item.is_available ? 'Mark filled' : 'Mark available'}</button></div></article>`).join('')}${adverts.map(item => `<article><div><strong>${escapeHtml(item.headline)}</strong><span>${escapeHtml(item.category)} · ${escapeHtml(item.status)}${item.service_availability?.booked_until ? ` · Fully booked until ${escapeHtml(item.service_availability.booked_until)}` : ''}</span></div><div class="sell-manage-actions"><button type="button" data-edit-advert="${item.id}">Edit</button>${item.status === 'approved' ? `<button type="button" data-pause-ad="${item.id}">Pause listing</button>` : `<button type="button" data-publish-ad="${item.id}">Publish listing</button>`}</div></article>`).join('') || (!rooms.length ? '<p>You have no listings yet.</p>' : '')}</div>`;
       content.dataset.rooms = JSON.stringify(rooms);
       content.dataset.adverts = JSON.stringify(adverts);
     } catch (error) { status(error.message, true); renderChoice(); }
@@ -168,13 +185,15 @@
     }
     if (event.target.closest('[data-sell-back]')) { status(''); renderChoice(); return; }
     if (event.target.closest('[data-my-listings]')) { status(''); await renderMyListings(); return; }
-    const availabilityButton = event.target.closest('[data-edit-availability]');
-    if (availabilityButton) {
-      const item = JSON.parse(content.dataset.adverts || '[]').find(row => String(row.id) === availabilityButton.dataset.editAvailability);
-      if (!item) return;
-      const availability = item.service_availability || {};
-      const dates = values => escapeHtml((values || []).join(', '));
-      content.innerHTML = `<button class="sell-back" type="button" data-my-listings>← My listings</button><form id="serviceAvailabilityForm" class="sell-form" data-advert-id="${item.id}"><h3>${escapeHtml(item.headline)}</h3><label>Opening hours and days<textarea name="opening_hours" maxlength="500" placeholder="Monday–Friday, 09:00–17:00">${escapeHtml(availability.opening_hours || '')}</textarea></label><label>Available dates (YYYY-MM-DD, separated by commas)<textarea name="available_dates" placeholder="2026-11-02, 2026-11-03">${dates(availability.available_dates)}</textarea></label><label>Available times (HH:MM, separated by commas)<textarea name="available_times" placeholder="09:00, 10:30, 14:00">${dates(availability.available_times)}</textarea></label><label>Closed dates (YYYY-MM-DD, separated by commas)<textarea name="closed_dates" placeholder="2026-12-25">${dates(availability.closed_dates)}</textarea></label><label><input name="consultations" type="checkbox" ${availability.consultations ? 'checked' : ''}> Offer consultations</label><label>Consultation length in minutes<input name="consultation_minutes" type="number" min="5" max="480" value="${escapeHtml(availability.consultation_minutes || '')}"></label><label>Consultation format<input name="consultation_mode" maxlength="80" placeholder="In person, phone or online" value="${escapeHtml(availability.consultation_mode || '')}"></label><button type="submit">Save availability</button></form>`;
+    const editRoom = event.target.closest('[data-edit-room]');
+    if (editRoom) { const item = JSON.parse(content.dataset.rooms || '[]').find(row => String(row.id) === editRoom.dataset.editRoom); if (item) renderEditListing('room', item); return; }
+    const editAdvert = event.target.closest('[data-edit-advert]');
+    if (editAdvert) { const item = JSON.parse(content.dataset.adverts || '[]').find(row => String(row.id) === editAdvert.dataset.editAdvert); if (item) renderEditListing('advert', item); return; }
+    const deleteButton = event.target.closest('[data-delete-listing]');
+    if (deleteButton) {
+      if (!confirm('Permanently delete this listing and its photos from the market? This cannot be undone.')) return;
+      try { await request(deleteButton.dataset.deleteListing === 'room' ? `/marketing/listings/${deleteButton.dataset.listingId}` : `/marketing/adverts/${deleteButton.dataset.listingId}`, {method:'DELETE'}); await renderMyListings(); document.dispatchEvent(new Event('market-listing-changed')); status('Listing deleted.'); }
+      catch (error) { status(error.message, true); }
       return;
     }
     if (event.target.closest('[data-sell-messages]')) { status(''); await renderMessages(); return; }
@@ -186,6 +205,7 @@
       const form = new FormData();
       for (const field of ['title','campus','area','monthly_rent','bedrooms','description','contact']) form.append(field, item[field] ?? '');
       form.append('is_available', String(!item.is_available));
+      form.append('booked_until', item.is_available ? (item.booked_until || '') : '');
       try { await request(`/marketing/listings/${item.id}`, {method:'PUT', body:form}); await renderMyListings(); document.dispatchEvent(new Event('market-listing-changed')); }
       catch (error) { status(error.message, true); }
     }
@@ -193,6 +213,11 @@
     if (pause) {
       try { await request(`/marketing/adverts/${pause.dataset.pauseAd}/pause`, {method:'PUT'}); await renderMyListings(); document.dispatchEvent(new Event('market-listing-changed')); }
       catch (error) { status(error.message, true); }
+    }
+    const publish = event.target.closest('[data-publish-ad]');
+    if (publish) {
+      const item = JSON.parse(content.dataset.adverts || '[]').find(row => String(row.id) === publish.dataset.publishAd);
+      if (item) renderEditListing('advert', item);
     }
   });
   dialog.addEventListener('change', event => {
@@ -221,12 +246,27 @@
         await renderMessages();
         return;
       }
-      if (form.id === 'serviceAvailabilityForm') {
-        const split = name => form.elements[name].value.split(',').map(value => value.trim()).filter(Boolean);
-        await request(`/marketing/adverts/${form.dataset.advertId}/availability`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({opening_hours:form.elements.opening_hours.value, available_dates:split('available_dates'), available_times:split('available_times'), closed_dates:split('closed_dates'), consultations:form.elements.consultations.checked, consultation_minutes:form.elements.consultation_minutes.value ? Number(form.elements.consultation_minutes.value) : null, consultation_mode:form.elements.consultation_mode.value})});
+      if (form.id === 'editListingForm') {
+        const data = new FormData(form);
+        const originalPhotos = JSON.parse(content.dataset.editPhotos || '[]');
+        const retained = originalPhotos.filter((_, index) => form.querySelector(`[data-keep-photo="${index}"]`)?.checked);
+        const added = [...(form.elements.images?.files || [])];
+        if (retained.length + added.length > 3) throw new Error('Keep and add no more than 3 photos in total.');
+        data.set('retained_image_urls', JSON.stringify(retained));
+        if (String(data.get('contact') || '').replace(/\D/g, '').length < 8) throw new Error('Add a valid contact number.');
+        if (form.dataset.type === 'room') {
+          data.set('is_available', String(form.elements.is_available.checked));
+          await request(`/marketing/listings/${form.dataset.id}`, {method:'PUT', body:data});
+        } else {
+          data.set('status', form.elements.status.value);
+          await request(`/marketing/adverts/${form.dataset.id}`, {method:'PUT', body:data});
+          if (form.elements.opening_hours) {
+            const split = name => form.elements[name].value.split(',').map(value => value.trim()).filter(Boolean);
+            await request(`/marketing/adverts/${form.dataset.id}/availability`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({opening_hours:form.elements.opening_hours.value, available_dates:split('available_dates'), available_times:split('available_times'), closed_dates:split('closed_dates'), booked_until:form.elements.booked_until.value, consultations:form.elements.consultations.checked, consultation_minutes:form.elements.consultation_minutes.value ? Number(form.elements.consultation_minutes.value) : null, consultation_mode:form.elements.consultation_mode.value})});
+          }
+        }
         document.dispatchEvent(new Event('market-listing-changed'));
-        await renderMyListings();
-        status('Availability saved.');
+        await renderMyListings(); status('Listing updated.');
         return;
       }
       if (form.id === 'sellAuthForm') {

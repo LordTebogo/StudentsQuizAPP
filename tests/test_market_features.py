@@ -55,7 +55,7 @@ class MarketFeaturesTest(unittest.TestCase):
             advert = MarketAdvert(owner_landlord_id=owner.id, business_name="Tutor", headline="Math tutoring", description="Lessons", category="Tutoring", status="approved", placement="feed", created_at="2026-10-01T00:00:00Z", updated_at="2026-10-01T00:00:00Z")
             db.add(advert); db.commit(); advert_id = advert.id
         path = f"/marketing/adverts/{advert_id}/availability"
-        details = {"opening_hours":"Weekdays 09:00–17:00", "available_dates":["2026-11-02"], "available_times":["09:00", "10:00"], "closed_dates":["2026-12-25"], "consultations":True, "consultation_minutes":30, "consultation_mode":"Online"}
+        details = {"opening_hours":"Weekdays 09:00–17:00", "available_dates":["2026-11-02"], "available_times":["09:00", "10:00"], "closed_dates":["2026-12-25"], "booked_until":"2026-11-01", "consultations":True, "consultation_minutes":30, "consultation_mode":"Online"}
         self.assertEqual(self.client.put(path, json=details).status_code, 401)
         self.assertEqual(self.client.put(path, json={**details, "closed_dates":["2026-11-02"]}, headers={"X-Landlord-Token":token}).status_code, 400)
         response = self.client.put(path, json=details, headers={"X-Landlord-Token":token})
@@ -81,6 +81,38 @@ class MarketFeaturesTest(unittest.TestCase):
         self.assertEqual(self.client.delete(f"/admin/accounts/provider/{advertiser_id}", headers=headers).status_code, 200)
         self.assertEqual(self.client.post("/marketing/landlords/login", json={"email":payload["email"], "password":"second-pass-123"}).status_code, 401)
         self.assertNotIn(advert_id, [row["id"] for row in self.client.get("/marketing/adverts").json()])
+
+    def test_owner_edits_and_deletes_market_advert(self):
+        with main.SessionLocal() as db:
+            owner = db.query(Landlord).first()
+            token = main._issue_landlord_token(owner.id)
+            item = MarketAdvert(owner_landlord_id=owner.id, business_name="Old shop", headline="Old item", description="Old", category="Sales & retail", status="approved", placement="feed", image_url="/static/old.jpg", image_urls='["/static/old.jpg"]', created_at="2026-10-01T00:00:00Z", updated_at="2026-10-01T00:00:00Z")
+            db.add(item); db.commit(); advert_id = item.id
+        path = f"/marketing/adverts/{advert_id}"
+        details = {"business_name":"New shop", "headline":"Refurbished laptop", "category":"Sales & retail", "description":"Working laptop", "price":"3500", "stock_quantity":"2", "campus":"Main", "area":"Central", "contact":"0791112233", "website_url":"", "status":"paused", "retained_image_urls":"[]"}
+        self.assertEqual(self.client.put(path, data=details).status_code, 401)
+        changed = self.client.put(path, data=details, headers={"X-Landlord-Token":token})
+        self.assertEqual(changed.status_code, 200)
+        self.assertEqual(changed.json()["advert"]["stock_quantity"], 2)
+        self.assertEqual(changed.json()["advert"]["image_urls"], [])
+        self.assertNotIn(advert_id, [row["id"] for row in self.client.get("/marketing/adverts").json()])
+        details["status"] = "approved"
+        self.assertEqual(self.client.put(path, data=details, headers={"X-Landlord-Token":token}).status_code, 200)
+        self.assertIn(advert_id, [row["id"] for row in self.client.get("/marketing/adverts").json()])
+        self.assertEqual(self.client.delete(path, headers={"X-Landlord-Token":token}).status_code, 200)
+        self.assertEqual(self.client.delete(path, headers={"X-Landlord-Token":token}).status_code, 404)
+
+    def test_room_booked_until_and_photo_removal(self):
+        with main.SessionLocal() as db:
+            owner = db.query(Landlord).first()
+            token = main._issue_landlord_token(owner.id)
+            room = Accommodation(landlord_id=owner.id, title="Booked room", campus="Test campus", area="Center", description="Room", contact="0791112233", image_url="/static/room.jpg", image_urls='["/static/room.jpg"]', is_available=True, is_approved=True, created_at="2026-10-01T00:00:00Z")
+            db.add(room); db.commit(); room_id = room.id
+        details = {"title":"Test room", "campus":"Test campus", "area":"Center", "description":"Room", "contact":"0791112233", "is_available":"false", "booked_until":"2026-12-01", "retained_image_urls":"[]"}
+        result = self.client.put(f"/marketing/listings/{room_id}", data=details, headers={"X-Landlord-Token":token})
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.json()["listing"]["booked_until"], "2026-12-01")
+        self.assertEqual(result.json()["listing"]["image_urls"], [])
 
     def test_room_approval_and_listing_contact_are_separate_from_registration(self):
         with main.SessionLocal() as db:
