@@ -753,6 +753,16 @@ class AdminUnifiedAccountUpdate(BaseModel):
     module_codes: Optional[List[str]] = None
 
 
+class AdminAdvertiserCreate(BaseModel):
+    full_name: str
+    business_name: str = ""
+    provider_type: str = "other"
+    email: str
+    phone: str
+    password: str
+    active: bool = True
+
+
 def _password_hash(password: str, salt: Optional[str] = None) -> str:
     salt = salt or secrets.token_hex(16)
     digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 210_000).hex()
@@ -3899,6 +3909,20 @@ def admin_list_all_accounts(_pin_ok: bool = Depends(require_lecturer_pin), db: S
     return sorted(rows, key=lambda item: item.get("created_at") or "", reverse=True)
 
 
+@app.post("/admin/advertisers")
+def admin_create_advertiser(payload: AdminAdvertiserCreate, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    email = payload.email.strip().lower()
+    if not payload.full_name.strip() or not payload.phone.strip() or "@" not in email or len(payload.password) < 8:
+        raise HTTPException(status_code=400, detail="Provide a name, contact number, valid email, and password of at least 8 characters")
+    if payload.provider_type not in {"residence", "transport", "sales", "other"}:
+        raise HTTPException(status_code=400, detail="Choose accommodation, transport, sales, or other")
+    if db.query(Landlord).filter(Landlord.email == email).first():
+        raise HTTPException(status_code=409, detail="An advertiser already uses this email")
+    advertiser = Landlord(full_name=payload.full_name.strip()[:160], business_name=payload.business_name.strip()[:160], provider_type=payload.provider_type, email=email, phone=payload.phone.strip()[:60], password_hash=_password_hash(payload.password), active=payload.active, created_at=datetime.now(timezone.utc).isoformat())
+    db.add(advertiser); db.commit(); db.refresh(advertiser)
+    return _admin_account_record("provider", advertiser)
+
+
 @app.put("/admin/accounts/{account_type}/{account_id}")
 def admin_update_any_account(account_type: str, account_id: int, payload: AdminUnifiedAccountUpdate,
                              _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
@@ -3983,7 +4007,7 @@ def admin_delete_any_account(account_type: str, account_id: int, _pin_ok: bool =
     if account_type == "src":
         db.query(ComradePost).filter(ComradePost.src_president_id == account.id).update({ComradePost.src_president_id: None})
     if account_type == "provider":
-        db.query(MarketAdvert).filter(MarketAdvert.owner_landlord_id == account.id).update({MarketAdvert.owner_landlord_id: None})
+        db.query(MarketAdvert).filter(MarketAdvert.owner_landlord_id == account.id).update({MarketAdvert.owner_landlord_id: None, MarketAdvert.status: "paused"})
         db.query(AccommodationComment).filter(AccommodationComment.author_landlord_id == account.id).update({AccommodationComment.author_landlord_id: None})
     db.delete(account)
     db.commit()

@@ -63,6 +63,25 @@ class MarketFeaturesTest(unittest.TestCase):
         public = next(item for item in self.client.get("/marketing/adverts").json() if item["id"] == advert_id)
         self.assertEqual(public["service_availability"], response.json()["service_availability"])
 
+    def test_admin_manages_advertiser_accounts(self):
+        headers = {"X-Lecturer-Pin": main.LECTURER_PIN}
+        payload = {"full_name":"New Provider", "business_name":"Tutor Service", "provider_type":"other", "email":"new-provider@example.test", "phone":"0791112233", "password":"first-pass-123"}
+        self.assertEqual(self.client.post("/admin/advertisers", json=payload).status_code, 401)
+        created = self.client.post("/admin/advertisers", json=payload, headers=headers)
+        self.assertEqual(created.status_code, 200)
+        advertiser_id = created.json()["id"]
+        self.assertIn(advertiser_id, [row["id"] for row in self.client.get("/admin/accounts", headers=headers).json() if row["account_type"] == "provider"])
+        reset = self.client.put(f"/admin/accounts/provider/{advertiser_id}", json={"password":"second-pass-123"}, headers=headers)
+        self.assertEqual(reset.status_code, 200)
+        self.assertEqual(self.client.post("/marketing/landlords/login", json={"email":payload["email"], "password":"first-pass-123"}).status_code, 401)
+        self.assertEqual(self.client.post("/marketing/landlords/login", json={"email":payload["email"], "password":"second-pass-123"}).status_code, 200)
+        with main.SessionLocal() as db:
+            advert = MarketAdvert(owner_landlord_id=advertiser_id, business_name="Tutor Service", headline="New lessons", description="Lessons", category="Tutoring", status="approved", placement="feed", created_at="2026-10-01T00:00:00Z", updated_at="2026-10-01T00:00:00Z")
+            db.add(advert); db.commit(); advert_id = advert.id
+        self.assertEqual(self.client.delete(f"/admin/accounts/provider/{advertiser_id}", headers=headers).status_code, 200)
+        self.assertEqual(self.client.post("/marketing/landlords/login", json={"email":payload["email"], "password":"second-pass-123"}).status_code, 401)
+        self.assertNotIn(advert_id, [row["id"] for row in self.client.get("/marketing/adverts").json()])
+
     def test_room_approval_and_listing_contact_are_separate_from_registration(self):
         with main.SessionLocal() as db:
             landlord = db.query(Landlord).first()

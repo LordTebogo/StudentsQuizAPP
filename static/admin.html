@@ -106,10 +106,16 @@
   </section>
 
   <section class="card admin-panel" data-admin-area="people" id="allAccountsCard">
-    <div class="admin-editor-heading"><div><span class="kicker">Read, update & delete</span><h2>All registered accounts</h2></div><button class="btn secondary" id="refreshAllAccountsBtn" type="button">Refresh</button></div>
+    <div class="admin-editor-heading"><div><span class="kicker">Read, update & delete</span><h2>All registered accounts</h2></div><div><button class="btn secondary" id="newAdvertiserBtn" type="button">Add advertiser</button> <button class="btn secondary" id="refreshAllAccountsBtn" type="button">Refresh</button></div></div>
     <p class="muted">Manage every learner, tutor and marketplace account, including accommodation, transport, sales and other businesses.</p>
-    <div class="admin-list-tools"><label for="allAccountSearch">Search accounts<input id="allAccountSearch" type="search" placeholder="Name, email, business or username"></label><label for="allAccountType">Account type<select id="allAccountType"><option value="all">All accounts</option><option value="student">Learners</option><option value="lecturer">Tutors</option><option value="provider">Businesses and providers</option></select></label><label for="allAccountStatus">Status<select id="allAccountStatus"><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="unapproved">Not approved</option></select></label></div>
+    <div class="admin-list-tools"><label for="allAccountSearch">Search accounts<input id="allAccountSearch" type="search" placeholder="Name, email, business or username"></label><label for="allAccountType">Account type<select id="allAccountType"><option value="all">All accounts</option><option value="student">Learners</option><option value="lecturer">Tutors</option><option value="provider">Advertisers</option></select></label><label for="allAccountStatus">Status<select id="allAccountStatus"><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="unapproved">Not approved</option></select></label></div>
     <div class="admin-page-head"><strong id="allAccountSummary">Accounts</strong></div>
+    <form id="newAdvertiserForm" class="account-directory-editor hidden">
+      <h3>Add advertiser</h3>
+      <div class="account-directory-fields"><div><label>Full name<input name="full_name" required maxlength="160"></label></div><div><label>Business name<input name="business_name" maxlength="160"></label></div><div><label>Category<select name="provider_type"><option value="residence">Accommodation</option><option value="transport">Transport</option><option value="sales">Sales</option><option value="other" selected>Other service</option></select></label></div><div><label>Email<input name="email" type="email" required></label></div><div><label>Contact number<input name="phone" type="tel" required></label></div><div><label>Initial password<input name="password" type="password" minlength="8" autocomplete="new-password" required></label></div></div>
+      <label class="check-label"><input name="active" type="checkbox" checked> Account active</label>
+      <button class="btn" type="submit">Create advertiser</button> <button class="btn secondary" type="button" id="cancelNewAdvertiserBtn">Cancel</button><div id="newAdvertiserMsg" role="status"></div>
+    </form>
     <div id="allAccountList" class="admin-list"></div>
     <div id="allAccountEditor" class="account-directory-editor hidden">
       <div class="admin-editor-heading"><div><span class="kicker" id="allAccountRole">Account</span><h3 id="allAccountEditorTitle">Edit account</h3></div><button class="btn secondary" id="closeAllAccountEditorBtn" type="button">Close</button></div>
@@ -125,7 +131,7 @@
         <div id="allAccountModuleLimitField" class="hidden"><label for="allAccountModuleLimit">Module limit</label><input id="allAccountModuleLimit" type="number" min="0"></div>
         <div id="allAccountModulesField" class="wide hidden"><label for="allAccountModules">Assigned modules</label><input id="allAccountModules" type="text" placeholder="BIO101, CHEM102"></div>
         <div id="allAccountBioField" class="wide hidden"><label for="allAccountBio">Profile information</label><textarea id="allAccountBio"></textarea></div>
-        <div class="wide"><label for="allAccountPassword">New password (leave blank to keep current)</label><input id="allAccountPassword" type="password" minlength="8" autocomplete="new-password"></div>
+        <div class="wide"><label for="allAccountPassword">Reset password (leave blank to keep current)</label><input id="allAccountPassword" type="password" minlength="8" autocomplete="new-password"></div>
       </div>
       <label class="check-label"><input id="allAccountActive" type="checkbox"> Account active</label>
       <label class="check-label hidden" id="allAccountApprovedField"><input id="allAccountApproved" type="checkbox"> Account approved</label>
@@ -531,6 +537,24 @@ $('studentPrevPage').addEventListener('click',()=>{if(studentAdminPage>1){studen
 $('studentNextPage').addEventListener('click',()=>{studentAdminPage++;renderStudentPage();$('studentList').scrollIntoView({behavior:'smooth',block:'start'})});
 $('refreshSrcPresidentsBtn').addEventListener('click', loadSrcPresidents);
 $('refreshAllAccountsBtn').addEventListener('click', loadAllAccounts);
+$('newAdvertiserBtn').addEventListener('click', () => { $('newAdvertiserForm').classList.remove('hidden'); $('newAdvertiserMsg').innerHTML = ''; $('newAdvertiserForm').scrollIntoView({behavior:'smooth', block:'center'}); });
+$('cancelNewAdvertiserBtn').addEventListener('click', () => $('newAdvertiserForm').classList.add('hidden'));
+$('newAdvertiserForm').addEventListener('submit', async event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector('[type="submit"]');
+  button.disabled = true;
+  try {
+    const payload = Object.fromEntries(new FormData(form));
+    payload.active = form.elements.active.checked;
+    const item = await api('/admin/advertisers', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+    form.reset(); form.classList.add('hidden');
+    $('allAccountType').value = 'provider'; $('allAccountSearch').value = '';
+    await loadAllAccounts(); openAllAccount('provider', item.id);
+    showMsg($('allAccountMsg'), 'Advertiser account created.', 'ok');
+  } catch (error) { showMsg($('newAdvertiserMsg'), error.message, 'error'); }
+  finally { button.disabled = false; }
+});
 $('allAccountSearch').addEventListener('input', renderAllAccounts);
 $('allAccountType').addEventListener('change', renderAllAccounts);
 $('allAccountStatus').addEventListener('change', renderAllAccounts);
