@@ -79,8 +79,9 @@
     content.innerHTML = '<button class="sell-back" type="button" data-sell-back>← Add another listing</button><p>Loading your listings…</p>';
     try {
       const [rooms, adverts] = await Promise.all([request('/marketing/landlord/listings'), request('/marketing/my-adverts')]);
-      content.innerHTML = `<button class="sell-back" type="button" data-sell-back>← Add another listing</button><div class="sell-manage">${rooms.map(item => `<article><strong>${escapeHtml(item.title)}</strong><span>Room · ${item.is_approved ? (item.is_available ? 'Published' : 'Filled') : 'Awaiting approval'}</span><button type="button" data-toggle-room="${item.id}">${item.is_available ? 'Mark filled' : 'Mark available'}</button></article>`).join('')}${adverts.map(item => `<article><strong>${escapeHtml(item.headline)}</strong><span>${escapeHtml(item.category)} · ${escapeHtml(item.status)}</span>${item.status === 'approved' ? `<button type="button" data-pause-ad="${item.id}">Pause listing</button>` : ''}</article>`).join('') || (!rooms.length ? '<p>You have no listings yet.</p>' : '')}</div>`;
+      content.innerHTML = `<button class="sell-back" type="button" data-sell-back>← Add another listing</button><div class="sell-manage">${rooms.map(item => `<article><strong>${escapeHtml(item.title)}</strong><span>Room · ${item.is_approved ? (item.is_available ? 'Published' : 'Filled') : 'Awaiting approval'}</span><button type="button" data-toggle-room="${item.id}">${item.is_available ? 'Mark filled' : 'Mark available'}</button></article>`).join('')}${adverts.map(item => `<article><strong>${escapeHtml(item.headline)}</strong><span>${escapeHtml(item.category)} · ${escapeHtml(item.status)}</span>${/transport|ride|shuttle|courier|delivery|sales|retail|technology|second.?hand|textbook/i.test(item.category) ? '' : `<button type="button" data-edit-availability="${item.id}">Edit service availability</button>`}${item.status === 'approved' ? `<button type="button" data-pause-ad="${item.id}">Pause listing</button>` : ''}</article>`).join('') || (!rooms.length ? '<p>You have no listings yet.</p>' : '')}</div>`;
       content.dataset.rooms = JSON.stringify(rooms);
+      content.dataset.adverts = JSON.stringify(adverts);
     } catch (error) { status(error.message, true); renderChoice(); }
   }
   async function renderMessages() {
@@ -167,6 +168,15 @@
     }
     if (event.target.closest('[data-sell-back]')) { status(''); renderChoice(); return; }
     if (event.target.closest('[data-my-listings]')) { status(''); await renderMyListings(); return; }
+    const availabilityButton = event.target.closest('[data-edit-availability]');
+    if (availabilityButton) {
+      const item = JSON.parse(content.dataset.adverts || '[]').find(row => String(row.id) === availabilityButton.dataset.editAvailability);
+      if (!item) return;
+      const availability = item.service_availability || {};
+      const dates = values => escapeHtml((values || []).join(', '));
+      content.innerHTML = `<button class="sell-back" type="button" data-my-listings>← My listings</button><form id="serviceAvailabilityForm" class="sell-form" data-advert-id="${item.id}"><h3>${escapeHtml(item.headline)}</h3><label>Opening hours and days<textarea name="opening_hours" maxlength="500" placeholder="Monday–Friday, 09:00–17:00">${escapeHtml(availability.opening_hours || '')}</textarea></label><label>Available dates (YYYY-MM-DD, separated by commas)<textarea name="available_dates" placeholder="2026-11-02, 2026-11-03">${dates(availability.available_dates)}</textarea></label><label>Available times (HH:MM, separated by commas)<textarea name="available_times" placeholder="09:00, 10:30, 14:00">${dates(availability.available_times)}</textarea></label><label>Closed dates (YYYY-MM-DD, separated by commas)<textarea name="closed_dates" placeholder="2026-12-25">${dates(availability.closed_dates)}</textarea></label><label><input name="consultations" type="checkbox" ${availability.consultations ? 'checked' : ''}> Offer consultations</label><label>Consultation length in minutes<input name="consultation_minutes" type="number" min="5" max="480" value="${escapeHtml(availability.consultation_minutes || '')}"></label><label>Consultation format<input name="consultation_mode" maxlength="80" placeholder="In person, phone or online" value="${escapeHtml(availability.consultation_mode || '')}"></label><button type="submit">Save availability</button></form>`;
+      return;
+    }
     if (event.target.closest('[data-sell-messages]')) { status(''); await renderMessages(); return; }
     if (event.target.closest('[data-sell-signout]')) { token = ''; profile = null; sessionStorage.removeItem('landlordToken'); sessionStorage.removeItem('activeRole'); mode = 'login'; renderAuth(); return; }
     const toggle = event.target.closest('[data-toggle-room]');
@@ -209,6 +219,14 @@
         await request('/marketing/provider/messages', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({recipient_type:'student', recipient_id:Number(form.dataset.replyTo), content:form.elements.content.value, is_anonymous:false})});
         status('Message sent.');
         await renderMessages();
+        return;
+      }
+      if (form.id === 'serviceAvailabilityForm') {
+        const split = name => form.elements[name].value.split(',').map(value => value.trim()).filter(Boolean);
+        await request(`/marketing/adverts/${form.dataset.advertId}/availability`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({opening_hours:form.elements.opening_hours.value, available_dates:split('available_dates'), available_times:split('available_times'), closed_dates:split('closed_dates'), consultations:form.elements.consultations.checked, consultation_minutes:form.elements.consultation_minutes.value ? Number(form.elements.consultation_minutes.value) : null, consultation_mode:form.elements.consultation_mode.value})});
+        document.dispatchEvent(new Event('market-listing-changed'));
+        await renderMyListings();
+        status('Availability saved.');
         return;
       }
       if (form.id === 'sellAuthForm') {

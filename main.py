@@ -45,7 +45,7 @@ import urllib.error
 import zipfile
 from pathlib import Path
 import cloudinary.api
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from difflib import SequenceMatcher
 from itertools import permutations
 from typing import List, Optional
@@ -314,7 +314,7 @@ def ensure_market_listing_fields_schema():
     if "market_adverts" in tables:
         columns = {column["name"] for column in inspect(engine).get_columns("market_adverts")}
         with engine.begin() as conn:
-            for name, definition in (("service_detail", "VARCHAR(160)"), ("area", "VARCHAR(160)"), ("latitude", "FLOAT"), ("longitude", "FLOAT")):
+            for name, definition in (("service_detail", "VARCHAR(160)"), ("service_availability", "TEXT"), ("area", "VARCHAR(160)"), ("latitude", "FLOAT"), ("longitude", "FLOAT")):
                 if name not in columns:
                     conn.execute(text(f"ALTER TABLE market_adverts ADD COLUMN {name} {definition}"))
             if "service_detail" not in columns:
@@ -5030,7 +5030,7 @@ def _advert_payload(item: MarketAdvert, owner_name: str = "", registration_conta
     directions_url = f"https://www.google.com/maps/dir/?api=1&destination={item.latitude},{item.longitude}" if item.latitude is not None and item.longitude is not None else None
     return {
         "id": item.id, "business_name": item.business_name, "headline": item.headline,
-        "description": item.description, "category": item.category, "service_detail": item.service_detail or "", "price": item.price, "campus": item.campus or "", "area": item.area or "", "latitude": item.latitude, "longitude": item.longitude, "directions_url": directions_url,
+        "description": item.description, "category": item.category, "service_detail": item.service_detail or "", "service_availability": json.loads(item.service_availability) if item.service_availability else {}, "price": item.price, "campus": item.campus or "", "area": item.area or "", "latitude": item.latitude, "longitude": item.longitude, "directions_url": directions_url,
         "contact": item.contact or "", "website_url": item.website_url or "",
         "placement": item.placement, "image_url": image_urls[0] if image_urls else None, "image_urls": image_urls,
         "video_url": _free_video_url(item.video_url), "premium_available": bool(item.premium_video_asset), "starts_at": item.starts_at,
@@ -5159,6 +5159,65 @@ def my_market_adverts(
         MarketAdvert.owner_student_id == student.id if student else MarketAdvert.owner_landlord_id == landlord.id
     )
     return [_advert_payload(item) for item in query.order_by(MarketAdvert.created_at.desc()).all()]
+
+
+class ServiceAvailabilityUpdate(BaseModel):
+    opening_hours: str = ""
+    available_dates: List[str] = Field(default_factory=list)
+    available_times: List[str] = Field(default_factory=list)
+    closed_dates: List[str] = Field(default_factory=list)
+    consultations: bool = False
+    consultation_minutes: Optional[int] = None
+    consultation_mode: str = ""
+
+
+@app.put("/marketing/adverts/{advert_id}/availability")
+def update_service_availability(
+    advert_id: int, payload: ServiceAvailabilityUpdate,
+    x_landlord_token: Optional[str] = Header(None, alias="X-Landlord-Token"), db: Session = Depends(get_db),
+):
+    if not x_landlord_token:
+        raise HTTPException(status_code=401, detail="Sign in as the service owner")
+    _, owner = _advert_owner(db, None, x_landlord_token)
+    item = db.query(MarketAdvert).filter(MarketAdvert.id == advert_id, MarketAdvert.owner_landlord_id == owner.id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Service listing not found")
+    if re.search(r"transport|ride|shuttle|courier|delivery|sales|retail|technology|second.?hand|textbook", item.category, re.IGNORECASE):
+        raise HTTPException(status_code=400, detail="Availability applies to service listings")
+    if len(payload.opening_hours) > 500 or len(payload.consultation_mode) > 80:
+        raise HTTPException(status_code=400, detail="Availability details are too long")
+    if payload.consultation_minutes is not None and not 5 <= payload.consultation_minutes <= 480:
+        raise HTTPException(status_code=400, detail="Consultations must be 5 to 480 minutes")
+    dates = {}
+    for key in ("available_dates", "closed_dates"):
+        values = getattr(payload, key)
+        if len(values) > 60:
+            raise HTTPException(status_code=400, detail="Use no more than 60 dates per list")
+        for value in values:
+            try:
+                if date.fromisoformat(value).isoformat() != value:
+                    raise ValueError()
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Dates must use YYYY-MM-DD")
+        dates[key] = sorted(set(values))
+    if set(dates["available_dates"]) & set(dates["closed_dates"]):
+        raise HTTPException(status_code=400, detail="A date cannot be both available and closed")
+    if len(payload.available_times) > 48:
+        raise HTTPException(status_code=400, detail="Use no more than 48 time slots")
+    for value in payload.available_times:
+        if not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", value):
+            raise HTTPException(status_code=400, detail="Times must use HH:MM")
+    availability = {
+        "opening_hours": payload.opening_hours.strip(), **dates,
+        "available_times": sorted(set(payload.available_times)),
+        "consultations": payload.consultations,
+        "consultation_minutes": payload.consultation_minutes if payload.consultations else None,
+        "consultation_mode": payload.consultation_mode.strip() if payload.consultations else "",
+    }
+    item.service_availability = json.dumps(availability)
+    item.updated_at = datetime.now(timezone.utc).isoformat()
+    db.commit()
+    return {"ok": True, "service_availability": availability}
 
 
 @app.put("/marketing/adverts/{advert_id}/pause")

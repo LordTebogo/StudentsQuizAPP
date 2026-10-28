@@ -48,6 +48,21 @@ class MarketFeaturesTest(unittest.TestCase):
         self.assertEqual(self.client.put(rating_path, json={"stars": 6}, headers=headers).status_code, 422)
         self.assertEqual(self.client.put(f"/marketing/adverts/{self.advert_id}/rating", json={"stars": 5}, headers=headers).status_code, 403)
 
+    def test_service_owner_can_update_public_availability(self):
+        with main.SessionLocal() as db:
+            owner = db.query(Landlord).first()
+            token = main._issue_landlord_token(owner.id)
+            advert = MarketAdvert(owner_landlord_id=owner.id, business_name="Tutor", headline="Math tutoring", description="Lessons", category="Tutoring", status="approved", placement="feed", created_at="2026-10-01T00:00:00Z", updated_at="2026-10-01T00:00:00Z")
+            db.add(advert); db.commit(); advert_id = advert.id
+        path = f"/marketing/adverts/{advert_id}/availability"
+        details = {"opening_hours":"Weekdays 09:00–17:00", "available_dates":["2026-11-02"], "available_times":["09:00", "10:00"], "closed_dates":["2026-12-25"], "consultations":True, "consultation_minutes":30, "consultation_mode":"Online"}
+        self.assertEqual(self.client.put(path, json=details).status_code, 401)
+        self.assertEqual(self.client.put(path, json={**details, "closed_dates":["2026-11-02"]}, headers={"X-Landlord-Token":token}).status_code, 400)
+        response = self.client.put(path, json=details, headers={"X-Landlord-Token":token})
+        self.assertEqual(response.status_code, 200)
+        public = next(item for item in self.client.get("/marketing/adverts").json() if item["id"] == advert_id)
+        self.assertEqual(public["service_availability"], response.json()["service_availability"])
+
     def test_room_approval_and_listing_contact_are_separate_from_registration(self):
         with main.SessionLocal() as db:
             landlord = db.query(Landlord).first()

@@ -240,6 +240,7 @@ class MarketAdvert(Base):
     description = Column(Text, nullable=False)
     category = Column(String, nullable=False)
     service_detail = Column(String)
+    service_availability = Column(Text)
     price = Column(Integer)
     campus = Column(String)
     area = Column(String)
