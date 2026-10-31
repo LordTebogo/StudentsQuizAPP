@@ -7220,6 +7220,7 @@ async def live_lesson_socket(websocket: WebSocket, room_code: str):
 
 
 FRONTEND_PAGES = {
+    "/": "index.html",
     "/students": "student.html",
     "/lecturers": "lecturer.html",
     "/students/lessons": "lessons_student.html",
@@ -7230,7 +7231,6 @@ FRONTEND_PAGES = {
     "/community": "fun.html",
     "/src": "index.html",
     "/market": "index.html",
-    "/learning": "academics.html",
     "/admin": "admin.html",
     "/tools/pdf": "pdf_tools.html",
     "/trust": "trust.html",
@@ -7238,30 +7238,8 @@ FRONTEND_PAGES = {
 }
 
 
-@app.get("/", include_in_schema=False)
-def site_home(request: Request):
-    """Give each Arounus hostname its own front door."""
-    host = request.url.hostname or ""
-    if host == "market.arounus.com":
-        page = "index.html"
-    elif host == "learning.arounus.com":
-        page = "academics.html"
-    elif host == "arounus.com" or host == "www.arounus.com":
-        page = "home.html"
-    else:
-        # Keep the existing market home for local development and older hosts.
-        page = "index.html"
-    return FileResponse(os.path.join("static", page))
-
-
 def _frontend_page(filename: str):
-    def serve_page(request: Request):
-        host = request.url.hostname or ""
-        if filename == "index.html" and host in {"arounus.com", "www.arounus.com", "learning.arounus.com"}:
-            destination = "https://market.arounus.com/"
-            if request.url.query:
-                destination += f"?{request.url.query}"
-            return RedirectResponse(url=destination, status_code=308)
+    def serve_page():
         return FileResponse(os.path.join("static", filename))
 
     return serve_page
