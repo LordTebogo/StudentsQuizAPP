@@ -1,5 +1,27 @@
 # Quiz + Video Lessons App (cloud-deployable version)
 
+## Arounus domains
+
+The application serves three front doors from the same backend:
+
+| Hostname | Home page |
+| --- | --- |
+| `arounus.com` (and `www.arounus.com`) | Community hub with posts, chats, live sessions, and free PDF tools |
+| `learning.arounus.com` | Learning and account workspace |
+| `market.arounus.com` | Campus marketplace |
+
+Point both subdomains to the same hosting service as `arounus.com`, add all
+three hostnames to the hosting service, and enable HTTPS for each. Keep the
+existing database and media configuration on that service. The application
+selects the right home page from the request hostname; the `/market` path on
+the main and learning hosts redirects to the market subdomain. DNS and custom
+domain setup are hosting tasks and are not performed by this repository.
+
+The main home page and PDF tools do not ask visitors to sign in. Existing
+posting, messaging, learning, and seller actions retain their own account
+requirements. Browser session storage is scoped to each hostname, so signing
+in on one subdomain does not automatically sign a visitor in on another.
+
 ## Document workspace
 
 PDF tools support previews, merge/reorder, selection, rotation, extraction and
