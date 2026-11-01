@@ -524,7 +524,10 @@ async def security_headers_and_head(request: Request, call_next):
     )
     response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
     response.headers.setdefault("Content-Security-Policy", _CSP)
-    if request.url.scheme == "https":
+    # Hosted HTTPS terminates at the reverse proxy, so the application's
+    # internal connection may be HTTP. HSTS is ignored on plain HTTP responses.
+    forwarded_scheme = request.headers.get("x-forwarded-proto", "").split(",", 1)[0].strip().lower()
+    if request.url.scheme == "https" or forwarded_scheme == "https":
         response.headers.setdefault(
             "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
         )

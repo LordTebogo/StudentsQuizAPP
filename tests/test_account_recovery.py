@@ -155,6 +155,8 @@ class AccountRecoveryTest(unittest.TestCase):
             self.assertEqual(self.client.get("/healthz").status_code, 503)
         with TestClient(main.app, base_url="https://arounus.test") as secure:
             self.assertIn("max-age=", secure.head("/").headers["strict-transport-security"])
+        proxied = self.client.head("/", headers={"X-Forwarded-Proto": "https"})
+        self.assertIn("max-age=", proxied.headers["strict-transport-security"])
         csp = self.client.get("/tools/pdf").headers["content-security-policy"]
         self.assertIn("https://cdnjs.cloudflare.com", csp)
         self.assertIn("worker-src 'self' blob:", csp)
