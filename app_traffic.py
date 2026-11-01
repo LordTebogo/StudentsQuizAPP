@@ -96,9 +96,13 @@ def create_traffic_router(require_admin, session_secret):
         distinct_visitors = func.count(func.distinct(AppTrafficActivity.visitor_hash))
         query = db.query(distinct_visitors)
         first_seen = db.query(func.min(AppTrafficActivity.first_seen)).scalar()
-        daily_counts = dict(db.query(func.substr(AppTrafficActivity.hour, 1, 10), distinct_visitors).filter(
+        # Group by the selected alias. Rebuilding substr() in GROUP BY creates
+        # different bind parameters, which PostgreSQL's server-side binding
+        # treats as a different expression and rejects with GroupingError.
+        visitor_day = func.substr(AppTrafficActivity.hour, 1, 10).label("visitor_day")
+        daily_counts = dict(db.query(visitor_day, distinct_visitors).filter(
             AppTrafficActivity.hour >= start_hour, AppTrafficActivity.hour < end_hour,
-        ).group_by(func.substr(AppTrafficActivity.hour, 1, 10)).all())
+        ).group_by("visitor_day").all())
         hours = [local_hour(now - timedelta(hours=i)) for i in range(24)]
         hourly_counts = dict(db.query(AppTrafficActivity.hour, distinct_visitors).filter(
             AppTrafficActivity.hour >= hours[-1], AppTrafficActivity.hour <= hours[0],

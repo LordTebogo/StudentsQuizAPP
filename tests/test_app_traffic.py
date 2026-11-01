@@ -100,6 +100,33 @@ class AppTrafficTest(unittest.TestCase):
         self.assertEqual(data["summary"]["all_time"], 1)
         self.assertEqual(data["hourly"][-1]["hour"], "2026-11-01T00:00:00+02:00")
 
+    def test_daily_grouping_is_valid_with_postgres_server_side_parameters(self):
+        from sqlalchemy import event
+        from sqlalchemy.dialects.postgresql.psycopg import dialect
+        statements = []
+
+        def capture(connection, clause, multiparams, params, execution_options):
+            statements.append(clause)
+
+        self.heartbeat(when=NOW - timedelta(days=2))
+        self.heartbeat()
+        event.listen(main.engine, "before_execute", capture)
+        try:
+            data = self.report()
+        finally:
+            event.remove(main.engine, "before_execute", capture)
+        self.assertEqual(data["daily"][-3]["visitors"], 1)
+        self.assertEqual(data["daily"][-1]["visitors"], 1)
+        grouped = [str(statement.compile(dialect=dialect(paramstyle="numeric_dollar")))
+                   for statement in statements if "substr(" in str(statement)]
+        self.assertEqual(len(grouped), 1)
+        # PostgreSQL accepts a selected alias or the identical expression;
+        # equal-valued but separately numbered bind parameters are not equal.
+        selected, grouping = grouped[0].split(" GROUP BY ")
+        selected_day = selected.removeprefix("SELECT ").split(", count(")[0]
+        expression, separator, alias = selected_day.partition(" AS ")
+        self.assertTrue(grouping == expression or (separator and grouping == alias), grouped[0])
+
     def test_persistence_after_application_restart_and_custom_history(self):
         self.heartbeat(when=NOW - timedelta(days=60))
         cookie = self.client.cookies.get(COOKIE_NAME)
