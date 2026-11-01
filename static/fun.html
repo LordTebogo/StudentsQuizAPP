@@ -160,7 +160,7 @@
   <main class="wrap">
     <header class="top">
       <div class="brand-group"><img class="brand-logo" src="/branding/logo" alt=""><div class="brand-text"><div class="brand">Aroun<span>us</span></div><div class="brand-tagline">Campus posts</div></div></div>
-      <nav><a href="/static/student.html">Quizzes</a><a href="/static/lessons_student.html">Lessons</a><a href="/static/index.html">Home</a></nav>
+      <nav><a href="/students">Quizzes</a><a href="/students/lessons">Lessons</a><a href="/">Home</a></nav>
     </header>
 
     <div class="fun-hero">
@@ -349,7 +349,7 @@
     $('publishBtn').addEventListener('click', () => submitPost());
     $('refreshBtn').addEventListener('click', loadFeed);
     $('postStickerPicker').innerHTML = stickerPickerHtml('post');
-    (async () => { if (!token) { window.location.href = '/static/student.html'; return; } try { await api('/student/me'); await loadMembers(); await loadFeed(); } catch (_) { sessionStorage.removeItem('studentToken'); window.location.href = '/static/student.html'; } })();
+    (async () => { if (!token) { window.location.href = '/students'; return; } try { await api('/student/me'); await loadMembers(); await loadFeed(); } catch (_) { sessionStorage.removeItem('studentToken'); window.location.href = '/students'; } })();
   </script>
 <script src="/static/loading.js"></script>
 <script src="/static/pwa.js?v=18"></script>

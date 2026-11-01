@@ -40,13 +40,13 @@
 </style>
 </head>
 <body>
-<script>if(!sessionStorage.getItem('lecturerToken'))location.replace('/static/index.html?role=lecturer')</script>
+<script>if(!sessionStorage.getItem('lecturerToken'))location.replace('/?role=lecturer')</script>
 
 <!-- Lecturer account gate -->
 <div class="wrap" id="gateWrap">
   <header class="top">
     <div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Aroun<span>us</span></div><div class="brand-tagline">Bioscientist</div></div></div>
-    <nav><a href="/static/index.html">Home</a><a href="/static/lessons_lecturer.html">Video lessons</a></nav>
+    <nav><a href="/">Home</a><a href="/lecturers/lessons">Video lessons</a></nav>
   </header>
   <span class="kicker">Tutor access</span>
   <h1 id="lecturerAuthHeading">Welcome back</h1>
@@ -59,7 +59,7 @@
     <label for="passwordInput">Password</label>
     <input type="password" id="passwordInput" autocomplete="current-password" placeholder="Your password">
     <button class="btn" id="unlockBtn">Sign in</button>
-    <p class="auth-help"><a href="/static/trust.html#support">Forgot your password?</a> Contact your administrator without sharing your password.</p>
+    <p class="auth-help"><a href="/trust#support">Forgot your password?</a> Contact your administrator without sharing your password.</p>
     <div id="pinMsg"></div>
   </section>
   <section class="card hidden" id="lecturerRegisterCard">
@@ -77,7 +77,7 @@
 <div class="wrap hidden" id="appWrap">
   <header class="top">
     <div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Aroun<span>us</span></div><div class="brand-tagline">Bioscientist</div></div></div>
-    <nav><a href="/static/index.html">Home</a><a href="/static/lessons_lecturer.html">Video lessons</a><a href="/static/live_lesson.html">Live lesson</a><a href="/static/pdf_tools.html">PDF tools</a><a href="/static/media_compressor.html">Compress media</a><a href="#" id="lockBtn">Lock</a></nav>
+    <nav><a href="/">Home</a><a href="/lecturers/lessons">Video lessons</a><a href="/live">Live lesson</a><a href="/tools/pdf">PDF tools</a><a href="/tools/media">Compress media</a><a href="#" id="lockBtn">Lock</a></nav>
   </header>
 
   <section class="card lecturer-roster"><div class="admin-editor-heading"><div><span class="kicker">Assigned learners</span><h2>Learners in my modules</h2><p class="muted" id="myStudentsSummary">Loading enrolled learners…</p></div><button class="btn secondary" id="refreshMyStudents">Refresh</button></div><details><summary>Show enrolled learners</summary><div id="myStudentsList" class="admin-list"></div></details></section>
@@ -140,7 +140,7 @@
     <p class="muted" id="quizReviewStatus" aria-live="polite">Choose a quiz, then load its student submissions.</p>
   </div>
 
-  <div class="card"><span class="kicker">Quick guide</span><h2>Quiz-building checklist</h2><ol class="builder-checklist"><li>Add a clear title and choose your assigned module.</li><li>Add questions, answers, marks, and optional images.</li><li>Save a draft or preview the student view.</li><li>Publish when the quiz is ready.</li></ol><a class="btn secondary" href="/static/tutor_guide.html">Open complete Tutor Guide</a></div>
+  <div class="card"><span class="kicker">Quick guide</span><h2>Quiz-building checklist</h2><ol class="builder-checklist"><li>Add a clear title and choose your assigned module.</li><li>Add questions, answers, marks, and optional images.</li><li>Save a draft or preview the student view.</li><li>Publish when the quiz is ready.</li></ol><a class="btn secondary" href="/lecturers/guide">Open complete Tutor Guide</a></div>
 
   </div>
 
@@ -322,7 +322,7 @@ async function tryUnlock(email, password) {
     sessionStorage.removeItem('studentToken');
     sessionStorage.setItem('activeRole', 'lecturer');
     sessionStorage.setItem('lecturerToken', result.token);
-    window.location.href = '/static/index.html';
+    window.location.href = '/';
   } catch (err) {
     sessionStorage.removeItem('lecturerToken');
     showMsg(msgBox, err.message, 'error');
@@ -347,7 +347,7 @@ $('lockBtn').addEventListener('click', (e) => {
   e.preventDefault();
   sessionStorage.removeItem('lecturerToken');
   LECTURER_TOKEN = null;
-  location.href = '/static/index.html?role=lecturer';
+  location.href = '/?role=lecturer';
 });
 
 // If a lecturer session exists, restore the workspace.
@@ -356,7 +356,7 @@ if (LECTURER_TOKEN) {
     $('gateWrap').classList.add('hidden'); $('appWrap').classList.remove('hidden');
     applyProfile(profile);
     loadQuizzes();
-  }).catch(() => { sessionStorage.removeItem('lecturerToken'); LECTURER_TOKEN = null; location.replace('/static/index.html?role=lecturer'); });
+  }).catch(() => { sessionStorage.removeItem('lecturerToken'); LECTURER_TOKEN = null; location.replace('/?role=lecturer'); });
 }
 
 $('registerBtn').addEventListener('click', async () => {
@@ -407,7 +407,7 @@ $('uploadBtn').addEventListener('click', async () => {
     const result = await api('/quiz/upload', { method: 'POST', body: formData }, true);
     const imgNote = result.images_uploaded ? ` (${result.images_uploaded} image${result.images_uploaded === 1 ? '' : 's'} attached)` : '';
     showMsg(msgBox, `Uploaded "${result.title}" to ${moduleLabel(result.module_code)} (${result.num_questions} questions).${imgNote}`, 'ok');
-    const link = `${window.location.origin}/static/student.html?module=${encodeURIComponent(result.module_code)}`;
+    const link = `${window.location.origin}/students?module=${encodeURIComponent(result.module_code)}`;
     $('shareLink').textContent = link;
     $('shareBox').classList.remove('hidden');
     fileInput.value = '';

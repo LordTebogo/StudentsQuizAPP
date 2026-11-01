@@ -39,13 +39,13 @@
 </style>
 </head>
 <body>
-<script>if(!sessionStorage.getItem('lecturerToken'))location.replace('/static/index.html?role=lecturer')</script>
+<script>if(!sessionStorage.getItem('lecturerToken'))location.replace('/?role=lecturer')</script>
 
 <!-- PIN gate -->
 <div class="wrap" id="gateWrap">
   <header class="top">
     <div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Aroun<span>us</span></div><div class="brand-tagline">Bioscientist</div></div></div>
-    <nav><a href="/static/index.html">Home</a></nav>
+    <nav><a href="/">Home</a></nav>
   </header>
   <h1>Tutor sign-in</h1>
   <p class="lede">Sign in to access only your own lessons and student scripts.</p>
@@ -53,7 +53,7 @@
     <label for="emailInput">Email</label><input type="text" id="emailInput" autocomplete="email" placeholder="you@example.com">
     <label for="passwordInput">Password</label><input type="password" id="passwordInput" autocomplete="current-password" placeholder="Your password">
     <button class="btn" id="unlockBtn">Sign in</button>
-    <p class="muted">Need a profile? <a href="/static/lecturer.html">Create one in the quiz workspace</a>.</p>
+    <p class="muted">Need a profile? <a href="/lecturers">Create one in the quiz workspace</a>.</p>
     <div id="pinMsg"></div>
   </div>
 </div>
@@ -62,7 +62,7 @@
 <div class="wrap hidden" id="appWrap">
   <header class="top">
     <div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Aroun<span>us</span></div><div class="brand-tagline">Bioscientist</div></div></div>
-    <nav><a href="/static/index.html">Home</a><a href="/static/lecturer.html">Quizzes</a><a href="#" id="lockBtn">Lock</a></nav>
+    <nav><a href="/">Home</a><a href="/lecturers">Quizzes</a><a href="#" id="lockBtn">Lock</a></nav>
   </header>
 
   <h1>Video lessons</h1>
@@ -232,10 +232,10 @@ $('lockBtn').addEventListener('click', (e) => {
   e.preventDefault();
   sessionStorage.removeItem('lecturerToken');
   LECTURER_TOKEN = null;
-  location.href = '/static/index.html?role=lecturer';
+  location.href = '/?role=lecturer';
 });
 if (LECTURER_TOKEN) {
-  api('/lecturer/me', {}, true).then(() => { $('gateWrap').classList.add('hidden'); $('appWrap').classList.remove('hidden'); loadModules(); loadLessons(); }).catch(() => { sessionStorage.removeItem('lecturerToken'); LECTURER_TOKEN = null; location.replace('/static/index.html?role=lecturer'); });
+  api('/lecturer/me', {}, true).then(() => { $('gateWrap').classList.add('hidden'); $('appWrap').classList.remove('hidden'); loadModules(); loadLessons(); }).catch(() => { sessionStorage.removeItem('lecturerToken'); LECTURER_TOKEN = null; location.replace('/?role=lecturer'); });
 }
 
 // ---- Upload lesson -----------------------------------------------------
@@ -288,7 +288,7 @@ $('uploadLessonBtn').addEventListener('click', async () => {
   try {
     const result = await api('/lecturer/lesson/upload', { method: 'POST', body: formData }, true);
     showMsg(msgBox, `Uploaded "${result.title}" under ${moduleLabel(result.module_code)} (${result.num_questions} questions) — lesson ID ${result.lesson_id}.`, 'ok');
-    const link = `${window.location.origin}/static/lessons_student.html?lesson=${result.lesson_id}`;
+    const link = `${window.location.origin}/students/lessons?lesson=${result.lesson_id}`;
     $('shareLink').textContent = link;
     $('shareBox').classList.remove('hidden');
     fileInput.value = ''; videoInput.value = ''; imagesInput.value = '';

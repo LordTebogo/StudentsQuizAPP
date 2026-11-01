@@ -58,6 +58,14 @@ class LessonManagementTest(unittest.TestCase):
             db.commit()
         self.assertEqual(self.client.patch(path, headers=self.owner_headers, json={"module_code":"BIO101"}).status_code, 409)
 
+    def test_clean_page_urls_and_legacy_redirects(self):
+        for clean in ("/learning", "/learning/guide", "/students", "/lecturers/lessons", "/tools/media", "/trust"):
+            self.assertEqual(self.client.get(clean).status_code, 200, clean)
+        for old, clean in (("/static/academics.html", "/learning"), ("/static/media_compressor.html", "/tools/media")):
+            response = self.client.get(old + "?source=bookmark", follow_redirects=False)
+            self.assertEqual(response.status_code, 308)
+            self.assertEqual(response.headers["location"], clean + "?source=bookmark")
+
     def test_unique_views_and_owner_only_management(self):
         view_path = f"/student/lessons/{self.lesson_id}/view"
         self.assertEqual(self.client.post(view_path, headers=self.student_headers).status_code, 200)

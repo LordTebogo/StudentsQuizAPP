@@ -1,20 +1,26 @@
 (function () {
   const friendlyPaths = {
     '/static/index.html': '/',
+    '/static/academics.html': '/learning',
+    '/static/arounus-guide.html': '/learning/guide',
     '/static/student.html': '/students',
     '/static/lecturer.html': '/lecturers',
     '/static/lessons_student.html': '/students/lessons',
     '/static/lessons_lecturer.html': '/lecturers/lessons',
     '/static/tutor_guide.html': '/lecturers/guide',
     '/static/live_lesson.html': '/live',
-    '/static/fun.html': '/posts',
+    '/static/fun.html': '/community',
     '/static/marketing.html': '/market',
     '/static/admin.html': '/admin',
     '/static/pdf_tools.html': '/tools/pdf',
+    '/static/media_compressor.html': '/tools/media',
     '/static/trust.html': '/trust',
+    '/static/premium.html': '/premium',
+    '/static/comrade.html': '/comrade',
   };
   const legacyPaths = Object.fromEntries(Object.entries(friendlyPaths).map(([legacy, friendly]) => [friendly, legacy]));
-  legacyPaths['/community'] = '/static/fun.html';
+  legacyPaths['/posts'] = '/static/fun.html';
+  legacyPaths['/src'] = '/static/index.html';
   const pagePath = legacyPaths[location.pathname] || location.pathname;
   const cleanPath = path => friendlyPaths[path] || path;
   if (!document.querySelector('link[href="/static/product.css"]')) {
@@ -59,31 +65,31 @@
   const activeRole = pagePath.endsWith('/admin.html') && adminPin ? 'admin' : lecturerToken ? 'lecturer' : studentToken ? 'student' : 'public';
   const activeSessionKey = activeRole === 'admin' ? 'lecturerPin' : activeRole + 'Token';
   const roleLinks = activeRole === 'admin' ? [
-    ['/static/admin.html#adminOverview', 'Overview'], ['/static/admin.html#adminContent', 'Content'],
-    ['/static/admin.html#adminPeople', 'Users'], ['/static/admin.html#marketAdvertAdmin', 'Approvals'],
+    ['/admin#adminOverview', 'Overview'], ['/admin#adminContent', 'Content'],
+    ['/admin#adminPeople', 'Users'], ['/admin#marketAdvertAdmin', 'Approvals'],
   ] : activeRole === 'lecturer' ? [
-    ['/static/lecturer.html', 'Overview'], ['/static/lecturer.html#create', 'Quizzes'],
-    ['/static/lessons_lecturer.html', 'Lessons'], ['/static/live_lesson.html', 'Live classroom'],
+    ['/lecturers', 'Overview'], ['/lecturers#create', 'Quizzes'],
+    ['/lecturers/lessons', 'Lessons'], ['/live', 'Live classroom'],
   ] : activeRole === 'student' ? [
-    ['/static/student.html', 'Home'], ['/static/student.html#moduleCard', 'Quizzes'],
-    ['/static/lessons_student.html', 'Lessons'], ['/static/live_lesson.html', 'Live'],
-    ['/static/fun.html', 'Posts'],
+    ['/students', 'Home'], ['/students#moduleCard', 'Quizzes'],
+    ['/students/lessons', 'Lessons'], ['/live', 'Live'],
+    ['/community', 'Posts'],
   ] : [
-    ['/static/index.html', 'Home'], ['/static/academics.html', 'Learning'],
+    ['/', 'Home'], ['/learning', 'Learning'],
     ['/market', 'Market'],
   ];
   const moreLinks = activeRole === 'admin' ? [
-    ['/static/admin.html#liveMonitorCard','Live sessions'], ['/static/admin.html#adminScripts','Submissions'],
-    ['/static/admin.html#adminModeration','Moderation'], ['/static/media_compressor.html','Compress videos & images'], ['/static/trust.html#support','Support'],
+    ['/admin#liveMonitorCard','Live sessions'], ['/admin#adminScripts','Submissions'],
+    ['/admin#adminModeration','Moderation'], ['/tools/media','Compress videos & images'], ['/trust#support','Support'],
   ] : activeRole === 'lecturer' ? [
-    ['/static/tutor_guide.html', 'Tutor guide'], ['/static/pdf_tools.html', 'PDF tools'], ['/static/media_compressor.html','Compress videos & images'], ['/static/fun.html', 'Posts'],
+    ['/lecturers/guide', 'Tutor guide'], ['/tools/pdf', 'PDF tools'], ['/tools/media','Compress videos & images'], ['/community', 'Posts'],
     ['/market', 'Market'],
   ] : activeRole === 'student' ? [
-    ['/market', 'Market'], ['/static/pdf_tools.html', 'PDF tools'], ['/static/media_compressor.html','Compress videos & images'],
-  ] : [['/static/fun.html', 'Posts']];
+    ['/market', 'Market'], ['/tools/pdf', 'PDF tools'], ['/tools/media','Compress videos & images'],
+  ] : [['/community', 'Posts']];
   function toggleMobileMenu(open) {
     let sheet=document.querySelector('.mobile-more-sheet'),scrim=document.querySelector('.mobile-more-scrim');
-    if(!sheet){scrim=document.createElement('button');scrim.type='button';scrim.className='mobile-more-scrim';scrim.setAttribute('aria-label','Close menu');sheet=document.createElement('section');sheet.className='mobile-more-sheet';sheet.setAttribute('aria-label','More navigation');const all=[...moreLinks];if(activeRole!=='public')all.push([activeRole==='admin'?'/static/admin.html':activeRole==='lecturer'?'/static/lecturer.html':'/static/student.html',activeRole==='admin'?'Administration overview':'Profile & settings'],['/static/trust.html#support','Help & support']);sheet.innerHTML='<div class="mobile-sheet-handle"></div><div class="mobile-sheet-head"><strong>More</strong><button type="button" aria-label="Close menu">×</button></div><nav></nav>';const list=sheet.querySelector('nav');all.forEach(([href,label])=>{const a=document.createElement('a');a.href=href;a.textContent=label;list.appendChild(a)});if(activeRole!=='public'){const signout=document.createElement('button');signout.type='button';signout.className='mobile-signout';signout.textContent=activeRole==='admin'?'Lock administration':'Sign out';signout.addEventListener('click',()=>{sessionStorage.removeItem(activeSessionKey);sessionStorage.removeItem('activeRole');location.href=activeRole==='admin'?'/static/admin.html':'/static/index.html'});list.appendChild(signout)}document.body.append(scrim,sheet);scrim.addEventListener('click',()=>toggleMobileMenu(false));sheet.querySelector('.mobile-sheet-head button').addEventListener('click',()=>toggleMobileMenu(false))}
+    if(!sheet){scrim=document.createElement('button');scrim.type='button';scrim.className='mobile-more-scrim';scrim.setAttribute('aria-label','Close menu');sheet=document.createElement('section');sheet.className='mobile-more-sheet';sheet.setAttribute('aria-label','More navigation');const all=[...moreLinks];if(activeRole!=='public')all.push([activeRole==='admin'?'/admin':activeRole==='lecturer'?'/lecturers':'/students',activeRole==='admin'?'Administration overview':'Profile & settings'],['/trust#support','Help & support']);sheet.innerHTML='<div class="mobile-sheet-handle"></div><div class="mobile-sheet-head"><strong>More</strong><button type="button" aria-label="Close menu">×</button></div><nav></nav>';const list=sheet.querySelector('nav');all.forEach(([href,label])=>{const a=document.createElement('a');a.href=href;a.textContent=label;list.appendChild(a)});if(activeRole!=='public'){const signout=document.createElement('button');signout.type='button';signout.className='mobile-signout';signout.textContent=activeRole==='admin'?'Lock administration':'Sign out';signout.addEventListener('click',()=>{sessionStorage.removeItem(activeSessionKey);sessionStorage.removeItem('activeRole');location.href=activeRole==='admin'?'/admin':'/'});list.appendChild(signout)}document.body.append(scrim,sheet);scrim.addEventListener('click',()=>toggleMobileMenu(false));sheet.querySelector('.mobile-sheet-head button').addEventListener('click',()=>toggleMobileMenu(false))}
     const shouldOpen=open===undefined?!sheet.classList.contains('open'):open;sheet.classList.toggle('open',shouldOpen);scrim.classList.toggle('open',shouldOpen);document.body.classList.toggle('menu-open',shouldOpen);
   }
 
@@ -95,7 +101,7 @@
       if(!primary){primary=document.createElement('div');primary.className='primary-nav-links';nav.appendChild(primary)}
       primary.replaceChildren();
       roleLinks.forEach(([href,label])=>{const link=document.createElement('a');link.href=href;link.textContent=label;if(cleanPath(new URL(link.href,location.href).pathname)===cleanPath(location.pathname))link.setAttribute('aria-current','page');primary.appendChild(link)});
-      const more=document.createElement('a');more.href=activeRole==='lecturer'?'/static/lecturer.html#lecturerMessagesCard':'/market';more.textContent=activeRole==='lecturer'?'Messages':'More';primary.appendChild(more);
+      const more=document.createElement('a');more.href=activeRole==='lecturer'?'/lecturers#lecturerMessagesCard':'/market';more.textContent=activeRole==='lecturer'?'Messages':'More';primary.appendChild(more);
       return;
     }
     nav.replaceChildren();
@@ -114,8 +120,8 @@
       profile.addEventListener('click', () => {
         const existing = document.querySelector('.account-sheet'); if (existing) { existing.remove(); return; }
         const sheet=document.createElement('div'); sheet.className='account-sheet';
-        sheet.innerHTML=`<strong>${activeRole==='admin'?'Administrator':activeRole==='lecturer'?'Tutor':'Learner'} account</strong><a href="${activeRole==='admin'?'/static/admin.html':activeRole==='lecturer'?'/static/lecturer.html':'/static/student.html'}">${activeRole==='admin'?'Administration overview':'Profile & settings'}</a><a href="/static/trust.html#support">Help & support</a><button type="button">${activeRole==='admin'?'Lock administration':'Sign out'}</button>`;
-        sheet.querySelector('button').addEventListener('click',()=>{sessionStorage.removeItem(activeSessionKey);sessionStorage.removeItem('activeRole');location.href=activeRole==='admin'?'/static/admin.html':'/static/index.html'});
+        sheet.innerHTML=`<strong>${activeRole==='admin'?'Administrator':activeRole==='lecturer'?'Tutor':'Learner'} account</strong><a href="${activeRole==='admin'?'/admin':activeRole==='lecturer'?'/lecturers':'/students'}">${activeRole==='admin'?'Administration overview':'Profile & settings'}</a><a href="/trust#support">Help & support</a><button type="button">${activeRole==='admin'?'Lock administration':'Sign out'}</button>`;
+        sheet.querySelector('button').addEventListener('click',()=>{sessionStorage.removeItem(activeSessionKey);sessionStorage.removeItem('activeRole');location.href=activeRole==='admin'?'/admin':'/'});
         document.body.appendChild(sheet);
       });
       menu.appendChild(profile);
@@ -130,8 +136,8 @@
       const profileEndpoint=activeRole==='student'?'/student/me':'/lecturer/me';
       const profileHeader=activeRole==='student'?{'X-Student-Token':studentToken}:{'X-Lecturer-Token':lecturerToken};
       fetch(profileEndpoint,{headers:profileHeader}).then(response=>response.ok?response.json():null).then(profile=>{if(profile?.profile_image_url)avatar.src=profile.profile_image_url;avatarButton.dataset.accountName=profile?.full_name||''}).catch(()=>{});
-      const openProfileEditor=()=>{const editor=document.getElementById(activeRole==='student'?'studentProfileCard':'profileCard');if(!editor){location.href=activeRole==='student'?'/static/student.html#edit-profile':'/static/lecturer.html#edit-profile';return}editor.classList.remove('hidden');history.replaceState(history.state,'',`${location.pathname}${location.search}#edit-profile`);requestAnimationFrame(()=>editor.scrollIntoView({behavior:'smooth',block:'start'}))};
-      avatarButton.addEventListener('click',event=>{event.stopPropagation();const existing=document.querySelector('.account-sheet');if(existing){existing.remove();return}const sheet=document.createElement('div');sheet.className='account-sheet';sheet.setAttribute('role','menu');sheet.innerHTML='<strong></strong><button class="account-edit-profile" type="button">Edit profile</button><a href="/static/trust.html#support">Help & support</a><button class="account-signout" type="button">Sign out</button>';sheet.querySelector('strong').textContent=avatarButton.dataset.accountName||`${activeRole==='lecturer'?'Tutor':'Learner'} account`;sheet.querySelector('.account-edit-profile').addEventListener('click',()=>{sheet.remove();openProfileEditor()});sheet.querySelector('.account-signout').addEventListener('click',()=>{sessionStorage.removeItem(activeSessionKey);sessionStorage.removeItem('activeRole');location.href='/static/index.html'});document.body.appendChild(sheet)});
+      const openProfileEditor=()=>{const editor=document.getElementById(activeRole==='student'?'studentProfileCard':'profileCard');if(!editor){location.href=activeRole==='student'?'/students#edit-profile':'/lecturers#edit-profile';return}editor.classList.remove('hidden');history.replaceState(history.state,'',`${location.pathname}${location.search}#edit-profile`);requestAnimationFrame(()=>editor.scrollIntoView({behavior:'smooth',block:'start'}))};
+      avatarButton.addEventListener('click',event=>{event.stopPropagation();const existing=document.querySelector('.account-sheet');if(existing){existing.remove();return}const sheet=document.createElement('div');sheet.className='account-sheet';sheet.setAttribute('role','menu');sheet.innerHTML='<strong></strong><button class="account-edit-profile" type="button">Edit profile</button><a href="/trust#support">Help & support</a><button class="account-signout" type="button">Sign out</button>';sheet.querySelector('strong').textContent=avatarButton.dataset.accountName||`${activeRole==='lecturer'?'Tutor':'Learner'} account`;sheet.querySelector('.account-edit-profile').addEventListener('click',()=>{sheet.remove();openProfileEditor()});sheet.querySelector('.account-signout').addEventListener('click',()=>{sessionStorage.removeItem(activeSessionKey);sessionStorage.removeItem('activeRole');location.href='/'});document.body.appendChild(sheet)});
       document.addEventListener('click',event=>{const sheet=document.querySelector('.account-sheet');if(sheet&&!sheet.contains(event.target)&&!avatarButton.contains(event.target))sheet.remove()});
       if(location.hash==='#edit-profile')requestAnimationFrame(openProfileEditor);
     }
@@ -171,11 +177,11 @@
 
   const studentPortal = document.getElementById('studentPortal');
   if (studentPortal && !document.getElementById('studentStatusGrid')) {
-    const status=document.createElement('div');status.id='studentStatusGrid';status.className='status-grid';status.innerHTML='<a href="/static/student.html"><span>Continue</span><strong>Quizzes & results</strong><small>Open your modules</small></a><a href="/static/lessons_student.html"><span>Learn</span><strong>Video lessons</strong><small>Resume your learning</small></a><a href="/static/student.html#studentBottomMessages"><span>Inbox</span><strong>Messages</strong><small>View tutor support</small></a>';studentPortal.querySelector('.role-grid')?.before(status);
+    const status=document.createElement('div');status.id='studentStatusGrid';status.className='status-grid';status.innerHTML='<a href="/students"><span>Continue</span><strong>Quizzes & results</strong><small>Open your modules</small></a><a href="/students/lessons"><span>Learn</span><strong>Video lessons</strong><small>Resume your learning</small></a><a href="/students#studentBottomMessages"><span>Inbox</span><strong>Messages</strong><small>View tutor support</small></a>';studentPortal.querySelector('.role-grid')?.before(status);
   }
   const lecturerPortal = document.getElementById('lecturerPortal');
   if (lecturerPortal && !document.getElementById('lecturerStatusGrid')) {
-    const status=document.createElement('div');status.id='lecturerStatusGrid';status.className='status-grid';status.innerHTML='<a href="/static/lecturer.html"><span>Assess</span><strong>Submissions</strong><small>Review student work</small></a><a href="/static/live_lesson.html"><span>Teach</span><strong>Live classroom</strong><small>Start or rejoin a room</small></a><a href="/static/lecturer.html#lecturerMessagesCard"><span>Support</span><strong>Messages</strong><small>Answer students</small></a>';lecturerPortal.querySelector('.role-grid')?.before(status);
+    const status=document.createElement('div');status.id='lecturerStatusGrid';status.className='status-grid';status.innerHTML='<a href="/lecturers"><span>Assess</span><strong>Submissions</strong><small>Review student work</small></a><a href="/live"><span>Teach</span><strong>Live classroom</strong><small>Start or rejoin a room</small></a><a href="/lecturers#lecturerMessagesCard"><span>Support</span><strong>Messages</strong><small>Answer students</small></a>';lecturerPortal.querySelector('.role-grid')?.before(status);
   }
   if (pagePath.endsWith('/lecturer.html') && document.getElementById('appWrap')) {
     const app=document.getElementById('appWrap'), workbench=app.querySelector('.lecturer-workbench');
@@ -183,7 +189,7 @@
       const libraryCards=[...workbench.querySelectorAll(':scope > .card')], builder=document.getElementById('quizBuilderCard'), roster=app.querySelector('.lecturer-roster'), messages=document.getElementById('lecturerMessagesCard'), submissions=document.getElementById('submissionsCard'), grading=document.getElementById('gradingCard');
       // Keep the builder's ID stable: quiz-builder.js initializes after this layout.
       if(libraryCards[0])libraryCards[0].id='quizLibrary';
-      const intro=document.createElement('section');intro.className='tutor-command-center';intro.innerHTML='<div><span class="kicker">Tutor workspace</span><h1>What would you like to do?</h1><p>Choose one task. Your teaching tools stay focused and easy to scan.</p></div><div class="tutor-hero-actions"><a class="btn" href="/static/live_lesson.html">Start live classroom</a><a class="btn secondary" href="/static/media_compressor.html">Compress videos &amp; images</a></div>';
+      const intro=document.createElement('section');intro.className='tutor-command-center';intro.innerHTML='<div><span class="kicker">Tutor workspace</span><h1>What would you like to do?</h1><p>Choose one task. Your teaching tools stay focused and easy to scan.</p></div><div class="tutor-hero-actions"><a class="btn" href="/live">Start live classroom</a><a class="btn secondary" href="/tools/media">Compress videos &amp; images</a></div>';
       const tabs=document.createElement('nav');tabs.className='tutor-task-nav';tabs.setAttribute('aria-label','Tutor workspace tasks');tabs.innerHTML='<button type="button" data-tutor-view="create">Create quiz</button><button type="button" data-tutor-view="library">Quiz library</button><button type="button" data-tutor-view="submissions">Submissions</button><button type="button" data-tutor-view="students">Students</button><button type="button" data-tutor-view="messages">Messages</button>';
       const views=document.createElement('div');views.className='tutor-task-views';
       const makeView=(name,title,description)=>{const section=document.createElement('section');section.className='tutor-task-view';section.dataset.tutorViewPanel=name;section.innerHTML=`<header class="task-view-heading"><span class="kicker">${title}</span><p>${description}</p></header>`;views.appendChild(section);return section};
@@ -209,7 +215,7 @@
   }
   if (pagePath.endsWith('/student.html') && document.getElementById('appWrap')) {
     const app=document.getElementById('appWrap');
-    if(!document.querySelector('.workflow-nav')){const results=[...app.querySelectorAll('.card')].find(card=>card.querySelector('h2')?.textContent.includes('My results'));if(results)results.id='studentResults';const heading=app.querySelector('h1'),lede=app.querySelector('.lede');if(heading)heading.textContent='Your learning';if(lede)lede.textContent='Choose a subject, continue a quiz, or check your latest result.';const overview=document.createElement('section');overview.className='learner-command-center';overview.id='learnerCommandCenter';overview.innerHTML='<div><span class="kicker">Recommended next step</span><h2 id="learnerNextTitle">Choose a module to begin</h2><p id="learnerNextMeta">Your assigned quizzes and video lessons are kept together by subject.</p></div><div class="learner-command-actions"><button class="btn" id="learnerContinueBtn" type="button">Browse my quizzes</button><a class="btn secondary" href="/static/lessons_student.html">Watch video lessons</a></div>';const tabs=document.createElement('nav');tabs.className='workflow-nav';tabs.setAttribute('aria-label','Student workspace sections');tabs.innerHTML='<a href="#learnerCommandCenter">Overview</a><a href="#moduleCard">Quizzes</a><a href="#studentResults">Results</a><a href="#studentBottomMessages">Messages</a>';lede?.after(overview,tabs);overview.querySelector('#learnerContinueBtn')?.addEventListener('click',()=>document.getElementById('moduleCard')?.scrollIntoView({behavior:'smooth',block:'start'}))}
+    if(!document.querySelector('.workflow-nav')){const results=[...app.querySelectorAll('.card')].find(card=>card.querySelector('h2')?.textContent.includes('My results'));if(results)results.id='studentResults';const heading=app.querySelector('h1'),lede=app.querySelector('.lede');if(heading)heading.textContent='Your learning';if(lede)lede.textContent='Choose a subject, continue a quiz, or check your latest result.';const overview=document.createElement('section');overview.className='learner-command-center';overview.id='learnerCommandCenter';overview.innerHTML='<div><span class="kicker">Recommended next step</span><h2 id="learnerNextTitle">Choose a module to begin</h2><p id="learnerNextMeta">Your assigned quizzes and video lessons are kept together by subject.</p></div><div class="learner-command-actions"><button class="btn" id="learnerContinueBtn" type="button">Browse my quizzes</button><a class="btn secondary" href="/students/lessons">Watch video lessons</a></div>';const tabs=document.createElement('nav');tabs.className='workflow-nav';tabs.setAttribute('aria-label','Student workspace sections');tabs.innerHTML='<a href="#learnerCommandCenter">Overview</a><a href="#moduleCard">Quizzes</a><a href="#studentResults">Results</a><a href="#studentBottomMessages">Messages</a>';lede?.after(overview,tabs);overview.querySelector('#learnerContinueBtn')?.addEventListener('click',()=>document.getElementById('moduleCard')?.scrollIntoView({behavior:'smooth',block:'start'}))}
   }
   if (pagePath.endsWith('/admin.html') && document.getElementById('appWrap')) {
     const app=document.getElementById('appWrap'),heading=app.querySelector('h1'),lede=app.querySelector('.lede');if(heading)heading.id='adminOverview';
@@ -227,9 +233,9 @@
     if(feed&&!document.querySelector('.market-results-head')){const head=document.createElement('div');head.className='market-results-head';head.innerHTML='<div><span id="marketResultCount">Loading places…</span><small>Verified landlord-managed listings</small></div><label>Sort by<select id="marketSort"><option value="recommended">Recommended</option><option value="price-low">Price: low to high</option><option value="price-high">Price: high to low</option><option value="name">Name</option></select></label>';feed.before(head);const update=()=>{const cards=[...feed.querySelectorAll('.listing-card')],visible=cards.filter(card=>!card.classList.contains('hidden'));document.getElementById('marketResultCount').textContent=`${visible.length} ${visible.length===1?'place':'places'} found`;cards.forEach(card=>{if(card.querySelector('.listing-facts'))return;const location=card.querySelector('.location')?.textContent.split('·').map(part=>part.trim()).filter(Boolean)||[];if(location.length){const facts=document.createElement('div');facts.className='listing-facts';facts.innerHTML=location.slice(0,3).map(value=>`<span>${value.replace(/[<>&]/g,'')}</span>`).join('');card.querySelector('.listing-meta')?.after(facts)}})};const sort=()=>{const mode=document.getElementById('marketSort').value,cards=[...feed.querySelectorAll('.listing-card')];cards.sort((a,b)=>{if(mode==='name')return(a.querySelector('h2')?.textContent||'').localeCompare(b.querySelector('h2')?.textContent||'');const price=card=>Number((card.querySelector('.rent')?.textContent||'').replace(/[^0-9]/g,''))||Number.MAX_SAFE_INTEGER;if(mode==='price-low')return price(a)-price(b);if(mode==='price-high')return price(b)-price(a);return 0});cards.forEach(card=>feed.appendChild(card));update()};document.getElementById('marketSort').addEventListener('change',sort);new MutationObserver(update).observe(feed,{childList:true,subtree:true,attributes:true,attributeFilter:['class']});update()}
   }
   const messagingAssets = {
-    '/static/student.html': '/static/student-messaging.js',
-    '/static/lecturer.html': '/static/lecturer-messaging.js',
-    '/static/admin.html': '/static/admin-messaging.js',
+    '/students': '/static/student-messaging.js',
+    '/lecturers': '/static/lecturer-messaging.js',
+    '/admin': '/static/admin-messaging.js',
   };
   const messagingScript = messagingAssets[pagePath];
   if (messagingScript) {

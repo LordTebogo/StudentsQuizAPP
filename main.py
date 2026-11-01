@@ -2153,7 +2153,7 @@ async def upload_quiz(
         [student_id for (student_id,) in assigned_students],
         "New quiz available",
         f"A new {_module_name(module_code)} quiz is ready: {title}",
-        f"/static/student.html?module={module_code}",
+        f"/students?module={module_code}",
         f"quiz-{quiz.id}",
     )
     return {
@@ -4300,7 +4300,7 @@ def _create_direct_message(db: Session, sender_type: str, sender_id: Optional[in
             [recipient.id],
             "New Arounus message",
             f"You have a new message from {_message_person(db, sender_type, sender_id)}.",
-            "/static/student.html",
+            "/students",
             f"message-{message.id}",
         )
     return _message_dict(db, message, sender_type, sender_id)
@@ -4556,7 +4556,7 @@ def lecturer_broadcast_message(payload: LecturerBroadcastMessage, lecturer: Lect
     for student in recipients:
         db.add(DirectMessage(sender_type="lecturer", sender_id=lecturer.id, recipient_type="student", recipient_id=student.id, content=content, is_anonymous=False, created_at=now))
     db.commit()
-    _notify_students_by_push(db, [student.id for student in recipients], "New module message", f"A new message was sent to {_module_name(module_code)} students.", "/static/student.html", f"module-message-{module_code}-{now}")
+    _notify_students_by_push(db, [student.id for student in recipients], "New module message", f"A new message was sent to {_module_name(module_code)} students.", "/students", f"module-message-{module_code}-{now}")
     return {"ok": True, "recipient_count": len(recipients), "module_code": module_code}
 
 
@@ -4589,7 +4589,7 @@ def admin_broadcast_message(payload: AdminBroadcastMessage, _pin_ok: bool = Depe
         [student.id for student in recipients],
         "New Arounus message",
         "Arounus Admin sent you a new message.",
-        "/static/student.html",
+        "/students",
         f"admin-broadcast-{now}",
     )
     return {"ok": True, "recipient_count": len(recipients)}
@@ -7240,6 +7240,8 @@ async def live_lesson_socket(websocket: WebSocket, room_code: str):
 
 FRONTEND_PAGES = {
     "/": "index.html",
+    "/learning": "academics.html",
+    "/learning/guide": "arounus-guide.html",
     "/students": "student.html",
     "/lecturers": "lecturer.html",
     "/students/lessons": "lessons_student.html",
@@ -7252,8 +7254,10 @@ FRONTEND_PAGES = {
     "/market": "index.html",
     "/admin": "admin.html",
     "/tools/pdf": "pdf_tools.html",
+    "/tools/media": "media_compressor.html",
     "/trust": "trust.html",
     "/premium": "premium.html",
+    "/comrade": "comrade.html",
 }
 
 

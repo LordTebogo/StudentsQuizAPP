@@ -520,7 +520,7 @@
       await Promise.all([loadDraftList(), loadQuizzes()]);
       byId('quizSelect').value = String(result.quiz_id);
       byId('loadStudentsBtn').disabled = false;
-      const link = `${location.origin}/static/student.html?module=${encodeURIComponent(result.module_code)}`;
+      const link = `${location.origin}/students?module=${encodeURIComponent(result.module_code)}`;
       byId('shareLink').textContent = link;
       byId('shareBox').classList.remove('hidden');
       showBuilderMessage(`Published “${result.title}” with ${result.num_questions} questions. Students in ${moduleLabel(result.module_code)} can now open it.`);

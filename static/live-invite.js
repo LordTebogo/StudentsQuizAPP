@@ -23,11 +23,11 @@
     const next = destination(location.href, location.origin);
     const params = new URLSearchParams({role: 'learner'});
     if (next) params.set('next', next);
-    return `/static/academics.html?${params}`;
+    return `/learning?${params}`;
   }
 
   function postLoginUrl(location) {
-    return destination(new URLSearchParams(location.search).get('next'), location.origin) || '/static/student.html';
+    return destination(new URLSearchParams(location.search).get('next'), location.origin) || '/students';
   }
 
   function shareUrl(origin, value) {

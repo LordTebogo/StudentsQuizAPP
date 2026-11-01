@@ -58,11 +58,11 @@
 <script src="/static/student-module-enrollment.js"></script>
 </head>
 <body>
-<script>if(!sessionStorage.getItem('studentToken'))location.replace('/static/index.html?role=learner')</script>
+<script>if(!sessionStorage.getItem('studentToken'))location.replace('/?role=learner')</script>
 <div class="wrap">
   <header class="top">
     <div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Aroun<span>us</span></div><div class="brand-tagline">Bioscientist</div></div></div>
-    <nav><a href="/static/index.html">Home</a><a href="/static/student.html">Quizzes</a><a href="/static/fun.html">Posts</a></nav>
+    <nav><a href="/">Home</a><a href="/students">Quizzes</a><a href="/community">Posts</a></nav>
   </header>
 
   <h1>Video lessons</h1>
@@ -164,7 +164,7 @@ function showMsg(el, text, kind) {
 }
 
 async function restoreStudentSession() {
-  if (!STUDENT_TOKEN) { window.location.href = '/static/student.html'; return false; }
+  if (!STUDENT_TOKEN) { window.location.href = '/students'; return false; }
   try {
     const student = await api('/student/me');
     $('studentName').value = student.full_name;
@@ -174,7 +174,7 @@ async function restoreStudentSession() {
     return student;
   } catch (_) {
     sessionStorage.removeItem('studentToken');
-    window.location.href = '/static/student.html';
+    window.location.href = '/students';
     return false;
   }
 }
@@ -239,7 +239,7 @@ async function loadLessonList(moduleCode) {
   try {
     const path = moduleCode ? `/student/lessons?module_code=${encodeURIComponent(moduleCode)}` : '/student/lessons';
     const lessons = await api(path);
-    const guideLink = moduleCode === 'AROUNUS' ? '<a class="lesson-list-item" href="/static/arounus-guide.html"><div class="lesson-list-title">How to use Arounus</div><p class="muted">Read the guide or print and save it as a document</p></a>' : '';
+    const guideLink = moduleCode === 'AROUNUS' ? '<a class="lesson-list-item" href="/learning/guide"><div class="lesson-list-title">How to use Arounus</div><p class="muted">Read the guide or print and save it as a document</p></a>' : '';
     if (!lessons.length) {
       box.innerHTML = guideLink + (moduleCode === 'AROUNUS' ? '<p class="muted">Video tutorials will appear here when the Arounus team publishes them.</p>' : '<p class="muted">No lessons in this module yet — check back soon.</p>');
       return;

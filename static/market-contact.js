@@ -12,7 +12,7 @@
     document.getElementById('contactTitle').textContent = `Message ${button.dataset.providerName || 'provider'}`;
     status.textContent = '';
     if (!sessionStorage.getItem('studentToken')) {
-      content.innerHTML = '<p>Sign in as a learner to send a private message.</p><a href="/static/academics.html?role=learner">Sign in to message</a>';
+      content.innerHTML = '<p>Sign in as a learner to send a private message.</p><a href="/learning?role=learner">Sign in to message</a>';
     } else {
       content.innerHTML = '<form id="contactForm"><label for="contactText">Your message</label><textarea id="contactText" maxlength="2000" required></textarea><button type="submit">Send message</button></form>';
     }

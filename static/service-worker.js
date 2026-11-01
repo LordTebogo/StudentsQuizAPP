@@ -1,4 +1,4 @@
-const OFFLINE_VERSION = "v49";
+const OFFLINE_VERSION = "v50";
 const SHELL_CACHE = `nucleocampus-shell-${OFFLINE_VERSION}`;
 const DATA_CACHE = `nucleocampus-data-${OFFLINE_VERSION}`;
 const EXTERNAL_CACHE = `nucleocampus-external-${OFFLINE_VERSION}`;
@@ -6,16 +6,13 @@ const EXTERNAL_CACHE = `nucleocampus-external-${OFFLINE_VERSION}`;
 // Everything required to open every Arounus workspace is downloaded when
 // the app is installed. Keep this list limited to files that ship with the app.
 const APP_SHELL = [
-  "/", "/students", "/lecturers", "/students/lessons", "/lecturers/lessons",
-  "/lecturers/guide", "/live", "/posts", "/community", "/src", "/market", "/admin",
-  "/tools/pdf", "/trust", "/premium",
-  "/static/academics.html", "/static/campus-home.css", "/static/campus-home.js",
-  "/static/index.html", "/static/student.html", "/static/lecturer.html",
-  "/static/lessons_student.html", "/static/lessons_lecturer.html",
-  "/static/live_lesson.html", "/static/fun.html", "/static/comrade.html",
-  "/static/admin.html", "/static/pdf_tools.html", "/static/media_compressor.html", "/static/premium.html",
+  "/", "/learning", "/learning/guide", "/students", "/lecturers",
+  "/students/lessons", "/lecturers/lessons", "/lecturers/guide", "/live",
+  "/posts", "/community", "/src", "/market", "/admin", "/comrade",
+  "/tools/pdf", "/tools/media", "/trust", "/premium",
+  "/static/campus-home.css", "/static/campus-home.js",
   "/static/media-compressor.js?v=2", "/static/admin-workspace.css?v=3", "/static/admin-workspace.js?v=1",
-  "/static/document-organizer.js", "/static/trust.html", "/static/tutor_guide.html",
+  "/static/document-organizer.js",
   "/static/style.css", "/static/product.css", "/static/theme.css?v=2",
   "/static/brand-intro.css?v=1", "/static/brand-intro.js?v=1",
   "/static/light.css?v=4", "/static/messaging.css",

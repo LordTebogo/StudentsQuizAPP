@@ -177,7 +177,7 @@ A couple of Render-specific things worth knowing:
 The Lecturer page is protected by a shared PIN, **90435** by default (or
 whatever you set `LECTURER_PIN` to).
 
-- Anyone opening `/static/lecturer.html` sees a sign-in screen first and must enter this PIN before they can upload quizzes, view submissions, or mark long answers.
+- Anyone opening `/lecturers` sees a sign-in screen first and must enter this PIN before they can upload quizzes, view submissions, or mark long answers.
 - The PIN is enforced on the backend too (not just hidden in the UI) — the routes `/quiz/upload`, `/quizzes`, `/lecturer/quiz/{id}/submissions`, `/lecturer/submission/{id}`, and `/lecturer/submission/{id}/mark` all require an `X-Lecturer-Pin` header matching the PIN, so students can't call them directly even if they guess the URLs.
 - The Student page (`student.html`) is not protected — anyone on the network can take a quiz and check their own results.
 - To change the PIN, edit the `LECTURER_PIN` constant near the top of `main.py`.
@@ -187,18 +187,18 @@ whatever you set `LECTURER_PIN` to).
 ## 6. Lecturer accounts, modules, and admin management
 
 The shared lecturer PIN is now used for the **admin workspace** only. Lecturers
-and tutors create their own profile at `/static/lecturer.html`, including a
+and tutors create their own profile at `/lecturers`, including a
 profile image, contact details, institution, and professional bio. New profiles
 are pending until an administrator approves and activates them.
 
-Administrators use `/static/admin.html` to create or remove lecturer profiles,
+Administrators use `/admin` to create or remove lecturer profiles,
 approve or deactivate them, assign their permitted module codes, and set the
 maximum number of modules each lecturer may teach. Multiple lecturers may be
 assigned to one module, but every quiz and lesson is owned by the account that
 uploaded it. A lecturer can only view, mark, or download student scripts for
 their own uploaded work.
 
-Students likewise create a profile at `/static/student.html` with a student
+Students likewise create a profile at `/students` with a student
 number, password confirmation, profile image, and contact details. An
 administrator approves/activates the student profile in the Student management
 panel before the student can sign in, take quizzes or lessons, view results, or
@@ -207,15 +207,15 @@ password unless the administrator resets it.
 
 Quizzes are now organised by a **module code**, just like video lessons. When
 a lecturer builds a quiz, they choose an assigned code such as `BIO101`. Students open
-`/static/student.html`, choose their module, and see all quizzes for that
+`/students`, choose their module, and see all quizzes for that
 module — no quiz ID is needed. A link such as
-`/static/student.html?module=BIO101` opens a module directly.
+`/students?module=BIO101` opens a module directly.
 
 Existing quizzes are automatically assigned to the `GENERAL` module when the
 app next starts. The required database column and index are added on startup
 without deleting existing quiz data.
 
-The protected admin workspace is at `/static/admin.html`. It uses the admin
+The protected admin workspace is at `/admin`. It uses the admin
 PIN and can create, view, edit, and delete quizzes and video lessons.
 Content with student submissions cannot be edited; create a new version
 instead. Deleting content also deletes its related submissions (and, for
@@ -327,8 +327,8 @@ A second, separate feature alongside quizzes: the lecturer uploads a video
 with comprehension questions attached, and students watch + answer them.
 
 **Pages:**
-- Lecturer: `http://<ip>:8000/static/lessons_lecturer.html` (PIN-protected, same PIN as quizzes)
-- Student: `http://<ip>:8000/static/lessons_student.html` (open — browses a public list of lessons, no link needed)
+- Lecturer: `http://<ip>:8000/lecturers/lessons` (PIN-protected, same PIN as quizzes)
+- Student: `http://<ip>:8000/students/lessons` (open — browses a public list of lessons, no link needed)
 
 **Uploading a lesson** — the lecturer fills in a module code and selects three things on the upload form:
 0. A **module code** (e.g. `BIO101`) — typed directly on the upload form, not inside the JSON. Stored as UPPERCASE regardless of how it's typed. This is what students filter by on their lessons page, so use the same code consistently for every lesson in the same module. Previously-used codes appear as autocomplete suggestions as you type.
@@ -378,10 +378,10 @@ browsable list — no link required, though sharing a direct link
 
 ## 13. Typical flow (using the frontend)
 
-1. **Lecturer** opens `http://<ip>:8000/static/lecturer.html`, signs in,
+1. **Lecturer** opens `http://<ip>:8000/lecturers`, signs in,
    creates a quiz in the visual builder (or imports a spreadsheet), previews
    it, and publishes. The page shows a shareable link like
-   `http://<ip>:8000/static/student.html?module=BIO101`.
+   `http://<ip>:8000/students?module=BIO101`.
 2. **Lecturer** shares that module link with the class.
 3. **Students** open the link (or choose a module on the Student page), select
    a quiz, enter their name and student ID, answer the questions, and submit. MCQ/short answers
@@ -459,6 +459,6 @@ below) need an `X-Lecturer-Pin: 90435` header.
 
 ## Campus marketplace home
 
-The root page, `/market`, and installed app open one public campus market. Visitors can filter available rooms and approved offers by university/college, category, search text, and price. The chosen campus is remembered on the device. "Sell or list" opens advertiser registration or sign in on this page; one provider account can publish accommodation and submit transport, item, or service offers for review. Providers can manage listings and reply to customer messages there. The Academics button opens `static/academics.html` for learner and tutor tools. The retired `/static/marketing.html` URL redirects to `/market` so old links still work.
+The root page, `/market`, and installed app open one public campus market. Visitors can filter available rooms and approved offers by university/college, category, search text, and price. The chosen campus is remembered on the device. "Sell or list" opens advertiser registration or sign in on this page; one provider account can publish accommodation and submit transport, item, or service offers for review. Providers can manage listings and reply to customer messages there. The Academics button opens `/learning` for learner and tutor tools. The retired `/static/marketing.html` URL redirects to `/market` so old links still work.
 
 Run frontend regression checks with `npm ci --prefix tests` then `npm test --prefix tests`.
