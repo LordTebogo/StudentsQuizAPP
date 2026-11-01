@@ -44,16 +44,16 @@ else if(payment==='failed') statusBox.textContent='The payment was not completed
 else if(payment==='mismatch') statusBox.textContent='We could not validate that payment. Please contact support.';
 async function load(){
   try{
+    // Reconcile any pending payment before quoting the account's next price.
+    const current=token?await fetch('/billing/premium/me',{headers:{'X-Student-Token':token},cache:'no-store'}):null;
+    const access=current?.ok?await current.json():null;
     const response=await fetch('/billing/premium/plans',{cache:'no-store',headers:token?{'X-Student-Token':token}:{}});
     if(!response.ok) throw Error('Plans could not be loaded.');
     const data=await response.json();
     if(!payment) statusBox.textContent=(data.checkout_available||data.google_pay_available)?'Choose a plan and payment option.':'Checkout is being set up. Plans are shown below, but payment is not available yet.';
     if(!token) statusBox.innerHTML='Sign in as a learner to purchase Premium HD. <a href="/students">Go to learner sign in</a>.';
-    let hasLifetime=false;
-    if(token){
-      const current=await fetch('/billing/premium/me',{headers:{'X-Student-Token':token},cache:'no-store'});
-      if(current.ok){const access=await current.json();hasLifetime=access.lifetime;if(access.active&&(!payment||payment==='pending'))statusBox.textContent=access.lifetime?'Your lifetime Premium HD access is active.':`Your Premium HD access is active${access.until?' until '+new Date(access.until).toLocaleDateString():''}.`;}
-    }
+    const hasLifetime=Boolean(access?.lifetime);
+    if(access?.active&&(!payment||payment==='pending'))statusBox.textContent=access.lifetime?'Your lifetime Premium HD access is active.':`Your Premium HD access is active${access.until?' until '+new Date(access.until).toLocaleDateString():''}.`;
     plansBox.innerHTML='';
     for(const plan of data.plans){
       const card=document.createElement('section');card.className='plan';

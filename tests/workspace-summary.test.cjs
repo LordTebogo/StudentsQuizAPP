@@ -72,3 +72,26 @@ test('installed app includes the new math fonts and current asset versions', () 
     dom.window.close();
   }
 });
+
+test('Premium reconciles a paid first month before displaying the next purchase price', async () => {
+  const dom = new JSDOM(read('premium.html'), {url:'https://arounus.test/premium',runScripts:'outside-only',virtualConsole:new VirtualConsole()});
+  const w=dom.window;
+  try {
+    w.sessionStorage.setItem('studentToken','test-only');
+    let confirmed=false;
+    w.fetch=async (url,options)=>{
+      assert.equal(options.headers['X-Student-Token'],'test-only');
+      if(url==='/billing/premium/me') {
+        confirmed=true;
+        return {ok:true,json:async()=>({active:true,lifetime:false})};
+      }
+      assert.equal(url,'/billing/premium/plans');
+      return {ok:true,json:async()=>({plans:[{id:'monthly',label:'30 days',amount_cents:confirmed?5000:1500,introductory:!confirmed}],checkout_available:true,google_pay_available:false})};
+    };
+    const script=[...w.document.scripts].find(el=>el.textContent.includes('async function load()'));
+    w.eval(script.textContent);
+    await tick();
+    assert.equal(w.document.querySelector('.price').textContent,'R50');
+    assert.match(w.document.getElementById('status').textContent,/access is active/);
+  } finally {w.close();}
+});
