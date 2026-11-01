@@ -1,0 +1,74 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const { JSDOM, VirtualConsole } = require('jsdom');
+const read = name => fs.readFileSync(path.join(__dirname, '../static', name), 'utf8');
+const tick = () => new Promise(resolve => setImmediate(resolve));
+
+test('tutor dashboard counts actual records and keeps tools inside main', async () => {
+  const dom = new JSDOM(read('lecturer.html'), { url: 'https://arounus.test/lecturers', runScripts: 'outside-only', virtualConsole: new VirtualConsole() });
+  const w = dom.window;
+  try {
+    w.sessionStorage.setItem('lecturerToken', 'test-only');
+    w.fetch = async () => ({ ok: true, json: async () => ({}) });
+    w.scrollTo = () => {};
+    w.document.getElementById('myStudentsList').innerHTML = '<p>No enrolled students yet.</p>';
+    w.eval(read('experience.js'));
+    assert.equal(w.document.getElementById('tutorStatLearners').textContent, '0');
+    w.document.getElementById('builderModuleCode').innerHTML = '<option value="">Choose a module</option><option value="MATH">Maths</option>';
+    w.document.getElementById('quizSelect').innerHTML = '<option value="">Choose a quiz</option><option value="1">Quiz one</option><option value="2">Quiz two</option>';
+    w.document.getElementById('myStudentsList').innerHTML = '<div class="admin-list-item">First learner</div><div class="admin-list-item">Second learner</div>';
+    await tick();
+    assert.equal(w.document.getElementById('tutorStatModules').textContent, '1');
+    assert.equal(w.document.getElementById('tutorStatQuizzes').textContent, '2');
+    assert.equal(w.document.getElementById('tutorStatLearners').textContent, '2');
+    assert.equal(w.document.getElementById('tutorStatModules').nextElementSibling.textContent, 'Module');
+    assert.ok(w.document.querySelector('main #quizBuilderCard'));
+    assert.ok(w.document.querySelector('main .tutor-command-center'));
+    const optional = w.document.querySelectorAll('.builder-optional-tool');
+    assert.equal(optional.length, 3);
+    assert.ok([...optional].every(section => !section.open));
+  } finally { w.close(); }
+});
+
+test('learner summary refreshes after modules and messages arrive', async () => {
+  const dom = new JSDOM(read('student.html'), { url: 'https://arounus.test/students', runScripts: 'outside-only', virtualConsole: new VirtualConsole() });
+  const w = dom.window;
+  try {
+    w.sessionStorage.setItem('studentToken', 'test-only');
+    w.fetch = async () => ({ ok: true, json: async () => ({}) });
+    w.scrollTo = () => {};
+    const messages = w.document.createElement('div');
+    messages.id = 'studentMessagesList';
+    w.document.getElementById('appWrap').append(messages);
+    w.eval(read('experience.js'));
+    w.document.getElementById('moduleList').innerHTML = '<a class="module-card"><strong>Maths</strong><span>2 quizzes</span></a><a class="module-card"><strong>Biology</strong><span>3 quizzes</span></a>';
+    messages.innerHTML = '<article class="message-item">One message</article>';
+    await tick();
+    assert.equal(w.document.getElementById('learnerStatModules').textContent, '2');
+    assert.equal(w.document.getElementById('learnerStatQuizzes').textContent, '5');
+    assert.equal(w.document.getElementById('learnerStatMessages').textContent, '1');
+    assert.equal(w.document.getElementById('learnerStatMessages').nextElementSibling.textContent, 'Message');
+    const nav = w.document.querySelector('.workflow-nav');
+    assert.equal(nav.nextElementSibling.id, 'moduleCard');
+    assert.equal(w.document.querySelectorAll('.learner-tools-grid > section').length, 2);
+  } finally { w.close(); }
+});
+
+test('installed app includes the new math fonts and current asset versions', () => {
+  const worker = read('service-worker.js');
+  for (const file of ['student.html', 'lecturer.html']) {
+    const dom = new JSDOM(read(file));
+    const fonts = dom.window.document.querySelector('link[href*="mathlive-fonts.css"]');
+    assert.ok(fonts);
+    assert.ok(worker.includes(fonts.getAttribute('href')));
+    dom.window.close();
+  }
+  for (const name of ['ui.css', 'quiz-builder.js']) {
+    const dom = new JSDOM(read('lecturer.html'));
+    const el = dom.window.document.querySelector(`[href*="${name}"], [src*="${name}"]`);
+    assert.ok(worker.includes(el.getAttribute('href') || el.getAttribute('src')));
+    dom.window.close();
+  }
+});

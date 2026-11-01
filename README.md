@@ -35,7 +35,7 @@ npm test
 ## Media and marketplace sustainability
 
 - New lesson, community, and advert video uploads create a public copy capped at 480p. If the uploaded original is higher resolution, its HD copy is stored as a Cloudinary authenticated asset. Videos load only after a viewer chooses Play.
-- Learners can choose Premium HD access at `/premium`: R10 for 30 days, R100 for 365 days, or a one-time R10 payment for lifetime access. These are prepaid periods and do not renew automatically. They can then choose PayU or Google Pay through Paystack's hosted checkout. PayU is enabled when `PUBLIC_BASE_URL` (HTTPS), `PAYU_SA_SAFEKEY`, `PAYU_SA_SOAP_USERNAME`, and `PAYU_SA_SOAP_PASSWORD` are configured. Set `PAYU_SA_ENVIRONMENT=staging` for PayU tests. Google Pay is enabled when the Paystack South Africa merchant account has Google Pay and Card active, `PAYSTACK_SECRET_KEY` is a live secret key, and `PAYSTACK_GOOGLE_PAY_ENABLED=true`. The server independently verifies either provider's payment reference, amount, currency and final transaction state before granting access. Admin grants in **Admin → All accounts** continue to work.
+- Learners can choose Premium HD access at `/premium`: R15 for their first 30 days, R50 for each additional 30-day purchase, R150 for six calendar months, or R400 for 365 days. The introductory price is available once per learner account; repeat introductory checkout requests reuse the same pending payment. Existing lifetime access and payments already in progress are honoured. These are prepaid periods and do not renew automatically. They can then choose PayU or Google Pay through Paystack's hosted checkout. PayU is enabled when `PUBLIC_BASE_URL` (HTTPS), `PAYU_SA_SAFEKEY`, `PAYU_SA_SOAP_USERNAME`, and `PAYU_SA_SOAP_PASSWORD` are configured. Set `PAYU_SA_ENVIRONMENT=staging` for PayU tests. Google Pay is enabled when the Paystack South Africa merchant account has Google Pay and Card active, `PAYSTACK_SECRET_KEY` is a live secret key, and `PAYSTACK_GOOGLE_PAY_ENABLED=true`. The server independently verifies either provider's payment reference, amount, currency and final transaction state before granting access. Admin grants in **Admin → All accounts** continue to work.
 - Community uploads remain limited to 50 MB per video and 10 videos per learner each month. Lesson and advert upload size limits remain in place.
 - Campus market cards show unique views and an average rating out of five. A view is counted once per browser and listing using a long-lived cookie and a database uniqueness rule; clearing cookies or using another device can count separately. An approved learner can rate a listing once and update that rating later.
 - Feed images request smaller Cloudinary versions, while opening the gallery requests the full image. The admin media finance panel shows videos uploaded and unique listing views for a selected month, alongside Cloudinary's rolling usage report. Administrators record actual advert income and Cloudinary, hosting, or other costs in rand to see the monthly difference. Featured adverts still require administrator approval; payment arrangements are handled outside the app until a payment provider is connected.
@@ -145,6 +145,8 @@ Run backend suites separately because each configures its own temporary database
 
 ```powershell
 python -m unittest discover -s tests -p test_account_recovery.py
+python -m unittest discover -s tests -p test_site_hardening.py
+python -m unittest discover -s tests -p test_premium_pricing.py
 python -m unittest discover -s tests -p test_market_features.py
 python -m unittest discover -s tests -p test_lesson_management.py
 python -m unittest discover -s tests -p test_document_tools.py
@@ -158,7 +160,7 @@ uvicorn main:app --reload
 
 Visit `http://localhost:8000` — you'll land on the home page, with links
 for **Quizzes** (Lecturer / Student) and **Video Lessons** (Lecturer /
-Student). Raw API docs are at `http://localhost:8000/docs`.
+Student). Interactive API docs are disabled by default. For local development, set `ENABLE_API_DOCS=1` to enable `http://localhost:8000/docs`.
 
 In the Tutor quiz builder, **Generate questions** creates an editable draft
 from a topic, learning outcomes, or pasted source notes. The tutor must review

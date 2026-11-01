@@ -193,7 +193,7 @@
       const libraryCards=[...workbench.querySelectorAll(':scope > .card')], builder=document.getElementById('quizBuilderCard'), roster=app.querySelector('.lecturer-roster'), messages=document.getElementById('lecturerMessagesCard'), submissions=document.getElementById('submissionsCard'), grading=document.getElementById('gradingCard');
       // Keep the builder's ID stable: quiz-builder.js initializes after this layout.
       if(libraryCards[0])libraryCards[0].id='quizLibrary';
-      const intro=document.createElement('section');intro.className='tutor-command-center';intro.innerHTML='<div><span class="kicker">Tutor workspace</span><h1>What would you like to do?</h1><p>Choose one task. Your teaching tools stay focused and easy to scan.</p></div><div class="tutor-hero-actions"><a class="btn" href="/live">Start live classroom</a><a class="btn secondary" href="/tools/media">Compress videos &amp; images</a></div>';
+      const intro=document.createElement('section');intro.className='tutor-command-center';intro.innerHTML='<div class="hero-copy"><span class="kicker">Tutor workspace</span><h1>What would you like to do?</h1><p>Choose one task. Your teaching tools stay focused and easy to scan.</p></div><div class="hero-side"><div class="hero-stats" id="tutorHeroStats" aria-label="Workspace summary"><div class="hero-stat"><strong id="tutorStatModules">&mdash;</strong><span data-singular="Module" data-plural="Modules">Modules</span></div><div class="hero-stat"><strong id="tutorStatQuizzes">&mdash;</strong><span data-singular="Quiz" data-plural="Quizzes">Quizzes</span></div><div class="hero-stat"><strong id="tutorStatLearners">&mdash;</strong><span data-singular="Learner" data-plural="Learners">Learners</span></div></div><div class="tutor-hero-actions"><a class="btn" href="/live">Start live classroom</a><a class="btn secondary" href="/tools/media">Compress videos &amp; images</a></div></div>';
       const tabs=document.createElement('nav');tabs.className='tutor-task-nav';tabs.setAttribute('aria-label','Tutor workspace tasks');tabs.innerHTML='<button type="button" data-tutor-view="create">Create quiz</button><button type="button" data-tutor-view="library">Quiz library</button><button type="button" data-tutor-view="submissions">Submissions</button><button type="button" data-tutor-view="students">Students</button><button type="button" data-tutor-view="messages">Messages</button>';
       const views=document.createElement('div');views.className='tutor-task-views';
       const makeView=(name,title,description)=>{const section=document.createElement('section');section.className='tutor-task-view';section.dataset.tutorViewPanel=name;section.innerHTML=`<header class="task-view-heading"><span class="kicker">${title}</span><p>${description}</p></header>`;views.appendChild(section);return section};
@@ -203,7 +203,8 @@
       const studentsView=makeView('students','Students','See the learners enrolled in your assigned modules.');
       const messagesView=makeView('messages','Learner support','Send individual or module messages without leaving your workspace.');
       if(builder)createView.appendChild(builder);libraryCards.forEach(card=>libraryView.appendChild(card));if(submissions)submissionsView.appendChild(submissions);if(grading)submissionsView.appendChild(grading);if(roster)studentsView.appendChild(roster);if(messages)messagesView.appendChild(messages);workbench.remove();
-      app.querySelector('header.top')?.after(intro,tabs,views);
+      const pageMain=document.getElementById('pageMain');
+      if(pageMain)pageMain.prepend(intro,tabs,views);else app.querySelector('header.top')?.after(intro,tabs,views);
       const activate=view=>{const known=['create','library','submissions','students','messages'];const next=known.includes(view)?view:'create';tabs.querySelectorAll('[data-tutor-view]').forEach(button=>{const active=button.dataset.tutorView===next;button.classList.toggle('active',active);button.setAttribute('aria-current',active?'page':'false')});views.querySelectorAll('[data-tutor-view-panel]').forEach(panel=>panel.classList.toggle('hidden',panel.dataset.tutorViewPanel!==next));history.replaceState(history.state,'',`${location.pathname}${location.search}#${next}`);window.scrollTo({top:Math.max(0,tabs.offsetTop-94),behavior:'smooth'})};
       tabs.addEventListener('click',event=>{const button=event.target.closest('[data-tutor-view]');if(button)activate(button.dataset.tutorView)});
       document.getElementById('loadStudentsBtn')?.addEventListener('click',()=>activate('submissions'));
@@ -211,15 +212,30 @@
       document.getElementById('newQuizBuilderBtn')?.addEventListener('click',()=>activate('create'));
       const hashView=location.hash.replace('#','');activate(hashView==='lecturerMessagesCard'?'messages':hashView==='myStudentsList'?'students':hashView);
       window.addEventListener('hashchange',()=>{const value=location.hash.replace('#','');if(['create','library','submissions','students','messages'].includes(value))activate(value)});
+      // Workspace summary: modules assigned, quizzes available, learners enrolled.
+      const pluralise=(id,v)=>{const el=document.getElementById(id);if(!el||v==null)return;const next=String(v);if(el.textContent!==next)el.textContent=next;const label=el.parentElement?.querySelector('span');if(label){const word=Number(v)===1?(label.dataset.singular||label.textContent):(label.dataset.plural||label.textContent);if(label.textContent!==word)label.textContent=word}};
+      const tutorSetStat=(id,v)=>pluralise(id,v);
+      const countOptions=sel=>{const el=document.querySelector(sel);return el?[...el.options].filter(o=>o.value).length:null};
+      const refreshTutorStats=()=>{
+        const modules=countOptions('#builderModuleCode'), quizzes=countOptions('#quizSelect');
+        const learners=document.querySelectorAll('#myStudentsList > .admin-list-item').length;
+        if(modules!=null)tutorSetStat('tutorStatModules',modules);
+        if(quizzes!=null)tutorSetStat('tutorStatQuizzes',quizzes);
+        tutorSetStat('tutorStatLearners',learners);
+      };
+      refreshTutorStats();
+      const tutorStatsObserver=new MutationObserver(refreshTutorStats);
+      ['#builderModuleCode','#quizSelect','#myStudentsList'].forEach(sel=>{const node=document.querySelector(sel);if(node)tutorStatsObserver.observe(node,{childList:true,subtree:true})});
+
     }
   }
   if (pagePath.endsWith('/lessons_lecturer.html') && document.getElementById('appWrap')) {
-    const app=document.getElementById('appWrap'),cards=[...app.querySelectorAll(':scope > .card')];
+    const app=document.getElementById('appWrap'),cards=[...(document.getElementById('pageMain')||app).querySelectorAll(':scope > .card')];
     if(cards.length&&!document.querySelector('.workflow-nav')){const tabs=document.createElement('nav');tabs.className='workflow-nav';tabs.setAttribute('aria-label','Lesson workspace sections');tabs.innerHTML='<a href="#lessonCreate">Create lesson</a><a href="#lessonLibrary">Lesson library</a><a href="#submissionsCard">Student answers</a>';cards[0].id='lessonCreate';if(cards[1])cards[1].id='lessonLibrary';app.querySelector('.lede')?.after(tabs)}
   }
   if (pagePath.endsWith('/student.html') && document.getElementById('appWrap')) {
     const app=document.getElementById('appWrap');
-    if(!document.querySelector('.workflow-nav')){const results=[...app.querySelectorAll('.card')].find(card=>card.querySelector('h2')?.textContent.includes('My results'));if(results)results.id='studentResults';const heading=app.querySelector('h1'),lede=app.querySelector('.lede');if(heading)heading.textContent='Your learning';if(lede)lede.textContent='Choose a subject, continue a quiz, or check your latest result.';const overview=document.createElement('section');overview.className='learner-command-center';overview.id='learnerCommandCenter';overview.innerHTML='<div><span class="kicker">Recommended next step</span><h2 id="learnerNextTitle">Choose a module to begin</h2><p id="learnerNextMeta">Your assigned quizzes and video lessons are kept together by subject.</p></div><div class="learner-command-actions"><button class="btn" id="learnerContinueBtn" type="button">Browse my quizzes</button><a class="btn secondary" href="/students/lessons">Watch video lessons</a></div>';const tabs=document.createElement('nav');tabs.className='workflow-nav';tabs.setAttribute('aria-label','Student workspace sections');tabs.innerHTML='<a href="#learnerCommandCenter">Overview</a><a href="#moduleCard">Quizzes</a><a href="#studentResults">Results</a><a href="#studentBottomMessages">Messages</a>';lede?.after(overview,tabs);overview.querySelector('#learnerContinueBtn')?.addEventListener('click',()=>document.getElementById('moduleCard')?.scrollIntoView({behavior:'smooth',block:'start'}))}
+    if(!document.querySelector('.workflow-nav')){const results=[...app.querySelectorAll('.card')].find(card=>card.querySelector('h2')?.textContent.includes('My results'));if(results)results.id='studentResults';const heading=document.querySelector('#pageMain > h1')||app.querySelector('h1'),lede=app.querySelector('.lede');if(heading)heading.textContent='Your learning';if(lede)lede.textContent='Choose a subject, continue a quiz, or check your latest result.';const overview=document.createElement('section');overview.className='learner-command-center';overview.id='learnerCommandCenter';overview.innerHTML='<div class="hero-copy"><span class="kicker">Recommended next step</span><h2 id="learnerNextTitle">Choose a module to begin</h2><p id="learnerNextMeta">Your assigned quizzes and video lessons are kept together by subject.</p></div><div class="hero-side"><div class="hero-stats" id="learnerHeroStats" aria-label="Your learning summary"><div class="hero-stat"><strong id="learnerStatModules">&mdash;</strong><span data-singular="Module" data-plural="Modules">Modules</span></div><div class="hero-stat"><strong id="learnerStatQuizzes">&mdash;</strong><span data-singular="Quiz" data-plural="Quizzes">Quizzes</span></div><div class="hero-stat"><strong id="learnerStatMessages">&mdash;</strong><span data-singular="Message" data-plural="Messages">Messages</span></div></div><div class="learner-command-actions"><button class="btn" id="learnerContinueBtn" type="button">Browse my quizzes</button><a class="btn secondary" href="/students/lessons">Watch video lessons</a></div></div>';const tabs=document.createElement('nav');tabs.className='workflow-nav';tabs.setAttribute('aria-label','Student workspace sections');tabs.innerHTML='<a href="#learnerCommandCenter">Overview</a><a href="#moduleCard">Quizzes</a><a href="#studentResults">Results</a><a href="#studentBottomMessages">Messages</a>';lede?.after(overview,tabs);overview.querySelector('#learnerContinueBtn')?.addEventListener('click',()=>document.getElementById('moduleCard')?.scrollIntoView({behavior:'smooth',block:'start'}));const moduleCard=document.getElementById('moduleCard');if(moduleCard)tabs.after(moduleCard);const guideCard=app.querySelector('section[aria-labelledby="arounusGuideHeading"]'),mediaCard=document.getElementById('mediaToolsCard');if(guideCard&&mediaCard){const tools=document.createElement('div');tools.className='learner-tools-grid';tools.setAttribute('aria-label','More learner tools');guideCard.before(tools);tools.append(guideCard,mediaCard);const res=document.getElementById('studentResults');if(res)res.after(tools);}const setStat=(id,v)=>{const el=document.getElementById(id);if(!el||v==null)return;const next=String(v);if(el.textContent!==next)el.textContent=next;const label=el.parentElement?.querySelector('span');if(label){const word=Number(v)===1?(label.dataset.singular||label.textContent):(label.dataset.plural||label.textContent);if(label.textContent!==word)label.textContent=word}};const refreshLearnerStats=()=>{const cards=[...document.querySelectorAll('#moduleList .module-card')];setStat('learnerStatModules',cards.length);setStat('learnerStatQuizzes',cards.reduce((t,c)=>t+(parseInt((c.querySelector('span')?.textContent||'').replace(/\D/g,''),10)||0),0));setStat('learnerStatMessages',document.querySelectorAll('#studentMessagesList .message-item').length)};refreshLearnerStats();const statsObserver=new MutationObserver(refreshLearnerStats);[document.getElementById('moduleList'),document.getElementById('studentMessagesList')].forEach(node=>{if(node)statsObserver.observe(node,{childList:true,subtree:true})})}
   }
   if (pagePath.endsWith('/admin.html') && document.getElementById('appWrap')) {
     const app=document.getElementById('appWrap'),heading=app.querySelector('h1'),lede=app.querySelector('.lede');if(heading)heading.id='adminOverview';
@@ -280,4 +296,42 @@
     if (location.hash) history.pushState(history.state, '', destination.pathname + destination.search);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   });
+
+  // Accessibility normalisation shared by every app screen.
+  const normaliseA11y = () => {
+    // 1. Every screen needs exactly one main landmark. Most templates wrap
+    //    their content in a plain <div class="wrap">, so promote the outermost
+    //    element that contains the page heading.
+    const isVisible = el => { const b = el.getBoundingClientRect(); return b.width > 0 && b.height > 0; };
+    // Drop a main landmark that was placed on a screen the user cannot see
+    // (for example the hidden sign-in gate of an app they are already inside).
+    document.querySelectorAll('[role="main"]').forEach(el => { if (!isVisible(el)) el.removeAttribute('role'); });
+    if (!document.querySelector('main, [role="main"]')) {
+      const heading = [...document.querySelectorAll('h1')].find(isVisible);
+      if (heading) {
+        // Climb as high as possible without swallowing the site header, so the
+        // banner landmark stays a sibling of main rather than a child of it.
+        let node = heading.parentElement, best = node;
+        while (node && node.parentElement && node.parentElement !== document.body) {
+          node = node.parentElement;
+          if (!node.querySelector('header.top')) best = node;
+        }
+        if (best && best !== document.body) best.setAttribute('role', 'main');
+      }
+    }
+
+    // 2. Horizontally scrollable code blocks and tables must be focusable so
+    //    keyboard users can scroll them (WCAG 2.1.1).
+    document.querySelectorAll('.code-example pre, .guide-table-wrap, .guide-table-wrap table').forEach((el, index) => {
+      if (el.hasAttribute('tabindex')) return;
+      if (el.scrollWidth > el.clientWidth + 1) {
+        el.setAttribute('tabindex', '0');
+        if (!el.hasAttribute('role')) el.setAttribute('role', 'region');
+        if (!el.hasAttribute('aria-label')) el.setAttribute('aria-label', `Scrollable content ${index + 1}`);
+      }
+    });
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', normaliseA11y);
+  else normaliseA11y();
+  setTimeout(normaliseA11y, 1200);
 })();

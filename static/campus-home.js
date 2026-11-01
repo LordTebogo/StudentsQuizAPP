@@ -48,6 +48,7 @@
     if (days < 14) return `Posted ${days} days ago`;
     return `Posted ${date.toLocaleDateString('en-ZA', {day: 'numeric', month: 'short'})}`;
   };
+  const MAX_DEMOS_WITH_LIVE = 6;
   const SAVED_KEY = 'arounusSavedListings';
   let saved = new Set();
   try { saved = new Set(JSON.parse(localStorage.getItem(SAVED_KEY) || '[]')); } catch { saved = new Set(); }
@@ -80,6 +81,14 @@
       return sort === 'price-low' ? Number(left) - Number(right) : Number(right) - Number(left);
     });
     else filtered.sort((a, b) => Number(isDemo(a)) - Number(isDemo(b)) || String(b.created_at || '').localeCompare(String(a.created_at || '')));
+    // Examples help an empty market, but should not crowd out real offers.
+    if (filtered.some(entry => !isDemo(entry))) {
+      let demosShown = 0;
+      for (let index = 0; index < filtered.length;) {
+        if (isDemo(filtered[index]) && ++demosShown > MAX_DEMOS_WITH_LIVE) filtered.splice(index, 1);
+        else index++;
+      }
+    }
     $('resultsTitle').textContent = $('campus').value.trim() ? `Around ${$('campus').value.trim()}` : 'Around campus';
     const demoCount = filtered.filter(isDemo).length;
     const liveCount = filtered.length - demoCount;

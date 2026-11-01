@@ -21,9 +21,8 @@
     window.setTimeout(() => intro.remove(), 450);
   };
 
-  window.addEventListener('load', () => {
-    window.setTimeout(finish, Math.max(0, 2200 - (performance.now() - started)));
-  }, { once: true });
-  window.setTimeout(finish, 3800);
+  // Keep the splash brief and independent of image loading so listings
+  // become visible (and interactive) quickly.
+  window.setTimeout(finish, Math.max(0, 900 - (performance.now() - started)));
   intro.addEventListener('click', finish);
 })();

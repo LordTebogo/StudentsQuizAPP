@@ -27,6 +27,7 @@ Deploy on Render with:
 """
 
 import io
+import calendar
 import html
 import asyncio
 import json
@@ -56,9 +57,12 @@ from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse, JSONResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
+from fastapi.exception_handlers import http_exception_handler
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import func, inspect, text
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -407,6 +411,13 @@ def ensure_premium_billing_schema():
             payment_columns = {column["name"] for column in inspect(engine).get_columns("premium_payments")}
             if "provider" not in payment_columns:
                 conn.execute(text("ALTER TABLE premium_payments ADD COLUMN provider VARCHAR DEFAULT 'payu' NOT NULL"))
+            if "checkout_url" not in payment_columns:
+                conn.execute(text("ALTER TABLE premium_payments ADD COLUMN checkout_url TEXT"))
+            conn.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ux_premium_intro_per_student "
+                "ON premium_payments (student_id) "
+                "WHERE plan = 'intro' AND status IN ('pending', 'paid')"
+            ))
 
 
 ensure_premium_billing_schema()
@@ -473,7 +484,16 @@ def ensure_student_module_selection_schema():
 
 ensure_student_module_selection_schema()
 
-app = FastAPI(title="Quiz + Video Lessons App")
+_API_DOCS_ENABLED = os.getenv("ENABLE_API_DOCS", "0").strip().lower() in {"1", "true", "yes"}
+
+# Interactive docs and the OpenAPI schema list every route, including the
+# administrator API, so they are only published when explicitly enabled.
+app = FastAPI(
+    title="Arounus API",
+    docs_url="/docs" if _API_DOCS_ENABLED else None,
+    redoc_url="/redoc" if _API_DOCS_ENABLED else None,
+    openapi_url="/openapi.json" if _API_DOCS_ENABLED else None,
+)
 
 # Wide-open CORS since this app has no per-user accounts; the PIN gates the
 # lecturer-only routes instead.
@@ -508,6 +528,33 @@ _CSP = (
 )
 
 
+# Market pages run only first-party scripts, so they get a CSP without
+# 'unsafe-inline'/'unsafe-eval'. Tool pages keep the broader policy above.
+_STRICT_CSP = (
+    "default-src 'self'; "
+    "script-src 'self'; "
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+    "font-src 'self' data: https://fonts.gstatic.com; "
+    "img-src 'self' data: blob: https:; "
+    "media-src 'self' blob: https:; "
+    "connect-src 'self' https:; "
+    "worker-src 'self'; "
+    "frame-src 'self' https:; "
+    "frame-ancestors 'self'; "
+    "object-src 'none'; "
+    "base-uri 'self'; "
+    "form-action 'self'"
+)
+_STRICT_CSP_PATHS = {"/", "/market", "/src"}
+_PRIVATE_PAGE_PREFIXES = ("/admin", "/students", "/lecturers", "/live", "/reset-password", "/billing/")
+_STATIC_IMMUTABLE_MAX_AGE = 31536000
+_STATIC_DEFAULT_MAX_AGE = 3600
+
+
+def _is_private_page(path: str) -> bool:
+    return any(path == prefix.rstrip("/") or path.startswith(prefix.rstrip("/") + "/") for prefix in _PRIVATE_PAGE_PREFIXES)
+
+
 @app.middleware("http")
 async def security_headers_and_head(request: Request, call_next):
     # Serve HEAD by internally treating it as GET, then dropping the body.
@@ -523,7 +570,18 @@ async def security_headers_and_head(request: Request, call_next):
         "camera=(self), microphone=(self), display-capture=(self), geolocation=()",
     )
     response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
-    response.headers.setdefault("Content-Security-Policy", _CSP)
+    path = request.url.path
+    strict = path in _STRICT_CSP_PATHS or path.startswith("/listing/")
+    response.headers.setdefault("Content-Security-Policy", _STRICT_CSP if strict else _CSP)
+    if _is_private_page(path):
+        response.headers.setdefault("X-Robots-Tag", "noindex, nofollow")
+    if path.startswith("/static/") and response.status_code == 200 and "cache-control" not in response.headers:
+        # Versioned assets (?v=N) change URL when they change, so they can be
+        # cached for a year; unversioned files revalidate hourly.
+        if "v=" in request.url.query:
+            response.headers["Cache-Control"] = f"public, max-age={_STATIC_IMMUTABLE_MAX_AGE}, immutable"
+        else:
+            response.headers["Cache-Control"] = f"public, max-age={_STATIC_DEFAULT_MAX_AGE}, stale-while-revalidate=86400"
     # Hosted HTTPS terminates at the reverse proxy, so the application's
     # internal connection may be HTTP. HSTS is ignored on plain HTTP responses.
     forwarded_scheme = request.headers.get("x-forwarded-proto", "").split(",", 1)[0].strip().lower()
@@ -1190,28 +1248,32 @@ def _require_owned_lesson(db: Session, lesson_id: int, lecturer: Lecturer) -> Le
     return lesson
 
 
-def require_lecturer_pin(request: Request, x_lecturer_pin: Optional[str] = Header(None, alias="X-Lecturer-Pin")):
-    """Dependency guarding lecturer-only routes. Send the PIN as the
-    'X-Lecturer-Pin' header. Raises 401 if it's missing or wrong."""
+def _check_admin_pin(request: Request, supplied: str, failure_detail: str) -> None:
+    """Compare a PIN with per-client lockout, shared by every PIN entry point."""
     client_key = request.client.host if request.client else "unknown"
     now = time.monotonic()
     recent = [stamp for stamp in _admin_pin_failures.get(client_key, []) if now - stamp < ADMIN_LOCKOUT_SECONDS]
     if len(recent) >= ADMIN_MAX_FAILURES:
+        _admin_pin_failures[client_key] = recent
         raise HTTPException(status_code=429, detail="Too many failed admin sign-in attempts. Try again in a few minutes.")
-    supplied = x_lecturer_pin or ""
     if not hmac.compare_digest(supplied, LECTURER_PIN):
         recent.append(now)
         _admin_pin_failures[client_key] = recent
-        raise HTTPException(status_code=401, detail="Incorrect or missing administrator PIN")
+        raise HTTPException(status_code=401, detail=failure_detail)
     _admin_pin_failures.pop(client_key, None)
+
+
+def require_lecturer_pin(request: Request, x_lecturer_pin: Optional[str] = Header(None, alias="X-Lecturer-Pin")):
+    """Dependency guarding lecturer-only routes. Send the PIN as the
+    'X-Lecturer-Pin' header. Raises 401 if it's missing or wrong."""
+    _check_admin_pin(request, x_lecturer_pin or "", "Incorrect or missing administrator PIN")
     return True
 
 
 @app.post("/lecturer/verify-pin")
-def verify_pin(payload: PinCheck):
+def verify_pin(payload: PinCheck, request: Request):
     """Used by the lecturer login screen to check a PIN before unlocking the UI."""
-    if not hmac.compare_digest(payload.pin.strip(), LECTURER_PIN):
-        raise HTTPException(status_code=401, detail="Incorrect PIN")
+    _check_admin_pin(request, payload.pin.strip(), "Incorrect PIN")
     return {"ok": True}
 
 
@@ -1402,11 +1464,45 @@ async def update_student_me(
 # App logo — serves image.png from the app's working directory if present.
 # ---------------------------------------------------------------------------
 
+_LOGO_MAX_SIZE = 384
+_logo_cache: dict[str, tuple[float, bytes]] = {}
+_logo_cache_lock = threading.Lock()
+
+
+def _optimised_logo(fmt: str) -> bytes:
+    """Downscale image.png once per file change; the source can be over 1 MB."""
+    mtime = os.path.getmtime(LOGO_PATH)
+    with _logo_cache_lock:
+        cached = _logo_cache.get(fmt)
+        if cached and cached[0] == mtime:
+            return cached[1]
+        with PILImage.open(LOGO_PATH) as source:
+            image = source.convert("RGBA")
+        image.thumbnail((_LOGO_MAX_SIZE, _LOGO_MAX_SIZE), PILImage.LANCZOS)
+        buffer = io.BytesIO()
+        if fmt == "webp":
+            image.save(buffer, "WEBP", quality=88, method=6)
+        else:
+            image.save(buffer, "PNG", optimize=True)
+        data = buffer.getvalue()
+        _logo_cache[fmt] = (mtime, data)
+        return data
+
+
 @app.get("/branding/logo")
-def get_logo():
+def get_logo(request: Request):
     if not os.path.isfile(LOGO_PATH):
         raise HTTPException(status_code=404, detail="No logo uploaded (add image.png to the app folder)")
-    return FileResponse(LOGO_PATH, media_type="image/png")
+    fmt = "webp" if "image/webp" in request.headers.get("accept", "") else "png"
+    try:
+        data = _optimised_logo(fmt)
+    except Exception:
+        return FileResponse(LOGO_PATH, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
+    return Response(
+        data,
+        media_type=f"image/{fmt}",
+        headers={"Cache-Control": "public, max-age=86400, stale-while-revalidate=604800", "Vary": "Accept"},
+    )
 
 
 @app.get("/favicon.ico", include_in_schema=False)
@@ -3255,16 +3351,36 @@ def _has_premium_video(student: Student) -> bool:
         return False
 
 
+def _premium_intro_available(db: Session, student: Optional[Student]) -> bool:
+    if student is None:
+        return True
+    return db.query(PremiumPayment.id).filter(
+        PremiumPayment.student_id == student.id, PremiumPayment.status == "paid"
+    ).first() is None and not student.premium_lifetime
+
+
 @app.get("/billing/premium/plans")
-def premium_plans():
+def premium_plans(
+    x_student_token: Optional[str] = Header(None, alias="X-Student-Token"),
+    db: Session = Depends(get_db),
+):
+    student = require_student_account(x_student_token, db) if x_student_token else None
+    introductory = _premium_intro_available(db, student)
+    plans = []
+    for key, value in PREMIUM_PLANS.items():
+        intro = key == "monthly" and introductory
+        plans.append({
+            "id": key, "label": value["label"],
+            "amount_cents": value["intro_amount_cents"] if intro else value["amount_cents"],
+            "introductory": intro, "regular_amount_cents": value["amount_cents"],
+        })
     response = JSONResponse({
         "currency": "ZAR",
-        "plans": [{"id": key, "label": value["label"], "amount_cents": value["amount_cents"]}
-                  for key, value in PREMIUM_PLANS.items()],
+        "plans": plans,
         "checkout_available": bool(payu_configured() and os.getenv("PUBLIC_BASE_URL", "").startswith("https://")),
         "google_pay_available": bool(paystack_configured() and os.getenv("PUBLIC_BASE_URL", "").startswith("https://")),
     })
-    response.headers["Cache-Control"] = "no-store"
+    response.headers["Cache-Control"] = "private, no-store"
     return response
 
 
@@ -3293,17 +3409,36 @@ def premium_checkout(payload: PremiumCheckoutRequest, student: Student = Depends
         raise HTTPException(status_code=400, detail="Choose a valid Premium HD plan")
     if payload.provider not in ("payu", "paystack"):
         raise HTTPException(status_code=400, detail="Choose PayU or Google Pay")
+    # Serialize checkouts per account and reserve the first-month offer once.
+    student = db.query(Student).filter(Student.id == student.id).populate_existing().with_for_update().one()
+    if student.premium_lifetime:
+        raise HTTPException(status_code=400, detail="Your lifetime Premium HD access is already active")
+    introductory = payload.plan == "monthly" and _premium_intro_available(db, student)
+    pending_intro = db.query(PremiumPayment).filter(
+        PremiumPayment.student_id == student.id,
+        PremiumPayment.plan == "intro", PremiumPayment.status == "pending",
+    ).first() if introductory else None
+    if pending_intro:
+        if pending_intro.provider != payload.provider:
+            raise HTTPException(status_code=409, detail="Your first-month checkout is already in progress. Continue with the payment provider you previously selected.")
+        if not pending_intro.checkout_url:
+            raise HTTPException(status_code=409, detail="Your first-month checkout is still being prepared. Please try again shortly.")
+        return JSONResponse({"checkout_url": pending_intro.checkout_url}, headers={"Cache-Control": "private, no-store"})
     public_base = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
     if (not public_base.startswith("https://") or
             (payload.provider == "payu" and not payu_configured()) or
             (payload.provider == "paystack" and not paystack_configured())):
         raise HTTPException(status_code=503, detail="Premium checkout is being set up. Please try again later.")
     reference = "AR" + secrets.token_hex(16).upper()
-    payment = PremiumPayment(student_id=student.id, merchant_reference=reference, plan=payload.plan,
-                             provider=payload.provider, amount_cents=plan["amount_cents"], status="pending",
+    payment = PremiumPayment(student_id=student.id, merchant_reference=reference, plan="intro" if introductory else payload.plan,
+                             provider=payload.provider, amount_cents=plan["intro_amount_cents"] if introductory else plan["amount_cents"], status="pending",
                              created_at=datetime.now(timezone.utc).isoformat())
     db.add(payment)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Your first-month checkout is already in progress. Please try again shortly.")
     try:
         if payload.provider == "payu":
             payu_reference, checkout_url = payu_start(reference, payment.amount_cents,
@@ -3317,6 +3452,7 @@ def premium_checkout(payload: PremiumCheckoutRequest, student: Student = Depends
         payment.status = "setup_failed"
         db.commit()
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    payment.checkout_url = checkout_url
     db.commit()
     response = JSONResponse({"checkout_url": checkout_url})
     response.headers["Cache-Control"] = "private, no-store"
@@ -3335,7 +3471,7 @@ def _confirm_premium_payment(reference: str, db: Session) -> str:
         result = paystack_verify(reference) if payment.provider == "paystack" else payu_verify(reference)
     except (PayUError, PaystackError):
         return "pending"
-    student = db.query(Student).filter(Student.id == payment.student_id).first()
+    student = db.query(Student).filter(Student.id == payment.student_id).populate_existing().with_for_update().first()
     if not student:
         return "unknown"
     if payment.provider == "paystack":
@@ -3368,7 +3504,22 @@ def _confirm_premium_payment(reference: str, db: Session) -> str:
             current_until = datetime.fromisoformat(student.premium_until) if student.premium_until else now
         except ValueError:
             current_until = now
-        student.premium_until = (max(now, current_until) + timedelta(days=PREMIUM_PLANS[payment.plan]["days"])).isoformat()
+        if current_until.tzinfo is None:
+            current_until = current_until.replace(tzinfo=timezone.utc)
+        start = max(now, current_until)
+        if payment.plan == "six_months":
+            month_index = start.year * 12 + start.month - 1 + 6
+            year, month = divmod(month_index, 12)
+            month += 1
+            until = start.replace(year=year, month=month, day=min(start.day, calendar.monthrange(year, month)[1]))
+        else:
+            # Honour monthly/annual payments opened before a price change, as
+            # well as the introductory 30-day payment and existing lifetime sales.
+            days = {"intro": 30, "monthly": 30, "annual": 365}.get(payment.plan)
+            if days is None:
+                return "unknown"
+            until = start + timedelta(days=days)
+        student.premium_until = until.isoformat()
     payment.status = "paid"
     payment.confirmed_at = datetime.now(timezone.utc).isoformat()
     db.commit()
@@ -5531,13 +5682,38 @@ def pause_market_advert(
     return {"ok": True}
 
 
+_ADVERT_CLICK_WINDOW_SECONDS = 30 * 60
+_advert_clicks_seen: dict[str, float] = {}
+_advert_clicks_lock = threading.Lock()
+
+
+def _first_advert_click(advert_id: int, request: Request) -> bool:
+    """Count one click per client and advert in each window so the public
+    counter cannot be inflated by repeated requests."""
+    client = request.client.host if request.client else "unknown"
+    viewer = request.cookies.get("arounus_viewer", "")
+    key = f"{advert_id}:{client}:{viewer}"
+    now = time.monotonic()
+    with _advert_clicks_lock:
+        if len(_advert_clicks_seen) > 50000:
+            for stale in [k for k, t in _advert_clicks_seen.items() if now - t >= _ADVERT_CLICK_WINDOW_SECONDS]:
+                _advert_clicks_seen.pop(stale, None)
+        last = _advert_clicks_seen.get(key)
+        if last is not None and now - last < _ADVERT_CLICK_WINDOW_SECONDS:
+            return False
+        _advert_clicks_seen[key] = now
+        return True
+
+
 @app.post("/marketing/adverts/{advert_id}/click")
-def record_market_advert_click(advert_id: int, db: Session = Depends(get_db)):
+def record_market_advert_click(advert_id: int, request: Request, db: Session = Depends(get_db)):
     item = db.query(MarketAdvert).filter(MarketAdvert.id == advert_id, MarketAdvert.status == "approved").first()
     if not item:
         raise HTTPException(status_code=404, detail="Advert not found")
-    item.clicks = (item.clicks or 0) + 1; db.commit()
-    return {"ok": True}
+    counted = _first_advert_click(advert_id, request)
+    if counted:
+        item.clicks = (item.clicks or 0) + 1; db.commit()
+    return {"ok": True, "counted": counted}
 
 
 @app.get("/admin/market-adverts")
@@ -7697,19 +7873,54 @@ def robots_txt():
     )
 
 
+@app.get("/.well-known/security.txt", include_in_schema=False)
+@app.get("/security.txt", include_in_schema=False)
+def security_txt():
+    contact = os.getenv("SECURITY_CONTACT", "").strip() or "https://arounus.com/trust#support"
+    expires = (datetime.now(timezone.utc) + timedelta(days=365)).strftime("%Y-%m-%dT00:00:00Z")
+    body = (
+        f"Contact: {contact}\n"
+        f"Expires: {expires}\n"
+        "Preferred-Languages: en\n"
+        "Canonical: https://arounus.com/.well-known/security.txt\n"
+        "Policy: https://arounus.com/trust#support\n"
+    )
+    return Response(body, media_type="text/plain", headers={"Cache-Control": "public, max-age=86400"})
+
+
+_NOT_FOUND_PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Page not found | Arounus</title><link rel="icon" type="image/png" href="/static/icons/favicon-96x96.png?v=5"><link rel="stylesheet" href="/static/style.css"><style>body{background:#f5f8f6;color:#18312d}.nf{max-width:560px;margin:12vh auto;padding:32px;background:#fff;border:1px solid #d5e4db;border-radius:20px;text-align:center}.nf a{display:inline-block;margin:8px;padding:12px 18px;border-radius:10px;background:#087f70;color:#fff;font-weight:700;text-decoration:none}.nf a+a{background:#e7f5ed;color:#10291f}</style></head><body><main class="nf"><p>404</p><h1>This page isn't here</h1><p>The listing may have been removed, or the link is mistyped.</p><a href="/">Browse campus listings</a><a href="/learning">Go to Learning</a></main></body></html>"""
+
+
+@app.exception_handler(StarletteHTTPException)
+async def html_aware_http_exception_handler(request: Request, exc: StarletteHTTPException):
+    """Browsers navigating to a missing page get a page, API clients keep JSON."""
+    accepts_html = "text/html" in request.headers.get("accept", "")
+    if exc.status_code == 404 and request.method in {"GET", "HEAD"} and accepts_html:
+        return HTMLResponse(_NOT_FOUND_PAGE, status_code=404, headers={"Cache-Control": "no-store"})
+    return await http_exception_handler(request, exc)
+
+
 @app.get("/sitemap.xml", include_in_schema=False)
 def sitemap_xml(db: Session = Depends(get_db)):
     today = datetime.now(timezone.utc).date().isoformat()
-    rooms = db.query(Accommodation.id, Accommodation.title).join(Landlord, Landlord.id == Accommodation.landlord_id).filter(
+    rooms = db.query(Accommodation.id, Accommodation.title, Accommodation.created_at).join(Landlord, Landlord.id == Accommodation.landlord_id).filter(
         Accommodation.is_approved == True, Accommodation.is_available == True, Landlord.active == True,
     ).all()
-    offers = db.query(MarketAdvert.id, MarketAdvert.headline).filter(
+    offers = db.query(MarketAdvert.id, MarketAdvert.headline, MarketAdvert.updated_at).filter(
         MarketAdvert.status == "approved",
         (MarketAdvert.starts_at.is_(None)) | (MarketAdvert.starts_at <= today),
         (MarketAdvert.expires_at.is_(None)) | (MarketAdvert.expires_at >= today),
     ).all()
     base = Path("static/sitemap.xml").read_text(encoding="utf-8")
-    links = [f"  <url><loc>https://arounus.com/listing/{kind}/{item_id}</loc></url>" for kind, rows in (("room", rooms), ("offer", offers)) for item_id, title in rows if not str(title or "").upper().startswith("DEMO:")]
+    def lastmod(value) -> str:
+        stamp = str(value or "")[:10]
+        return f"<lastmod>{stamp}</lastmod>" if re.fullmatch(r"\d{4}-\d{2}-\d{2}", stamp) else ""
+    links = [
+        f"  <url><loc>https://arounus.com/listing/{kind}/{item_id}</loc>{lastmod(changed)}</url>"
+        for kind, rows in (("room", rooms), ("offer", offers))
+        for item_id, title, changed in rows
+        if not str(title or "").upper().startswith("DEMO:")
+    ]
     return Response(base.replace("</urlset>", "\n".join(links) + "\n</urlset>"), media_type="application/xml", headers={"Cache-Control": "public, max-age=3600"})
 
 
@@ -7751,10 +7962,31 @@ def public_market_listing(kind: str, listing_id: int, db: Session = Depends(get_
     image_meta = f'<meta property="og:image" content="{escape(photo)}">' if photo else ""
     image_html = f'<img class="photo" src="{escape(photo)}" alt="{escape(title)}">' if photo else ""
     contact = data.get("contact") or "Ask the provider for contact details."
+    amount = data.get("monthly_rent") if kind == "room" else data.get("price")
+    structured = {
+        "@context": "https://schema.org",
+        "@type": "Product",
+        "name": str(title),
+        "description": description,
+        "url": path,
+        "category": "Student accommodation" if kind == "room" else str(data.get("category") or "Campus service"),
+    }
+    if photo:
+        structured["image"] = photo
+    if amount is not None:
+        structured["offers"] = {
+            "@type": "Offer",
+            "price": str(amount),
+            "priceCurrency": "ZAR",
+            "availability": "https://schema.org/InStock",
+            "url": path,
+            **({"seller": {"@type": "Organization", "name": seller}} if seller else {}),
+        }
+    structured_html = "" if is_demo else '<script type="application/ld+json">' + json.dumps(structured).replace("<", "\\u003c") + "</script>"
     body = f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{escape(title)} | Arounus</title><meta name="description" content="{escape(description)}"><meta name="robots" content="{'noindex,follow' if is_demo else 'index,follow'}"><link rel="canonical" href="{path}">
 <meta property="og:type" content="product"><meta property="og:title" content="{escape(title)}"><meta property="og:description" content="{escape(description)}"><meta property="og:url" content="{path}">{image_meta}
-<meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/static/style.css"><style>body{{background:#f5f8f6;color:#18312d}}.listing-page{{max-width:820px;margin:30px auto;padding:28px;background:white;border:1px solid #d5e4db;border-radius:20px}}.photo{{width:100%;max-height:460px;object-fit:cover;border-radius:14px}}.listing-page p{{line-height:1.6}}.listing-page a{{color:#087c6f}}@media(max-width:650px){{.listing-page{{margin:12px;padding:18px}}}}</style></head>
+<meta name="twitter:card" content="summary_large_image">{structured_html}<link rel="stylesheet" href="/static/style.css"><style>body{{background:#f5f8f6;color:#18312d}}.listing-page{{max-width:820px;margin:30px auto;padding:28px;background:white;border:1px solid #d5e4db;border-radius:20px}}.photo{{width:100%;max-height:460px;object-fit:cover;border-radius:14px}}.listing-page p{{line-height:1.6}}.listing-page a{{color:#087c6f}}@media(max-width:650px){{.listing-page{{margin:12px;padding:18px}}}}</style></head>
 <body><main class="listing-page"><p><a href="/">← Browse campus market</a></p>{'<p><strong>Example only — this is not a real offer.</strong></p>' if is_demo else ''}<h1>{escape(title)}</h1>{image_html}<p>{escape(data.get('campus') or 'Campus not specified')}{' · ' + escape(data.get('area')) if data.get('area') else ''}</p><p><strong>{escape(price)}</strong></p>{'<p>Listed by ' + escape(seller) + '</p>' if seller and not is_demo else ''}<p>{escape(full_description)}</p>{'<p><strong>Contact:</strong> ' + escape(contact) + '</p>' if not is_demo else ''}<p>Check the listing and provider independently before paying. <a href="/trust#safety">Read market safety guidance</a>.</p><p><a href="/">Find more listings</a></p></main></body></html>"""
     return HTMLResponse(body, headers={"Cache-Control": "public, max-age=60"})
 

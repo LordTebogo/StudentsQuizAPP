@@ -480,3 +480,510 @@ header.top nav a,
   display: inline-flex;
   align-items: center;
 }
+
+/* ==========================================================================
+   11. Command-center heroes, workspace stats and message list
+   ========================================================================== */
+
+/* Two-column hero: copy on the left, at-a-glance stats + actions on the right.
+   Collapses to a single column on narrow screens so nothing is cramped. */
+.learner-command-center,
+.tutor-command-center {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-5) var(--space-6);
+}
+
+.hero-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.hero-copy h1,
+.hero-copy h2 {
+  margin: 0;
+  font-size: var(--text-2xl);
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.hero-copy p {
+  margin: 0;
+  max-width: 46ch;
+  color: var(--ink-2, #3f4a48);
+  line-height: 1.5;
+}
+
+.hero-copy .kicker {
+  align-self: flex-start;
+}
+
+.hero-side {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  justify-self: end;
+}
+
+/* Compact stat strip. Numbers are the loudest element, labels stay quiet. */
+.hero-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(72px, 1fr));
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  background: rgba(15, 118, 110, 0.06);
+  border: 1px solid rgba(15, 118, 110, 0.14);
+}
+
+.hero-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  text-align: center;
+  min-width: 0;
+}
+
+.hero-stat strong {
+  font-size: var(--text-xl);
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  color: var(--ok-ink, #0f766e);
+}
+
+.hero-stat span {
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #5b6b68;
+  white-space: nowrap;
+}
+
+.tutor-hero-actions,
+.learner-command-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+.tutor-hero-actions .btn,
+.learner-command-actions .btn {
+  min-height: var(--target-min);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Group secondary learner tools so they read as a pair, not as two
+   competing hero cards above the primary task. */
+.learner-tools-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.learner-tools-grid > * {
+  margin: 0;
+}
+
+/* Private inbox: one message per row, name and time on a single quiet line. */
+.message-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.message-item {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: #fff;
+  border: 1px solid rgba(16, 32, 30, 0.1);
+  box-shadow: 0 1px 2px rgba(16, 32, 30, 0.04);
+}
+
+.message-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+
+.message-head strong {
+  font-size: var(--text-sm);
+  color: #14211f;
+}
+
+.message-head time {
+  font-size: var(--text-xs);
+  color: #5b6b68;
+  font-variant-numeric: tabular-nums;
+}
+
+.message-head time::before {
+  content: "\00b7";
+  margin-right: var(--space-2);
+  color: #9aa8a5;
+}
+
+.message-body {
+  margin: 0;
+  color: #26332f;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 860px) {
+  .learner-command-center,
+  .tutor-command-center {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-4);
+  }
+
+  .hero-side {
+    justify-self: stretch;
+    width: 100%;
+  }
+
+  .hero-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .tutor-hero-actions,
+  .learner-command-actions {
+    justify-content: stretch;
+  }
+
+  .tutor-hero-actions .btn,
+  .learner-command-actions .btn {
+    flex: 1 1 auto;
+  }
+}
+
+@media (max-width: 420px) {
+  .hero-stat {
+    padding: var(--space-2);
+  }
+
+  .hero-stat strong {
+    font-size: var(--text-lg);
+  }
+
+  .hero-stat span {
+    font-size: 0.68rem;
+  }
+}
+
+/* ==========================================================================
+   12. Progressive disclosure for optional tutor builder tools
+   ========================================================================== */
+
+/* AI generation, drafts and bulk import are secondary to writing questions,
+   so they start collapsed instead of stacking three tall panels above the
+   question builder. */
+.builder-optional-tool {
+  border: 1px solid rgba(16, 32, 30, 0.12);
+  border-radius: var(--radius-md);
+  background: #fff;
+  margin: 0;
+  overflow: hidden;
+}
+
+.builder-optional-tool > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  min-height: var(--target-min);
+  cursor: pointer;
+  list-style: none;
+  background: rgba(15, 118, 110, 0.04);
+}
+
+.builder-optional-tool > summary::-webkit-details-marker {
+  display: none;
+}
+
+.builder-optional-tool > summary::before {
+  content: "";
+  width: 0.55em;
+  height: 0.55em;
+  border-right: 2px solid #0f766e;
+  border-bottom: 2px solid #0f766e;
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease;
+  flex: 0 0 auto;
+  margin-right: var(--space-1);
+}
+
+.builder-optional-tool[open] > summary::before {
+  transform: rotate(45deg);
+}
+
+.builder-optional-tool > summary strong {
+  font-size: var(--text-sm);
+  color: #14211f;
+}
+
+.builder-optional-tool > summary:hover {
+  background: rgba(15, 118, 110, 0.08);
+}
+
+.builder-optional-tool[open] > summary {
+  border-bottom: 1px solid rgba(16, 32, 30, 0.1);
+}
+
+.builder-optional-tool > .builder-tool-panel {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+  padding: var(--space-4);
+}
+
+.quiz-builder-tools {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* ==========================================================================
+   13. Remaining tap-target gaps in the tutor quiz builder
+   ========================================================================== */
+
+.question-actions button,
+.question-actions .btn,
+.builder-tool-panel .account-actions .btn,
+.quiz-builder-meta .btn,
+.ai-source-field > summary {
+  min-height: var(--target-min);
+}
+
+.ai-source-field > summary {
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-2);
+}
+
+.question-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+/* Checkboxes and radios keep their native size but gain a comfortable
+   hit area through padding on the wrapping label. */
+.fun-quiz-switch input[type="checkbox"],
+.question-option input[type="radio"],
+.question-option input[type="checkbox"] {
+  min-width: 24px;
+  min-height: 24px;
+}
+
+.question-editor button,
+.question-editor .btn,
+.question-option button {
+  min-height: var(--target-min);
+}
+
+/* ==========================================================================
+   14. Leftover dark-theme surfaces on the light theme
+   ========================================================================== */
+
+/* The module picker kept a translucent dark fill from the old dark theme,
+   which read as a smudge on the light page and pushed text below 4.5:1. */
+.module-card {
+  background: #fff;
+  border: 1px solid rgba(16, 32, 30, 0.12);
+  box-shadow: 0 1px 2px rgba(16, 32, 30, 0.05);
+}
+
+.module-card strong {
+  color: #0b5f57;
+}
+
+.module-card span {
+  color: #4d5f5b;
+}
+
+.module-card:hover,
+.module-card:focus-visible {
+  background: #f2f8f6;
+  border-color: rgba(15, 118, 110, 0.45);
+}
+
+.module-card[aria-pressed="true"],
+.module-card.active {
+  background: #e6f4f1;
+  border-color: #0f766e;
+}
+
+/* Collapsible summaries on the live-classroom and lesson screens were
+   inheriting a muted cyan that failed contrast on white. */
+#prejoinPanel > summary,
+#lessonCreate > details > summary,
+.lesson-create > details > summary {
+  color: #0b5f57;
+}
+
+/* Small secondary buttons in the tutor quiz list. */
+.quiz-list button,
+.quiz-list .btn,
+[data-action="duplicate"],
+[data-action="delete"] {
+  color: #14211f;
+}
+
+/* Guide page: horizontally scrollable code and table blocks must be
+   reachable with the keyboard. */
+.code-example pre,
+.guide-table-wrap {
+  overflow: auto;
+}
+
+/* ==========================================================================
+   15. Quiz builder: dark-theme surfaces re-skinned for the light theme
+   --------------------------------------------------------------------------
+   quiz-builder.css was written for the original dark palette. On the light
+   theme its translucent navy panels and #081326 dialog read as grey smudges,
+   and its muted text dropped below 4.5:1. These rules restate the same
+   components on white.
+   ========================================================================== */
+
+.builder-tool-panel {
+  background: #fff;
+  border: 1px solid rgba(16, 32, 30, 0.12);
+}
+
+.question-editor {
+  background: #fff;
+  border: 1px solid rgba(16, 32, 30, 0.14);
+  box-shadow: 0 1px 2px rgba(16, 32, 30, 0.05);
+}
+
+.question-actions button,
+.option-remove {
+  background: #fff;
+  border: 1px solid rgba(16, 32, 30, 0.18);
+  color: #26332f;
+}
+
+.question-actions button:hover,
+.option-remove:hover {
+  border-color: #0f766e;
+  color: #0b5f57;
+  background: #f2f8f6;
+}
+
+.question-actions button:disabled {
+  color: #8a9996;
+  background: #f4f6f5;
+}
+
+.quiz-builder-footer {
+  background: rgba(15, 118, 110, 0.05);
+  border: 1px solid rgba(15, 118, 110, 0.2);
+}
+
+.advanced-quiz-import {
+  background: #fff;
+  border: 1px solid rgba(16, 32, 30, 0.12);
+}
+
+.advanced-quiz-import summary {
+  color: #0b5f57;
+}
+
+.question-empty {
+  color: #4d5f5b;
+  border-color: rgba(16, 32, 30, 0.18);
+}
+
+.question-number span {
+  color: #fff;
+  background: #0f766e;
+}
+
+.quiz-preview-dialog {
+  background: #fff;
+  color: #14211f;
+  border: 1px solid rgba(16, 32, 30, 0.14);
+  box-shadow: 0 24px 70px rgba(16, 32, 30, 0.22);
+}
+
+.quiz-preview-dialog::backdrop {
+  background: rgba(16, 32, 30, 0.45);
+  backdrop-filter: blur(4px);
+}
+
+.quiz-preview-question {
+  background: #f7faf9;
+  border: 1px solid rgba(16, 32, 30, 0.1);
+}
+
+.quiz-preview-option {
+  color: #26332f;
+  border: 1px solid rgba(16, 32, 30, 0.12);
+}
+
+.builder-checklist {
+  color: #3f4a48;
+}
+
+/* Destructive actions keep a readable red on white. */
+.danger-action {
+  color: #b3261e !important;
+  border-color: rgba(179, 38, 30, 0.35) !important;
+}
+
+.danger-action:hover {
+  background: #fdecea !important;
+}
+
+/* Collapsible summaries inside lesson and live-classroom cards. */
+#prejoinPanel > summary,
+#lessonCreate > details > summary {
+  color: #0b5f57 !important;
+}
+
+/* The pre-join panel and lesson accordions also kept translucent navy fills. */
+#prejoinPanel,
+#lessonCreate > details,
+.lesson-create > details,
+.advanced-quiz-import,
+.message-history,
+.lecturer-roster details {
+  background: #fff;
+  border: 1px solid rgba(16, 32, 30, 0.12);
+}
+
+#prejoinPanel > summary,
+#lessonCreate > details > summary,
+.lesson-create > details > summary {
+  color: #0b5f57 !important;
+  background: rgba(15, 118, 110, 0.05);
+}
+
+/* Cards now live inside <main id="pageMain"> rather than directly in the app
+   wrapper, so restate the rules that used the old child selector. */
+#pageMain > .card {
+  box-shadow: 0 10px 30px rgba(0, 7, 18, 0.06);
+}
+
+#pageMain > .card:not(.lecturer-roster) {
+  padding-block: 24px;
+}

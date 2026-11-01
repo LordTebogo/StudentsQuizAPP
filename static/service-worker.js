@@ -1,4 +1,4 @@
-const OFFLINE_VERSION = "v54";
+const OFFLINE_VERSION = "v56";
 const SHELL_CACHE = `nucleocampus-shell-${OFFLINE_VERSION}`;
 const DATA_CACHE = `nucleocampus-data-${OFFLINE_VERSION}`;
 const EXTERNAL_CACHE = `nucleocampus-external-${OFFLINE_VERSION}`;
@@ -10,27 +10,27 @@ const APP_SHELL = [
   "/students/lessons", "/lecturers/lessons", "/lecturers/guide", "/live",
   "/posts", "/community", "/src", "/market", "/admin", "/comrade",
   "/tools/pdf", "/tools/media", "/trust", "/premium", "/reset-password",
-  "/static/campus-home.css", "/static/campus-home.js",
+  "/static/campus-home.css?v=6", "/static/campus-home.js?v=5", "/static/campus-redirect.js?v=1",
   "/static/media-compressor.js?v=2", "/static/admin-workspace.css?v=3", "/static/admin-workspace.js?v=1",
   "/static/document-organizer.js",
-  "/static/style.css", "/static/ui.css?v=1", "/static/product.css", "/static/theme.css?v=2",
-  "/static/brand-intro.css?v=1", "/static/brand-intro.js?v=1",
+  "/static/style.css", "/static/ui.css?v=2", "/static/product.css", "/static/theme.css?v=2",
+  "/static/brand-intro.css?v=1", "/static/brand-intro.js?v=2",
   "/static/light.css?v=5", "/static/messaging.css",
   "/static/market-sell.css?v=2",
   "/static/lesson-insights.css", "/static/quiz-builder.css",
-  "/static/quiz-math-tools.css",
+  "/static/quiz-math-tools.css", "/static/mathlive-fonts.css?v=1",
   "/static/experience.js", "/static/loading.js", "/static/pwa.js?v=18",
   "/static/module-names.js", "/static/student-module-enrollment.js", "/static/username-suggestion.js", "/static/student-messaging.js",
   "/static/lecturer-messaging.js", "/static/admin-messaging.js",
   "/static/admin-market-ads.js", "/static/market-sell.js?v=2", "/static/market-contact.js?v=1",
-  "/static/market-metrics.js?v=2", "/static/video-access.js?v=5", "/static/media-url.js?v=1",
-  "/static/lesson-insights.js", "/static/admin-finance.js?v=1", "/static/quiz-builder.js?v=15",
+  "/static/market-metrics.js?v=3", "/static/video-access.js?v=5", "/static/media-url.js?v=1",
+  "/static/lesson-insights.js", "/static/admin-finance.js?v=1", "/static/quiz-builder.js?v=16",
   "/static/quiz-import-template.csv", "/static/standard-quiz-template.json",
   "/static/fun-quiz-template.json", "/static/fun-quiz-images-scenario-template.json",
   "/static/lesson.json", "/static/manifest.webmanifest",
   "/favicon.ico", "/branding/logo", "/branding/logo?v=metallic-us", "/static/icons/favicon.ico",
-  "/static/icons/favicon-96x96.png", "/static/icons/apple-touch-icon.png",
-  "/static/icons/icon-192x192.png", "/static/icons/icon-512x512.png",
+  "/static/icons/favicon-96x96.png?v=5", "/static/icons/apple-touch-icon.png?v=5",
+  "/static/icons/icon-192x192.png?v=5", "/static/icons/icon-512x512.png?v=5", "/static/icons/og-card.png",
   "/static/icons/bioscientistapp-sticker.png"
 ];
 
@@ -202,8 +202,8 @@ self.addEventListener("push", event => {
   const title = payload.title || "Arounus";
   const options = {
     body: payload.body || "You have a new Arounus update.",
-    icon: "/static/icons/icon-192x192.png",
-    badge: "/static/icons/favicon-96x96.png",
+    icon: "/static/icons/icon-192x192.png?v=5",
+    badge: "/static/icons/favicon-96x96.png?v=5",
     tag: payload.tag || "nucleocampus-update",
     renotify: true,
     data: { url: payload.url || "/students" }

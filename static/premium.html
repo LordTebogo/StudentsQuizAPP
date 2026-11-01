@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Premium HD | Arounus</title>
-  <link rel="stylesheet" href="/static/style.css"><link rel="stylesheet" href="/static/ui.css?v=1">
+  <link rel="stylesheet" href="/static/style.css"><link rel="stylesheet" href="/static/ui.css?v=2">
   <style>
     body{margin:0;background:#f0f7f3;color:#17332d;font-family:system-ui,sans-serif}
     main{max-width:1040px;margin:auto;padding:clamp(20px,5vw,60px)}
@@ -30,13 +30,13 @@
   <div id="status" class="status" role="status" aria-live="polite">Checking Premium HD availability…</div>
   <div class="plans" id="plans"></div>
   <p class="intro">Google Pay opens Paystack’s secure checkout. Its wallet option appears when your device and saved card are eligible.</p>
-  <p class="intro">The 30 day and 365 day options are prepaid access periods. They do not renew automatically. The one-time option gives lifetime access.</p>
+  <p class="intro">Your first 30 days cost R15; each additional 30-day purchase costs R50. You can also choose six months for R150 or one year for R400. All plans are prepaid and do not renew automatically.</p>
 </main>
 <script>
 const statusBox=document.getElementById('status'), plansBox=document.getElementById('plans');
 const token=sessionStorage.getItem('studentToken');
-const descriptions={monthly:'30 days of Premium HD access',annual:'365 days of Premium HD access',once:'One payment for lifetime access'};
-const names={monthly:'30 days',annual:'365 days',once:'One-time'};
+const descriptions={monthly:'30 days of Premium HD access',six_months:'6 calendar months of Premium HD access',annual:'365 days of Premium HD access'};
+const names={monthly:'30 days',six_months:'6 months',annual:'1 year'};
 const payment=new URLSearchParams(location.search).get('payment');
 if(payment==='paid') statusBox.textContent='Payment confirmed. Premium HD is ready on your account.';
 else if(payment==='pending') statusBox.textContent='Payment is still processing. Please check again shortly.';
@@ -44,7 +44,7 @@ else if(payment==='failed') statusBox.textContent='The payment was not completed
 else if(payment==='mismatch') statusBox.textContent='We could not validate that payment. Please contact support.';
 async function load(){
   try{
-    const response=await fetch('/billing/premium/plans',{cache:'no-store'});
+    const response=await fetch('/billing/premium/plans',{cache:'no-store',headers:token?{'X-Student-Token':token}:{}});
     if(!response.ok) throw Error('Plans could not be loaded.');
     const data=await response.json();
     if(!payment) statusBox.textContent=(data.checkout_available||data.google_pay_available)?'Choose a plan and payment option.':'Checkout is being set up. Plans are shown below, but payment is not available yet.';
@@ -59,7 +59,7 @@ async function load(){
       const card=document.createElement('section');card.className='plan';
       const title=document.createElement('h2');title.textContent=names[plan.id]||plan.label;
       const price=document.createElement('div');price.className='price';price.textContent=`R${plan.amount_cents/100}`;
-      const description=document.createElement('p');description.textContent=descriptions[plan.id]||plan.label;
+      const description=document.createElement('p');description.textContent=plan.id==='monthly'&&plan.introductory?'R15 for your first 30 days, then R50 per 30-day purchase.':descriptions[plan.id]||plan.label;
       async function openCheckout(button,provider){
         button.disabled=true;button.innerHTML='<span class="spinner" aria-hidden="true"></span>Opening checkout…';statusBox.textContent='Setting up your secure checkout…';
         try{

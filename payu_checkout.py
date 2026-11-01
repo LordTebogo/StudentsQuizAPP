@@ -12,9 +12,9 @@ import xml.etree.ElementTree as ET
 
 
 PLANS = {
-    "monthly": {"label": "30 days", "amount_cents": 1000, "days": 30},
-    "annual": {"label": "365 days", "amount_cents": 10000, "days": 365},
-    "once": {"label": "Lifetime", "amount_cents": 1000, "days": None},
+    "monthly": {"label": "30 days", "amount_cents": 5000, "intro_amount_cents": 1500, "days": 30},
+    "six_months": {"label": "6 months", "amount_cents": 15000, "months": 6},
+    "annual": {"label": "1 year", "amount_cents": 40000, "days": 365},
 }
 
 SOAP_NS = "http://schemas.xmlsoap.org/soap/envelope/"

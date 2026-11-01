@@ -3,7 +3,7 @@
   const attempted = new Set();
   const timers = new WeakMap();
   const style = document.createElement('style');
-  style.textContent = '.market-metrics{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:10px 0;font-size:.82rem;color:var(--muted,#526675)}.market-metrics strong{color:var(--text,#17313a)}.market-stars{display:inline-flex;gap:2px}.market-stars button{min-width:44px;min-height:44px;border:0;background:transparent;color:#b38419;font-size:1.15rem;line-height:1;cursor:pointer;padding:8px}.market-stars button:hover,.market-stars button:focus-visible{color:#df9500;transform:scale(1.12)}.market-rating-note{font-size:.76rem}';
+  style.textContent = '.market-metrics{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:10px 0;font-size:.82rem;color:var(--muted,#526675)}.market-metrics strong{color:var(--text,#17313a)}.market-stars{display:inline-flex;gap:2px}.market-stars button{min-width:44px;min-height:44px;border:0;background:transparent;color:#b38419;font-size:1.15rem;line-height:1;cursor:pointer;padding:8px}.market-stars button:hover,.market-stars button:focus-visible{color:#df9500;transform:scale(1.12)}.market-stars button[data-active=true]{color:#df9500}.market-rating-note{font-size:.76rem}';
   document.head.appendChild(style);
   const cardsFor = card => [...document.querySelectorAll(selector)].filter(other => other.dataset.marketKind === card.dataset.marketKind && other.dataset.marketId === card.dataset.marketId);
   const paint = card => {
@@ -17,7 +17,7 @@
     for (let stars = 1; stars <= 5; stars++) {
       const button = document.createElement('button');
       button.type = 'button';
-      button.textContent = '★';
+      button.textContent = '☆';
       button.title = `Rate ${stars} star${stars === 1 ? '' : 's'}`;
       button.setAttribute('aria-label', `${button.title} for ${card.querySelector('h3')?.textContent || 'this listing'}`);
       button.dataset.stars = String(stars);
@@ -81,6 +81,7 @@
       const result = await response.json();
       if (!response.ok) throw new Error(result.detail || 'Rating could not be saved');
       cardsFor(card).forEach(other => { other.dataset.marketRating = String(result.rating); other.dataset.marketRatingCount = String(result.rating_count); refresh(other); });
+      card.querySelectorAll('.market-stars button').forEach(button => { const active = Number(button.dataset.stars) <= result.your_rating; button.dataset.active = String(active); button.textContent = active ? '★' : '☆'; });
       note.textContent = `Your rating: ${result.your_rating}/5`;
     } catch (error) { note.textContent = error.message; }
     finally { star.disabled = false; }

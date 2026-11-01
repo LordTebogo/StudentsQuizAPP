@@ -6,14 +6,14 @@
 <meta name="theme-color" content="#f5f8f6">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<link rel="icon" type="image/png" href="/static/icons/favicon-96x96.png?v=4">
+<link rel="icon" type="image/png" href="/static/icons/favicon-96x96.png?v=5">
 
-<link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png?v=4">
+<link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png?v=5">
 <link rel="manifest" href="/static/manifest.webmanifest">
 <title>Tutor — Arounus</title>
 <link rel="stylesheet" href="/static/style.css">
 <link rel="stylesheet" href="/static/quiz-builder.css">
-<link rel="stylesheet" href="/static/quiz-math-tools.css"><link rel="stylesheet" href="/static/ui.css?v=1">
+<link rel="stylesheet" href="/static/quiz-math-tools.css"><link rel="stylesheet" href="/static/ui.css?v=2">
 <script type="module">import{MathfieldElement}from"https://cdn.jsdelivr.net/npm/mathlive@0.110.0/+esm";MathfieldElement.fontsDirectory="https://cdn.jsdelivr.net/npm/mathlive@0.110.0/fonts";</script>
 <style>
   .lecturer-workbench { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(280px, .75fr); gap: 22px; align-items: start; }
@@ -38,6 +38,7 @@
   @media (max-width: 760px) { .lecturer-workbench { grid-template-columns: 1fr; } }
   @media (max-width: 760px) { .ai-quiz-grid { grid-template-columns: 1fr; } }
 </style>
+  <link rel="stylesheet" href="/static/mathlive-fonts.css?v=1">
 </head>
 <body>
 <script>if(!sessionStorage.getItem('lecturerToken'))location.replace('/?role=lecturer')</script>
@@ -80,6 +81,8 @@
     <nav><a href="/">Home</a><a href="/lecturers/lessons">Video lessons</a><a href="/live">Live lesson</a><a href="/tools/pdf">PDF tools</a><a href="/tools/media">Compress media</a><a href="#" id="lockBtn">Lock</a></nav>
   </header>
 
+  <main id="pageMain">
+
   <section class="card lecturer-roster"><div class="admin-editor-heading"><div><span class="kicker">Assigned learners</span><h2>Learners in my modules</h2><p class="muted" id="myStudentsSummary">Loading enrolled learners…</p></div><button class="btn secondary" id="refreshMyStudents">Refresh</button></div><details><summary>Show enrolled learners</summary><div id="myStudentsList" class="admin-list"></div></details></section>
   <section class="card" id="lecturerMessagesCard"><div class="admin-editor-heading"><div><span class="kicker">Learner support</span><h2>Message a learner</h2></div><button class="btn secondary" id="refreshLecturerMessagesBtn">Refresh</button></div><label for="lecturerMessageStudent">Choose learner</label><select id="lecturerMessageStudent"></select><label for="lecturerMessageText">Message</label><textarea id="lecturerMessageText" maxlength="2000" placeholder="Write a private message to the selected learner"></textarea><button class="btn" id="sendLecturerMessageBtn">Send message</button><div id="lecturerMessageMsg"></div><details class="message-history"><summary>Show conversation history</summary><div id="lecturerMessagesList" class="admin-list"></div></details></section>
   <div class="card"><div class="profile-strip"><img id="profileImage" class="profile-avatar hidden" alt="Tutor profile image"><div id="profileSummary" class="muted"></div><button class="btn secondary" id="editProfileBtn">Edit profile</button></div></div>
@@ -96,9 +99,9 @@
     </div>
 
     <div class="quiz-builder-tools">
-      <section class="builder-tool-panel ai-quiz-panel"><span class="kicker">AI quiz generator</span><h3>Generate editable questions</h3><p class="muted">Describe the topic or learning outcomes. Generated questions are added to this builder for your review and are never published automatically.</p><div class="ai-quiz-grid"><div><label for="aiQuizTopic">Topic or learning outcomes</label><textarea id="aiQuizTopic" maxlength="500" placeholder="e.g. Compare mitosis and meiosis, including chromosome number and genetic variation"></textarea></div><div><label for="aiQuestionCount">Questions</label><input id="aiQuestionCount" type="number" min="1" max="30" value="10"></div><div><label for="aiDifficulty">Difficulty</label><select id="aiDifficulty"><option value="introductory">Introductory</option><option value="intermediate" selected>Intermediate</option><option value="advanced">Advanced</option></select></div><div><label for="aiQuestionTypes">Question types</label><select id="aiQuestionTypes"><option value="mixed">Mixed</option><option value="mcq">Multiple choice</option><option value="short">Short answer</option><option value="long">Long answer</option></select></div></div><details class="ai-source-field"><summary>Optional: constrain questions to source notes</summary><label for="aiSourceText">Lecture notes or source material</label><textarea id="aiSourceText" maxlength="20000" placeholder="Paste the material students were taught. When supplied, questions will be based only on this text."></textarea><small class="muted">Source notes are sent to the configured AI service. Do not include learner names or other personal information.</small></details><div class="account-actions"><button class="btn" id="generateQuizBtn" type="button">Generate questions</button><small id="aiQuizStatus" class="muted" aria-live="polite">Choose an assigned module above before generating.</small></div></section>
-      <section class="builder-tool-panel"><span class="kicker">Drafts</span><label for="quizDraftSelect">Continue a saved draft</label><select id="quizDraftSelect"><option value="">No saved drafts</option></select><div class="account-actions"><button class="btn secondary" id="loadQuizDraftBtn" type="button">Load draft</button><button class="btn secondary" id="saveQuizDraftBtn" type="button">Save as draft</button><button class="btn secondary danger-action" id="deleteQuizDraftBtn" type="button">Delete draft</button></div><small id="quizDraftStatus" class="muted">Drafts are saved to your tutor account.</small></section>
-      <section class="builder-tool-panel"><span class="kicker">Bulk import</span><label for="quizSpreadsheetFile">Excel or CSV question sheet</label><input id="quizSpreadsheetFile" type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"><div class="account-actions"><button class="btn secondary" id="importSpreadsheetBtn" type="button">Import into builder</button><a class="btn secondary" href="/static/quiz-import-template.csv" download>Download template</a></div><small class="muted">Review imported questions here before publishing.</small></section>
+      <details class="builder-optional-tool"><summary><span class="kicker">AI quiz generator</span><strong>Generate editable questions from a topic</strong></summary><section class="builder-tool-panel ai-quiz-panel"><p class="muted">Describe the topic or learning outcomes. Generated questions are added to this builder for your review and are never published automatically.</p><div class="ai-quiz-grid"><div><label for="aiQuizTopic">Topic or learning outcomes</label><textarea id="aiQuizTopic" maxlength="500" placeholder="e.g. Compare mitosis and meiosis, including chromosome number and genetic variation"></textarea></div><div><label for="aiQuestionCount">Questions</label><input id="aiQuestionCount" type="number" min="1" max="30" value="10"></div><div><label for="aiDifficulty">Difficulty</label><select id="aiDifficulty"><option value="introductory">Introductory</option><option value="intermediate" selected>Intermediate</option><option value="advanced">Advanced</option></select></div><div><label for="aiQuestionTypes">Question types</label><select id="aiQuestionTypes"><option value="mixed">Mixed</option><option value="mcq">Multiple choice</option><option value="short">Short answer</option><option value="long">Long answer</option></select></div></div><details class="ai-source-field"><summary>Optional: constrain questions to source notes</summary><label for="aiSourceText">Lecture notes or source material</label><textarea id="aiSourceText" maxlength="20000" placeholder="Paste the material students were taught. When supplied, questions will be based only on this text."></textarea><small class="muted">Source notes are sent to the configured AI service. Do not include learner names or other personal information.</small></details><div class="account-actions"><button class="btn" id="generateQuizBtn" type="button">Generate questions</button><small id="aiQuizStatus" class="muted" aria-live="polite">Choose an assigned module above before generating.</small></div></section></details>
+      <details class="builder-optional-tool"><summary><span class="kicker">Drafts</span><strong>Save, load or delete a draft</strong></summary><section class="builder-tool-panel"><label for="quizDraftSelect">Continue a saved draft</label><select id="quizDraftSelect"><option value="">No saved drafts</option></select><div class="account-actions"><button class="btn secondary" id="loadQuizDraftBtn" type="button">Load draft</button><button class="btn secondary" id="saveQuizDraftBtn" type="button">Save as draft</button><button class="btn secondary danger-action" id="deleteQuizDraftBtn" type="button">Delete draft</button></div><small id="quizDraftStatus" class="muted">Drafts are saved to your tutor account.</small></section></details>
+      <details class="builder-optional-tool"><summary><span class="kicker">Bulk import</span><strong>Import questions from Excel or CSV</strong></summary><section class="builder-tool-panel"><label for="quizSpreadsheetFile">Excel or CSV question sheet</label><input id="quizSpreadsheetFile" type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"><div class="account-actions"><button class="btn secondary" id="importSpreadsheetBtn" type="button">Import into builder</button><a class="btn secondary" href="/static/quiz-import-template.csv" download>Download template</a></div><small class="muted">Review imported questions here before publishing.</small></section></details>
     </div>
 
     <div class="question-builder-header"><div><span class="kicker">Questions</span><strong id="builderQuestionCount">0 questions</strong></div><button class="btn secondary" id="addQuestionBtn" type="button">+ Add question</button></div>
@@ -181,6 +184,7 @@
     <button class="btn secondary" id="downloadOnePdfBtn">Download this student's answers (PDF)</button>
     <div id="gradingMsg"></div>
   </div>
+</main>
 </div><!-- /appWrap -->
 
 <dialog class="quiz-preview-dialog" id="quizPreviewDialog"><div class="quiz-preview-head"><div><span class="kicker">Student view</span><h2 id="quizPreviewTitle">Quiz preview</h2><p class="muted" id="quizPreviewMeta"></p></div><button class="btn secondary" id="closeQuizPreviewBtn" type="button">Close</button></div><div id="quizPreviewQuestions"></div></dialog>
@@ -683,14 +687,19 @@ $('sendLecturerMessageBtn').addEventListener('click', async () => { try { await 
 if (LECTURER_TOKEN) loadLecturerMessages();
 async function loadMyStudents(){try{const rows=await api('/lecturer/students',{},true);const modules=[...new Set(rows.flatMap(student=>student.module_codes||[]))];$('myStudentsSummary').textContent=rows.length?`${rows.length} enrolled student${rows.length===1?'':'s'} across ${modules.length} assigned module${modules.length===1?'':'s'}.`:'No enrolled students in your assigned modules yet.';$('myStudentsList').innerHTML=rows.length?rows.map(s=>`<div class="admin-list-item"><span><strong>${escapeHtml(s.full_name)}</strong><small>${escapeHtml(s.student_number)} · ${escapeHtml((s.module_codes||[]).map(moduleLabel).join(', '))}</small></span><span class="badge done">Enrolled</span></div>`).join(''):'<p class="muted">No enrolled students in your assigned modules yet.</p>'}catch(e){$('myStudentsSummary').textContent='Could not load enrolled students.';$('myStudentsList').innerHTML='<p class="muted">Could not load students.</p>'}}
 $('refreshMyStudents').addEventListener('click',loadMyStudents);if(LECTURER_TOKEN)loadMyStudents();
-const lecturerWorkspace = $('appWrap'); const lecturerProfileCard = $('profileImage').closest('.card'); const lecturerMessageCard = $('lecturerMessagesCard'); lecturerWorkspace.insertBefore(lecturerProfileCard, lecturerWorkspace.querySelector('.card')); lecturerWorkspace.appendChild(lecturerMessageCard);
+const lecturerWorkspace = $('appWrap'); const lecturerProfileCard = $('profileImage')?.closest('.card'); const lecturerMessageCard = $('lecturerMessagesCard');
+/* Only reorder when the cards are still direct children of the workspace.
+   Once experience.js builds the task views, cards live inside #pageMain and
+   moving them here would throw NotFoundError / tear them out of their view. */
+if (lecturerWorkspace && lecturerProfileCard && lecturerProfileCard.parentElement === lecturerWorkspace) { const firstCard = lecturerWorkspace.querySelector(':scope > .card'); if (firstCard && firstCard !== lecturerProfileCard) lecturerWorkspace.insertBefore(lecturerProfileCard, firstCard); }
+if (lecturerWorkspace && lecturerMessageCard && lecturerMessageCard.parentElement === lecturerWorkspace) lecturerWorkspace.appendChild(lecturerMessageCard);
 $('downloadOnePdfBtn').addEventListener('click', () => {
   if (!currentSubmissionId) return;
   downloadPdf(`/lecturer/submission/${currentSubmissionId}/pdf`, `submission_${currentSubmissionId}_answers.pdf`, $('gradingMsg'));
 });
 </script>
 <script src="/static/experience.js?v=16"></script>
-<script src="/static/quiz-builder.js?v=15"></script>
+<script src="/static/quiz-builder.js?v=16"></script>
 <script src="/static/loading.js"></script>
 <script src="/static/pwa.js?v=18"></script>
 </body>
