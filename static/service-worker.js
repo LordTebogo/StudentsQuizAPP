@@ -1,4 +1,4 @@
-const OFFLINE_VERSION = "v50";
+const OFFLINE_VERSION = "v51";
 const SHELL_CACHE = `nucleocampus-shell-${OFFLINE_VERSION}`;
 const DATA_CACHE = `nucleocampus-data-${OFFLINE_VERSION}`;
 const EXTERNAL_CACHE = `nucleocampus-external-${OFFLINE_VERSION}`;
@@ -33,6 +33,17 @@ const APP_SHELL = [
   "/static/icons/icon-192x192.png", "/static/icons/icon-512x512.png",
   "/static/icons/bioscientistapp-sticker.png"
 ];
+
+const LEGACY_PAGE_URLS = {
+  'academics.html': '/learning', 'arounus-guide.html': '/learning/guide',
+  'student.html': '/students', 'lecturer.html': '/lecturers',
+  'lessons_student.html': '/students/lessons', 'lessons_lecturer.html': '/lecturers/lessons',
+  'tutor_guide.html': '/lecturers/guide', 'live_lesson.html': '/live',
+  'fun.html': '/community', 'index.html': '/', 'marketing.html': '/market',
+  'admin.html': '/admin', 'pdf_tools.html': '/tools/pdf',
+  'media_compressor.html': '/tools/media', 'trust.html': '/trust',
+  'premium.html': '/premium', 'comrade.html': '/comrade'
+};
 
 // These libraries are cached when their corresponding workspace first uses
 // them. They never delay or block installation of the offline app shell.
@@ -143,6 +154,11 @@ self.addEventListener("fetch", event => {
   }
 
   if (request.mode === "navigate") {
+    const legacyName = url.pathname.startsWith('/static/') ? url.pathname.slice('/static/'.length) : '';
+    if (Object.hasOwn(LEGACY_PAGE_URLS, legacyName)) {
+      event.respondWith(Response.redirect(new URL(LEGACY_PAGE_URLS[legacyName] + url.search, url.origin), 308));
+      return;
+    }
     event.respondWith((async () => {
       try {
         const preload = await event.preloadResponse;
