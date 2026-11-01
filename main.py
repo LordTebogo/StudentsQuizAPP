@@ -88,6 +88,7 @@ except ImportError:  # The app stays usable while push dependencies are being in
     webpush = None
 
 from database import Base, SessionLocal, engine, get_db
+from app_traffic import create_traffic_router
 from models import (
     Answer,
     DirectMessage,
@@ -1290,6 +1291,9 @@ def require_lecturer_pin(request: Request, x_lecturer_pin: Optional[str] = Heade
     'X-Lecturer-Pin' header. Raises 401 if it's missing or wrong."""
     _check_admin_pin(request, x_lecturer_pin or "", "Incorrect or missing administrator PIN")
     return True
+
+
+app.include_router(create_traffic_router(require_lecturer_pin, STUDENT_SESSION_SECRET))
 
 
 @app.post("/lecturer/verify-pin")
@@ -8170,7 +8174,7 @@ def public_market_listing(kind: str, listing_id: int, db: Session = Depends(get_
 <title>{escape(title)} | Arounus</title><meta name="description" content="{escape(description)}"><meta name="robots" content="{'noindex,follow' if is_demo else 'index,follow'}"><link rel="canonical" href="{path}">
 <meta property="og:type" content="product"><meta property="og:title" content="{escape(title)}"><meta property="og:description" content="{escape(description)}"><meta property="og:url" content="{path}">{image_meta}
 <meta name="twitter:card" content="summary_large_image">{structured_html}<link rel="stylesheet" href="/static/style.css"><style>body{{background:#f5f8f6;color:#18312d}}.listing-page{{max-width:820px;margin:30px auto;padding:28px;background:white;border:1px solid #d5e4db;border-radius:20px}}.photo{{width:100%;max-height:460px;object-fit:cover;border-radius:14px}}.listing-page p{{line-height:1.6}}.listing-page a{{color:#087c6f}}@media(max-width:650px){{.listing-page{{margin:12px;padding:18px}}}}</style></head>
-<body><main class="listing-page"><p><a href="/">← Browse campus market</a></p>{'<p><strong>Example only — this is not a real offer.</strong></p>' if is_demo else ''}<h1>{escape(title)}</h1>{image_html}<p>{escape(data.get('campus') or 'Campus not specified')}{' · ' + escape(data.get('area')) if data.get('area') else ''}</p><p><strong>{escape(price)}</strong></p>{'<p>Listed by ' + escape(seller) + '</p>' if seller and not is_demo else ''}<p>{escape(full_description)}</p>{'<p><strong>Contact:</strong> ' + escape(contact) + '</p>' if not is_demo else ''}<p>Check the listing and provider independently before paying. <a href="/trust#safety">Read market safety guidance</a>.</p><p><a href="/">Find more listings</a></p></main></body></html>"""
+<body><script src="/static/app-traffic.js?v=1" defer></script><main class="listing-page"><p><a href="/">← Browse campus market</a></p>{'<p><strong>Example only — this is not a real offer.</strong></p>' if is_demo else ''}<h1>{escape(title)}</h1>{image_html}<p>{escape(data.get('campus') or 'Campus not specified')}{' · ' + escape(data.get('area')) if data.get('area') else ''}</p><p><strong>{escape(price)}</strong></p>{'<p>Listed by ' + escape(seller) + '</p>' if seller and not is_demo else ''}<p>{escape(full_description)}</p>{'<p><strong>Contact:</strong> ' + escape(contact) + '</p>' if not is_demo else ''}<p>Check the listing and provider independently before paying. <a href="/trust#safety">Read market safety guidance</a>.</p><p><a href="/">Find more listings</a></p></main></body></html>"""
     return HTMLResponse(body, headers={"Cache-Control": "public, max-age=60"})
 
 

@@ -43,6 +43,8 @@
 </style>
 <link rel="stylesheet" href="/static/light.css?v=4">
 <link rel="stylesheet" href="/static/admin-workspace.css?v=3"><link rel="stylesheet" href="/static/ui.css?v=2">
+<link rel="stylesheet" href="/static/admin-traffic.css?v=1">
+<script src="/static/app-traffic.js?v=1" defer></script>
 </head>
 <body>
 <div class="wrap admin-gate" id="gateWrap">
@@ -57,6 +59,28 @@
   <section class="admin-intro"><div><span class="kicker">Arounus administration</span><h1 id="adminAreaTitle">Overview</h1><p id="adminAreaDescription">Your workspaces, live activity, and the next task at a glance.</p></div><span class="admin-private-pill">● Protected workspace</span></section>
   <div class="admin-layout"><nav class="admin-sidebar" aria-label="Admin sections"><span class="admin-sidebar-label">WORKSPACES</span><button type="button" class="active" data-admin-nav="overview">Overview</button><button type="button" data-admin-nav="learning">Learning content</button><button type="button" data-admin-nav="people">People &amp; access</button><button type="button" data-admin-nav="community">Community</button><button type="button" data-admin-nav="market">Campus market</button><button type="button" data-admin-nav="finance">Finance</button><div class="admin-sidebar-note">Choose a workspace to focus on one task at a time.</div></nav><div class="admin-content">
   <section class="admin-dashboard" data-admin-area="overview"><div class="admin-welcome"><span class="kicker">Today at Arounus</span><h2>Everything in its place.</h2><p>Open a workspace to manage its records and actions. Your learning content remains protected once learners submit work.</p><a class="admin-media-link" href="/tools/media">Compress videos &amp; images <span aria-hidden="true">→</span></a></div><div class="admin-shortcuts"><button type="button" data-admin-go="learning"><span class="shortcut-icon">✦</span><strong>Learning content</strong><small>Quizzes, lessons, and scripts</small><span class="shortcut-arrow">→</span></button><button type="button" data-admin-go="people"><span class="shortcut-icon">◎</span><strong>People &amp; access</strong><small>Learners, tutors, and accounts</small><span class="shortcut-arrow">→</span></button><button type="button" data-admin-go="community"><span class="shortcut-icon">◌</span><strong>Community</strong><small>Posts and conversations</small><span class="shortcut-arrow">→</span></button><button type="button" data-admin-go="market"><span class="shortcut-icon">▣</span><strong>Campus market</strong><small>Rooms and advertisements</small><span class="shortcut-arrow">→</span></button><button type="button" data-admin-go="finance"><span class="shortcut-icon">▥</span><strong>Finance</strong><small>Costs and promotion income</small><span class="shortcut-arrow">→</span></button></div></section>
+
+  <section class="card admin-panel" id="appTrafficCard" data-admin-area="overview" aria-labelledby="appTrafficTitle">
+    <div class="admin-editor-heading"><div><span class="kicker">App audience</span><h2 id="appTrafficTitle">Visitor traffic</h2></div><button class="btn secondary" id="refreshAppTraffic" type="button">Refresh traffic</button></div>
+    <p class="muted">Guest and signed-in visitors, counted once per browser in each period. Active now means a visible app page reported activity in the past 2 minutes. Updates every 30 seconds.</p>
+    <div class="traffic-summary">
+      <div class="live-stat"><strong id="trafficActive">—</strong><span><i class="traffic-live-dot" aria-hidden="true"></i> Active now</span></div>
+      <div class="live-stat"><strong id="trafficHour">—</strong><span>Past hour</span></div>
+      <div class="live-stat"><strong id="trafficToday">—</strong><span>Today</span></div>
+      <div class="live-stat"><strong id="trafficAllTime">—</strong><span>All time</span></div>
+    </div>
+    <form id="trafficHistoryForm" class="traffic-filters">
+      <label for="trafficHistoryView">History<select id="trafficHistoryView"><option value="daily">Daily visitors</option><option value="hourly">Hourly · past 24 hours</option></select></label>
+      <label for="trafficStartDate">From<input id="trafficStartDate" type="date" required></label>
+      <label for="trafficEndDate">To<input id="trafficEndDate" type="date" required></label>
+      <button class="btn secondary" type="submit">Show history</button>
+    </form>
+    <p id="trafficPeriodSummary" class="muted"></p>
+    <div class="traffic-history"><table><caption id="trafficHistoryCaption">Visitor history · South Africa time (UTC+2)</caption><thead><tr><th scope="col">Period</th><th scope="col">Visitors</th><th scope="col"><span class="traffic-sr-only">Relative visitor count</span></th></tr></thead><tbody id="trafficHistoryRows"></tbody></table></div>
+    <p id="trafficTrackingNote" class="muted">History starts when tracking is enabled. Earlier visits cannot be reconstructed.</p>
+    <p class="muted">Admin pages are excluded. Another device or cleared cookies can count separately. Period totals count unique browsers, so daily and hourly counts do not add up to the all-time total.</p>
+    <div id="appTrafficMessage" role="status" aria-live="polite"></div>
+  </section>
 
   <section class="card admin-panel" id="liveMonitorCard" data-admin-area="overview">
     <div class="admin-editor-heading"><div><span class="kicker">Live activity</span><h2>Live classroom monitor</h2></div><button class="btn secondary" id="refreshLiveSessionsBtn" type="button">Refresh</button></div>
@@ -242,6 +266,7 @@ async function unlock(value) {
     if (!res.ok) throw new Error(data.detail || (res.status >= 500 ? 'The administration service is temporarily unavailable.' : 'The administrator PIN was not accepted.'));
     pin = value; sessionStorage.setItem('lecturerPin', pin);
     $('gateWrap').classList.add('hidden'); $('appWrap').classList.remove('hidden');
+    window.dispatchEvent(new Event('admin:unlocked'));
     if (!adminBootHasPin) {
       history.replaceState(null, '', '/admin#adminOverview');
       window.location.reload();
@@ -602,8 +627,9 @@ if (pin) unlock(pin);
 setInterval(() => { if (pin && !$('appWrap').classList.contains('hidden')) loadLiveSessions(); }, 15000);
 </script>
 <script src="/static/admin-market-ads.js"></script>
-<script src="/static/admin-workspace.js?v=1"></script>
+<script src="/static/admin-workspace.js?v=2"></script>
 <script src="/static/admin-finance.js?v=1"></script>
+<script src="/static/admin-traffic.js?v=1"></script>
 <script src="/static/experience.js"></script>
 <script src="/static/loading.js"></script>
 <script src="/static/pwa.js?v=18"></script>

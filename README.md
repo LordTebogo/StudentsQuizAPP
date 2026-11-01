@@ -32,6 +32,34 @@ npm ci
 npm test
 ```
 
+## App visitor traffic
+
+**Admin → Overview → Visitor traffic** shows active browsers (a visible app page
+reported in the past two minutes), distinct visitors in the past hour, today's
+visitors, and all-time distinct visitors. The overview refreshes every 30 seconds.
+Choose hourly history for the past 24 calendar-hour buckets, or daily history
+with a date range of up to 366 days. Dates use South Africa time (UTC+2).
+
+The first-party tracker reports once per minute while an app page is visible
+and online, including guest pages and shared listings. It uses a signed,
+HttpOnly, one-year browser cookie. One browser is counted once per period,
+across tabs, pages and repeat opens; another device or cleared cookies may
+count separately. Admin pages, background tabs, offline opens, health checks,
+asset requests and service-worker precaching do not report traffic. Browsers
+blocking cookies/scripts and automated browsers can affect these estimates.
+
+The `app_traffic_activity` table is created automatically at startup. It stores
+one hashed browser identifier and first/last activity times per active hour,
+without account details, IPs or page URLs. History persists in the configured
+database and begins with the first recorded visit; earlier traffic cannot be
+reconstructed. Daily/hourly figures count unique browsers within each period,
+so summing them can count a returning browser more than once. Keep the session
+signing secret stable to preserve browser identity across restarts. Check with:
+
+```powershell
+python -m unittest discover -s tests -p test_app_traffic.py -v
+```
+
 ## Media and marketplace sustainability
 
 - New lesson, community, and advert video uploads create a public copy capped at 480p. If the uploaded original is higher resolution, its HD copy is stored as a Cloudinary authenticated asset. Videos load only after a viewer chooses Play.

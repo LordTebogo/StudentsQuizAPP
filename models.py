@@ -31,6 +31,18 @@ from sqlalchemy.orm import relationship
 from database import Base
 
 
+class AppTrafficActivity(Base):
+    """One anonymous browser's activity in an hour; no account or page data."""
+    __tablename__ = "app_traffic_activity"
+    __table_args__ = (UniqueConstraint("visitor_hash", "hour", name="app_traffic_visitor_hour"),)
+
+    id = Column(Integer, primary_key=True)
+    visitor_hash = Column(String(64), nullable=False, index=True)
+    hour = Column(String(25), nullable=False, index=True)
+    first_seen = Column(String(27), nullable=False)
+    last_seen = Column(String(27), nullable=False, index=True)
+
+
 # ---------------------------------------------------------------------------
 # Lecturer accounts and module permissions
 # ---------------------------------------------------------------------------

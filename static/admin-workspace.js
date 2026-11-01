@@ -22,6 +22,7 @@
     document.getElementById('adminAreaTitle').textContent = descriptions[area][0];
     document.getElementById('adminAreaDescription').textContent = descriptions[area][1];
     if (location.hash !== `#${area}`) history.replaceState(null, '', `#${area}`);
+    window.dispatchEvent(new CustomEvent('admin:area', {detail:area}));
     if (scroll && !document.getElementById('appWrap').classList.contains('hidden')) {
       document.querySelector('.admin-intro').scrollIntoView({behavior:'smooth', block:'start'});
     }
