@@ -81,8 +81,8 @@
         <label for="lecturerPhone">Phone</label><input id="lecturerPhone" type="text" placeholder="Optional">
         <label for="lecturerInstitution">Institution</label><input id="lecturerInstitution" type="text" placeholder="School or university">
         <label for="lecturerBio">Professional bio</label><textarea id="lecturerBio" placeholder="Tutoring background"></textarea>
-        <label for="lecturerModules">Assigned module codes</label><input id="lecturerModules" type="text" placeholder="e.g. SBIA021, SBIA022">
-        <details><summary>Module names and codes</summary><div id="moduleCatalogList" class="muted"></div></details>
+        <label for="lecturerModules">Assigned subjects</label><input id="lecturerModules" type="text" placeholder="e.g. Biochemistry, Molecular Biology">
+        <details><summary>Available subjects</summary><div id="moduleCatalogList" class="muted"></div></details>
         <label for="lecturerLimit">Module limit</label><input id="lecturerLimit" type="number" min="0" value="1">
         <button class="btn" id="saveLecturerBtn">Save tutor</button><div id="lecturerMsg"></div>
       </div>
@@ -129,7 +129,7 @@
         <div id="allAccountPartyField" class="hidden"><label for="allAccountParty">Party or organisation</label><input id="allAccountParty" type="text"></div>
         <div id="allAccountInstitutionField" class="hidden"><label for="allAccountInstitution">Institution</label><input id="allAccountInstitution" type="text"></div>
         <div id="allAccountModuleLimitField" class="hidden"><label for="allAccountModuleLimit">Module limit</label><input id="allAccountModuleLimit" type="number" min="0"></div>
-        <div id="allAccountModulesField" class="wide hidden"><label for="allAccountModules">Assigned modules</label><input id="allAccountModules" type="text" placeholder="BIO101, CHEM102"></div>
+        <div id="allAccountModulesField" class="wide hidden"><label for="allAccountModules">Assigned modules</label><input id="allAccountModules" type="text" placeholder="Biochemistry, Molecular Biology"></div>
         <div id="allAccountBioField" class="wide hidden"><label for="allAccountBio">Profile information</label><textarea id="allAccountBio"></textarea></div>
         <div class="wide"><label for="allAccountPassword">Reset password (leave blank to keep current)</label><input id="allAccountPassword" type="password" minlength="8" autocomplete="new-password"></div>
       </div>
@@ -172,12 +172,12 @@
     <div class="admin-editor-heading"><div><span class="kicker" id="editorKicker">Create</span><h2 id="editorTitle">New content</h2></div><button class="btn secondary" id="closeEditorBtn">Close</button></div>
     <div id="quizFields">
       <label for="contentTitle">Quiz title</label><input id="contentTitle" type="text" placeholder="e.g. Cell Biology: Week 1">
-      <label for="quizModuleCode">Module code</label><input id="quizModuleCode" type="text" placeholder="e.g. BIO101">
+      <label for="quizModuleCode">Subject</label><input id="quizModuleCode" type="text" placeholder="e.g. Biochemistry">
     </div>
     <div id="lessonFields" class="hidden">
       <label for="lessonDescription">Lesson description</label><textarea id="lessonDescription" placeholder="A short introduction for students"></textarea>
-      <label for="moduleCode">Module code</label><input id="moduleCode" type="text" placeholder="e.g. BIO101 or AROUNUS">
-      <p class="muted">Use <strong>AROUNUS</strong> for an app tutorial video. Every learner can see it. Tutorial videos can have an empty questions list (<code>[]</code>).</p>
+      <label for="moduleCode">Subject</label><input id="moduleCode" type="text" placeholder="e.g. Biochemistry or How to Use Arounus">
+      <p class="muted">Choose <strong>How to Use Arounus</strong> for an app tutorial video. Every learner can see it. Tutorial videos can have an empty questions list (<code>[]</code>).</p>
       <label for="videoUrl">Video URL</label><input id="videoUrl" type="text" placeholder="https://...">
     </div>
     <label for="questionsJson">Questions</label>
@@ -204,10 +204,12 @@
 
 <script src="/static/module-names.js"></script>
 <script>
-document.getElementById('moduleCatalogList').textContent = Object.entries(moduleNames).map(([code, name]) => `${name} (${code})`).join(' · ');
+const displayModuleList = codes => (codes || []).map(moduleLabel).join(', ');
+const parseModuleList = value => value.split(',').map(name => name.trim()).filter(Boolean).map(name => Object.keys(moduleNames).find(code => moduleNames[code].toLowerCase() === name.toLowerCase()) || name);
+document.getElementById('moduleCatalogList').textContent = Object.values(moduleNames).join(' · ');
 const $ = id => document.getElementById(id);
 const studentModulesLabel = document.createElement('label'); studentModulesLabel.htmlFor = 'studentModules'; studentModulesLabel.textContent = 'Assigned modules / subjects';
-const studentModulesInput = document.createElement('input'); studentModulesInput.id = 'studentModules'; studentModulesInput.type = 'text'; studentModulesInput.placeholder = 'e.g. BIO101, CHEM102';
+const studentModulesInput = document.createElement('input'); studentModulesInput.id = 'studentModules'; studentModulesInput.type = 'text'; studentModulesInput.placeholder = 'e.g. Biochemistry, Molecular Biology';
 const studentCard = $('studentAdminCard'); const resetLabel = $('studentResetPassword').previousElementSibling; studentCard.insertBefore(studentModulesLabel, resetLabel); studentCard.insertBefore(studentModulesInput, resetLabel);
 const selectedStudentBanner = document.createElement('div'); selectedStudentBanner.className = 'student-selected-banner hidden'; selectedStudentBanner.id = 'selectedStudentBanner'; studentCard.insertBefore(selectedStudentBanner, studentCard.firstChild);
 let pin = sessionStorage.getItem('lecturerPin') || null;
@@ -254,12 +256,12 @@ function openEditor(kind, item = null) {
   $('editorCard').classList.remove('hidden'); $('editorMsg').innerHTML = '';
   $('quizFields').classList.toggle('hidden', kind !== 'quiz'); $('lessonFields').classList.toggle('hidden', kind !== 'lesson');
   $('editorKicker').textContent = item ? `Editing ${kind}` : `New ${kind}`;
-  $('editorTitle').textContent = item ? item.title : `Create ${kind === 'quiz' ? 'a quiz' : 'a video lesson'}`;
+  $('editorTitle').textContent = item ? moduleDisplayTitle(item.title, item.module_code) : `Create ${kind === 'quiz' ? 'a quiz' : 'a video lesson'}`;
   $('deleteBtn').classList.toggle('hidden', !item);
-  $('contentTitle').value = item ? item.title : '';
-  $('quizModuleCode').value = item ? item.module_code || '' : '';
+  $('contentTitle').value = item ? moduleDisplayTitle(item.title, item.module_code) : '';
+  $('quizModuleCode').value = item ? moduleLabel(item.module_code) : '';
   $('lessonDescription').value = item ? item.description || '' : '';
-  $('moduleCode').value = item ? item.module_code || '' : '';
+  $('moduleCode').value = item ? moduleLabel(item.module_code) : '';
   $('videoUrl').value = item ? item.video_url || '' : '';
   $('questionsJson').value = JSON.stringify(item ? item.questions : (kind === 'quiz' ? quizTemplate : lessonTemplate), null, 2);
   $('editorCard').scrollIntoView({behavior:'smooth', block:'start'});
@@ -267,7 +269,7 @@ function openEditor(kind, item = null) {
 async function edit(kind, id) { try { openEditor(kind, await api(`/admin/${kind === 'quiz' ? 'quizzes' : 'lessons'}/${id}`)); } catch (err) { alert(`Could not open content: ${err.message}`); } }
 function renderList(target, items, kind) {
   const noun = kind === 'quiz' ? 'quiz' : 'lesson';
-  $(target).innerHTML = items.length ? items.map(item => `<button class="admin-list-item" data-id="${item.id}"><span><strong>${escapeHtml(item.title)}</strong><small>#${item.id} · ${item.question_count} question${item.question_count === 1 ? '' : 's'} · ${escapeHtml(moduleLabel(item.module_code))}</small></span><span class="badge ${item.submission_count ? 'pending' : 'done'}">${item.submission_count ? item.submission_count + ' submissions' : 'Editable'}</span></button>`).join('') : `<p class="muted">No ${noun} content yet.</p>`;
+  $(target).innerHTML = items.length ? items.map(item => `<button class="admin-list-item" data-id="${item.id}"><span><strong>${escapeHtml(moduleDisplayTitle(item.title, item.module_code))}</strong><small>#${item.id} · ${item.question_count} question${item.question_count === 1 ? '' : 's'} · ${escapeHtml(moduleLabel(item.module_code))}</small></span><span class="badge ${item.submission_count ? 'pending' : 'done'}">${item.submission_count ? item.submission_count + ' submissions' : 'Editable'}</span></button>`).join('') : `<p class="muted">No ${noun} content yet.</p>`;
   $(target).querySelectorAll('[data-id]').forEach(button => button.addEventListener('click', () => edit(kind, button.dataset.id)));
 }
 async function loadLists() {
@@ -292,7 +294,7 @@ async function loadLiveSessions() {
 async function loadAdminScripts() {
   try {
     const scripts = await api('/admin/submissions');
-    $('adminScriptsList').innerHTML = scripts.length ? scripts.map(script => `<div class="admin-list-item"><span><strong>${escapeHtml(script.student_name)}</strong><small>${escapeHtml(moduleLabel(script.module_code))} · ${escapeHtml(script.quiz_title)} · ${escapeHtml(script.student_id)} · ${escapeHtml(script.submitted_at)}</small></span><span><span class="badge ${script.fully_marked ? 'done' : 'pending'}">${script.total_score} / ${script.max_score}${script.fully_marked ? ' final' : ' pending'}</span> <button class="row-download-btn" data-admin-script="${script.id}">PDF</button></span></div>`).join('') : '<p class="muted">No student scripts have been submitted yet.</p>';
+    $('adminScriptsList').innerHTML = scripts.length ? scripts.map(script => `<div class="admin-list-item"><span><strong>${escapeHtml(script.student_name)}</strong><small>${escapeHtml(moduleLabel(script.module_code))} · ${escapeHtml(moduleDisplayTitle(script.quiz_title, script.module_code))} · ${escapeHtml(script.student_id)} · ${escapeHtml(script.submitted_at)}</small></span><span><span class="badge ${script.fully_marked ? 'done' : 'pending'}">${script.total_score} / ${script.max_score}${script.fully_marked ? ' final' : ' pending'}</span> <button class="row-download-btn" data-admin-script="${script.id}">PDF</button></span></div>`).join('') : '<p class="muted">No student scripts have been submitted yet.</p>';
     $('adminScriptsList').querySelectorAll('[data-admin-script]').forEach(button => button.addEventListener('click', () => downloadAdminScript(button.dataset.adminScript)));
     $('adminScriptsList').querySelectorAll('.admin-list-item').forEach(row => { const pdf = row.querySelector('[data-admin-script]'); if (pdf && row.textContent.includes('pending')) { const mark = document.createElement('button'); mark.className = 'row-download-btn'; mark.textContent = 'Mark'; mark.addEventListener('click', () => openAdminMarking(pdf.dataset.adminScript)); pdf.parentElement.appendChild(mark); } });
   } catch (err) { showMsg($('adminScriptsMsg'), err.message, 'error'); }
@@ -319,7 +321,7 @@ async function saveAdminMarks() {
   } catch (error) { showMsg($('adminMarkMsg'), error.message, 'error'); }
 }
 function lecturerFormPayload(includePassword) {
-  const modules = $('lecturerModules').value.split(',').map(code => code.trim()).filter(Boolean);
+  const modules = parseModuleList($('lecturerModules').value);
   const moduleLimit = Math.max(Number($('lecturerLimit').value) || 0, modules.length);
   $('lecturerLimit').value = moduleLimit;
   const payload = { full_name: $('lecturerName').value.trim(), phone: $('lecturerPhone').value.trim(), institution: $('lecturerInstitution').value.trim(), bio: $('lecturerBio').value.trim(), module_limit: moduleLimit, module_codes: modules };
@@ -369,7 +371,7 @@ function loadLecturers() {
 }
 function editLecturer(id, lecturers) {
   const item = lecturers.find(lecturer => lecturer.id === Number(id)); if (!item) return;
-  selectedLecturerId = item.id; $('lecturerName').value = item.full_name; $('lecturerEmail').value = item.email; $('lecturerEmail').disabled = true; $('lecturerPassword').value = ''; $('lecturerPhone').value = item.phone || ''; $('lecturerInstitution').value = item.institution || ''; $('lecturerBio').value = item.bio || ''; $('lecturerModules').value = item.module_codes.join(', '); $('lecturerLimit').value = Math.max(item.module_limit, item.module_codes.length, 1); $('lecturerPassword').classList.add('hidden'); $('passwordResetFields').classList.remove('hidden'); $('lecturerMsg').innerHTML = ''; loadLecturers();
+  selectedLecturerId = item.id; $('lecturerName').value = item.full_name; $('lecturerEmail').value = item.email; $('lecturerEmail').disabled = true; $('lecturerPassword').value = ''; $('lecturerPhone').value = item.phone || ''; $('lecturerInstitution').value = item.institution || ''; $('lecturerBio').value = item.bio || ''; $('lecturerModules').value = displayModuleList(item.module_codes); $('lecturerLimit').value = Math.max(item.module_limit, item.module_codes.length, 1); $('lecturerPassword').classList.add('hidden'); $('passwordResetFields').classList.remove('hidden'); $('lecturerMsg').innerHTML = ''; loadLecturers();
 }
 async function saveLecturer() {
   const creating = !selectedLecturerId; const payload = lecturerFormPayload(creating);
@@ -434,7 +436,7 @@ function openAllAccount(type, id) {
   $('allAccountName').value = item.full_name || ''; $('allAccountEmail').value = item.email || ''; $('allAccountPhone').value = item.phone || '';
   $('allAccountStudentNumber').value = item.username || item.student_number || ''; $('allAccountBusiness').value = item.business_name || ''; $('allAccountProviderType').value = item.provider_type || 'other';
   $('allAccountParty').value = item.party_name || ''; $('allAccountInstitution').value = item.institution || ''; $('allAccountBio').value = item.bio || '';
-  $('allAccountModules').value = (item.module_codes || []).join(', '); $('allAccountModuleLimit').value = item.module_limit ?? Math.max((item.module_codes || []).length, 1);
+  $('allAccountModules').value = displayModuleList(item.module_codes); $('allAccountModuleLimit').value = item.module_limit ?? Math.max((item.module_codes || []).length, 1);
   $('allAccountPassword').value = ''; $('allAccountActive').checked = item.active; $('allAccountApproved').checked = item.approved !== false; $('allAccountPremium').checked = Boolean(item.premium_video);
   const visibility = {
     allAccountStudentNumberField: type === 'student', allAccountBusinessField: type === 'provider', allAccountProviderTypeField: type === 'provider',
@@ -451,8 +453,8 @@ function allAccountPayload() {
   const payload = {full_name:$('allAccountName').value.trim(), email:$('allAccountEmail').value.trim(), phone:$('allAccountPhone').value.trim(), active:$('allAccountActive').checked};
   if (item.approved !== null) payload.approved = $('allAccountApproved').checked;
   if ($('allAccountPassword').value) payload.password = $('allAccountPassword').value;
-  if (item.account_type === 'student') Object.assign(payload, {student_number:$('allAccountStudentNumber').value.trim(), institution:$('allAccountInstitution').value.trim(), bio:$('allAccountBio').value.trim(), module_codes:$('allAccountModules').value.split(',').map(value=>value.trim()).filter(Boolean), premium_video:$('allAccountPremium').checked});
-  if (item.account_type === 'lecturer') Object.assign(payload, {institution:$('allAccountInstitution').value.trim(), bio:$('allAccountBio').value.trim(), module_limit:Number($('allAccountModuleLimit').value), module_codes:$('allAccountModules').value.split(',').map(value=>value.trim()).filter(Boolean)});
+  if (item.account_type === 'student') Object.assign(payload, {student_number:$('allAccountStudentNumber').value.trim(), institution:$('allAccountInstitution').value.trim(), bio:$('allAccountBio').value.trim(), module_codes:parseModuleList($('allAccountModules').value), premium_video:$('allAccountPremium').checked});
+  if (item.account_type === 'lecturer') Object.assign(payload, {institution:$('allAccountInstitution').value.trim(), bio:$('allAccountBio').value.trim(), module_limit:Number($('allAccountModuleLimit').value), module_codes:parseModuleList($('allAccountModules').value)});
   if (item.account_type === 'provider') Object.assign(payload, {business_name:$('allAccountBusiness').value.trim(), provider_type:$('allAccountProviderType').value});
   if (item.account_type === 'src') payload.party_name = $('allAccountParty').value.trim();
   return payload;
@@ -483,7 +485,7 @@ function renderModerationItem(item, area) {
 }
 function bindModerationActions() { document.querySelectorAll('[data-moderate-action]').forEach(button => button.addEventListener('click', () => moderateItem(button.dataset.moderateArea, button.dataset.moderateKind, button.dataset.moderateId, button.dataset.moderateAction))); }
 async function loadCommunityModeration(lessons = null) {
-  if (lessons) { const selected = $('officialLessonSelect').value; $('officialLessonSelect').innerHTML = lessons.length ? lessons.map(item => `<option value="${item.id}">${escapeHtml(item.title)} · ${escapeHtml(moduleLabel(item.module_code))}</option>`).join('') : '<option value="">No lessons available</option>'; if (selected) $('officialLessonSelect').value = selected; }
+  if (lessons) { const selected = $('officialLessonSelect').value; $('officialLessonSelect').innerHTML = lessons.length ? lessons.map(item => `<option value="${item.id}">${escapeHtml(moduleDisplayTitle(item.title, item.module_code))} · ${escapeHtml(moduleLabel(item.module_code))}</option>`).join('') : '<option value="">No lessons available</option>'; if (selected) $('officialLessonSelect').value = selected; }
   try { const [funPosts, lessonComments] = await Promise.all([api('/admin/fun/posts'), api('/admin/lesson-comments')]); $('funModerationList').innerHTML = funPosts.length ? funPosts.map(item => renderModerationItem(item, 'fun')).join('') : '<p class="muted">No posts yet.</p>'; $('lessonModerationList').innerHTML = lessonComments.length ? lessonComments.map(item => renderModerationItem(item, 'lesson')).join('') : '<p class="muted">No lesson comments yet.</p>'; bindModerationActions(); }
   catch (err) { showMsg($('officialFunMsg'), `Could not load discussions: ${err.message}`, 'error'); }
 }
@@ -497,8 +499,8 @@ async function moderateItem(area, kind, id, action) {
 }
 async function postOfficialFun() { const content = $('officialFunText').value.trim(); if (!content) { showMsg($('officialFunMsg'), 'Write an official post first.', 'error'); return; } try { await api('/admin/fun/official-posts', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({content})}); $('officialFunText').value = ''; showMsg($('officialFunMsg'), 'Official post published.', 'ok'); await loadCommunityModeration(); } catch (err) { showMsg($('officialFunMsg'), err.message, 'error'); } }
 async function postOfficialLesson() { const lessonId = $('officialLessonSelect').value, content = $('officialLessonText').value.trim(); if (!lessonId || !content) { showMsg($('officialLessonMsg'), 'Choose a lesson and write an official comment.', 'error'); return; } try { await api(`/admin/lessons/${lessonId}/comments`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({content})}); $('officialLessonText').value = ''; showMsg($('officialLessonMsg'), 'Official lesson comment posted.', 'ok'); await loadCommunityModeration(); } catch (err) { showMsg($('officialLessonMsg'), err.message, 'error'); } }
-function selectStudent(id, students) { const student = students.find(item => item.id === Number(id)); if (!student) return; selectedStudentId = student.id; $('studentModules').value = (student.module_codes || []).join(', '); $('studentResetPassword').value = ''; $('studentAdminCard').classList.remove('hidden'); $('studentMsg').innerHTML = ''; const modules=(student.module_codes || []).map(moduleLabel).join(', ') || 'No modules assigned'; $('selectedStudentBanner').innerHTML=`<strong>Editing: ${escapeHtml(student.full_name)}</strong><small>${escapeHtml(student.student_number)} · ${escapeHtml(student.email || 'No email')} · ${escapeHtml(modules)}</small>`; $('selectedStudentBanner').classList.remove('hidden'); loadStudents(); }
-async function saveStudent() { if (!selectedStudentId) return; try { await api(`/admin/students/${selectedStudentId}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({module_codes:$('studentModules').value.split(',').map(code=>code.trim()).filter(Boolean)})}); showMsg($('studentMsg'), 'Student modules saved.', 'ok'); loadStudents(); } catch (err) { showMsg($('studentMsg'), err.message, 'error'); } }
+function selectStudent(id, students) { const student = students.find(item => item.id === Number(id)); if (!student) return; selectedStudentId = student.id; $('studentModules').value = displayModuleList(student.module_codes); $('studentResetPassword').value = ''; $('studentAdminCard').classList.remove('hidden'); $('studentMsg').innerHTML = ''; const modules=(student.module_codes || []).map(moduleLabel).join(', ') || 'No modules assigned'; $('selectedStudentBanner').innerHTML=`<strong>Editing: ${escapeHtml(student.full_name)}</strong><small>${escapeHtml(student.student_number)} · ${escapeHtml(student.email || 'No email')} · ${escapeHtml(modules)}</small>`; $('selectedStudentBanner').classList.remove('hidden'); loadStudents(); }
+async function saveStudent() { if (!selectedStudentId) return; try { await api(`/admin/students/${selectedStudentId}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({module_codes:parseModuleList($('studentModules').value)})}); showMsg($('studentMsg'), 'Student modules saved.', 'ok'); loadStudents(); } catch (err) { showMsg($('studentMsg'), err.message, 'error'); } }
 async function resetStudentPassword() { const password = $('studentResetPassword').value; if (!selectedStudentId || password.length < 8) { showMsg($('studentMsg'), 'Enter a new password with at least 8 characters.', 'error'); return; } try { await api(`/admin/students/${selectedStudentId}/reset-password`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({password})}); $('studentResetPassword').value = ''; showMsg($('studentMsg'), 'New password saved. The student can sign in with it now.', 'ok'); } catch (err) { showMsg($('studentMsg'), err.message, 'error'); } }
 async function resetLecturerPassword() { const password = $('resetPassword').value; if (!selectedLecturerId || password.length < 8) { showMsg($('lecturerMsg'), 'Enter a new password with at least 8 characters.', 'error'); return; } try { await api(`/admin/lecturers/${selectedLecturerId}/reset-password`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({password})}); $('resetPassword').value = ''; showMsg($('lecturerMsg'), 'Password reset. Share the new password securely with the tutor.', 'ok'); } catch (err) { showMsg($('lecturerMsg'), err.message, 'error'); } }
 function buildPayload() {
@@ -506,8 +508,8 @@ function buildPayload() {
   try { questions = JSON.parse($('questionsJson').value); } catch (_) { throw new Error('Questions must be valid JSON.'); }
   if (!Array.isArray(questions)) throw new Error('Questions must be a JSON array.');
   const payload = { title: $('contentTitle').value.trim(), questions };
-  if (editor.kind === 'quiz') Object.assign(payload, { module_code: $('quizModuleCode').value.trim() });
-  if (editor.kind === 'lesson') Object.assign(payload, { description: $('lessonDescription').value.trim(), module_code: $('moduleCode').value.trim(), video_url: $('videoUrl').value.trim() });
+  if (editor.kind === 'quiz') Object.assign(payload, { module_code: parseModuleList($('quizModuleCode').value)[0] || '' });
+  if (editor.kind === 'lesson') Object.assign(payload, { description: $('lessonDescription').value.trim(), module_code: parseModuleList($('moduleCode').value)[0] || '', video_url: $('videoUrl').value.trim() });
   return payload;
 }
 async function save() {

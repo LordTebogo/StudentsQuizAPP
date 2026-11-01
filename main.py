@@ -959,12 +959,18 @@ AROUNUS_MODULE_CODE = "AROUNUS"
 
 # Codes remain stable so existing quizzes, lessons, and enrollments keep working.
 MODULE_NAMES = {
+    "SBIA011": "Biochemistry Foundations",
     "SBIA021": "Introduction to Biochemistry",
-    "SBIA022": "Biochemistry II",
-    "SBIA031": "Biochemistry III",
+    "SBIA022": "Biochemistry",
+    "SBIA031": "Advanced Biochemistry",
     "SMIB032": "Molecular Biology",
-    "SBTB031": "Biotechnology I",
-    "SBTA032": "Immunology I",
+    "SBTB031": "Biotechnology",
+    "SBTA032": "Immunology",
+    "CHEMISTRY": "Chemistry",
+    "PHYSICS": "Physics",
+    "MATH": "Mathematics",
+    "GENERAL": "General Studies",
+    "AROUNUS": "How to Use Arounus",
     "ADVANCED_BIOLOGY": "Advanced Biology",
     "ADVANCED_IMMUNOLOGY": "Advanced Immunology",
     "ADVANCED_INDUSTRIAL_BIOTECHNOLOGY": "Advanced Industrial Biotechnology",
@@ -975,6 +981,11 @@ MODULE_NAMES = {
 
 def _module_name(code: str) -> str:
     return MODULE_NAMES.get(code, code)
+
+
+def _public_module_title(title: str, code: str) -> str:
+    cleaned = re.sub(r"\b(?:SBIA|SMIB|SBTB|SBTA)\d{3}\b\s*[-–—:]?\s*", "", title or "", flags=re.IGNORECASE).strip()
+    return cleaned or _module_name(code)
 
 
 def _set_student_modules(db: Session, student: Student, codes: List[str]):
@@ -1467,7 +1478,7 @@ def build_submission_pdf(db: Session, submission_id: int, styles, include_expect
     )
 
     flow = []
-    flow.append(Paragraph(_pdf_escape(quiz.title), styles["QuizTitle"]))
+    flow.append(Paragraph(_pdf_escape(_public_module_title(quiz.title, quiz.module_code)), styles["QuizTitle"]))
     flow.append(Paragraph(
         f"Student: {_pdf_escape(submission.student_name)} &nbsp;&nbsp;|&nbsp;&nbsp; "
         f"ID: {_pdf_escape(submission.student_id)} &nbsp;&nbsp;|&nbsp;&nbsp; "
@@ -1553,8 +1564,8 @@ def build_lesson_script_pdf(db: Session, lesson_id: int, styles) -> list:
         raise HTTPException(status_code=404, detail="Lesson not found")
 
     flow = [
-        Paragraph(_pdf_escape(lesson.title), styles["QuizTitle"]),
-        Paragraph(f"Module: {_pdf_escape(_module_name(lesson.module_code))} ({_pdf_escape(lesson.module_code)})", styles["MetaLine"]),
+        Paragraph(_pdf_escape(_public_module_title(lesson.title, lesson.module_code)), styles["QuizTitle"]),
+        Paragraph(f"Subject: {_pdf_escape(_module_name(lesson.module_code))}", styles["MetaLine"]),
     ]
     if lesson.description:
         for paragraph in re.split(r"\n\s*\n", lesson.description.strip()):
@@ -1610,7 +1621,7 @@ def build_lesson_submission_pdf(
 
     status = "Fully marked" if submission.fully_marked else "Some questions still pending marking"
     flow = [
-        Paragraph(_pdf_escape(lesson.title), styles["QuizTitle"]),
+        Paragraph(_pdf_escape(_public_module_title(lesson.title, lesson.module_code)), styles["QuizTitle"]),
         Paragraph(
             f"Student: {_pdf_escape(submission.student_name)} &nbsp;&nbsp;|&nbsp;&nbsp; "
             f"ID: {_pdf_escape(submission.student_id)} &nbsp;&nbsp;|&nbsp;&nbsp; "
@@ -2152,8 +2163,8 @@ async def upload_quiz(
         db,
         [student_id for (student_id,) in assigned_students],
         "New quiz available",
-        f"A new {_module_name(module_code)} quiz is ready: {title}",
-        f"/students?module={module_code}",
+        f"A new {_module_name(module_code)} quiz is ready: {_public_module_title(title, module_code)}",
+        "/students",
         f"quiz-{quiz.id}",
     )
     return {
@@ -4688,7 +4699,7 @@ def admin_download_submission_pdf(submission_id: int, _pin_ok: bool = Depends(re
     buffer.seek(0)
 
     safe_name = "".join(c for c in (submission.student_name or "student") if c.isalnum() or c in (" ", "_", "-")).strip() or "student"
-    safe_module = "".join(c for c in (submission.quiz.module_code or "module") if c.isalnum() or c in ("_", "-")).strip() or "module"
+    safe_module = "_".join(_module_name(submission.quiz.module_code).split()) or "Subject"
     filename = f"{safe_module}_{safe_name}_script.pdf"
     return StreamingResponse(
         buffer,

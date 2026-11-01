@@ -241,7 +241,7 @@
     const drafts = await api('/lecturer/quiz-drafts', {}, true);
     const select = byId('quizDraftSelect');
     select.innerHTML = drafts.length
-      ? '<option value="">Choose a saved draft</option>' + drafts.map(draft => `<option value="${draft.id}">${html(moduleLabel(draft.module_code) || 'No module')} — ${html(draft.title)} (${draft.question_count})</option>`).join('')
+      ? '<option value="">Choose a saved draft</option>' + drafts.map(draft => `<option value="${draft.id}">${html(moduleLabel(draft.module_code) || 'No module')} — ${html(moduleDisplayTitle(draft.title, draft.module_code))} (${draft.question_count})</option>`).join('')
       : '<option value="">No saved drafts</option>';
     if (selectId && drafts.some(draft => draft.id === Number(selectId))) select.value = String(selectId);
     byId('loadQuizDraftBtn').disabled = !drafts.length;
@@ -348,7 +348,7 @@
     try {
       const quiz = await api(`/lecturer/quizzes/${quizId}`, {}, true);
       state.draftId = null;
-      byId('builderQuizTitle').value = `${quiz.title} — copy`;
+      byId('builderQuizTitle').value = `${moduleDisplayTitle(quiz.title, quiz.module_code)} — copy`;
       populateModuleSelect(byId('builderModuleCode'), quiz.module_code);
       byId('builderIsFun').checked = Boolean(quiz.is_fun);
       syncAiQuestionTypes();
@@ -520,10 +520,10 @@
       await Promise.all([loadDraftList(), loadQuizzes()]);
       byId('quizSelect').value = String(result.quiz_id);
       byId('loadStudentsBtn').disabled = false;
-      const link = `${location.origin}/students?module=${encodeURIComponent(result.module_code)}`;
+      const link = `${location.origin}/students`;
       byId('shareLink').textContent = link;
       byId('shareBox').classList.remove('hidden');
-      showBuilderMessage(`Published “${result.title}” with ${result.num_questions} questions. Students in ${moduleLabel(result.module_code)} can now open it.`);
+      showBuilderMessage(`Published “${moduleDisplayTitle(result.title, result.module_code)}” with ${result.num_questions} questions. Students in ${moduleLabel(result.module_code)} can now open it.`);
     } catch (error) { showBuilderMessage(`Could not publish quiz: ${error.message}`, 'error'); }
     finally { button.disabled = false; }
   }

@@ -110,7 +110,7 @@
     <details class="advanced-quiz-import">
       <summary>Advanced options: import the original JSON format</summary>
       <p class="muted">This remains available for technical users and existing quiz files.</p>
-      <label for="moduleCode">Module code</label>
+      <label for="moduleCode">Subject</label>
       <select id="moduleCode"><option value="">Choose a module</option></select>
       <label for="quizFile">Quiz JSON file</label>
       <input type="file" id="quizFile" accept="application/json,.json">
@@ -392,7 +392,7 @@ $('uploadBtn').addEventListener('click', async () => {
   }
   const moduleCode = $('moduleCode').value.trim();
   if (!moduleCode) {
-    showMsg(msgBox, 'Enter a module code first.', 'error');
+    showMsg(msgBox, 'Choose a subject first.', 'error');
     return;
   }
   const formData = new FormData();
@@ -406,8 +406,8 @@ $('uploadBtn').addEventListener('click', async () => {
   try {
     const result = await api('/quiz/upload', { method: 'POST', body: formData }, true);
     const imgNote = result.images_uploaded ? ` (${result.images_uploaded} image${result.images_uploaded === 1 ? '' : 's'} attached)` : '';
-    showMsg(msgBox, `Uploaded "${result.title}" to ${moduleLabel(result.module_code)} (${result.num_questions} questions).${imgNote}`, 'ok');
-    const link = `${window.location.origin}/students?module=${encodeURIComponent(result.module_code)}`;
+    showMsg(msgBox, `Uploaded "${moduleDisplayTitle(result.title, result.module_code)}" to ${moduleLabel(result.module_code)} (${result.num_questions} questions).${imgNote}`, 'ok');
+    const link = `${window.location.origin}/students`;
     $('shareLink').textContent = link;
     $('shareBox').classList.remove('hidden');
     fileInput.value = '';
@@ -434,7 +434,7 @@ async function loadQuizzes() {
       $('quizReviewStatus').textContent = 'Upload a quiz before viewing student submissions.';
       return;
     }
-    select.innerHTML = quizzes.map(q => `<option value="${q.id}">${escapeHtml(moduleLabel(q.module_code))} — ${escapeHtml(q.title)}${q.is_fun ? ` · Fun Quiz (${escapeHtml(q.fun_level)})` : ''}</option>`).join('');
+    select.innerHTML = quizzes.map(q => `<option value="${q.id}">${escapeHtml(moduleLabel(q.module_code))} — ${escapeHtml(moduleDisplayTitle(q.title, q.module_code))}${q.is_fun ? ` · Fun Quiz (${escapeHtml(q.fun_level)})` : ''}</option>`).join('');
     select._quizModules = Object.fromEntries(quizzes.map(q => [String(q.id), q.module_code]));
     if ([...select.options].some(option => option.value === selectedId)) select.value = selectedId;
     $('quizModuleCorrection').value = select._quizModules[select.value] || '';

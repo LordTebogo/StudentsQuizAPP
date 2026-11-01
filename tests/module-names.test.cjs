@@ -9,9 +9,14 @@ const source = fs.readFileSync(path.join(root, 'static/module-names.js'), 'utf8'
 const context = { window: {} };
 vm.runInNewContext(source, context);
 
-test('module labels show names while retaining codes, including custom modules', () => {
-  assert.equal(context.window.moduleLabel('SBIA021'), 'Introduction to Biochemistry (SBIA021)');
+test('module labels show subject names without university codes', () => {
+  assert.equal(context.window.moduleLabel('SBIA021'), 'Introduction to Biochemistry');
+  assert.equal(context.window.moduleLabel('SBIA022'), 'Biochemistry');
+  assert.equal(context.window.moduleLabel('SBTA032'), 'Immunology');
   assert.equal(context.window.moduleName('ADVANCED_IMMUNOLOGY'), 'Advanced Immunology');
+  assert.equal(context.window.moduleDisplayTitle('SBTA032 — Innate Immunity', 'SBTA032'), 'Innate Immunity');
+  assert.equal(context.window.moduleSlug('SMIB032'), 'molecular-biology');
+  assert.equal(context.window.moduleCodeFromSlug('molecular-biology'), 'SMIB032');
   assert.equal(context.window.moduleLabel('CHEM101'), 'CHEM101');
 });
 

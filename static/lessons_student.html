@@ -203,7 +203,7 @@ async function loadModuleList() {
     }
     box.innerHTML = modules.map(m => `
       <a class="lesson-list-item" data-code="${escapeHtml(m.module_code)}">
-        <div class="lesson-list-title">${m.is_app_guide ? 'AROUNUS · How to use the app' : escapeHtml(m.module_name || m.module_code)}</div>
+        <div class="lesson-list-title">${m.is_app_guide ? 'How to Use Arounus' : escapeHtml(m.module_name || moduleLabel(m.module_code))}</div>
         <p class="muted">${m.is_app_guide ? 'Written guide and printable document · ' : ''}${m.lesson_count} video${m.lesson_count === 1 ? '' : 's'}</p>
       </a>
     `).join('');
@@ -220,9 +220,9 @@ function openModule(moduleCode) {
   currentModule = moduleCode;
   $('moduleCard').classList.add('hidden');
   $('listCard').classList.remove('hidden');
-  $('listCardTitle').textContent = moduleCode === 'AROUNUS' ? 'AROUNUS — app guide and tutorials' : `${moduleCode} — lessons`;
+  $('listCardTitle').textContent = moduleCode === 'AROUNUS' ? 'Arounus guide and tutorials' : `${moduleLabel(moduleCode)} — lessons`;
   loadLessonList(moduleCode);
-  history.replaceState(null, '', `?module=${encodeURIComponent(moduleCode)}`);
+  history.replaceState(null, '', `?subject=${encodeURIComponent(moduleSlug(moduleCode))}`);
 }
 
 $('backToModulesBtn').addEventListener('click', () => {
@@ -250,7 +250,7 @@ async function loadLessonList(moduleCode) {
         : `<span class="badge pending">Not completed</span>`;
       return `
         <a class="lesson-list-item" data-id="${l.id}">
-          <div class="lesson-list-title">${escapeHtml(l.title)}</div>
+          <div class="lesson-list-title">${escapeHtml(moduleDisplayTitle(l.title, l.module_code))}</div>
           <p class="muted">${escapeHtml(l.description || '')}</p>
           ${progress}
         </a>`;
@@ -277,7 +277,7 @@ async function openLesson(lessonId) {
     $('commentsCard').classList.remove('hidden');
     $('myResultCard').classList.add('hidden');
 
-    $('lessonTitle').textContent = lesson.title;
+    $('lessonTitle').textContent = moduleDisplayTitle(lesson.title, lesson.module_code);
     $('lessonDescription').textContent = `${moduleLabel(lesson.module_code)}${lesson.description ? ' — ' + lesson.description : ''}`;
     const videoEl = $('lessonVideo');
     videoEl.dataset.freeVideo = lesson.video_url;
@@ -305,9 +305,9 @@ $('backToListBtn').addEventListener('click', () => {
   $('myResultCard').classList.add('hidden');
   if (currentModule) {
     $('listCard').classList.remove('hidden');
-    $('listCardTitle').textContent = `${currentModule} — lessons`;
+    $('listCardTitle').textContent = `${moduleLabel(currentModule)} — lessons`;
     loadLessonList(currentModule);
-    history.replaceState(null, '', `?module=${encodeURIComponent(currentModule)}`);
+    history.replaceState(null, '', `?subject=${encodeURIComponent(moduleSlug(currentModule))}`);
   } else {
     $('moduleCard').classList.remove('hidden');
     history.replaceState(null, '', window.location.pathname);
@@ -596,7 +596,7 @@ restoreStudentSession().then(async ready => {
   loadLessonMembers();
   if (!ready.module_selection_completed) loadModuleList();
   if (params.get('lesson')) openLesson(params.get('lesson'));
-  else if (params.get('module')) openModule(params.get('module'));
+  else if (params.get('subject') || params.get('module')) openModule(moduleCodeFromSlug(params.get('subject') || params.get('module')));
 });
 </script>
 <script src="/static/loading.js"></script>

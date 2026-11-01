@@ -6,6 +6,27 @@ const { JSDOM } = require('jsdom');
 
 const studentPage = fs.readFileSync(path.join(__dirname, '../static/student.html'), 'utf8');
 const enterAppSource = studentPage.match(/^async function enterApp\(profile\)\{[^\n]+\}/m)?.[0];
+const loadModulesSource = studentPage.match(/^async function loadModules\(\)\{[^\n]+\}/m)?.[0];
+
+test('learner module cards show subject names and quiz counts without university codes', async () => {
+  assert.ok(loadModulesSource);
+  const dom = new JSDOM('<div id="moduleList"></div>');
+  const { window } = dom;
+  const loadModules = new Function('$', 'api', 'updateLearnerOverview', 'escapeHtml', 'moduleLabel', 'recommendUnfinishedQuiz', 'document', 'loadModule', `${loadModulesSource};return loadModules;`)(
+    id => window.document.getElementById(id),
+    async () => [{module_code: 'SBIA022', module_name: 'Biochemistry', quiz_count: 3}],
+    () => {},
+    value => value,
+    code => code === 'SBIA022' ? 'Biochemistry' : code,
+    async () => {},
+    window.document,
+    () => {},
+  );
+  await loadModules();
+  assert.match(window.document.getElementById('moduleList').textContent, /Biochemistry.*3 quizzes/);
+  assert.doesNotMatch(window.document.getElementById('moduleList').textContent, /SBIA022/);
+  dom.window.close();
+});
 
 test('saved learner sees loading view until modules are ready', async () => {
   assert.ok(enterAppSource);

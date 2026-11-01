@@ -80,7 +80,7 @@
         const title = document.createElement('strong');
         title.textContent = module.module_name || module.module_code;
         const detail = document.createElement('small');
-        detail.textContent = `${module.module_code} · ${module.quiz_count || 0} quizzes · ${module.lesson_count || 0} video lessons`;
+        detail.textContent = `${module.quiz_count || 0} quizzes · ${module.lesson_count || 0} video lessons`;
         copy.append(title, detail);
         label.append(input, copy);
         list.appendChild(label);

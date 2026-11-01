@@ -71,10 +71,9 @@
   <!-- Upload -->
   <div class="card">
     <h2>1. Upload a video lesson</h2>
-    <label for="moduleCodeInput">Module code</label>
-    <input type="text" id="moduleCodeInput" list="moduleCodeOptions" placeholder="e.g. BIO101" autocapitalize="characters">
-    <datalist id="moduleCodeOptions"></datalist>
-    <p class="muted">Students pick the module name on the lessons page to see its videos. Use the assigned code across lessons in the same module (not case-sensitive — stored as UPPERCASE).</p>
+    <label for="moduleCodeInput">Subject</label>
+    <select id="moduleCodeInput"><option value="">Choose a subject</option></select>
+    <p class="muted">Choose the subject your students will see on the lessons page.</p>
     <label for="newLessonTitle">Lesson title</label>
     <input id="newLessonTitle" type="text" maxlength="200" placeholder="e.g. Gluconeogenesis explained">
     <label for="newLessonDescription">What will students learn?</label>
@@ -269,7 +268,7 @@ $('uploadLessonBtn').addEventListener('click', async () => {
   const moduleInput = $('moduleCodeInput');
   const msgBox = $('uploadMsg');
   const moduleCode = moduleInput.value.trim();
-  if (!moduleCode) { showMsg(msgBox, 'Enter a module code first.', 'error'); return; }
+  if (!moduleCode) { showMsg(msgBox, 'Choose a subject first.', 'error'); return; }
   let lessonFile;
   try { lessonFile = fileInput.files[0] || lessonFromForm(); }
   catch (err) { showMsg(msgBox, err.message, 'error'); return; }
@@ -287,7 +286,7 @@ $('uploadLessonBtn').addEventListener('click', async () => {
   msgBox.innerHTML = '<div class="lesson-upload-progress" role="status" aria-live="polite"><span class="lesson-upload-spinner" aria-hidden="true"></span><div class="lesson-upload-copy"><strong>Uploading your lesson…</strong><small>Keep this page open. Large videos may take a few minutes.</small><div class="lesson-upload-track" aria-hidden="true"><span></span></div></div></div>';
   try {
     const result = await api('/lecturer/lesson/upload', { method: 'POST', body: formData }, true);
-    showMsg(msgBox, `Uploaded "${result.title}" under ${moduleLabel(result.module_code)} (${result.num_questions} questions) — lesson ID ${result.lesson_id}.`, 'ok');
+    showMsg(msgBox, `Uploaded "${moduleDisplayTitle(result.title, result.module_code)}" under ${moduleLabel(result.module_code)} (${result.num_questions} questions) — lesson ID ${result.lesson_id}.`, 'ok');
     const link = `${window.location.origin}/students/lessons?lesson=${result.lesson_id}`;
     $('shareLink').textContent = link;
     $('shareBox').classList.remove('hidden');
@@ -313,7 +312,10 @@ async function loadModules() {
   try {
     const profile = await api('/lecturer/me', {}, true);
     const modules = profile.module_codes || [];
-    $('moduleCodeOptions').innerHTML = modules.map(code => `<option value="${escapeHtml(code)}" label="${escapeHtml(moduleName(code))}">`).join('');
+    const uploadSelect = $('moduleCodeInput');
+    const selectedModule = uploadSelect.value;
+    uploadSelect.innerHTML = '<option value="">Choose a subject</option>' + modules.map(code => `<option value="${escapeHtml(code)}">${escapeHtml(moduleLabel(code))}</option>`).join('');
+    uploadSelect.value = selectedModule || modules[0] || '';
     const filterSelect = $('moduleFilterSelect');
     const previousValue = filterSelect.value;
     filterSelect.innerHTML = '<option value="">All modules</option>' +
@@ -338,11 +340,11 @@ async function loadLessons() {
       return;
     }
     const previous = select.value || String(currentLessonId || '');
-    select.innerHTML = filteredLessons.map(l => `<option value="${l.id}">[${escapeHtml(moduleLabel(l.module_code))}] #${l.id} — ${escapeHtml(l.title)}</option>`).join('');
+    select.innerHTML = filteredLessons.map(l => `<option value="${l.id}">${escapeHtml(moduleLabel(l.module_code))} — ${escapeHtml(moduleDisplayTitle(l.title, l.module_code))}</option>`).join('');
     if (filteredLessons.some(lesson => String(lesson.id) === previous)) select.value = previous;
     $('myLessonList').innerHTML = filteredLessons.map(lesson => `
       <div class="my-lesson">
-        <strong>${escapeHtml(lesson.title)}</strong>
+        <strong>${escapeHtml(moduleDisplayTitle(lesson.title, lesson.module_code))}</strong>
         <span>${escapeHtml(moduleLabel(lesson.module_code))} · ${lesson.unique_viewers} unique viewer${lesson.unique_viewers === 1 ? '' : 's'} · ${lesson.video_starts} video start${lesson.video_starts === 1 ? '' : 's'}<br>${lesson.question_count} question${lesson.question_count === 1 ? '' : 's'} · ${lesson.submission_count} submission${lesson.submission_count === 1 ? '' : 's'}</span>
         <button type="button" class="btn secondary" data-open-lesson="${lesson.id}">Open video</button>
       </div>`).join('');
@@ -374,7 +376,7 @@ async function selectLesson(lessonId) {
     ]);
     editableLesson = owned;
     $('previewCard').classList.remove('hidden');
-    $('previewTitle').textContent = lesson.title;
+    $('previewTitle').textContent = moduleDisplayTitle(lesson.title, lesson.module_code);
     $('previewDescription').textContent = lesson.description || '';
     const videoEl = $('previewVideo');
     videoEl.src = lesson.video_url;
