@@ -10,3 +10,4 @@ lesson_videos/
 
 *.log
 node_modules/
+local_dev.db

@@ -604,3 +604,32 @@ class LessonComment(Base):
     created_at = Column(String, nullable=False)
 
     lesson = relationship("Lesson", back_populates="comments")
+
+
+class PasswordResetCode(Base):
+    """One-time, hashed password-reset codes for learners and tutors.
+
+    Codes are stored hashed (never in plain text) and expire quickly. A single
+    row records which account type the code belongs to so a learner code can
+    never be redeemed against a tutor account.
+    """
+
+    __tablename__ = "password_reset_codes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_type = Column(String, nullable=False)  # "student" | "lecturer"
+    account_id = Column(Integer, nullable=False, index=True)
+    email = Column(String, nullable=False, index=True)
+    code_hash = Column(String, nullable=False)
+    failed_attempts = Column(Integer, nullable=False, default=0)
+    expires_at = Column(String, nullable=False)
+    used_at = Column(String, nullable=True)
+    created_at = Column(String, nullable=False)
+    requested_ip = Column(String, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "account_type IN ('student','lecturer')",
+            name="ck_password_reset_account_type",
+        ),
+    )

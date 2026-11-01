@@ -11,7 +11,7 @@
 <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png?v=4">
 <link rel="manifest" href="/static/manifest.webmanifest">
 <title>Video Lessons — Student</title>
-<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/style.css"><link rel="stylesheet" href="/static/ui.css?v=1">
 <style>
   video { width: 100%; border-radius: 4px; border: 1px solid var(--border); background: #000; display: block; }
   .lesson-list-item {
@@ -98,6 +98,10 @@
     <input type="text" id="studentId" placeholder="e.g. ST12345">
     <p class="muted">Enter your ID above, then click "Load my previous answers" if you've already answered this lesson before — otherwise just answer below and submit.</p>
     <button class="btn secondary" id="loadMineBtn">Load my previous answers</button>
+    <div class="quiz-progress" id="quizProgress" hidden>
+      <p class="quiz-progress-text" id="quizProgressText"></p>
+      <div class="quiz-progress-bar" aria-hidden="true"><span id="quizProgressFill"></span></div>
+    </div>
     <div id="questionsBox"></div>
     <button class="btn" id="submitAnswersBtn">Submit answers</button>
     <div id="submitMsg"></div>
@@ -287,6 +291,9 @@ async function openLesson(lessonId) {
     window.arounusSetupVideo(videoEl);
 
     $('questionsBox').innerHTML = lesson.questions.map((q, i) => renderQuestion(q, i + 1)).join('');
+    pendingSubmit = false;
+    $('submitAnswersBtn').textContent = 'Submit answers';
+    updateQuizProgress();
     $('submitMsg').innerHTML = '';
 
     await loadComments(lessonId);
@@ -313,6 +320,52 @@ $('backToListBtn').addEventListener('click', () => {
     history.replaceState(null, '', window.location.pathname);
   }
 });
+
+let pendingSubmit = false;
+
+function answeredCount() {
+  if (!currentLesson) return { answered: 0, total: 0, firstUnanswered: null };
+  let answered = 0;
+  let firstUnanswered = null;
+  currentLesson.questions.forEach(q => {
+    let done = false;
+    if (q.type === 'mcq') {
+      done = Boolean(document.querySelector(`input[name="q_${q.question_id}"]:checked`));
+    } else {
+      const el = $(`q_${q.question_id}`);
+      done = Boolean(el && el.value.trim());
+    }
+    if (done) answered++;
+    else if (!firstUnanswered) firstUnanswered = q;
+  });
+  return { answered, total: currentLesson.questions.length, firstUnanswered };
+}
+
+function updateQuizProgress() {
+  const wrap = $('quizProgress');
+  if (!wrap || !currentLesson) return;
+  const { answered, total } = answeredCount();
+  wrap.hidden = total === 0;
+  $('quizProgressText').textContent = `${answered} of ${total} question${total === 1 ? '' : 's'} answered`;
+  $('quizProgressFill').style.width = total ? `${Math.round((answered / total) * 100)}%` : '0%';
+}
+
+function focusQuestion(q) {
+  if (!q) return;
+  const target = document.querySelector(`input[name="q_${q.question_id}"]`) || $(`q_${q.question_id}`);
+  if (target) {
+    target.focus();
+    target.closest('.q')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+
+function answersChanged() {
+  pendingSubmit = false;
+  $('submitAnswersBtn').textContent = 'Submit answers';
+  updateQuizProgress();
+}
+$('questionsBox').addEventListener('input', answersChanged);
+$('questionsBox').addEventListener('change', answersChanged);
 
 function renderQuestion(q, num) {
   let body = '';
@@ -365,6 +418,7 @@ $('loadMineBtn').addEventListener('click', async () => {
         if (el) el.value = a.answer_text || '';
       }
     });
+    answersChanged();
     renderMyResult(mine);
   } catch (err) {
     showMsg($('submitMsg'), `Could not load your previous answers: ${err.message}`, 'error');
@@ -402,6 +456,15 @@ $('submitAnswersBtn').addEventListener('click', async () => {
     }
     return { question_id: q.question_id, answer: value };
   });
+
+  const { answered, total, firstUnanswered } = answeredCount();
+  if (answered < total && !pendingSubmit) {
+    pendingSubmit = true;
+    $('submitAnswersBtn').textContent = `Submit anyway (${total - answered} unanswered)`;
+    showMsg(msgBox, `You have answered ${answered} of ${total} questions. Submit again to send your answers as they are.`, 'error');
+    focusQuestion(firstUnanswered);
+    return;
+  }
 
   $('submitAnswersBtn').disabled = true;
   showMsg(msgBox, 'Fetching your result…', 'ok');

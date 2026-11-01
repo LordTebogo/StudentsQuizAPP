@@ -1,8 +1,34 @@
 <!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#f5f8f6"><link rel="icon" type="image/png" href="/static/icons/favicon-96x96.png?v=4"><link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png?v=4"><link rel="manifest" href="/static/manifest.webmanifest"><title>Live lesson - Arounus</title><link rel="stylesheet" href="/static/style.css"><script src="https://cdn.jsdelivr.net/npm/livekit-client@2.21.0/dist/livekit-client.umd.min.js"></script><style>
 .live-shell{width:min(1380px,calc(100% - 28px));margin:auto}.join-card{max-width:650px;margin:36px auto}.room-row{display:grid;grid-template-columns:1fr auto;gap:10px}.room-row .btn,.join-actions .btn,.call-controls .btn{margin-top:0}.join-actions,.call-controls{display:flex;flex-wrap:wrap;gap:9px;margin-top:14px}.live-head{display:flex;justify-content:space-between;gap:14px;align-items:center}.room-badge{padding:7px 11px;border:1px solid rgba(103,232,249,.35);border-radius:999px;color:var(--cyan);font:700 .72rem var(--font-mono)}.classroom{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:16px;align-items:start}.video-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:12px;margin:18px 0}.video-tile{position:relative;overflow:hidden;min-height:190px;border:1px solid var(--border);border-radius:18px;background:#020817}.video-tile video{display:block;width:100%;height:100%;min-height:190px;object-fit:cover}.video-tile audio{display:none}.video-label{position:absolute;left:10px;bottom:10px;padding:6px 9px;border-radius:999px;background:rgba(2,8,23,.78);color:#fff;font-size:.78rem}.video-tile.lecturer{border-color:rgba(103,232,249,.7)}.chat-board{position:sticky;top:12px;display:grid;grid-template-rows:auto minmax(280px,55vh) auto;padding:0!important;overflow:hidden}.chat-board h2{padding:16px 16px 10px;margin:0}.chat-list{overflow-y:auto;padding:0 15px 14px;display:grid;align-content:start;gap:9px}.chat-message{padding:9px 11px;border-radius:12px;background:rgba(148,163,184,.09);word-break:break-word}.chat-message strong{display:block;color:var(--cyan);font-size:.72rem}.chat-compose{display:grid;grid-template-columns:1fr auto;gap:8px;padding:12px;border-top:1px solid var(--border)}.chat-compose input{margin:0}.chat-compose button{margin:0}.call-controls{position:sticky;bottom:12px;z-index:5;justify-content:center;padding:12px;border:1px solid var(--border);border-radius:16px;background:rgba(5,12,27,.92);backdrop-filter:blur(14px)}.danger-call{border-color:rgba(248,113,113,.55)!important;color:#fecaca!important;background:rgba(248,113,113,.12)!important}.privacy-strip{padding:11px 14px;border-left:3px solid #4ade80;background:rgba(74,222,128,.07);color:var(--text-muted)}@media(max-width:900px){.classroom{grid-template-columns:1fr}.chat-board{position:relative;top:auto;grid-template-rows:auto 280px auto}}@media(max-width:560px){.room-row{grid-template-columns:1fr}.live-head{align-items:flex-start;flex-direction:column}.video-grid{grid-template-columns:1fr}}
-</style><link rel="stylesheet" href="/static/live-session.css"></head><body><script src="/static/live-invite.js"></script><script>if(!sessionStorage.getItem('studentToken')&&!sessionStorage.getItem('lecturerToken'))location.replace(NucleoLiveInvite.loginUrl(location))</script><main class="live-shell"><header class="top"><div class="brand-group"><img class="brand-logo" src="/branding/logo" alt=""><div class="brand-text"><div class="brand">Aroun<span>us</span></div><div class="brand-tagline">Live classroom</div></div></div><nav><a id="backLink" href="/">My workspace</a><a href="/">Home</a></nav></header>
-<section class="card join-card" id="joinCard"><span class="kicker">Up to 100 participants</span><h1 id="joinTitle">Join a classroom</h1><p class="lede" id="joinIntro">Enter the room code shared by your lecturer.</p><label for="roomCode">Room code</label><div class="room-row"><input id="roomCode" maxlength="32" autocomplete="off" placeholder="e.g. BIO101-LIVE"><button class="btn secondary hidden" id="generateRoom" type="button">Generate code</button></div><div class="join-actions"><button class="btn secondary hidden" id="copyJoinInvite" type="button">Copy student link</button><button class="btn" id="joinCamera" type="button">Join with camera</button><button class="btn secondary" id="joinListen" type="button">Join without camera</button></div><div id="joinMessage" aria-live="polite"></div><p class="privacy-strip"><strong>Private classroom:</strong> video, audio, and chat are not saved. Uploaded slides are temporary and are removed when the classroom ends.</p></section>
-<section class="hidden" id="callArea"><div class="live-head"><div><span class="kicker">Live now · <span id="participantCount">1</span>/100</span><h1 id="roomHeading">Live lesson</h1></div><div><span class="room-badge" id="roomBadge"></span> <button class="btn secondary" id="copyInvite" type="button">Copy invite</button></div></div><div class="classroom"><div><div class="video-grid" id="videoGrid"></div><p id="callStatus" class="muted" aria-live="polite">Connecting...</p><div class="media-settings"><label class="media-setting"><span>Camera</span><select id="cameraSelect" aria-label="Choose camera"></select></label><label class="media-setting"><span>Microphone</span><select id="microphoneSelect" aria-label="Choose microphone"></select></label><p id="deviceFeedback" class="muted device-feedback" aria-live="polite"></p></div><div class="call-controls"><button class="btn secondary control-button is-off" id="toggleMic" type="button"><span class="control-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3M8 22h8"/></svg></span><span class="control-label">Unmute to answer</span></button><button class="btn secondary control-button is-off" id="toggleCamera" type="button"><span class="control-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M15 10 20 7v10l-5-3"/><rect x="3" y="5" width="12" height="14" rx="2"/></svg></span><span class="control-label">Camera on</span></button><button class="btn secondary control-button" id="shareScreen" type="button"><span class="control-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4M12 13V7M9 10l3-3 3 3"/></svg></span><span class="control-label">Share screen</span></button><button class="btn secondary danger-call control-button" id="leaveCall" type="button"><span class="control-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 14c5-4 11-4 16 0M7 12l-2 5M17 12l2 5"/></svg></span><span class="control-label">Leave</span></button></div></div><aside class="card chat-board"><h2>Class chat</h2><div class="chat-list" id="chatList"><p class="muted">Messages appear here during this lesson only.</p></div><form class="chat-compose" id="chatForm"><input id="chatInput" maxlength="500" placeholder="Message the class"><button class="btn secondary" type="submit">Send</button></form></aside></div></section></main>
+
+.prejoin{margin:14px 0 4px;border:1px solid rgba(148,163,184,.3);border-radius:14px;padding:10px 14px}
+.prejoin summary{cursor:pointer;font-weight:700}
+.prejoin-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;margin-top:12px}
+.prejoin-preview{position:relative;border-radius:12px;overflow:hidden;background:#0b1220;min-height:150px;display:flex;align-items:center;justify-content:center}
+.prejoin-preview video{width:100%;height:100%;object-fit:cover;display:none}
+.prejoin-preview video.is-live{display:block}
+.prejoin-placeholder{margin:0;padding:16px;text-align:center;font-size:.85rem;color:#c7d5e6}
+.prejoin-controls{display:flex;flex-direction:column;gap:10px}
+@media(max-width:640px){.prejoin-grid{grid-template-columns:1fr}}
+</style><link rel="stylesheet" href="/static/live-session.css"><link rel="stylesheet" href="/static/ui.css?v=1"></head><body><script src="/static/live-invite.js"></script><script>if(!sessionStorage.getItem('studentToken')&&!sessionStorage.getItem('lecturerToken'))location.replace(NucleoLiveInvite.loginUrl(location))</script><main class="live-shell"><header class="top"><div class="brand-group"><img class="brand-logo" src="/branding/logo" alt=""><div class="brand-text"><div class="brand">Aroun<span>us</span></div><div class="brand-tagline">Live classroom</div></div></div><nav><a id="backLink" href="/">My workspace</a><a href="/">Home</a></nav></header>
+<section class="card join-card" id="joinCard"><span class="kicker">Up to 100 participants</span><h1 id="joinTitle">Join a classroom</h1><p class="lede" id="joinIntro">Enter the room code shared by your lecturer.</p><label for="roomCode">Room code</label><div class="room-row"><input id="roomCode" maxlength="32" autocomplete="off" placeholder="e.g. BIO101-LIVE"><button class="btn secondary hidden" id="generateRoom" type="button">Generate code</button></div><div class="join-actions"><button class="btn secondary hidden" id="copyJoinInvite" type="button">Copy student link</button><button class="btn" id="joinCamera" type="button">Join with camera</button><button class="btn secondary" id="joinListen" type="button">Join without camera</button></div><details class="prejoin" id="prejoinPanel">
+      <summary>Check your camera and microphone first</summary>
+      <div class="prejoin-grid">
+        <div class="prejoin-preview">
+          <video id="prejoinVideo" muted playsinline aria-label="Camera preview"></video>
+          <p class="prejoin-placeholder" id="prejoinPlaceholder">Your camera preview appears here.</p>
+        </div>
+        <div class="prejoin-controls">
+          <label class="media-setting"><span>Camera</span><select id="prejoinCamera" aria-label="Choose camera for the preview"></select></label>
+          <label class="media-setting"><span>Microphone</span><select id="prejoinMic" aria-label="Choose microphone for the preview"></select></label>
+          <button class="btn secondary" id="prejoinTest" type="button">Test devices</button>
+          <button class="btn secondary" id="prejoinStop" type="button" hidden>Stop preview</button>
+          <p class="muted" id="prejoinStatus" aria-live="polite"></p>
+        </div>
+      </div>
+    </details>
+    <div id="joinMessage" aria-live="polite"></div><p class="privacy-strip"><strong>Private classroom:</strong> video, audio, and chat are not saved. Uploaded slides are temporary and are removed when the classroom ends.</p></section>
+<section class="hidden" id="callArea"><div class="live-head"><div><span class="kicker">Live now · <span id="participantCount">1</span>/100</span><h2 id="roomHeading">Live lesson</h2></div><div><span class="room-badge" id="roomBadge"></span> <button class="btn secondary" id="copyInvite" type="button">Copy invite</button></div></div><div class="classroom"><div><div class="video-grid" id="videoGrid"></div><p id="callStatus" class="muted" aria-live="polite">Connecting...</p><div class="media-settings"><label class="media-setting"><span>Camera</span><select id="cameraSelect" aria-label="Choose camera"></select></label><label class="media-setting"><span>Microphone</span><select id="microphoneSelect" aria-label="Choose microphone"></select></label><p id="deviceFeedback" class="muted device-feedback" aria-live="polite"></p></div><div class="call-controls"><button class="btn secondary control-button is-off" id="toggleMic" type="button"><span class="control-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3M8 22h8"/></svg></span><span class="control-label">Unmute to answer</span></button><button class="btn secondary control-button is-off" id="toggleCamera" type="button"><span class="control-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M15 10 20 7v10l-5-3"/><rect x="3" y="5" width="12" height="14" rx="2"/></svg></span><span class="control-label">Camera on</span></button><button class="btn secondary control-button" id="shareScreen" type="button"><span class="control-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4M12 13V7M9 10l3-3 3 3"/></svg></span><span class="control-label">Share screen</span></button><button class="btn secondary danger-call control-button" id="leaveCall" type="button"><span class="control-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 14c5-4 11-4 16 0M7 12l-2 5M17 12l2 5"/></svg></span><span class="control-label">Leave</span></button></div></div><aside class="card chat-board"><h2>Class chat</h2><div class="chat-list" id="chatList"><p class="muted">Messages appear here during this lesson only.</p></div><form class="chat-compose" id="chatForm"><input id="chatInput" maxlength="500" placeholder="Message the class" aria-label="Message the class" autocomplete="off"><button class="btn secondary" type="submit">Send</button></form></aside></div></section></main>
 <style>.media-settings{display:grid;grid-template-columns:repeat(2,minmax(180px,1fr));gap:10px;margin:12px 0;padding:12px;border:1px solid var(--border);border-radius:14px;background:rgba(5,12,27,.62)}.media-setting{display:grid;gap:5px;color:var(--text-muted);font-size:.73rem}.media-setting select{margin:0;padding:9px 10px}.device-feedback{grid-column:1/-1;margin:0;min-height:1em}.control-button{display:grid!important;grid-template-columns:38px auto;align-items:center;gap:8px;min-height:48px;padding:5px 14px 5px 6px!important;border-radius:999px!important;text-transform:none!important;letter-spacing:0!important;font-size:.78rem!important}.control-icon{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:rgba(103,232,249,.13)}.control-icon svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.control-button.is-off{color:#fecaca!important;border-color:rgba(248,113,113,.5)!important;background:rgba(248,113,113,.11)!important}.control-button.is-off .control-icon{background:rgba(248,113,113,.18)}.control-button.is-active{color:#bbf7d0!important;border-color:rgba(74,222,128,.5)!important;background:rgba(74,222,128,.1)!important}@media(max-width:560px){.media-settings{grid-template-columns:1fr}.control-button{grid-template-columns:36px;padding-right:6px!important}.control-button .control-label{display:none}}</style>
 <style>
 .video-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,220px));gap:12px;align-items:start;margin:18px 0;min-height:150px}
@@ -109,7 +135,7 @@ const waitFor=(promise,timeout,text)=>Promise.race([promise,new Promise((_,rejec
 function prepareMeetingAudio(){if(!meetingSoundsEnabled)return Promise.resolve(null);try{meetingAudioContext=meetingAudioContext||new (window.AudioContext||window.webkitAudioContext)();return meetingAudioContext.state==='suspended'?meetingAudioContext.resume().then(()=>meetingAudioContext).catch(()=>null):Promise.resolve(meetingAudioContext)}catch(_){meetingAudioContext=null;return Promise.resolve(null)}}
 async function playMeetingTone(kind){if(!meetingSoundsEnabled)return;const context=await prepareMeetingAudio();if(!context||context.state!=='running')return;const notes=kind==='hand'?[[659,0,.13],[784,.15,.13],[988,.3,.2]]:[[880,0,.1],[1175,.12,.16]],start=context.currentTime+.01;for(const[frequency,delay,duration]of notes){const oscillator=context.createOscillator(),gain=context.createGain(),noteStart=start+delay;oscillator.type=kind==='hand'?'triangle':'sine';oscillator.frequency.setValueAtTime(frequency,noteStart);gain.gain.setValueAtTime(.0001,noteStart);gain.gain.exponentialRampToValueAtTime(kind==='hand'?.075:.055,noteStart+.018);gain.gain.exponentialRampToValueAtTime(.0001,noteStart+duration);oscillator.connect(gain).connect(context.destination);oscillator.start(noteStart);oscillator.stop(noteStart+duration+.03)}}
 async function ensureLiveLibrary(){if(Room)return true;for(const source of ['https://unpkg.com/livekit-client@2.21.0/dist/livekit-client.umd.min.js','https://cdn.jsdelivr.net/npm/livekit-client@2.21.0/dist/livekit-client.umd.min.js']){try{await waitFor(new Promise((resolve,reject)=>{const script=document.createElement('script');script.src=source;script.onload=resolve;script.onerror=reject;document.head.appendChild(script)}),12000,'Video library timed out');if(window.LivekitClient){({Room,RoomEvent,Track}=window.LivekitClient);return true}}catch(_){}}return false}
-async function join(wantsCamera){roomCode=clean($('roomCode').value);if(roomCode.length<4){message('Enter a room code with at least 4 characters.');return}if(!role){message('Sign in as a student or lecturer first.');return}cameraRequested=wantsCamera;setJoinLoading(true,wantsCamera);try{if(!await ensureLiveLibrary())throw new Error('The live classroom library could not load. Check your connection and try again.');const data=new FormData();data.append('room_code',roomCode);const headers=role==='lecturer'?{'X-Lecturer-Token':authToken}:{'X-Student-Token':authToken};const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);let response;try{response=await fetch('/live/token',{method:'POST',headers,body:data,signal:controller.signal})}finally{clearTimeout(timer)}const access=await response.json().catch(()=>({}));if(!response.ok)throw new Error(access.detail||'Could not join this lesson');room=new Room({adaptiveStream:{pixelDensity:'screen'},dynacast:true,disconnectOnPageLeave:true,publishDefaults:{degradationPreference:'maintain-resolution',screenShareEncoding:{maxBitrate:8000000,maxFramerate:30}}});bindRoom();await waitFor(room.connect(access.url,access.token),20000,'The live classroom took too long to connect. Please try again.');showClassroom(access);renderAllParticipants();setJoinLoading(false,wantsCamera);try{await room.localParticipant.setMicrophoneEnabled(role==='lecturer',{echoCancellation:true,noiseSuppression:true,autoGainControl:true});if(wantsCamera)await room.localParticipant.setCameraEnabled(true);syncLocalMicControl()}catch(permissionError){cameraRequested=false;setControlState('toggleCamera','Camera on',true);$('deviceFeedback').textContent='You joined without camera or microphone. Allow browser permissions, then use the controls below.'}await loadMediaDevices()}catch(error){await room?.disconnect().catch(()=>{});room=null;message(error.name==='AbortError'?'The live classroom service did not respond. Please try again.':(error.message||'Could not join the live lesson'));setJoinLoading(false,wantsCamera)}}
+async function join(wantsCamera){roomCode=clean($('roomCode').value);if(roomCode.length<4){message('Enter a room code with at least 4 characters.');return}if(!role){message('Sign in as a student or lecturer first.');return}cameraRequested=wantsCamera;window.arounusPrejoin?.stop();setJoinLoading(true,wantsCamera);try{if(!await ensureLiveLibrary())throw new Error('The live classroom library could not load. Check your connection and try again.');const data=new FormData();data.append('room_code',roomCode);const headers=role==='lecturer'?{'X-Lecturer-Token':authToken}:{'X-Student-Token':authToken};const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);let response;try{response=await fetch('/live/token',{method:'POST',headers,body:data,signal:controller.signal})}finally{clearTimeout(timer)}const access=await response.json().catch(()=>({}));if(!response.ok)throw new Error(access.detail||'Could not join this lesson');room=new Room({adaptiveStream:{pixelDensity:'screen'},dynacast:true,disconnectOnPageLeave:true,publishDefaults:{degradationPreference:'maintain-resolution',screenShareEncoding:{maxBitrate:8000000,maxFramerate:30}}});bindRoom();await waitFor(room.connect(access.url,access.token),20000,'The live classroom took too long to connect. Please try again.');showClassroom(access);renderAllParticipants();setJoinLoading(false,wantsCamera);try{await room.localParticipant.setMicrophoneEnabled(role==='lecturer',{deviceId:$('prejoinMic')?.value||undefined,echoCancellation:true,noiseSuppression:true,autoGainControl:true});if(wantsCamera)await room.localParticipant.setCameraEnabled(true,{deviceId:$('prejoinCamera')?.value||undefined});syncLocalMicControl()}catch(permissionError){cameraRequested=false;setControlState('toggleCamera','Camera on',true);$('deviceFeedback').textContent='You joined without camera or microphone. Allow browser permissions, then use the controls below.'}await loadMediaDevices()}catch(error){await room?.disconnect().catch(()=>{});room=null;message(error.name==='AbortError'?'The live classroom service did not respond. Please try again.':(error.message||'Could not join the live lesson'));setJoinLoading(false,wantsCamera)}}
 $('joinCamera').onclick=()=>{prepareMeetingAudio();join(true)};$('joinListen').onclick=()=>{prepareMeetingAudio();join(false)};
 function bindRoom(){
   room.on(RoomEvent.ParticipantConnected,participant=>{if(participant.attributes?.role!=='screen'){renderParticipant(participant);$('callStatus').textContent=`${participant.name||'A student'} joined`}updateCount()});
@@ -451,4 +477,112 @@ async function readyToLeaveRecording(){
 $('leaveCall').onclick=async()=>{const button=$('leaveCall');button.disabled=true;try{if(!await readyToLeaveRecording())return;sessionStorage.removeItem('nucleoActiveMeeting');clearTimeout(reactionSocketRetry);reactionSocket?.close();reactionSocket=null;await room?.disconnect();location.href=role==='lecturer'?'/lecturers':'/students'}finally{button.disabled=false}};
 document.addEventListener('click',async event=>{const link=event.target.closest?.('a[href]');if(!link||link.id==='recordingDownload'||link.hasAttribute('download')||(!sessionRecorder&&!recordingStopPromise&&!recordingNeedsConfirmation))return;event.preventDefault();if(await readyToLeaveRecording())location.href=link.href},true);
 const savedMeeting=(()=>{try{return JSON.parse(sessionStorage.getItem('nucleoActiveMeeting')||'null')}catch(_){return null}})();if(savedMeeting&&savedMeeting.room&&savedMeeting.role===role&&(!invited||invited===savedMeeting.room)){$('roomCode').value=savedMeeting.room;$('joinIntro').textContent='Reconnecting you to your live classroom…';setTimeout(()=>join(Boolean(savedMeeting.camera)),0)}else if(invited&&role==='student'){$('joinIntro').textContent='Joining your invited classroom…';setTimeout(()=>join(false),0)}
-</script><script src="/static/pwa.js?v=18"></script></body></html>
+</script><script src="/static/pwa.js?v=18"></script><script>
+(() => {
+  const panel = document.getElementById('prejoinPanel');
+  if (!panel) return;
+  const video = document.getElementById('prejoinVideo');
+  const placeholder = document.getElementById('prejoinPlaceholder');
+  const cameraSelect = document.getElementById('prejoinCamera');
+  const micSelect = document.getElementById('prejoinMic');
+  const testBtn = document.getElementById('prejoinTest');
+  const stopBtn = document.getElementById('prejoinStop');
+  const status = document.getElementById('prejoinStatus');
+  let stream = null;
+  let previewGeneration = 0;
+
+  const say = (text, kind) => {
+    status.textContent = text || '';
+    status.className = 'muted' + (kind === 'error' ? ' prejoin-error' : '');
+  };
+
+  function fill(select, devices, fallback) {
+    const current = select.value;
+    select.innerHTML = '';
+    if (!devices.length) {
+      const opt = document.createElement('option');
+      opt.textContent = fallback;
+      opt.value = '';
+      select.appendChild(opt);
+      return;
+    }
+    devices.forEach((device, index) => {
+      const opt = document.createElement('option');
+      opt.value = device.deviceId;
+      opt.textContent = device.label || `${fallback} ${index + 1}`;
+      select.appendChild(opt);
+    });
+    if (current) select.value = current;
+  }
+
+  async function refreshDevices() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+      say('This browser cannot list devices. You can still join.', 'error');
+      return;
+    }
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      fill(cameraSelect, devices.filter(d => d.kind === 'videoinput'), 'Camera');
+      fill(micSelect, devices.filter(d => d.kind === 'audioinput'), 'Microphone');
+    } catch (_) {
+      say('Could not list devices. You can still join.', 'error');
+    }
+  }
+
+  async function startPreview() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      say('Camera preview is not supported here. You can still join.', 'error');
+      return;
+    }
+    stopPreview();
+    const generation = previewGeneration;
+    say('Requesting camera and microphone…');
+    try {
+      const requestedStream = await navigator.mediaDevices.getUserMedia({
+        video: cameraSelect.value ? { deviceId: { exact: cameraSelect.value } } : true,
+        audio: micSelect.value ? { deviceId: { exact: micSelect.value } } : true
+      });
+      if (generation !== previewGeneration) {
+        requestedStream.getTracks().forEach(track => track.stop());
+        return;
+      }
+      stream = requestedStream;
+      video.srcObject = stream;
+      video.classList.add('is-live');
+      placeholder.hidden = true;
+      testBtn.hidden = true;
+      stopBtn.hidden = false;
+      say('Preview is live. Close this panel when you are ready to join.');
+      await refreshDevices();
+    } catch (error) {
+      const name = error && error.name;
+      say(name === 'NotAllowedError'
+        ? 'Permission was blocked. Allow camera and microphone in your browser settings, or join without camera.'
+        : 'No camera or microphone was found. You can join without camera.', 'error');
+    }
+  }
+
+  function stopPreview() {
+    previewGeneration++;
+    if (stream) stream.getTracks().forEach(track => track.stop());
+    stream = null;
+    video.srcObject = null;
+    video.classList.remove('is-live');
+    placeholder.hidden = false;
+    testBtn.hidden = false;
+    stopBtn.hidden = true;
+  }
+
+  testBtn.addEventListener('click', startPreview);
+  window.arounusPrejoin = { stop: stopPreview };
+  cameraSelect.addEventListener('change', () => { if (stream) startPreview(); });
+  micSelect.addEventListener('change', () => { if (stream) startPreview(); });
+  stopBtn.addEventListener('click', () => { stopPreview(); say('Preview stopped.'); });
+  panel.addEventListener('toggle', () => {
+    if (panel.open) refreshDevices();
+    else stopPreview();
+  });
+  window.addEventListener('pagehide', stopPreview);
+})();
+</script>
+</body></html>

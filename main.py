@@ -108,6 +108,7 @@ from models import (
     PushSubscription,
     StudentModule,
     Landlord, Accommodation, AccommodationComment, MarketAdvert, MarketListingView, MarketListingRating, MediaFinanceEntry, MediaUploadEvent,
+    PasswordResetCode,
     SrcPresident,
     ComradePost, ComradeReply, ComradeSrcReply,
 )
@@ -482,6 +483,120 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ---------------------------------------------------------------------------
+# Security headers, HEAD support, and health check
+# ---------------------------------------------------------------------------
+# The app previously sent no hardening headers at all and returned 405 for
+# HEAD requests (which breaks most uptime monitors). Both are fixed here.
+
+_CSP = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com; "
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; "
+    "font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net; "
+    "img-src 'self' data: blob: https:; "
+    "media-src 'self' blob: https:; "
+    "connect-src 'self' https: wss:; "
+    "worker-src 'self' blob: https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
+    "frame-src 'self' blob: https:; "
+    "frame-ancestors 'self'; "
+    "object-src 'none'; "
+    "base-uri 'self'; "
+    "form-action 'self'"
+)
+
+
+@app.middleware("http")
+async def security_headers_and_head(request: Request, call_next):
+    # Serve HEAD by internally treating it as GET, then dropping the body.
+    is_head = request.method == "HEAD"
+    if is_head:
+        request.scope["method"] = "GET"
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault(
+        "Permissions-Policy",
+        "camera=(self), microphone=(self), display-capture=(self), geolocation=()",
+    )
+    response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+    response.headers.setdefault("Content-Security-Policy", _CSP)
+    if request.url.scheme == "https":
+        response.headers.setdefault(
+            "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
+        )
+    if is_head:
+        # Consume the response so streaming resources and background work finish.
+        # Keep the original response and raw headers, including repeated cookies.
+        body_iterator = response.body_iterator
+        async def empty_body():
+            async for _ in body_iterator:
+                pass
+            yield b""
+        response.body_iterator = empty_body()
+    return response
+
+
+@app.get("/healthz", include_in_schema=False)
+def healthz():
+    """Lightweight liveness/readiness probe for uptime monitors."""
+    db_ok = True
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+    except Exception:
+        db_ok = False
+    return JSONResponse(
+        {"status": "ok" if db_ok else "degraded", "database": db_ok,
+         "time": datetime.utcnow().isoformat() + "Z"},
+        status_code=200 if db_ok else 503,
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+# ---------------------------------------------------------------------------
+# In-memory login throttling
+# ---------------------------------------------------------------------------
+# Simple sliding-window limiter keyed by account scope + identifier. This is
+# deliberately process-local: it stops casual password spraying without
+# requiring Redis. Swap for a shared store if you run multiple workers.
+_LOGIN_ATTEMPTS: dict[str, list[float]] = {}
+_LOGIN_LOCK = threading.Lock()
+_LOGIN_WINDOW_SECONDS = 15 * 60
+_LOGIN_MAX_FAILURES = 5
+
+
+def _login_throttle_key(scope: str, identifier: str) -> str:
+    return f"{scope}:{(identifier or '').strip().lower()}"
+
+
+def _assert_login_allowed(scope: str, identifier: str) -> None:
+    key = _login_throttle_key(scope, identifier)
+    now = time.time()
+    with _LOGIN_LOCK:
+        attempts = [t for t in _LOGIN_ATTEMPTS.get(key, []) if now - t < _LOGIN_WINDOW_SECONDS]
+        _LOGIN_ATTEMPTS[key] = attempts
+        if len(attempts) >= _LOGIN_MAX_FAILURES:
+            retry = int(_LOGIN_WINDOW_SECONDS - (now - attempts[0])) + 1
+            raise HTTPException(
+                status_code=429,
+                detail=f"Too many failed sign-in attempts. Try again in {max(retry, 1)} seconds.",
+                headers={"Retry-After": str(max(retry, 1))},
+            )
+
+
+def _record_login_failure(scope: str, identifier: str) -> None:
+    key = _login_throttle_key(scope, identifier)
+    with _LOGIN_LOCK:
+        _LOGIN_ATTEMPTS.setdefault(key, []).append(time.time())
+
+
+def _clear_login_failures(scope: str, identifier: str) -> None:
+    with _LOGIN_LOCK:
+        _LOGIN_ATTEMPTS.pop(_login_throttle_key(scope, identifier), None)
 
 
 # ---------------------------------------------------------------------------
@@ -1124,16 +1239,26 @@ async def register_lecturer(
     )
     db.add(lecturer)
     db.commit()
-    return {"ok": True, "message": "Profile created and activated. You can sign in now; module access appears once modules are assigned."}
+    db.refresh(lecturer)
+    return {
+        "ok": True,
+        "token": _issue_lecturer_token(lecturer.id),
+        "lecturer": _lecturer_profile(lecturer),
+        "message": "Profile created and activated. You are now signed in; module access appears once modules are assigned.",
+    }
 
 
 @app.post("/lecturers/login")
 def lecturer_login(payload: LecturerLogin, db: Session = Depends(get_db)):
+    _assert_login_allowed("lecturer", payload.email)
     lecturer = db.query(Lecturer).filter(Lecturer.email == payload.email.strip().lower()).first()
     if not lecturer:
+        _record_login_failure("lecturer", payload.email)
         raise HTTPException(status_code=401, detail="No tutor profile was found for this email")
     if not _password_matches(payload.password, lecturer.password_hash):
-        raise HTTPException(status_code=401, detail="Password does not match this tutor profile. Ask the administrator to reset it.")
+        _record_login_failure("lecturer", payload.email)
+        raise HTTPException(status_code=401, detail="Password does not match this tutor profile. Use \"Forgot password?\" to reset it.")
+    _clear_login_failures("lecturer", payload.email)
     if not lecturer.active:
         raise HTTPException(status_code=403, detail="This tutor profile is inactive")
     if not lecturer.approved:
@@ -1208,17 +1333,27 @@ async def register_student(
     if any(code.strip() for code in module_codes.split(",")):
         student.module_selection_completed = True
     db.commit()
-    return {"ok": True, "message": "Profile created and activated. You can sign in now."}
+    db.refresh(student)
+    return {
+        "ok": True,
+        "token": _issue_student_token(student.id),
+        "student": _student_profile(student),
+        "message": "Profile created and activated. You are now signed in.",
+    }
 
 
 @app.post("/students/login")
 def student_login(payload: StudentLogin, db: Session = Depends(get_db)):
     identifier = payload.identifier.strip()
+    _assert_login_allowed("student", identifier)
     student = db.query(Student).filter((Student.student_number == identifier.upper()) | (Student.email == identifier.lower())).first()
     if not student:
+        _record_login_failure("student", identifier)
         raise HTTPException(status_code=401, detail="No learner account was found for this username or email")
     if not _password_matches(payload.password, student.password_hash):
-        raise HTTPException(status_code=401, detail="Password does not match this learner account. Ask the administrator to reset it.")
+        _record_login_failure("student", identifier)
+        raise HTTPException(status_code=401, detail="Password does not match this learner account. Use \"Forgot password?\" to reset it.")
+    _clear_login_failures("student", identifier)
     if not student.active:
         raise HTTPException(status_code=403, detail="This learner account is inactive")
     if not student.approved:
@@ -4858,9 +4993,12 @@ async def register_landlord(full_name: str = Form(...), business_name: str = For
 
 @app.post("/marketing/landlords/login")
 def landlord_login(payload: LandlordLogin, db: Session = Depends(get_db)):
+    _assert_login_allowed("landlord", payload.email)
     landlord = db.query(Landlord).filter(Landlord.email == payload.email.strip().lower()).first()
     if not landlord or not _password_matches(payload.password, landlord.password_hash):
+        _record_login_failure("landlord", payload.email)
         raise HTTPException(status_code=401, detail="Incorrect provider email or password")
+    _clear_login_failures("landlord", payload.email)
     if not landlord.active:
         raise HTTPException(status_code=403, detail="This landlord profile is inactive")
     return {"token": _issue_landlord_token(landlord.id), "profile": _landlord_profile(landlord)}
@@ -7250,6 +7388,225 @@ async def live_lesson_socket(websocket: WebSocket, room_code: str):
                 pass
 
 
+# ---------------------------------------------------------------------------
+# Self-service password reset
+# ---------------------------------------------------------------------------
+# Previously the only way to recover an account was to ask an administrator.
+# These endpoints issue short-lived, single-use, hashed reset codes. Codes are
+# delivered by SMTP when configured; in local development you can set
+# AROUNUS_DEV_RESET_CODES=1 to have the code echoed back in the response.
+
+_PASSWORD_RESET_TTL_MINUTES = 15
+_PASSWORD_RESET_SECRET = os.getenv("PASSWORD_RESET_SECRET") or STUDENT_SESSION_SECRET
+_PASSWORD_RESET_MAX_PER_HOUR = 5
+_PASSWORD_RESET_MIN_GAP_SECONDS = 60
+_PASSWORD_RESET_MAX_ATTEMPTS = 8
+
+
+class PasswordResetRequest(BaseModel):
+    email: str = Field(..., max_length=200)
+
+
+class PasswordResetConfirm(BaseModel):
+    email: str = Field(..., max_length=200)
+    code: str = Field(..., max_length=12)
+    new_password: str = Field(..., min_length=8, max_length=200)
+
+
+def _hash_reset_code(code: str) -> str:
+    return hashlib.sha256(f"{code.strip()}:{_PASSWORD_RESET_SECRET}".encode("utf-8")).hexdigest()
+
+
+def _send_reset_email(email: str, code: str, account_type: str) -> bool:
+    """Best-effort email delivery. Returns True when an SMTP message was sent."""
+    host = os.getenv("SMTP_HOST")
+    if not host:
+        return False
+    try:
+        import smtplib
+        from email.message import EmailMessage
+
+        port = int(os.getenv("SMTP_PORT", "587"))
+        user = os.getenv("SMTP_USER", "")
+        password = os.getenv("SMTP_PASSWORD", "")
+        sender = os.getenv("SMTP_FROM", user or "no-reply@arounus.com")
+        label = "learner" if account_type == "student" else "tutor"
+        msg = EmailMessage()
+        msg["Subject"] = "Your Arounus password reset code"
+        msg["From"] = sender
+        msg["To"] = email
+        msg.set_content(
+            f"Your Arounus {label} password reset code is {code}.\n\n"
+            f"It expires in {_PASSWORD_RESET_TTL_MINUTES} minutes and can be used once.\n"
+            "If you did not request this, you can ignore this email."
+        )
+        with smtplib.SMTP(host, port, timeout=10) as smtp:
+            smtp.ehlo()
+            if os.getenv("SMTP_TLS", "1") not in ("0", "false", "False"):
+                smtp.starttls()
+                smtp.ehlo()
+            if user:
+                smtp.login(user, password)
+            smtp.send_message(msg)
+        return True
+    except Exception as exc:  # pragma: no cover - depends on external SMTP
+        print(f"[password-reset] email delivery failed: {exc}")
+        return False
+
+
+def _create_reset_code(db: Session, account_type: str, account_id: int, email: str, ip: str) -> Optional[str]:
+    now = datetime.now(timezone.utc)
+    recent = (
+        db.query(PasswordResetCode)
+        .filter(PasswordResetCode.account_type == account_type,
+                PasswordResetCode.account_id == account_id)
+        .order_by(PasswordResetCode.id.desc())
+        .all()
+    )
+    hour_ago = now - timedelta(hours=1)
+    in_last_hour = [r for r in recent if _parse_iso(r.created_at) and _parse_iso(r.created_at) > hour_ago]
+    if len(in_last_hour) >= _PASSWORD_RESET_MAX_PER_HOUR:
+        return None
+    if recent and _parse_iso(recent[0].created_at):
+        gap = (now - _parse_iso(recent[0].created_at)).total_seconds()
+        if gap < _PASSWORD_RESET_MIN_GAP_SECONDS:
+            return None
+    # Invalidate any previous unused codes for this account.
+    for row in recent:
+        if not row.used_at:
+            row.used_at = now.isoformat()
+    code = f"{secrets.randbelow(1000000):06d}"
+    db.add(PasswordResetCode(
+        account_type=account_type,
+        account_id=account_id,
+        email=email,
+        code_hash=_hash_reset_code(code),
+        expires_at=(now + timedelta(minutes=_PASSWORD_RESET_TTL_MINUTES)).isoformat(),
+        created_at=now.isoformat(),
+        requested_ip=ip,
+    ))
+    db.commit()
+    _send_reset_email(email, code, account_type)
+    return code
+
+
+def _parse_iso(value: Optional[str]):
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+def _reset_request(account_type: str, payload: PasswordResetRequest, request: Request, db: Session):
+    email = (payload.email or "").strip().lower()
+    development_codes = os.getenv("AROUNUS_DEV_RESET_CODES", "").lower() in ("1", "true", "yes")
+    if not os.getenv("SMTP_HOST") and not development_codes:
+        return {
+            "ok": True, "recovery_available": False,
+            "message": "Email recovery is not available yet. Contact your administrator through Help & support to reset your password.",
+        }
+    generic = {
+        "ok": True,
+        "message": "If an account exists for that email, a reset code has been sent. Check your inbox and spam folder. If no code arrives, contact your administrator through Help & support.",
+    }
+    if "@" not in email:
+        return generic
+    model = Student if account_type == "student" else Lecturer
+    account = db.query(model).filter(model.email == email).first()
+    if not account:
+        return generic
+    code = _create_reset_code(db, account_type, account.id, email, request.client.host if request.client else "")
+    if code and development_codes:
+        generic["dev_code"] = code
+        generic["message"] = "Development mode: use the reset code shown below."
+    return generic
+
+
+def _reset_confirm(account_type: str, payload: PasswordResetConfirm, db: Session):
+    email = (payload.email or "").strip().lower()
+    code = (payload.code or "").strip()
+    if len(payload.new_password or "") < 8:
+        raise HTTPException(status_code=400, detail="Choose a password of at least 8 characters")
+
+    model = Student if account_type == "student" else Lecturer
+    account = db.query(model).filter(model.email == email).first()
+    if not account:
+        raise HTTPException(status_code=400, detail="This reset code is invalid or has expired")
+
+    row = (
+        db.query(PasswordResetCode)
+        .filter(PasswordResetCode.account_type == account_type,
+                PasswordResetCode.account_id == account.id,
+                PasswordResetCode.used_at.is_(None))
+        .order_by(PasswordResetCode.id.desc())
+        .first()
+    )
+    now = datetime.now(timezone.utc)
+    expires = _parse_iso(row.expires_at) if row else None
+    if not row or not expires or expires < now:
+        raise HTTPException(status_code=400, detail="This reset code is invalid or has expired")
+
+    if row.failed_attempts >= _PASSWORD_RESET_MAX_ATTEMPTS:
+        raise HTTPException(status_code=429, detail="Too many incorrect reset codes. Request a new code and try again.")
+
+    if not hmac.compare_digest(row.code_hash, _hash_reset_code(code)):
+        db.query(PasswordResetCode).filter(
+            PasswordResetCode.id == row.id,
+            PasswordResetCode.used_at.is_(None),
+            PasswordResetCode.failed_attempts < _PASSWORD_RESET_MAX_ATTEMPTS,
+        ).update({PasswordResetCode.failed_attempts: PasswordResetCode.failed_attempts + 1}, synchronize_session=False)
+        db.commit()
+        raise HTTPException(status_code=400, detail="That reset code is not correct")
+
+    # Claim the code in the same transaction as the password update. Only one
+    # concurrent request (including requests on other workers) can redeem it.
+    claimed = db.query(PasswordResetCode).filter(
+        PasswordResetCode.id == row.id,
+        PasswordResetCode.used_at.is_(None),
+        PasswordResetCode.failed_attempts < _PASSWORD_RESET_MAX_ATTEMPTS,
+    ).update({PasswordResetCode.used_at: now.isoformat()}, synchronize_session=False)
+    if not claimed:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="This reset code is invalid or has expired")
+    account.password_hash = _password_hash(payload.new_password)
+    # Burn every other outstanding code for this account.
+    db.query(PasswordResetCode).filter(
+        PasswordResetCode.account_type == account_type,
+        PasswordResetCode.account_id == account.id,
+        PasswordResetCode.used_at.is_(None),
+    ).update({PasswordResetCode.used_at: now.isoformat()}, synchronize_session=False)
+    db.commit()
+    # Clear throttles for both the email and the username, since either can be
+    # used as the sign-in identifier.
+    _clear_login_failures(account_type, email)
+    if account_type == "student":
+        _clear_login_failures(account_type, account.student_number)
+    return {"ok": True, "message": "Your password has been updated. You can sign in now."}
+
+
+@app.post("/students/password-reset/request")
+def student_password_reset_request(payload: PasswordResetRequest, request: Request, db: Session = Depends(get_db)):
+    return _reset_request("student", payload, request, db)
+
+
+@app.post("/students/password-reset/confirm")
+def student_password_reset_confirm(payload: PasswordResetConfirm, db: Session = Depends(get_db)):
+    return _reset_confirm("student", payload, db)
+
+
+@app.post("/lecturers/password-reset/request")
+def lecturer_password_reset_request(payload: PasswordResetRequest, request: Request, db: Session = Depends(get_db)):
+    return _reset_request("lecturer", payload, request, db)
+
+
+@app.post("/lecturers/password-reset/confirm")
+def lecturer_password_reset_confirm(payload: PasswordResetConfirm, db: Session = Depends(get_db)):
+    return _reset_confirm("lecturer", payload, db)
+
+
 FRONTEND_PAGES = {
     "/": "index.html",
     "/learning": "academics.html",
@@ -7270,6 +7627,7 @@ FRONTEND_PAGES = {
     "/trust": "trust.html",
     "/premium": "premium.html",
     "/comrade": "comrade.html",
+    "/reset-password": "reset-password.html",
 }
 
 

@@ -17,6 +17,7 @@
     '/static/trust.html': '/trust',
     '/static/premium.html': '/premium',
     '/static/comrade.html': '/comrade',
+    '/static/reset-password.html': '/reset-password',
   };
   const legacyPaths = Object.fromEntries(Object.entries(friendlyPaths).map(([legacy, friendly]) => [friendly, legacy]));
   legacyPaths['/posts'] = '/static/fun.html';
@@ -41,6 +42,8 @@
     lightStyles.href = '/static/light.css?v=4';
     document.head.appendChild(lightStyles);
   }
+  const sharedStyles = document.querySelector('link[href^="/static/ui.css"]');
+  if (sharedStyles) document.head.appendChild(sharedStyles);
   const body = document.body;
   if (!body) return;
   body.classList.add('nucleocampus-ui');
@@ -95,6 +98,7 @@
 
   document.querySelectorAll('header.top nav').forEach(nav => {
     nav.classList.add('experience-nav');
+    nav.setAttribute('aria-label', 'Experience navigation');
     if (nav.closest('#welcome')) {
       if (activeRole === 'public') return;
       let primary=nav.querySelector('.primary-nav-links');

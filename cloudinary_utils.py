@@ -36,23 +36,44 @@ CLOUDINARY_CLOUD_NAME = os.getenv("CLOUDINARY_CLOUD_NAME")
 CLOUDINARY_API_KEY = os.getenv("CLOUDINARY_API_KEY")
 CLOUDINARY_API_SECRET = os.getenv("CLOUDINARY_API_SECRET")
 
-if not (CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET):
-    raise RuntimeError(
-        "Cloudinary credentials are not fully set. Add CLOUDINARY_CLOUD_NAME, "
-        "CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET to your .env file "
-        "locally, or to the Environment Variables section of your Render service."
-    )
+_configured = False
 
-cloudinary.config(
-    cloud_name=CLOUDINARY_CLOUD_NAME,
-    api_key=CLOUDINARY_API_KEY,
-    api_secret=CLOUDINARY_API_SECRET,
-    secure=True,
-)
+
+def cloudinary_configured() -> bool:
+    """Return True when all three Cloudinary credentials are present."""
+    return bool(CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET)
+
+
+def _configure() -> None:
+    """Configure the Cloudinary SDK lazily.
+
+    Previously this module raised at import time when credentials were
+    missing, which meant the whole application (including pages that never
+    touch media) could not boot without third-party secrets. Now we only
+    fail when an upload is actually attempted, and the failure is a clear
+    runtime error rather than an import crash.
+    """
+    global _configured
+    if _configured:
+        return
+    if not cloudinary_configured():
+        raise RuntimeError(
+            "Cloudinary credentials are not fully set. Add CLOUDINARY_CLOUD_NAME, "
+            "CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET to your .env file "
+            "locally, or to the Environment Variables section of your Render service."
+        )
+    cloudinary.config(
+        cloud_name=CLOUDINARY_CLOUD_NAME,
+        api_key=CLOUDINARY_API_KEY,
+        api_secret=CLOUDINARY_API_SECRET,
+        secure=True,
+    )
+    _configured = True
 
 
 def upload_image_bytes(data: bytes, folder: str, public_id: Optional[str] = None) -> str:
     """Upload image bytes to Cloudinary and return the secure (https) URL."""
+    _configure()
     result = cloudinary.uploader.upload(
         data,
         folder=folder,
@@ -70,6 +91,7 @@ def upload_video_bytes(data: bytes, folder: str, public_id: Optional[str] = None
     than raw storage would — check your plan's video upload limit if large
     lecture recordings fail to upload.
     """
+    _configure()
     result = cloudinary.uploader.upload(
         data,
         folder=folder,
@@ -82,6 +104,7 @@ def upload_video_bytes(data: bytes, folder: str, public_id: Optional[str] = None
 
 def upload_video_variants(data: bytes | str, folder: str) -> tuple[str, Optional[str]]:
     """Save a public 480p copy and protect the higher-resolution original."""
+    _configure()
     uploader = cloudinary.uploader.upload_large if isinstance(data, str) else cloudinary.uploader.upload
     original = uploader(
         data, folder=f"{folder}/premium", resource_type="video", type="authenticated"
@@ -103,6 +126,7 @@ def upload_video_variants(data: bytes | str, folder: str) -> tuple[str, Optional
 
 def premium_video_url(asset_json: str) -> str:
     """Provide a short-lived URL only after the caller's account is checked."""
+    _configure()
     asset = json.loads(asset_json)
     return cloudinary.utils.private_download_url(
         asset["public_id"], asset["format"], resource_type="video",
@@ -112,6 +136,9 @@ def premium_video_url(asset_json: str) -> str:
 
 def delete_lesson_video_variants(free_url: str, premium_asset: Optional[str]) -> bool:
     """Remove managed lesson uploads without touching external video URLs."""
+    if not cloudinary_configured():
+        return False
+    _configure()
     targets = []
     parsed = urlsplit(free_url or "")
     prefix = f"/{CLOUDINARY_CLOUD_NAME}/video/upload/"

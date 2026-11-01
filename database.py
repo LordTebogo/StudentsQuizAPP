@@ -5,11 +5,20 @@ import os
 
 load_dotenv()
 
+# ---------------------------------------------------------------------------
+# Database URL resolution
+# ---------------------------------------------------------------------------
+# Production expects DATABASE_URL (Postgres). For local development and for
+# anyone cloning the project to try it out, fall back to a file-backed SQLite
+# database instead of crashing at import time. This keeps the app bootable with
+# zero configuration while still honouring a real DATABASE_URL when present.
 DATABASE_URL = os.getenv("DATABASE_URL")
+
 if not DATABASE_URL:
-    raise RuntimeError(
-        "DATABASE_URL is not set. Add it to your .env file locally, or to "
-        "the Environment Variables section of your Render service."
+    DATABASE_URL = "sqlite:///./local_dev.db"
+    print(
+        "[database] DATABASE_URL is not set - falling back to local SQLite "
+        "database at ./local_dev.db. Set DATABASE_URL to use Postgres.",
     )
 
 # SQLAlchemy's default postgres driver name changed; some hosted Postgres
@@ -19,14 +28,22 @@ if not DATABASE_URL:
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-engine = create_engine(
-    DATABASE_URL,
-    pool_pre_ping=True,   # avoids "server closed the connection unexpectedly"
-                          # errors after the DB drops idle connections
-    pool_recycle=300,     # recycle connections every 5 min, safe for
-                          # poolers (e.g. Supabase's pgbouncer/Supavisor)
-                          # that close idle connections aggressively
-)
+_is_sqlite = DATABASE_URL.startswith("sqlite")
+
+_engine_kwargs = {}
+if _is_sqlite:
+    # SQLite needs to be told to allow use across FastAPI's worker threads.
+    _engine_kwargs["connect_args"] = {"check_same_thread": False}
+else:
+    _engine_kwargs.update(
+        pool_pre_ping=True,   # avoids "server closed the connection unexpectedly"
+                              # errors after the DB drops idle connections
+        pool_recycle=300,     # recycle connections every 5 min, safe for
+                              # poolers (e.g. Supabase's pgbouncer/Supavisor)
+                              # that close idle connections aggressively
+    )
+
+engine = create_engine(DATABASE_URL, **_engine_kwargs)
 
 SessionLocal = sessionmaker(
     autocommit=False,

@@ -1,0 +1,482 @@
+/* ==========================================================================
+   Arounus shared design-system layer (ui.css)
+   --------------------------------------------------------------------------
+   Loaded after style.css / light.css so it can normalise the two competing
+   theme layers into one predictable set of tokens and interaction states.
+
+   Contents
+     1. Design tokens (spacing, radius, type, colour, elevation)
+     2. Focus visibility (global, keyboard-only)
+     3. Touch targets
+     4. Form fields + validation states
+     5. Password reveal + strength meter
+     6. Contrast repairs
+     7. Utility classes (screen-reader text, skip link)
+     8. Reduced-motion guard
+   ========================================================================== */
+
+/* 1. Design tokens ------------------------------------------------------- */
+:root {
+  /* Spacing scale (4px base) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  /* Radii */
+  --radius-sm: 8px;
+  --radius-md: 13px;
+  --radius-lg: 20px;
+  --radius-pill: 999px;
+
+  /* Type scale */
+  --text-xs: 0.78rem;
+  --text-sm: 0.88rem;
+  --text-base: 1rem;
+  --text-lg: 1.15rem;
+  --text-xl: 1.45rem;
+  --text-2xl: 1.9rem;
+  --text-3xl: 2.4rem;
+
+  /* Interaction */
+  --focus-ring: #0f766e;
+  --focus-halo: rgba(255, 255, 255, 0.92);
+  --target-min: 44px;
+
+  /* Semantic status colours (AA on light surfaces) */
+  --ok-ink: #0a6b4f;
+  --ok-bg: #e7f7f0;
+  --error-ink: #a4231a;
+  --error-bg: #fdeceb;
+  --warn-ink: #8a5300;
+  --warn-bg: #fff4e0;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* 2. Focus visibility ---------------------------------------------------- */
+/* Previously only two selectors had a focus style, so keyboard users lost
+   track of focus almost everywhere. This is a single, consistent ring. */
+:where(a, button, input, select, textarea, summary, [tabindex], [role="tab"]):focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px var(--focus-halo);
+  border-radius: var(--radius-sm);
+}
+
+/* Never remove the ring for keyboard users, even if a component tries. */
+:where(a, button, input, select, textarea):focus-visible {
+  outline-style: solid !important;
+}
+
+/* 3. Touch targets ------------------------------------------------------- */
+.btn,
+button,
+button.btn,
+.entry-tab,
+.home-ad-control,
+.notification-toggle,
+.install-app-btn,
+[role="tab"] {
+  min-height: var(--target-min);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Give text links a comfortable hit area without changing their look. */
+header.top nav a,
+.site-footer nav a,
+.campus-header nav a,
+.experience-nav a,
+.site-footer a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target-min);
+  padding: 0 6px;
+}
+
+@media (pointer: coarse) {
+  button,
+  a.btn,
+  [role="tab"],
+  summary,
+  select,
+  input[type="checkbox"],
+  input[type="radio"] {
+    min-height: var(--target-min);
+  }
+  /* Keep icon-only controls square rather than stretched. */
+  .home-ad-control,
+  .notification-toggle {
+    min-width: var(--target-min);
+  }
+}
+
+/* 4. Form fields + validation states ------------------------------------- */
+.field {
+  display: block;
+  margin-top: var(--space-4);
+}
+
+.field > label,
+.field-label {
+  display: block;
+  margin-bottom: var(--space-2);
+  font-weight: 700;
+}
+
+.field-hint {
+  display: block;
+  margin-top: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--text-muted, #526b65);
+}
+
+.field-error {
+  display: block;
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--error-ink);
+}
+
+.field-error:empty {
+  display: none;
+}
+
+input[aria-invalid="true"],
+select[aria-invalid="true"],
+textarea[aria-invalid="true"] {
+  border-color: var(--error-ink) !important;
+  box-shadow: 0 0 0 3px rgba(164, 35, 26, 0.14) !important;
+}
+
+input:disabled,
+select:disabled,
+textarea:disabled,
+button:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+/* Inline status messages, reused across auth and reset flows. */
+.ui-status {
+  margin-top: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.ui-status.ok {
+  color: var(--ok-ink);
+  background: var(--ok-bg);
+  border-color: rgba(10, 107, 79, 0.28);
+}
+.ui-status.error {
+  color: var(--error-ink);
+  background: var(--error-bg);
+  border-color: rgba(164, 35, 26, 0.3);
+}
+.ui-status.warn {
+  color: var(--warn-ink);
+  background: var(--warn-bg);
+  border-color: rgba(138, 83, 0, 0.28);
+}
+
+/* 5. Password reveal + strength meter ------------------------------------ */
+.pw-wrap {
+  position: relative;
+  display: block;
+}
+
+.pw-wrap input {
+  padding-right: 84px;
+}
+
+.pw-toggle {
+  position: absolute;
+  top: 50%;
+  right: var(--space-2);
+  transform: translateY(-50%);
+  min-height: 34px;
+  padding: 0 var(--space-3);
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: inherit;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pw-strength {
+  display: flex;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+
+.pw-strength span {
+  height: 5px;
+  flex: 1;
+  border-radius: var(--radius-pill);
+  background: rgba(148, 163, 184, 0.35);
+  transition: background 0.15s ease;
+}
+
+.pw-strength[data-score="1"] span:nth-child(-n + 1),
+.pw-strength[data-score="2"] span:nth-child(-n + 2) {
+  background: #d97706;
+}
+.pw-strength[data-score="3"] span:nth-child(-n + 3) {
+  background: #0f766e;
+}
+.pw-strength[data-score="4"] span {
+  background: #0a6b4f;
+}
+
+.pw-strength-label {
+  display: block;
+  margin-top: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--text-muted, #526b65);
+}
+
+/* 6. Contrast repairs ---------------------------------------------------- */
+/* These were measured below 4.5:1 against their actual backgrounds. */
+.eyebrow {
+  color: #0b5d4e !important;
+}
+
+#installAppBtn,
+.install-app-btn {
+  background: #0b3b33 !important;
+  color: #ffffff !important;
+  border-color: #0b3b33 !important;
+}
+
+.campus-cta {
+  border-color: #2b4a3e !important;
+}
+
+.campus-cta p {
+  color: #2f4a43 !important;
+}
+
+.campus-cta > a {
+  background: #0b3b33 !important;
+  color: #ffffff !important;
+  border-color: #0b3b33 !important;
+}
+
+#status a,
+.status a {
+  color: #0a5c4f;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.market-skip,
+a.market-skip {
+  background: #0b3b33 !important;
+  color: #ffffff !important;
+}
+
+/* Links inside status boxes and muted paragraphs on light surfaces. */
+.ui-status a,
+.msg a,
+.muted a,
+p.muted a {
+  color: #0a5c4f;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* 7. Utilities ----------------------------------------------------------- */
+.sr-only {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target-min);
+  position: absolute;
+  left: var(--space-3);
+  top: -60px;
+  z-index: 10001;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-sm);
+  background: #0b3b33;
+  color: #ffffff;
+  font-weight: 700;
+  text-decoration: none;
+  transition: top 0.15s ease;
+}
+
+.skip-link:focus {
+  top: var(--space-3);
+}
+
+/* 8. Reduced-motion guard ------------------------------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* 9. Quiz progress ------------------------------------------------------- */
+.quiz-progress {
+  margin: var(--space-4) 0 var(--space-2);
+}
+.quiz-progress-text {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+.quiz-progress-bar {
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: rgba(148, 163, 184, 0.28);
+  overflow: hidden;
+}
+.quiz-progress-bar > span {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(90deg, #0f766e, #0a6b4f);
+  transition: width 0.2s ease;
+}
+
+/* Secondary campus path link was near-invisible on the light page. */
+.campus-paths a + a {
+  color: #0b3b33 !important;
+  background: #e7f5ed !important;
+  border-color: #0b3b33 !important;
+}
+
+/* 10. Tap-target completion ---------------------------------------------- */
+/* Standalone links and controls must offer a >=44px hit area. Inline links
+   inside running prose are exempt (WCAG 2.5.8) and are left untouched. */
+
+.campus-footer nav a,
+.site-footer nav a,
+footer nav a,
+footer nav button,
+#installAppBtn,
+.install-app-btn,
+#clearFilters,
+.entry-role-extra a,
+.entry-forgot a,
+.pw-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--target-min);
+}
+
+.campus-footer nav a,
+.site-footer nav a,
+footer nav a {
+  padding: 0 var(--space-2);
+}
+
+.entry-role-extra a,
+.entry-forgot a {
+  padding: 0 var(--space-1);
+}
+
+.pw-toggle {
+  min-width: var(--target-min);
+}
+
+header.top nav a,
+.campus-header nav a {
+  padding-top: 0.35rem;
+  padding-bottom: 0.35rem;
+}
+
+/* Footer link rows: keep the visual density but guarantee the target box. */
+.campus-footer nav,
+.site-footer nav,
+footer nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+/* Header / in-app navigation targets (experience nav, workflow tabs,
+   account avatar, footer links rendered outside a <nav>). */
+.experience-nav > a,
+.experience-nav .nav-more > summary,
+.workflow-nav a,
+.workflow-nav button,
+.learner-command-actions a,
+.learner-command-actions button,
+.status-grid a,
+.nav-account-avatar,
+.site-footer > a,
+.campus-footer > a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--target-min);
+}
+
+.nav-account-avatar {
+  min-width: var(--target-min);
+}
+
+.experience-nav > a,
+.workflow-nav a,
+.workflow-nav button {
+  padding-top: 0.4rem;
+  padding-bottom: 0.4rem;
+}
+
+/* Market skip link should match the shared skip-link target size. */
+.market-skip {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target-min);
+  padding: 0 var(--space-3);
+}
+
+/* Final specificity pass for header controls and back links. */
+header.top nav a,
+header.top .nav-account-avatar,
+header.top .nav-profile-button,
+.experience-nav .nav-account-avatar,
+.back {
+  min-height: var(--target-min) !important;
+}
+header.top nav a,
+.back {
+  display: inline-flex;
+  align-items: center;
+}

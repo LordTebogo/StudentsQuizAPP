@@ -123,6 +123,35 @@ deploy, and for inspecting the schema afterward.)
 
 ## 3. Run the server locally
 
+Without `DATABASE_URL`, the app uses a local `local_dev.db` SQLite file (ignored
+by Git). Cloudinary credentials are needed only when using media uploads or
+protected media. Production should keep its existing Postgres and Cloudinary
+settings. `/healthz` reports database readiness with HTTP 200 or 503.
+
+Learner and tutor registration signs the account in immediately. Password
+recovery is available at `/reset-password`: configure `SMTP_HOST`, `SMTP_PORT`
+(587 by default), `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`, and `SMTP_TLS` (1
+by default for STARTTLS). Without email configuration, recovery directs users
+to their administrator. Optionally set a separate random `PASSWORD_RESET_SECRET`;
+otherwise the student session secret is used. Keep `AROUNUS_DEV_RESET_CODES=0`
+in production: setting it to 1 exposes codes in responses for local testing.
+The new `password_reset_codes` table is created automatically at startup.
+Codes expire after 15 minutes, allow eight incorrect guesses, and can be used
+once. Requests are limited to five per account per hour with a 60-second gap.
+Login throttling is process-local (five failures per identifier per 15 minutes);
+multiple production workers need a shared limiter for a deployment-wide limit.
+
+Run backend suites separately because each configures its own temporary database:
+
+```powershell
+python -m unittest discover -s tests -p test_account_recovery.py
+python -m unittest discover -s tests -p test_market_features.py
+python -m unittest discover -s tests -p test_lesson_management.py
+python -m unittest discover -s tests -p test_document_tools.py
+npm ci
+npm test
+```
+
 ```bash
 uvicorn main:app --reload
 ```

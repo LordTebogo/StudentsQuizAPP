@@ -1,4 +1,4 @@
-const OFFLINE_VERSION = "v53";
+const OFFLINE_VERSION = "v54";
 const SHELL_CACHE = `nucleocampus-shell-${OFFLINE_VERSION}`;
 const DATA_CACHE = `nucleocampus-data-${OFFLINE_VERSION}`;
 const EXTERNAL_CACHE = `nucleocampus-external-${OFFLINE_VERSION}`;
@@ -9,11 +9,11 @@ const APP_SHELL = [
   "/", "/learning", "/learning/guide", "/students", "/lecturers",
   "/students/lessons", "/lecturers/lessons", "/lecturers/guide", "/live",
   "/posts", "/community", "/src", "/market", "/admin", "/comrade",
-  "/tools/pdf", "/tools/media", "/trust", "/premium",
+  "/tools/pdf", "/tools/media", "/trust", "/premium", "/reset-password",
   "/static/campus-home.css", "/static/campus-home.js",
   "/static/media-compressor.js?v=2", "/static/admin-workspace.css?v=3", "/static/admin-workspace.js?v=1",
   "/static/document-organizer.js",
-  "/static/style.css", "/static/product.css", "/static/theme.css?v=2",
+  "/static/style.css", "/static/ui.css?v=1", "/static/product.css", "/static/theme.css?v=2",
   "/static/brand-intro.css?v=1", "/static/brand-intro.js?v=1",
   "/static/light.css?v=5", "/static/messaging.css",
   "/static/market-sell.css?v=2",
@@ -42,7 +42,8 @@ const LEGACY_PAGE_URLS = {
   'fun.html': '/community', 'index.html': '/', 'marketing.html': '/market',
   'admin.html': '/admin', 'pdf_tools.html': '/tools/pdf',
   'media_compressor.html': '/tools/media', 'trust.html': '/trust',
-  'premium.html': '/premium', 'comrade.html': '/comrade'
+  'premium.html': '/premium', 'comrade.html': '/comrade',
+  'reset-password.html': '/reset-password'
 };
 
 // These libraries are cached when their corresponding workspace first uses
