@@ -21,7 +21,7 @@ test('opening the same product repeatedly records one view and ratings update in
   w.document.querySelector('[data-offer]').click();
   await tick();
   assert.equal(views, 1);
-  assert.match(w.document.querySelector('.market-metrics').textContent, /1 unique views/);
+  assert.doesNotMatch(w.document.querySelector('.market-metrics').textContent, /unique views/);
   w.document.querySelector('[data-stars="5"]').click(); await tick();
   assert.match(w.document.querySelector('.market-metrics').textContent, /★ 5 \(1\)/);
 });

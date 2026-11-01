@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /students
+Disallow: /lecturers
+Disallow: /students/lessons
+Disallow: /lecturers/lessons
+Disallow: /live
+Disallow: /api/
+Disallow: /static/demo-market/
+
+Sitemap: https://arounus.com/sitemap.xml

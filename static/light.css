@@ -266,3 +266,14 @@ body.campus-home { color: var(--text); background: #f5f8f6 !important; }
 body.nucleocampus-ui #callArea .slide-deck-stage,
 body.nucleocampus-ui #callArea .slide-deck-viewport,
 .video-grid { color-scheme: dark; }
+
+/* Light-theme support for the market card tools, demo notice and safety note. */
+.campus-card .card-meta { color: var(--text-muted); }
+.campus-card .card-tool { color: var(--text); border-color: var(--line); background: #f4f8f6; }
+.campus-card .card-tool:hover { color: var(--cyan); border-color: var(--cyan); }
+.campus-card .card-tool[aria-pressed="true"] { color: #19312e; border-color: var(--cyan); background: #e7f5ed; }
+.campus-card .verified-badge { color: #1c6b52; background: #e7f5ed; }
+.demo-notice { color: var(--text-muted); border-color: var(--line); background: #ffffff; }
+.demo-notice--soft { background: #f2f8f4; }
+.offer-safety { color: var(--text-muted); background: #f2f8f4; }
+.offer-safety a { color: var(--cyan); }

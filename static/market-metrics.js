@@ -3,7 +3,7 @@
   const attempted = new Set();
   const timers = new WeakMap();
   const style = document.createElement('style');
-  style.textContent = '.market-metrics{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:10px 0;font-size:.82rem;color:var(--muted,#526675)}.market-metrics strong{color:var(--text,#17313a)}.market-stars{display:inline-flex;gap:2px}.market-stars button{border:0;background:transparent;color:#b38419;font-size:1.15rem;line-height:1;cursor:pointer;padding:2px}.market-stars button:hover,.market-stars button:focus-visible{color:#df9500;transform:scale(1.12)}.market-rating-note{font-size:.76rem}';
+  style.textContent = '.market-metrics{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:10px 0;font-size:.82rem;color:var(--muted,#526675)}.market-metrics strong{color:var(--text,#17313a)}.market-stars{display:inline-flex;gap:2px}.market-stars button{min-width:44px;min-height:44px;border:0;background:transparent;color:#b38419;font-size:1.15rem;line-height:1;cursor:pointer;padding:8px}.market-stars button:hover,.market-stars button:focus-visible{color:#df9500;transform:scale(1.12)}.market-rating-note{font-size:.76rem}';
   document.head.appendChild(style);
   const cardsFor = card => [...document.querySelectorAll(selector)].filter(other => other.dataset.marketKind === card.dataset.marketKind && other.dataset.marketId === card.dataset.marketId);
   const paint = card => {
@@ -12,13 +12,14 @@
     card.dataset.metricsReady = 'true';
     const panel = document.createElement('div');
     panel.className = 'market-metrics';
+    if (card.dataset.demo === 'true') return;
     panel.innerHTML = '<span data-view-count></span><strong data-rating-summary></strong><span class="market-stars" aria-label="Rate this listing from 1 to 5 stars"></span><span class="market-rating-note" role="status"></span>';
     for (let stars = 1; stars <= 5; stars++) {
       const button = document.createElement('button');
       button.type = 'button';
       button.textContent = '★';
       button.title = `Rate ${stars} star${stars === 1 ? '' : 's'}`;
-      button.setAttribute('aria-label', button.title);
+      button.setAttribute('aria-label', `${button.title} for ${card.querySelector('h3')?.textContent || 'this listing'}`);
       button.dataset.stars = String(stars);
       panel.querySelector('.market-stars').appendChild(button);
     }
@@ -27,13 +28,13 @@
     refresh(card);
   };
   const refresh = card => {
-    card.querySelector('[data-view-count]').textContent = `${card.dataset.marketViews || 0} unique views`;
+    card.querySelector('[data-view-count]').textContent = '';
     const count = Number(card.dataset.marketRatingCount || 0);
     card.querySelector('[data-rating-summary]').textContent = count ? `★ ${card.dataset.marketRating} (${count})` : 'No ratings yet';
   };
   async function recordView(card) {
     const key = `${card.dataset.marketKind}:${card.dataset.marketId}`;
-    if (attempted.has(key)) return;
+    if (card.dataset.demo === 'true' || attempted.has(key)) return;
     attempted.add(key);
     try {
       const response = await fetch(`/marketing/${card.dataset.marketKind}/${card.dataset.marketId}/view`, {method:'POST'});

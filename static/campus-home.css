@@ -1,7 +1,6 @@
 .campus-home {
   background:#090e19;
   color:#edf3fa;
-  font-family:Arial,sans-serif;
   margin:0
 }
 .campus-home * {
@@ -457,3 +456,19 @@
 }
 
 }
+
+/* --- card meta, save/share, demo notice, verified badge --- */
+.campus-card .card-meta{font-size:12px;color:#8ea0b8;margin:0 0 10px}
+.campus-card .verified-badge{display:inline-block;margin-left:6px;padding:2px 7px;border-radius:100px;background:#123a2c;color:#8be2c1;font-size:10px;font-weight:700;letter-spacing:.04em;vertical-align:middle}
+.campus-card .card-tools{display:flex;gap:8px;margin:0 0 6px}
+.campus-card .card-tool{flex:1 1 auto;min-height:44px;padding:10px 12px;border:1px solid #2b3749;border-radius:10px;background:#0e1725;color:#c8d6ef;font:inherit;font-size:13px;font-weight:700;cursor:pointer}
+.campus-card .card-tool:hover{border-color:#3f7f68;color:#b5efd7}
+.campus-card .card-tool[aria-pressed="true"]{background:#123a2c;border-color:#3f7f68;color:#b5efd7}
+.campus-card .card-action{min-height:44px}
+.campus-card[data-demo="true"]{border-style:dashed;border-color:#3e4e65}
+.campus-card[data-demo="true"] .campus-card-media{filter:saturate(.55)}
+.demo-notice{grid-column:1/-1;margin:0 0 4px;padding:14px 18px;border:1px dashed #3e4e65;border-radius:14px;background:#0e1725;color:#c8d6ef;font-size:14px;line-height:1.6}
+.demo-notice--soft{border-style:solid;background:#101d2c}
+.offer-safety{margin-top:18px;padding:12px 14px;border-left:3px solid #8be2c1;background:#0e1725;border-radius:8px;font-size:13px;line-height:1.6}
+.offer-safety a{color:#b5efd7}
+@media (max-width:600px){.campus-card .card-tools{flex-direction:column}}

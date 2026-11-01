@@ -27,6 +27,7 @@ Deploy on Render with:
 """
 
 import io
+import html
 import asyncio
 import json
 import os
@@ -53,7 +54,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse, JSONResponse
+from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse, JSONResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import func, inspect, text
@@ -7321,6 +7322,80 @@ app.add_api_route(
     "/static/marketing.html", _legacy_frontend_redirect("/market"),
     methods=["GET"], name="legacy_market_page", include_in_schema=False,
 )
+
+
+# ---------------------------------------------------------------------------
+# Crawler files served from the site root (previously 404).
+# ---------------------------------------------------------------------------
+@app.get("/robots.txt", include_in_schema=False)
+def robots_txt():
+    return FileResponse(
+        os.path.join("static", "robots.txt"),
+        media_type="text/plain",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
+@app.get("/sitemap.xml", include_in_schema=False)
+def sitemap_xml(db: Session = Depends(get_db)):
+    today = datetime.now(timezone.utc).date().isoformat()
+    rooms = db.query(Accommodation.id, Accommodation.title).join(Landlord, Landlord.id == Accommodation.landlord_id).filter(
+        Accommodation.is_approved == True, Accommodation.is_available == True, Landlord.active == True,
+    ).all()
+    offers = db.query(MarketAdvert.id, MarketAdvert.headline).filter(
+        MarketAdvert.status == "approved",
+        (MarketAdvert.starts_at.is_(None)) | (MarketAdvert.starts_at <= today),
+        (MarketAdvert.expires_at.is_(None)) | (MarketAdvert.expires_at >= today),
+    ).all()
+    base = Path("static/sitemap.xml").read_text(encoding="utf-8")
+    links = [f"  <url><loc>https://arounus.com/listing/{kind}/{item_id}</loc></url>" for kind, rows in (("room", rooms), ("offer", offers)) for item_id, title in rows if not str(title or "").upper().startswith("DEMO:")]
+    return Response(base.replace("</urlset>", "\n".join(links) + "\n</urlset>"), media_type="application/xml", headers={"Cache-Control": "public, max-age=3600"})
+
+
+@app.get("/listing/{kind}/{listing_id}", response_class=HTMLResponse, include_in_schema=False)
+def public_market_listing(kind: str, listing_id: int, db: Session = Depends(get_db)):
+    """A permanent, indexable page for each currently published market offer."""
+    if kind == "room":
+        row = db.query(Accommodation, Landlord).join(Landlord, Landlord.id == Accommodation.landlord_id).filter(
+            Accommodation.id == listing_id, Accommodation.is_approved == True,
+            Accommodation.is_available == True, Landlord.active == True,
+        ).first()
+        if not row:
+            raise HTTPException(status_code=404, detail="Listing unavailable")
+        data = _accommodation_payload(*row)
+        title = data["title"]
+        price = f"R{data['monthly_rent']:,} per month" if data.get("monthly_rent") is not None else "Price on request"
+        seller = data["landlord"]["name"]
+    elif kind == "offer":
+        today = datetime.now(timezone.utc).date().isoformat()
+        item = db.query(MarketAdvert).filter(
+            MarketAdvert.id == listing_id, MarketAdvert.status == "approved",
+            (MarketAdvert.starts_at.is_(None)) | (MarketAdvert.starts_at <= today),
+            (MarketAdvert.expires_at.is_(None)) | (MarketAdvert.expires_at >= today),
+        ).first()
+        if not item:
+            raise HTTPException(status_code=404, detail="Listing unavailable")
+        data = _advert_payload(item)
+        title = data["headline"]
+        price = f"R{data['price']:,}" if data.get("price") is not None else "Ask for price"
+        seller = data.get("business_name") or ""
+    else:
+        raise HTTPException(status_code=404, detail="Listing unavailable")
+    escape = lambda value: html.escape(str(value or ""), quote=True)
+    path = f"https://arounus.com/listing/{kind}/{listing_id}"
+    is_demo = str(title).upper().startswith("DEMO:") or str(data.get("campus") or "").lower() == "demo campus"
+    full_description = str(data.get("description") or "")
+    description = full_description[:240]
+    photo = next((url for url in data.get("image_urls", []) if str(url).startswith("https://")), "")
+    image_meta = f'<meta property="og:image" content="{escape(photo)}">' if photo else ""
+    image_html = f'<img class="photo" src="{escape(photo)}" alt="{escape(title)}">' if photo else ""
+    contact = data.get("contact") or "Ask the provider for contact details."
+    body = f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{escape(title)} | Arounus</title><meta name="description" content="{escape(description)}"><meta name="robots" content="{'noindex,follow' if is_demo else 'index,follow'}"><link rel="canonical" href="{path}">
+<meta property="og:type" content="product"><meta property="og:title" content="{escape(title)}"><meta property="og:description" content="{escape(description)}"><meta property="og:url" content="{path}">{image_meta}
+<meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/static/style.css"><style>body{{background:#f5f8f6;color:#18312d}}.listing-page{{max-width:820px;margin:30px auto;padding:28px;background:white;border:1px solid #d5e4db;border-radius:20px}}.photo{{width:100%;max-height:460px;object-fit:cover;border-radius:14px}}.listing-page p{{line-height:1.6}}.listing-page a{{color:#087c6f}}@media(max-width:650px){{.listing-page{{margin:12px;padding:18px}}}}</style></head>
+<body><main class="listing-page"><p><a href="/">← Browse campus market</a></p>{'<p><strong>Example only — this is not a real offer.</strong></p>' if is_demo else ''}<h1>{escape(title)}</h1>{image_html}<p>{escape(data.get('campus') or 'Campus not specified')}{' · ' + escape(data.get('area')) if data.get('area') else ''}</p><p><strong>{escape(price)}</strong></p>{'<p>Listed by ' + escape(seller) + '</p>' if seller and not is_demo else ''}<p>{escape(full_description)}</p>{'<p><strong>Contact:</strong> ' + escape(contact) + '</p>' if not is_demo else ''}<p>Check the listing and provider independently before paying. <a href="/trust#safety">Read market safety guidance</a>.</p><p><a href="/">Find more listings</a></p></main></body></html>"""
+    return HTMLResponse(body, headers={"Cache-Control": "public, max-age=60"})
 
 
 # ---------------------------------------------------------------------------
