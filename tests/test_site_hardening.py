@@ -4,6 +4,12 @@ import os
 import re
 import tempfile
 import unittest
+import http.client
+import logging
+import socket
+import threading
+import time
+import uvicorn
 
 from fastapi.testclient import TestClient
 
@@ -74,6 +80,35 @@ class SiteHardeningTest(unittest.TestCase):
         plain = self.client.get("/static/style.css")
         self.assertIn("max-age=3600", plain.headers["cache-control"])
         self.assertEqual(self.client.get("/service-worker.js").headers["cache-control"], "no-store")
+
+    def test_head_transport_keeps_content_length_without_server_errors(self):
+        sock = socket.socket()
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+        server = uvicorn.Server(uvicorn.Config(main.app, host="127.0.0.1", port=port, http="httptools", loop="asyncio", lifespan="off", access_log=False, log_config=None))
+        thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
+        with self.assertNoLogs("uvicorn.error", level=logging.ERROR):
+            try:
+                thread.start()
+                deadline = time.monotonic() + 5
+                while not server.started and thread.is_alive() and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                self.assertTrue(server.started)
+                for path in ("/", "/static/ui.css?v=2", "/branding/logo"):
+                    connection = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+                    try:
+                        connection.request("HEAD", path)
+                        response = connection.getresponse()
+                        self.assertEqual(response.status, 200)
+                        self.assertGreater(int(response.getheader("Content-Length")), 0)
+                        self.assertEqual(response.read(), b"")
+                    finally:
+                        connection.close()
+            finally:
+                server.should_exit = True
+                thread.join(timeout=5)
+                sock.close()
+                self.assertFalse(thread.is_alive())
 
     def test_logo_is_downscaled(self):
         response = self.client.get("/branding/logo", headers={"Accept": "image/avif,image/webp,*/*"})

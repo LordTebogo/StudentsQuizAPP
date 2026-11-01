@@ -561,7 +561,13 @@ async def security_headers_and_head(request: Request, call_next):
     is_head = request.method == "HEAD"
     if is_head:
         request.scope["method"] = "GET"
-    response = await call_next(request)
+    try:
+        response = await call_next(request)
+    finally:
+        # Uvicorn reads the shared scope when checking Content-Length. Restore
+        # HEAD before sending headers so it expects an empty response body.
+        if is_head:
+            request.scope["method"] = "HEAD"
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
