@@ -3,38 +3,17 @@
   const content = document.getElementById('sellContent');
   const message = document.getElementById('sellMessage');
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
-  let token = sessionStorage.getItem('landlordToken') || '';
   let profile = null;
-  let mode = 'register';
   let kind = '';
 
-  async function request(path, options = {}) {
-    const headers = {...(options.headers || {})};
-    if (token) headers['X-Landlord-Token'] = token;
-    const response = await fetch(path, {...options, headers});
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.detail || 'The request could not be completed.');
-    return data;
+  async function request(path,options={}) {
+    const result=await ArounusMarketAuth.request(path,options);
+    if(result===null)throw new Error('Sign in to continue.');
+    return result;
   }
   function status(text, error = false) {
     message.textContent = text;
     message.classList.toggle('error', error);
-  }
-  function renderAuth() {
-    profile = null;
-    kind = '';
-    document.getElementById('sellTitle').textContent = 'Advertiser account';
-    document.getElementById('sellIntro').textContent = 'Use one email and password for every type of listing.';
-    content.innerHTML = `<div class="sell-tabs"><button type="button" data-auth-mode="register" aria-pressed="${mode === 'register'}">Create account</button><button type="button" data-auth-mode="login" aria-pressed="${mode === 'login'}">Sign in</button></div>
-      <form id="sellAuthForm" class="sell-form">${mode === 'register' ? `
-        <label>Full name<input name="full_name" autocomplete="name" required></label>
-        <label>Business or service name <span>(optional)</span><input name="business_name" autocomplete="organization"></label>
-        <label>Contact number<input name="phone" type="tel" autocomplete="tel" required></label>` : ''}
-        <label>Email<input name="email" type="email" autocomplete="email" required></label>
-        <label>Password<input name="password" type="password" autocomplete="${mode === 'register' ? 'new-password' : 'current-password'}" minlength="8" required></label>
-        ${mode === 'register' ? '<label>Confirm password<input name="confirm_password" type="password" autocomplete="new-password" minlength="8" required></label>' : ''}
-        <button type="submit">${mode === 'register' ? 'Create advertiser account' : 'Sign in'}</button>
-      </form>`;
   }
   function renderChoice() {
     kind = '';
@@ -92,7 +71,7 @@
   }
   async function renderMyListings() {
     document.getElementById('sellTitle').textContent = 'My listings';
-    document.getElementById('sellIntro').textContent = 'Manage all your offers with the same advertiser account.';
+    document.getElementById('sellIntro').textContent = 'Manage all your offers with your Arounus account.';
     content.innerHTML = '<button class="sell-back" type="button" data-sell-back>← Add another listing</button><p>Loading your listings…</p>';
     try {
       const [rooms, adverts] = await Promise.all([request('/marketing/landlord/listings'), request('/marketing/my-adverts')]);
@@ -102,44 +81,46 @@
     } catch (error) { status(error.message, true); renderChoice(); }
   }
   async function renderMessages() {
-    document.getElementById('sellTitle').textContent = 'Customer messages';
-    document.getElementById('sellIntro').textContent = 'Reply to students who contacted your listings.';
+    document.getElementById('sellTitle').textContent = 'My market messages';
+    document.getElementById('sellIntro').textContent = 'Read and reply to conversations with your Arounus market contacts.';
     content.innerHTML = '<button class="sell-back" type="button" data-sell-back>← Back to listings</button><p>Loading messages…</p>';
     try {
       const rows = await request('/marketing/provider/messages');
       const threads = new Map();
       rows.forEach(row => {
-        const studentId = row.sender_type === 'student' ? row.sender_id : row.recipient_type === 'student' ? row.recipient_id : null;
-        if (!studentId) return;
-        if (!threads.has(studentId)) threads.set(studentId, {name:row.sender_type === 'student' ? row.sender_name : row.recipient_name, messages:[]});
-        threads.get(studentId).messages.push(row);
+        const type=row.peer_type||(row.sender_type==='landlord'?row.recipient_type:row.sender_type);
+        const id=row.peer_id||(row.sender_type==='landlord'?row.recipient_id:row.sender_id);
+        if(!id)return;
+        const key=type+':'+id;
+        if(!threads.has(key))threads.set(key,{type,id,name:row.peer_name||row.sender_name,messages:[]});
+        threads.get(key).messages.push(row);
       });
-      content.innerHTML = `<button class="sell-back" type="button" data-sell-back>← Back to listings</button><div class="sell-inbox">${[...threads].map(([id, thread]) => `<section><h3>${escapeHtml(thread.name)}</h3><div class="sell-thread">${thread.messages.reverse().map(row => `<p><strong>${escapeHtml(row.sender_type === 'landlord' ? 'You' : row.sender_name)}:</strong> ${escapeHtml(row.content)}</p>`).join('')}</div><form data-reply-to="${id}"><label>Reply<textarea name="content" maxlength="2000" required></textarea></label><button type="submit">Send reply</button></form></section>`).join('') || '<p>No messages yet.</p>'}</div>`;
-      for (const [id] of threads) request(`/marketing/provider/messages/read/${id}`, {method:'POST'}).catch(() => {});
+      content.innerHTML=`<button class="sell-back" type="button" data-sell-back>← Back to listings</button><div class="sell-inbox">${[...threads].map(([key,thread])=>`<section><h3>${escapeHtml(thread.name)}</h3><div class="sell-thread">${thread.messages.reverse().map(row=>`<p><strong>${escapeHtml(row.is_outgoing?'You':row.sender_name)}:</strong> ${escapeHtml(row.content)}</p>`).join('')}</div><form data-reply-to="${escapeHtml(key)}"><label>Reply<textarea name="content" maxlength="2000" required></textarea></label><button type="submit">Send reply</button></form></section>`).join('')||'<p>No messages yet.</p>'}</div>`;
+      for(const thread of threads.values())request('/marketing/provider/messages/read',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target_type:thread.type,target_id:thread.id})}).catch(()=>{});
     } catch (error) { status(error.message, true); renderChoice(); }
   }
-  async function open() {
-    if (!dialog.open) dialog.showModal();
+  async function open(showMessages=false) {
     status('');
-    if (!token) { renderAuth(); return; }
     try {
-      profile = await request('/marketing/landlords/me');
-      renderChoice();
-    } catch (_) {
-      token = '';
-      sessionStorage.removeItem('landlordToken');
-      renderAuth();
+      const session=await ArounusMarketAuth.ensureSignedIn();
+      if(!session)return;
+      profile=session.profile;
+      document.getElementById('contactDialog')?.close();
+      if(!dialog.open)dialog.showModal();
+      if(showMessages)await renderMessages();else renderChoice();
+    } catch(error) {
+      status(error.message,true);
+      if(!dialog.open)dialog.showModal();
     }
   }
-  document.addEventListener('click', event => {
-    if (!event.target.closest('[data-open-sell]')) return;
+  document.addEventListener('click',event=>{
+    const messages=event.target.closest('[data-market-messages]');
+    if(!messages&&!event.target.closest('[data-open-sell]'))return;
     event.preventDefault();
-    open();
+    open(Boolean(messages));
   });
   document.getElementById('closeSell').addEventListener('click', () => dialog.close());
   dialog.addEventListener('click', async event => {
-    const modeButton = event.target.closest('[data-auth-mode]');
-    if (modeButton) { mode = modeButton.dataset.authMode; status(''); renderAuth(); return; }
     const choice = event.target.closest('[data-sell-kind]');
     if (choice) { status(''); renderForm(choice.dataset.sellKind); return; }
     const locationButton = event.target.closest('[data-use-location]');
@@ -197,7 +178,7 @@
       return;
     }
     if (event.target.closest('[data-sell-messages]')) { status(''); await renderMessages(); return; }
-    if (event.target.closest('[data-sell-signout]')) { token = ''; profile = null; sessionStorage.removeItem('landlordToken'); sessionStorage.removeItem('activeRole'); mode = 'login'; renderAuth(); return; }
+    if (event.target.closest('[data-sell-signout]')) { profile=null;ArounusMarketAuth.signOut();dialog.close();return; }
     const toggle = event.target.closest('[data-toggle-room]');
     if (toggle) {
       const item = JSON.parse(content.dataset.rooms || '[]').find(row => String(row.id) === toggle.dataset.toggleRoom);
@@ -241,7 +222,7 @@
     status('Saving…');
     try {
       if (form.dataset.replyTo) {
-        await request('/marketing/provider/messages', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({recipient_type:'student', recipient_id:Number(form.dataset.replyTo), content:form.elements.content.value, is_anonymous:false})});
+        await request('/marketing/provider/messages', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({recipient_type:form.dataset.replyTo.split(':')[0], recipient_id:Number(form.dataset.replyTo.split(':')[1]), content:form.elements.content.value, is_anonymous:false})});
         status('Message sent.');
         await renderMessages();
         return;
@@ -269,37 +250,22 @@
         await renderMyListings(); status('Listing updated.');
         return;
       }
-      if (form.id === 'sellAuthForm') {
-        let result;
-        if (mode === 'register') {
-          const data = new FormData(form);
-          if (data.get('password') !== data.get('confirm_password')) throw new Error('Passwords do not match.');
-          result = await request('/marketing/landlords/register', {method:'POST', body:data});
-        } else {
-          result = await request('/marketing/landlords/login', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email:form.elements.email.value, password:form.elements.password.value})});
-        }
-        token = result.token;
-        profile = result.profile;
-        sessionStorage.setItem('landlordToken', token);
-        sessionStorage.setItem('activeRole', 'advertiser');
-        status('');
-        renderChoice();
-      } else if (form.id === 'sellListingForm') {
+      if (form.id === 'sellListingForm') {
         const data = new FormData(form);
         const files = [...(form.elements.images?.files || [])];
         if (files.length > 3) throw new Error('Choose no more than 3 photos.');
         if (String(data.get('contact') || '').replace(/\D/g, '').length < 8) throw new Error('Add a valid contact number for this listing.');
         await request(kind === 'room' ? '/marketing/listings' : '/marketing/adverts', {method:'POST', body:data});
         document.dispatchEvent(new Event('market-listing-changed'));
+        const wasRoom = kind === 'room';
         renderChoice();
-        status(kind === 'room' ? 'Your room was submitted for admin approval.' : 'Your listing is published.');
+        status(wasRoom ? 'Your room was submitted for admin approval.' : 'Your listing is published.');
       }
     } catch (error) { status(error.message, true); }
     finally { if (form.isConnected) submit.disabled = false; }
   });
   const params = new URLSearchParams(location.search);
   if (params.has('sell') || params.has('create') || params.get('role') === 'advertiser' || location.hash === '#sell') {
-    if (params.get('mode') === 'login') mode = 'login';
-    window.addEventListener('load', open, {once:true});
+    window.addEventListener('load', () => open(), {once:true});
   }
 })();

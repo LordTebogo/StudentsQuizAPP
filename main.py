@@ -60,7 +60,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.exception_handlers import http_exception_handler
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import func, inspect, text
+from sqlalchemy import func, inspect, text, and_, or_
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
@@ -113,6 +113,7 @@ from models import (
     StudentModule,
     Landlord, Accommodation, AccommodationComment, MarketAdvert, MarketListingView, MarketListingRating, MediaFinanceEntry, MediaUploadEvent,
     PasswordResetCode,
+    MarketAccountRating,
     SrcPresident,
     ComradePost, ComradeReply, ComradeSrcReply,
 )
@@ -483,6 +484,18 @@ def ensure_student_module_selection_schema():
 
 
 ensure_student_module_selection_schema()
+
+
+def ensure_market_account_links_schema():
+    columns = {column["name"] for column in inspect(engine).get_columns("landlords")}
+    with engine.begin() as conn:
+        for name, table in (("linked_student_id", "students"), ("linked_lecturer_id", "lecturers")):
+            if name not in columns:
+                conn.execute(text(f"ALTER TABLE landlords ADD COLUMN {name} INTEGER REFERENCES {table}(id) ON DELETE CASCADE"))
+            conn.execute(text(f"CREATE UNIQUE INDEX IF NOT EXISTS ix_landlords_{name} ON landlords ({name})"))
+
+
+ensure_market_account_links_schema()
 
 _API_DOCS_ENABLED = os.getenv("ENABLE_API_DOCS", "0").strip().lower() in {"1", "true", "yes"}
 
@@ -1092,6 +1105,9 @@ def require_landlord_account(
     landlord = db.query(Landlord).filter(Landlord.id == _landlord_id_from_token(x_landlord_token)).first()
     if not landlord or not landlord.active:
         raise HTTPException(status_code=403, detail="Your landlord account is inactive")
+    source = landlord.linked_student if landlord.linked_student_id else landlord.linked_lecturer if landlord.linked_lecturer_id else None
+    if (landlord.linked_student_id or landlord.linked_lecturer_id) and (not source or not source.active or not source.approved):
+        raise HTTPException(status_code=403, detail="Your Arounus account is not active and approved")
     return landlord
 
 
@@ -4530,15 +4546,36 @@ def _message_dict(db: Session, message: DirectMessage, viewer_type: str = "", vi
             "created_at": message.created_at}
 
 
+def _market_message_aliases(db: Session, kind: str, person_id: int) -> set[tuple[str, int]]:
+    aliases = {(kind, person_id)}
+    provider = None
+    if kind == "landlord":
+        provider = db.get(Landlord, person_id)
+    elif kind in {"student", "lecturer"}:
+        column = Landlord.linked_student_id if kind == "student" else Landlord.linked_lecturer_id
+        provider = db.query(Landlord).filter(column == person_id).first()
+    if provider:
+        aliases.add(("landlord", provider.id))
+        if provider.linked_student_id:
+            aliases.add(("student", provider.linked_student_id))
+        if provider.linked_lecturer_id:
+            aliases.add(("lecturer", provider.linked_lecturer_id))
+    return aliases
+
+
+def _message_identity_filter(type_column, id_column, aliases):
+    return or_(*(and_(type_column == kind, id_column == person_id) for kind, person_id in aliases))
+
+
 def _message_pair_blocked(db: Session, sender_type: str, sender_id: Optional[int], recipient_type: str, recipient_id: int) -> bool:
     if sender_id is None:
         return False
-    return db.query(DirectMessageBlock).filter(
-        ((DirectMessageBlock.blocker_type == sender_type) & (DirectMessageBlock.blocker_id == sender_id) &
-         (DirectMessageBlock.blocked_type == recipient_type) & (DirectMessageBlock.blocked_id == recipient_id)) |
-        ((DirectMessageBlock.blocker_type == recipient_type) & (DirectMessageBlock.blocker_id == recipient_id) &
-         (DirectMessageBlock.blocked_type == sender_type) & (DirectMessageBlock.blocked_id == sender_id))
-    ).first() is not None
+    senders = _market_message_aliases(db, sender_type, sender_id)
+    recipients = _market_message_aliases(db, recipient_type, recipient_id)
+    return db.query(DirectMessageBlock).filter(or_(
+        and_(_message_identity_filter(DirectMessageBlock.blocker_type, DirectMessageBlock.blocker_id, senders), _message_identity_filter(DirectMessageBlock.blocked_type, DirectMessageBlock.blocked_id, recipients)),
+        and_(_message_identity_filter(DirectMessageBlock.blocker_type, DirectMessageBlock.blocker_id, recipients), _message_identity_filter(DirectMessageBlock.blocked_type, DirectMessageBlock.blocked_id, senders)),
+    )).first() is not None
 
 
 def _push_enabled() -> bool:
@@ -4593,6 +4630,8 @@ def _create_direct_message(db: Session, sender_type: str, sender_id: Optional[in
         approved = True if recipient_type == "landlord" else bool(recipient and recipient.approved)
         if not recipient or not approved or not recipient.active:
             raise HTTPException(status_code=404, detail="That recipient is not available")
+        if recipient_type == "landlord":
+            require_landlord_account(_issue_landlord_token(recipient.id), db)
         recipient_id = recipient.id
     if _message_pair_blocked(db, sender_type, sender_id, recipient_type, recipient_id):
         raise HTTPException(status_code=403, detail="Private messaging is blocked between these accounts")
@@ -4738,11 +4777,46 @@ def student_send_message(payload: DirectMessageCreate, student: Student = Depend
 
 @app.get("/marketing/provider/messages")
 def provider_messages(landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
+    aliases = _market_message_aliases(db, "landlord", landlord.id)
     rows = db.query(DirectMessage).filter(
-        ((DirectMessage.recipient_type == "landlord") & (DirectMessage.recipient_id == landlord.id)) |
-        ((DirectMessage.sender_type == "landlord") & (DirectMessage.sender_id == landlord.id))
+        or_(_message_identity_filter(DirectMessage.recipient_type, DirectMessage.recipient_id, aliases), _message_identity_filter(DirectMessage.sender_type, DirectMessage.sender_id, aliases)),
+        (DirectMessage.sender_type == "landlord") | (DirectMessage.recipient_type == "landlord"),
     ).order_by(DirectMessage.created_at.desc()).all()
-    return [_message_dict(db, row, "landlord", landlord.id) for row in rows]
+    result = []
+    for row in rows:
+        outgoing = (row.sender_type, row.sender_id) in aliases
+        kind, person_id = (row.recipient_type, row.recipient_id) if outgoing else (row.sender_type, row.sender_id)
+        anonymous_incoming = row.is_anonymous and row.sender_type == "student" and not outgoing
+        if anonymous_incoming:
+            person_id = None
+        if kind in {"student", "lecturer"} and person_id:
+            linked = db.query(Landlord).filter((Landlord.linked_student_id if kind == "student" else Landlord.linked_lecturer_id) == person_id).first()
+            if linked:
+                kind, person_id = "landlord", linked.id
+        viewer_type, viewer_id = (row.sender_type, row.sender_id) if outgoing else ("landlord", landlord.id)
+        result.append({**_message_dict(db, row, viewer_type, viewer_id), "is_outgoing": outgoing,
+                       "unread": not outgoing and row.read_at is None,
+                       "peer_type": kind, "peer_id": person_id,
+                       "peer_name": _message_person(db, kind, person_id) if person_id else "Anonymous sender"})
+    return result
+
+
+@app.post("/marketing/provider/messages/read")
+def market_mark_thread_read(payload: MessageBlockRequest, landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
+    if payload.target_type not in {"student", "lecturer", "landlord"} or payload.target_id <= 0:
+        raise HTTPException(status_code=400, detail="Choose a conversation")
+    own = _market_message_aliases(db, "landlord", landlord.id)
+    peer = _market_message_aliases(db, payload.target_type, payload.target_id)
+    rows = db.query(DirectMessage).filter(
+        _message_identity_filter(DirectMessage.recipient_type, DirectMessage.recipient_id, own),
+        _message_identity_filter(DirectMessage.sender_type, DirectMessage.sender_id, peer),
+        (DirectMessage.sender_type == "landlord") | (DirectMessage.recipient_type == "landlord"),
+        DirectMessage.read_at.is_(None),
+    ).all()
+    for row in rows:
+        row.read_at = datetime.now(timezone.utc).isoformat()
+    db.commit()
+    return {"ok": True, "read_count": len(rows)}
 
 
 @app.post("/marketing/provider/messages/read/{student_id}")
@@ -4760,10 +4834,10 @@ def provider_mark_thread_read(student_id: int, landlord: Landlord = Depends(requ
 @app.post("/marketing/provider/messages")
 def provider_send_message(payload: DirectMessageCreate, landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
     recipient_type = payload.recipient_type.strip().lower()
-    if recipient_type not in {"student", "landlord"}:
-        raise HTTPException(status_code=400, detail="Providers can reply to students or other marketplace providers")
-    if recipient_type == "landlord" and payload.recipient_id == landlord.id:
-        raise HTTPException(status_code=400, detail="Choose another provider")
+    if recipient_type not in {"student", "lecturer", "landlord"}:
+        raise HTTPException(status_code=400, detail="Choose an Arounus market contact")
+    if _market_message_aliases(db, recipient_type, payload.recipient_id) & _market_message_aliases(db, "landlord", landlord.id):
+        raise HTTPException(status_code=400, detail="Choose another account")
     return _create_direct_message(db, "landlord", landlord.id, payload)
 
 
@@ -5056,7 +5130,101 @@ FUN_STICKERS = {
 # ---------------------------------------------------------------------------
 
 def _landlord_profile(landlord: Landlord) -> dict:
-    return {"id": landlord.id, "full_name": landlord.full_name, "business_name": landlord.business_name or "", "provider_type": landlord.provider_type or "residence", "email": landlord.email, "phone": landlord.phone, "profile_image_url": landlord.profile_image_url}
+    source = landlord.linked_student if landlord.linked_student_id else landlord.linked_lecturer if landlord.linked_lecturer_id else None
+    return {"id": landlord.id, "full_name": landlord.full_name, "business_name": landlord.business_name or "", "provider_type": landlord.provider_type or "residence", "email": source.email if source else landlord.email, "phone": landlord.phone, "profile_image_url": landlord.profile_image_url}
+
+
+def _market_provider_for_account(db: Session, role: str, account) -> Landlord:
+    if role == "landlord":
+        return require_landlord_account(_issue_landlord_token(account.id), db)
+    column = Landlord.linked_student_id if role == "student" else Landlord.linked_lecturer_id
+    # Link by verified account ID, never by a shared email address.
+    model = Student if role == "student" else Lecturer
+    account = db.query(model).filter(model.id == account.id).populate_existing().with_for_update().one()
+    provider = db.query(Landlord).filter(column == account.id).first()
+    if not provider:
+        provider = Landlord(
+            full_name=account.full_name, business_name="", provider_type="other",
+            email=f"market-{secrets.token_hex(16)}@accounts.arounus.invalid",
+            phone=account.phone or "", password_hash=_password_hash(secrets.token_urlsafe(48)),
+            active=True, created_at=datetime.now(timezone.utc).isoformat(),
+            **{"linked_student_id" if role == "student" else "linked_lecturer_id": account.id},
+        )
+        db.add(provider)
+    elif not provider.active:
+        raise HTTPException(status_code=403, detail="Your market account is inactive")
+    provider.full_name = account.full_name
+    provider.phone = account.phone or ""
+    provider.profile_image_url = account.profile_image_url
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        provider = db.query(Landlord).filter(column == account.id).first()
+        if not provider:
+            raise HTTPException(status_code=409, detail="Your market account is being prepared. Please try again.")
+    return require_landlord_account(_issue_landlord_token(provider.id), db)
+
+
+def _market_session_result(db: Session, role: str, account, token: Optional[str] = None):
+    provider = _market_provider_for_account(db, role, account)
+    issue = {"student": _issue_student_token, "lecturer": _issue_lecturer_token, "landlord": _issue_landlord_token}[role]
+    return JSONResponse({
+        "role": role, "token": token or issue(account.id),
+        "market_token": _issue_landlord_token(provider.id), "profile": _landlord_profile(provider),
+    }, headers={"Cache-Control": "private, no-store"})
+
+
+class MarketLogin(BaseModel):
+    identifier: str = Field(min_length=1, max_length=200)
+    password: str = Field(min_length=1, max_length=200)
+
+
+@app.post("/marketing/login")
+def market_login(payload: MarketLogin, db: Session = Depends(get_db)):
+    identifier = payload.identifier.strip()
+    _assert_login_allowed("market", identifier)
+    candidates = [
+        ("landlord", db.query(Landlord).filter(func.lower(Landlord.email) == identifier.lower(), Landlord.linked_student_id.is_(None), Landlord.linked_lecturer_id.is_(None)).first()),
+        ("lecturer", db.query(Lecturer).filter(func.lower(Lecturer.email) == identifier.lower()).first()),
+        ("student", db.query(Student).filter((Student.student_number == identifier.upper()) | (func.lower(Student.email) == identifier.lower())).first()),
+    ]
+    matches = []
+    for role, account in candidates:
+        _assert_login_allowed(role, identifier)
+        if account and _password_matches(payload.password, account.password_hash):
+            matches.append((role, account))
+    if not matches:
+        _record_login_failure("market", identifier)
+        for role, _ in candidates:
+            _record_login_failure(role, identifier)
+        raise HTTPException(status_code=401, detail="Email, username or password is incorrect")
+    allowed = [(role, account) for role, account in matches if account.active and (role == "landlord" or account.approved)]
+    if not allowed:
+        raise HTTPException(status_code=403, detail="Your Arounus account is not active and approved")
+    role, account = allowed[0]
+    _clear_login_failures("market", identifier)
+    _clear_login_failures(role, identifier)
+    return _market_session_result(db, role, account)
+
+
+@app.post("/marketing/session")
+def connect_market_session(request: Request, db: Session = Depends(get_db)):
+    headers = [("student", "X-Student-Token", require_student_account), ("lecturer", "X-Lecturer-Token", require_lecturer_account), ("landlord", "X-Landlord-Token", require_landlord_account)]
+    supplied = [(role, request.headers.get(header), check) for role, header, check in headers if request.headers.get(header)]
+    if not supplied:
+        raise HTTPException(status_code=401, detail="Sign in to your Arounus account")
+    if len(supplied) != 1:
+        raise HTTPException(status_code=400, detail="Use one Arounus account at a time")
+    role, token, check = supplied[0]
+    return _market_session_result(db, role, check(token, db), token)
+
+
+def _provider_advert_ownership(provider: Landlord):
+    conditions = [MarketAdvert.owner_landlord_id == provider.id]
+    if provider.linked_student_id:
+        conditions.append(MarketAdvert.owner_student_id == provider.linked_student_id)
+    return or_(*conditions)
 
 
 def _accommodation_payload(item: Accommodation, landlord: Landlord) -> dict:
@@ -5141,6 +5309,8 @@ async def register_landlord(full_name: str = Form(...), business_name: str = For
         raise HTTPException(status_code=400, detail="Choose accommodation, transport, sales, or other provider")
     if db.query(Landlord).filter(Landlord.email == email).first():
         raise HTTPException(status_code=409, detail="A provider profile already uses this email")
+    if db.query(Student.id).filter(func.lower(Student.email) == email).first() or db.query(Lecturer.id).filter(func.lower(Lecturer.email) == email).first():
+        raise HTTPException(status_code=409, detail="You already have an Arounus account. Choose Sign in and use your existing password.")
     image_url = None
     if profile_image and profile_image.filename:
         if not (profile_image.content_type or "").startswith("image/"):
@@ -5208,18 +5378,26 @@ def record_market_view(kind: str, listing_id: int, request: Request, db: Session
 
 
 @app.put("/marketing/{kind}/{listing_id}/rating")
-def rate_market_listing(kind: str, listing_id: int, payload: MarketRatingInput, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+def rate_market_listing(kind: str, listing_id: int, payload: MarketRatingInput, request: Request, db: Session = Depends(get_db)):
+    if request.headers.get("X-Landlord-Token"):
+        provider = require_landlord_account(request.headers["X-Landlord-Token"], db)
+    elif request.headers.get("X-Lecturer-Token"):
+        provider = _market_provider_for_account(db, "lecturer", require_lecturer_account(request.headers["X-Lecturer-Token"], db))
+    else:
+        provider = _market_provider_for_account(db, "student", require_student_account(request.headers.get("X-Student-Token"), db))
     item = _market_item(kind, listing_id, db)
-    if (kind == "adverts" and item.owner_student_id == student.id):
+    if (kind == "adverts" and (item.owner_landlord_id == provider.id or (provider.linked_student_id and item.owner_student_id == provider.linked_student_id))) or (kind == "rooms" and item.landlord_id == provider.id):
         raise HTTPException(status_code=403, detail="You cannot rate your own listing")
     model = Accommodation if kind == "rooms" else MarketAdvert
-    db.query(model).filter(model.id == listing_id).with_for_update().first()
-    current = db.query(MarketListingRating).filter_by(kind=kind, listing_id=listing_id, student_id=student.id).first()
+    item = db.query(model).filter(model.id == listing_id).populate_existing().with_for_update().one()
+    rating_model = MarketListingRating if provider.linked_student_id else MarketAccountRating
+    owner_key = {"student_id": provider.linked_student_id} if provider.linked_student_id else {"provider_id": provider.id}
+    current = db.query(rating_model).filter_by(kind=kind, listing_id=listing_id, **owner_key).first()
     if current:
         item.rating_total = (item.rating_total or 0) + payload.stars - current.stars
         current.stars = payload.stars
     else:
-        db.add(MarketListingRating(kind=kind, listing_id=listing_id, student_id=student.id, stars=payload.stars, created_at=datetime.now(timezone.utc).isoformat()))
+        db.add(rating_model(kind=kind, listing_id=listing_id, **owner_key, stars=payload.stars, created_at=datetime.now(timezone.utc).isoformat()))
         item.rating_total = (item.rating_total or 0) + payload.stars
         item.rating_count = (item.rating_count or 0) + 1
     db.commit()
@@ -5359,6 +5537,7 @@ def _delete_accommodation_record(db: Session, item: Accommodation) -> None:
         db.delete(comment)
     db.query(MarketListingView).filter_by(kind="rooms", listing_id=item.id).delete()
     db.query(MarketListingRating).filter_by(kind="rooms", listing_id=item.id).delete()
+    db.query(MarketAccountRating).filter_by(kind="rooms", listing_id=item.id).delete()
     db.delete(item); db.commit()
 
 
@@ -5393,9 +5572,7 @@ def create_accommodation_comment(listing_id: int, payload: AccommodationCommentC
         raise HTTPException(status_code=404, detail="The comment you are replying to no longer exists")
     landlord = None; student = None
     if x_landlord_token:
-        landlord = db.query(Landlord).filter(Landlord.id == _landlord_id_from_token(x_landlord_token)).first()
-        if not landlord or not landlord.active:
-            raise HTTPException(status_code=403, detail="Your landlord account is inactive")
+        landlord = require_landlord_account(x_landlord_token, db)
     else:
         student = db.query(Student).filter(Student.id == _student_id_from_token(x_student_token)).first()
         if not student or not student.active or not student.approved:
@@ -5427,9 +5604,7 @@ def _advert_payload(item: MarketAdvert, owner_name: str = "", registration_conta
 
 def _advert_owner(db: Session, student_token: Optional[str], landlord_token: Optional[str]):
     if landlord_token:
-        owner = db.query(Landlord).filter(Landlord.id == _landlord_id_from_token(landlord_token)).first()
-        if not owner or not owner.active:
-            raise HTTPException(status_code=403, detail="Your landlord account is inactive")
+        owner = require_landlord_account(landlord_token, db)
         return None, owner
     if student_token:
         owner = db.query(Student).filter(Student.id == _student_id_from_token(student_token)).first()
@@ -5538,7 +5713,7 @@ def my_market_adverts(
 ):
     student, landlord = _advert_owner(db, x_student_token, x_landlord_token)
     query = db.query(MarketAdvert).filter(
-        MarketAdvert.owner_student_id == student.id if student else MarketAdvert.owner_landlord_id == landlord.id
+        MarketAdvert.owner_student_id == student.id if student else _provider_advert_ownership(landlord)
     )
     return [_advert_payload(item) for item in query.order_by(MarketAdvert.created_at.desc()).all()]
 
@@ -5552,7 +5727,7 @@ async def update_market_advert(
     retained_image_urls: str = Form(""), images: Optional[List[UploadFile]] = File(None),
     landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db),
 ):
-    item = db.query(MarketAdvert).filter(MarketAdvert.id == advert_id, MarketAdvert.owner_landlord_id == landlord.id).first()
+    item = db.query(MarketAdvert).filter(MarketAdvert.id == advert_id, _provider_advert_ownership(landlord)).first()
     if not item:
         raise HTTPException(status_code=404, detail="Listing not found")
     if not all(value.strip() for value in (business_name, headline, category, description)) or len(description.strip()) > 1200:
@@ -5597,11 +5772,12 @@ async def update_market_advert(
 
 @app.delete("/marketing/adverts/{advert_id}")
 def delete_market_advert(advert_id: int, landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
-    item = db.query(MarketAdvert).filter(MarketAdvert.id == advert_id, MarketAdvert.owner_landlord_id == landlord.id).first()
+    item = db.query(MarketAdvert).filter(MarketAdvert.id == advert_id, _provider_advert_ownership(landlord)).first()
     if not item:
         raise HTTPException(status_code=404, detail="Listing not found")
     db.query(MarketListingView).filter_by(kind="adverts", listing_id=item.id).delete()
     db.query(MarketListingRating).filter_by(kind="adverts", listing_id=item.id).delete()
+    db.query(MarketAccountRating).filter_by(kind="adverts", listing_id=item.id).delete()
     db.delete(item); db.commit()
     return {"ok": True}
 
@@ -5625,7 +5801,7 @@ def update_service_availability(
     if not x_landlord_token:
         raise HTTPException(status_code=401, detail="Sign in as the service owner")
     _, owner = _advert_owner(db, None, x_landlord_token)
-    item = db.query(MarketAdvert).filter(MarketAdvert.id == advert_id, MarketAdvert.owner_landlord_id == owner.id).first()
+    item = db.query(MarketAdvert).filter(MarketAdvert.id == advert_id, _provider_advert_ownership(owner)).first()
     if not item:
         raise HTTPException(status_code=404, detail="Service listing not found")
     if re.search(r"transport|ride|shuttle|courier|delivery|sales|retail|technology|second.?hand|textbook", item.category, re.IGNORECASE):
@@ -5680,7 +5856,7 @@ def pause_market_advert(
 ):
     student, landlord = _advert_owner(db, x_student_token, x_landlord_token)
     query = db.query(MarketAdvert).filter(MarketAdvert.id == advert_id)
-    query = query.filter(MarketAdvert.owner_student_id == student.id) if student else query.filter(MarketAdvert.owner_landlord_id == landlord.id)
+    query = query.filter(MarketAdvert.owner_student_id == student.id) if student else query.filter(_provider_advert_ownership(landlord))
     item = query.first()
     if not item:
         raise HTTPException(status_code=404, detail="Advert not found")
@@ -5756,6 +5932,7 @@ def admin_delete_market_advert(advert_id: int, _pin_ok: bool = Depends(require_l
         raise HTTPException(status_code=404, detail="Advert not found")
     db.query(MarketListingView).filter_by(kind="adverts", listing_id=item.id).delete()
     db.query(MarketListingRating).filter_by(kind="adverts", listing_id=item.id).delete()
+    db.query(MarketAccountRating).filter_by(kind="adverts", listing_id=item.id).delete()
     db.delete(item); db.commit()
     return {"ok": True}
 

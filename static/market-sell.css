@@ -49,3 +49,14 @@
 #closeContact{float:right;border:0;background:transparent;color:#395a52;font-size:28px}
 #contactForm{display:grid;gap:12px}#contactForm textarea{min-height:125px;border:1px solid #bfd5ca;border-radius:8px;padding:12px;font:inherit}#contactForm button{justify-self:start;border:0;border-radius:8px;background:#087f70;color:white;padding:11px 16px;font-weight:700}
 @media(max-width:600px){#sellDialog{padding:20px}.sell-choice{grid-template-columns:1fr}.sell-choice button{min-height:90px}}
+
+#marketAuthDialog{width:min(600px,calc(100% - 24px));max-height:90vh;padding:28px;border:1px solid #bfd5ca;border-radius:20px;background:#fff;color:#19312e;box-shadow:0 25px 80px #142d2840;overflow:auto}
+#marketAuthDialog::backdrop{background:#091915aa}
+#marketAuthDialog [data-close-market-auth]{background:transparent;border:0;font-size:32px;color:#395a52;min-width:44px}
+#marketAuthContent>p{line-height:1.6;color:#526b65}
+#marketAuthStatus{min-height:20px;color:#087f70;font-weight:700}
+#marketAuthStatus.error{color:#a93232}
+.market-account-choice button{flex:1;min-height:48px}
+.market-inbox-button{border:1px solid #85bca9;border-radius:10px;background:#eef7f2;color:#087f70;padding:10px 14px;font-weight:700;min-height:44px;cursor:pointer}
+.market-inbox-icon{display:none}
+@media(max-width:560px){.market-inbox-label{display:none}.market-inbox-icon{display:inline}.market-inbox-button{padding:8px;min-width:44px}#marketAuthDialog{padding:20px}}

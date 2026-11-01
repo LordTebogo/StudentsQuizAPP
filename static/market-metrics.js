@@ -70,16 +70,13 @@
     if (!star) return;
     event.stopPropagation();
     const card = star.closest(selector), note = card.querySelector('.market-rating-note');
-    const token = sessionStorage.getItem('studentToken');
-    if (!token) { note.textContent = 'Sign in as a learner to rate.'; return; }
     star.disabled = true;
     try {
-      const response = await fetch(`/marketing/${card.dataset.marketKind}/${card.dataset.marketId}/rating`, {
-        method:'PUT', headers:{'Content-Type':'application/json','X-Student-Token':token},
+      const result = await ArounusMarketAuth.request(`/marketing/${card.dataset.marketKind}/${card.dataset.marketId}/rating`, {
+        method:'PUT', headers:{'Content-Type':'application/json'},
         body:JSON.stringify({stars:Number(star.dataset.stars)})
       });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.detail || 'Rating could not be saved');
+      if(!result)return;
       cardsFor(card).forEach(other => { other.dataset.marketRating = String(result.rating); other.dataset.marketRatingCount = String(result.rating_count); refresh(other); });
       card.querySelectorAll('.market-stars button').forEach(button => { const active = Number(button.dataset.stars) <= result.your_rating; button.dataset.active = String(active); button.textContent = active ? '★' : '☆'; });
       note.textContent = `Your rating: ${result.your_rating}/5`;

@@ -176,6 +176,10 @@ class Landlord(Base):
     password_hash = Column(String, nullable=False)
     active = Column(Boolean, nullable=False, default=True)
     created_at = Column(String, nullable=False)
+    linked_student_id = Column(Integer, ForeignKey("students.id", ondelete="CASCADE"), unique=True, index=True)
+    linked_lecturer_id = Column(Integer, ForeignKey("lecturers.id", ondelete="CASCADE"), unique=True, index=True)
+    linked_student = relationship("Student", foreign_keys=[linked_student_id])
+    linked_lecturer = relationship("Lecturer", foreign_keys=[linked_lecturer_id])
 
 
 class Accommodation(Base):
@@ -286,6 +290,17 @@ class MarketListingRating(Base):
     kind = Column(String(16), nullable=False, index=True)
     listing_id = Column(Integer, nullable=False, index=True)
     student_id = Column(Integer, ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True)
+    stars = Column(Integer, nullable=False)
+    created_at = Column(String, nullable=False)
+
+
+class MarketAccountRating(Base):
+    __tablename__ = "market_account_ratings"
+    __table_args__ = (UniqueConstraint("kind", "listing_id", "provider_id", name="market_account_rating_unique"),)
+    id = Column(Integer, primary_key=True)
+    kind = Column(String(16), nullable=False, index=True)
+    listing_id = Column(Integer, nullable=False, index=True)
+    provider_id = Column(Integer, ForeignKey("landlords.id", ondelete="CASCADE"), nullable=False, index=True)
     stars = Column(Integer, nullable=False)
     created_at = Column(String, nullable=False)
 

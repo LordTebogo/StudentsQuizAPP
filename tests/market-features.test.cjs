@@ -16,6 +16,7 @@ test('opening the same product repeatedly records one view and ratings update in
     throw new Error(url);
   };
   w.sessionStorage.setItem('studentToken', 'test-token');
+  w.ArounusMarketAuth={request:async(url,options)=>(await w.fetch(url,options)).json()};
   w.eval(metrics); await tick();
   w.document.querySelector('[data-offer]').click();
   w.document.querySelector('[data-offer]').click();

@@ -21,11 +21,14 @@ test('sell or list opens one advertiser registration and uses its login for room
     throw new Error(url);
   };
   w.eval(sellScript);
+  w.eval(fs.readFileSync(path.join(__dirname,'../static/market-auth.js'),'utf8'));
   w.document.querySelector('[data-open-sell]').click();
-  assert.equal(w.document.getElementById('sellDialog').open, true);
-  assert.equal(w.document.querySelectorAll('#sellAuthForm').length, 1);
+  await tick();
+  assert.equal(w.document.getElementById('marketAuthDialog').open, true);
+  w.document.querySelector('[data-account-answer="no"]').click();
+  assert.equal(w.document.querySelectorAll('#marketAuthForm').length, 1);
   assert.equal(w.document.querySelector('[name="provider_type"]'), null);
-  const auth = w.document.getElementById('sellAuthForm');
+  const auth = w.document.getElementById('marketAuthForm');
   for (const [name,value] of Object.entries({full_name:'One seller',phone:'0712345678',email:'one@example.com',password:'password123',confirm_password:'password123'})) auth.elements[name].value = value;
   auth.dispatchEvent(new w.Event('submit', {bubbles:true,cancelable:true}));
   await tick();
