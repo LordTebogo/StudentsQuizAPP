@@ -15,7 +15,7 @@
 <link rel="stylesheet" href="/static/brand-intro.css?v=1">
 <script>{const p=new URLSearchParams(location.search);if((p.has('role')&&p.get('role')!=='advertiser')||(p.has('mode')&&!p.has('sell')&&!p.has('create')&&p.get('role')!=='advertiser')||location.hash==='#register')location.replace('/static/academics.html'+location.search+location.hash)}</script>
 <script src="/static/media-url.js?v=1" defer></script>
-<script src="/static/campus-home.js?v=2" defer></script>
+<script src="/static/campus-home.js?v=3" defer></script>
 <script src="/static/market-sell.js?v=2" defer></script>
 <script src="/static/market-contact.js?v=1" defer></script>
 <script src="/static/video-access.js?v=5" defer></script>
@@ -31,8 +31,8 @@
 <nav aria-label="Main navigation"><a class="academic-link" href="/static/academics.html">Learning <span>↗</span></a><button class="sell-link" type="button" data-open-sell>Sell or list</button></nav>
 </header>
 <main id="market">
-<section class="campus-intro"><span class="eyebrow">YOUR CAMPUS. YOUR COMMUNITY.</span><h1>Campus life,<br><em>all in one place.</em></h1><p>Find a room, catch a ride, or shop what students are selling around your university or college.</p></section>
-<section class="market-browser" aria-label="Browse the campus market">
+<section class="campus-intro"><span class="eyebrow">YOUR CAMPUS. YOUR COMMUNITY.</span><h1>Campus life,<br><em>all in one place.</em></h1><p>Study with quizzes and tutors, or find a room, a ride, and useful items around your university or college.</p><div class="campus-paths"><a href="/static/academics.html">Study and find a tutor →</a><a href="#marketBrowse">Browse campus listings →</a></div></section>
+<section class="market-browser" id="marketBrowse" aria-label="Browse the campus market">
 <form id="campusSearch" class="campus-search"><div><label for="campus">University or college</label><input id="campus" name="campus" list="campusOptions" placeholder="Choose or type your campus" autocomplete="off"><datalist id="campusOptions"></datalist></div><div><label for="search">What are you looking for?</label><input id="search" name="search" type="search" placeholder="Room, shuttle, textbooks…"></div><button type="submit">Find listings</button></form>
 <div class="market-refine"><label for="maxPrice">Maximum price (R)</label><input id="maxPrice" type="number" min="0" inputmode="numeric" placeholder="Any price"><label for="sortListings">Sort by</label><select id="sortListings"><option value="newest">Newest first</option><option value="price-low">Price: low to high</option><option value="price-high">Price: high to low</option></select></div>
 <div class="market-categories" role="group" aria-label="Listing category"><button type="button" data-category="all" aria-pressed="true">All listings</button><button type="button" data-category="rooms" aria-pressed="false">Rooms</button><button type="button" data-category="transport" aria-pressed="false">Transport</button><button type="button" data-category="items" aria-pressed="false">Items for sale</button><button type="button" data-category="services" aria-pressed="false">Other services</button></div>

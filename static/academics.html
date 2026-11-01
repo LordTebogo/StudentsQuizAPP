@@ -256,7 +256,7 @@
     try {
       const response = await fetch('/marketing/adverts');
       if (!response.ok) return;
-      const adverts = (await response.json()).filter(advert => advertLink(advert)).slice(0, 12);
+      const adverts = (await response.json()).filter(advert => advertLink(advert) && !/^DEMO:/i.test(String(advert.headline || '').trim()) && String(advert.campus || '').trim().toLowerCase() !== 'demo campus').slice(0, 12);
       const slides = [];
       adverts.forEach(advert => {
         const media = [];

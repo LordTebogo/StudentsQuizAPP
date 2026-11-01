@@ -658,6 +658,10 @@ class AdminQuizInput(BaseModel):
     questions: List[AdminQuestionInput]
 
 
+class QuizModuleChange(BaseModel):
+    module_code: str = Field(min_length=1, max_length=64)
+
+
 class QuizGenerationInput(BaseModel):
     topic: str = Field(min_length=3, max_length=500)
     module_code: str = Field(min_length=1, max_length=64)
@@ -2165,6 +2169,21 @@ async def upload_quiz(
 def list_quizzes(lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db)):
     rows = db.query(Quiz).filter(Quiz.lecturer_id == lecturer.id).order_by(Quiz.id.desc()).all()
     return [{"id": r.id, "title": r.title, "module_code": r.module_code, "is_fun": bool(r.is_fun), "fun_level": r.fun_level or "starter", "created_at": r.created_at} for r in rows]
+
+
+@app.patch("/lecturer/quizzes/{quiz_id}/module")
+def lecturer_change_quiz_module(
+    quiz_id: int, payload: QuizModuleChange,
+    lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db),
+):
+    quiz = _require_owned_quiz(db, quiz_id, lecturer)
+    if db.query(Submission.id).filter(Submission.quiz_id == quiz_id).first():
+        raise HTTPException(status_code=409, detail="This quiz already has submissions. Duplicate it into the correct module instead.")
+    if db.query(QuizDraft.id).filter(QuizDraft.quiz_id == quiz_id).first():
+        raise HTTPException(status_code=409, detail="A learner has started this quiz. Duplicate it into the correct module instead.")
+    quiz.module_code = _require_module_access(db, lecturer, payload.module_code)
+    db.commit()
+    return {"id": quiz.id, "module_code": quiz.module_code}
 
 
 @app.get("/quiz-modules")

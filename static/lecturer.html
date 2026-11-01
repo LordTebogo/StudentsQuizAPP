@@ -128,9 +128,13 @@
     <h2>2. Choose a quiz to review</h2>
     <label for="quizSelect">Quiz</label>
     <select id="quizSelect"><option value="">Loading quizzes…</option></select>
+    <label for="quizModuleCorrection">Assigned subject</label>
+    <select id="quizModuleCorrection" aria-describedby="quizModuleHelp"></select>
+    <p class="muted" id="quizModuleHelp">Correct a quiz's subject before learners submit answers.</p>
     <div class="account-actions">
       <button class="btn secondary" id="refreshQuizzesBtn">Refresh quiz list</button>
       <button class="btn secondary" id="duplicateQuizBtn" type="button">Duplicate in builder</button>
+      <button class="btn secondary" id="correctQuizModuleBtn" type="button">Save subject correction</button>
       <button class="btn" id="loadStudentsBtn" disabled>See students who took this quiz</button>
     </div>
     <p class="muted" id="quizReviewStatus" aria-live="polite">Choose a quiz, then load its student submissions.</p>
@@ -234,7 +238,7 @@ async function api(path, options = {}, needsAuth = false) {
 function applyProfile(profile) {
   window.LECTURER_PROFILE = profile;
   const assignedModules = [...new Set(profile.module_codes || [])].map(String).sort();
-  ['builderModuleCode', 'moduleCode'].forEach(id => {
+  ['builderModuleCode', 'moduleCode', 'quizModuleCorrection'].forEach(id => {
     const select = $(id);
     if (!select) return;
     const previous = select.value;
@@ -431,7 +435,9 @@ async function loadQuizzes() {
       return;
     }
     select.innerHTML = quizzes.map(q => `<option value="${q.id}">${escapeHtml(moduleLabel(q.module_code))} — ${escapeHtml(q.title)}${q.is_fun ? ` · Fun Quiz (${escapeHtml(q.fun_level)})` : ''}</option>`).join('');
+    select._quizModules = Object.fromEntries(quizzes.map(q => [String(q.id), q.module_code]));
     if ([...select.options].some(option => option.value === selectedId)) select.value = selectedId;
+    $('quizModuleCorrection').value = select._quizModules[select.value] || '';
     $('loadStudentsBtn').disabled = !select.value;
     $('quizReviewStatus').textContent = select.value ? 'Ready to load students who took the selected quiz.' : 'Choose a quiz, then load its student submissions.';
   } catch (err) {
@@ -441,6 +447,16 @@ async function loadQuizzes() {
   }
 }
 $('refreshQuizzesBtn').addEventListener('click', loadQuizzes);
+$('correctQuizModuleBtn').addEventListener('click', async () => {
+  const quizId = $('quizSelect').value, moduleCode = $('quizModuleCorrection').value;
+  if (!quizId || !moduleCode) { $('quizReviewStatus').textContent = 'Choose a quiz and an assigned subject.'; return; }
+  const button = $('correctQuizModuleBtn'); button.disabled = true;
+  try {
+    await api(`/lecturer/quizzes/${encodeURIComponent(quizId)}/module`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({module_code:moduleCode})}, true);
+    await loadQuizzes(); $('quizReviewStatus').textContent = 'Subject updated. Learners will find this quiz under the corrected subject.';
+  } catch (err) { $('quizReviewStatus').textContent = err.message; }
+  finally { button.disabled = false; }
+});
 $('loadStudentsBtn').addEventListener('click', () => {
   const quizId = $('quizSelect').value;
   if (!quizId) return;
@@ -458,6 +474,7 @@ $('downloadAllPdfBtn').addEventListener('click', () => {
 });
 $('quizSelect').addEventListener('change', (e) => {
   $('loadStudentsBtn').disabled = !e.target.value;
+  $('quizModuleCorrection').value = e.target._quizModules?.[e.target.value] || '';
   $('quizReviewStatus').textContent = e.target.value ? 'Ready to load students who took the selected quiz.' : 'Choose a quiz, then load its student submissions.';
   if (e.target.value) {
     $('gradingCard').classList.add('hidden');

@@ -15,7 +15,7 @@ os.environ["CLOUDINARY_API_SECRET"] = "test-secret"
 
 import main  # noqa: E402
 import cloudinary_utils  # noqa: E402
-from models import Lecturer, Lesson, LessonAnswer, LessonComment, LessonQuestion, LessonSubmission, LessonView, Student, StudentModule  # noqa: E402
+from models import Lecturer, LecturerModule, Lesson, LessonAnswer, LessonComment, LessonQuestion, LessonSubmission, LessonView, Quiz, Submission, Student, StudentModule  # noqa: E402
 
 
 class LessonManagementTest(unittest.TestCase):
@@ -28,6 +28,7 @@ class LessonManagementTest(unittest.TestCase):
             second_student = Student(student_number="LEARN002", full_name="Second learner", email="second@example.test", password_hash="unused", approved=True, active=True, created_at="2026-10-01T00:00:00Z")
             db.add_all([owner, other, student, second_student]); db.flush()
             db.add_all([StudentModule(student_id=student.id, module_code="BIO101"), StudentModule(student_id=second_student.id, module_code="BIO101")])
+            db.add_all([LecturerModule(lecturer_id=owner.id, module_code="BIO101"), LecturerModule(lecturer_id=owner.id, module_code="CHEMISTRY"), LecturerModule(lecturer_id=other.id, module_code="BIO101")])
             db.commit()
             cls.owner_id, cls.other_id, cls.student_id, cls.second_student_id = owner.id, other.id, student.id, second_student.id
         cls.client = TestClient(main.app)
@@ -42,6 +43,20 @@ class LessonManagementTest(unittest.TestCase):
             db.add(LessonQuestion(lesson_id=lesson.id, q_order=0, type="mcq", question="Old question?", options_json='["A", "B"]', correct_answer="A", marks=1))
             db.commit()
             self.lesson_id = lesson.id
+
+    def test_quiz_subject_correction_requires_owner_and_no_submissions(self):
+        with main.SessionLocal() as db:
+            quiz = Quiz(title="Chemistry review", module_code="BIO101", lecturer_id=self.owner_id, created_at="2026-10-01T00:00:00Z")
+            db.add(quiz); db.commit(); quiz_id = quiz.id
+        path = f"/lecturer/quizzes/{quiz_id}/module"
+        self.assertEqual(self.client.patch(path, headers=self.other_headers, json={"module_code":"BIO101"}).status_code, 404)
+        self.assertEqual(self.client.patch(path, headers=self.owner_headers, json={"module_code":"PHYSICS"}).status_code, 403)
+        corrected = self.client.patch(path, headers=self.owner_headers, json={"module_code":"CHEMISTRY"})
+        self.assertEqual((corrected.status_code, corrected.json().get("module_code")), (200, "CHEMISTRY"))
+        with main.SessionLocal() as db:
+            db.add(Submission(quiz_id=quiz_id, student_id="LEARN001", student_name="Learner", submitted_at="2026-10-01T00:00:00Z"))
+            db.commit()
+        self.assertEqual(self.client.patch(path, headers=self.owner_headers, json={"module_code":"BIO101"}).status_code, 409)
 
     def test_unique_views_and_owner_only_management(self):
         view_path = f"/student/lessons/{self.lesson_id}/view"

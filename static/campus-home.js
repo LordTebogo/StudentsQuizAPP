@@ -23,6 +23,7 @@
   const priceValue = entry => entry.kind === 'rooms' ? entry.monthly_rent : entry.price;
   const offerPrice = entry => entry.kind === 'rooms' ? roomPrice(entry) : entry.price !== null && entry.price !== undefined ? `R${Number(entry.price).toLocaleString('en-ZA')}` : 'Ask for price';
   const sponsored = entry => Boolean(entry.is_featured);
+  const isDemo = entry => /^DEMO:/i.test(String(entry.title || entry.headline || '').trim()) || normalized(entry.campus) === 'demo campus';
   function render() {
     $('campusListings').querySelectorAll('.campus-card').forEach(stopPreview);
     const campus = normalized($('campus').value), search = normalized($('search').value);
@@ -30,19 +31,21 @@
     const filtered = entries.filter(entry => (!campus || normalized(entry.campus).includes(campus)) && (category === 'all' || entry.kind === category) && (!search || normalized([entry.title, entry.headline, entry.description, entry.area, entry.business_name].join(' ')).includes(search)) && (maximum === null || (priceValue(entry) !== null && priceValue(entry) !== undefined && Number(priceValue(entry)) <= maximum)));
     const sort = $('sortListings').value;
     if (sort !== 'newest') filtered.sort((a, b) => {
+      if (isDemo(a) !== isDemo(b)) return isDemo(a) ? 1 : -1;
       const left = priceValue(a), right = priceValue(b);
       if (left == null) return right == null ? 0 : 1;
       if (right == null) return -1;
       return sort === 'price-low' ? Number(left) - Number(right) : Number(right) - Number(left);
     });
-    else filtered.sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
+    else filtered.sort((a, b) => Number(isDemo(a)) - Number(isDemo(b)) || String(b.created_at || '').localeCompare(String(a.created_at || '')));
     $('resultsTitle').textContent = $('campus').value.trim() ? `Around ${$('campus').value.trim()}` : 'Around campus';
-    $('marketStatus').textContent = loading ? 'Loading campus listings…' : failures === 2 ? 'Listings could not be loaded. Please try again.' : `${filtered.length} listing${filtered.length === 1 ? '' : 's'}${campus ? ' for your campus' : ' across all campuses'}${failures ? ' · Some listings could not be loaded. Retry to see everything.' : ''}`;
+    const demoCount = filtered.filter(isDemo).length;
+    $('marketStatus').textContent = loading ? 'Loading campus listings…' : failures === 2 ? 'Listings could not be loaded. Please try again.' : `${filtered.length - demoCount} active listing${filtered.length - demoCount === 1 ? '' : 's'}${campus ? ' for your campus' : ' across all campuses'}${demoCount ? ` · ${demoCount} clearly marked examples` : ''}${failures ? ' · Some listings could not be loaded. Retry to see everything.' : ''}`;
     $('retryListings').hidden = !failures;
     $('campusListings').setAttribute('aria-busy', String(loading));
     $('campusListings').innerHTML = filtered.map(entry => {
       const title = entry.title || entry.headline, src = image(entry);
-      return `<article class="campus-card" data-market-kind="${entry.kind === 'rooms' ? 'rooms' : 'adverts'}" data-market-id="${entry.id}" data-market-views="${entry.views || 0}" data-market-rating="${entry.rating || ''}" data-market-rating-count="${entry.rating_count || 0}" data-view-on-open="true" data-entry-key="${esc(entry.key)}" tabindex="0" aria-label="View ${esc(title)}"><button type="button" class="campus-card-media" data-offer="${esc(entry.key)}" aria-label="View ${esc(title)} and its photos">${src ? `<img src="${esc(window.arounusThumb?.(src, 560) || src)}" alt="${esc(title)}" loading="lazy">` : `<span>${categories[entry.kind]}</span>`}${photos(entry).length > 1 ? `<small class="photo-count">${photos(entry).length} photos</small>` : ''}</button><div class="campus-card-body"><span class="card-kind">${categories[entry.kind]}${sponsored(entry) ? ' · Sponsored' : ''}</span><h3>${esc(title)}</h3><p>${esc(entry.campus || 'Campus not specified')}${entry.area ? ' · ' + esc(entry.area) : ''}</p><p class="card-price">${esc(offerPrice(entry))}</p>${entry.kind !== 'rooms' && entry.business_name ? `<p class="card-provider">${esc(entry.business_name)}</p>` : ''}<button type="button" class="card-action" data-offer="${esc(entry.key)}">View ${entry.kind === 'rooms' ? 'room' : 'listing'} →</button></div></article>`;
+      return `<article class="campus-card" data-market-kind="${entry.kind === 'rooms' ? 'rooms' : 'adverts'}" data-market-id="${entry.id}" data-market-views="${entry.views || 0}" data-market-rating="${entry.rating || ''}" data-market-rating-count="${entry.rating_count || 0}" data-view-on-open="true" data-entry-key="${esc(entry.key)}" tabindex="0" aria-label="View ${esc(title)}"><button type="button" class="campus-card-media" data-offer="${esc(entry.key)}" aria-label="View ${esc(title)} and its photos">${src ? `<img src="${esc(window.arounusThumb?.(src, 560) || src)}" alt="${esc(title)}" loading="lazy">` : `<span>${categories[entry.kind]}</span>`}${photos(entry).length > 1 ? `<small class="photo-count">${photos(entry).length} photos</small>` : ''}</button><div class="campus-card-body"><span class="card-kind">${categories[entry.kind]}${sponsored(entry) ? ' · Sponsored' : ''}${isDemo(entry) ? ' · Example only' : ''}</span><h3>${esc(title)}</h3><p>${esc(entry.campus || 'Campus not specified')}${entry.area ? ' · ' + esc(entry.area) : ''}</p><p class="card-price">${esc(offerPrice(entry))}</p>${entry.kind !== 'rooms' && entry.business_name ? `<p class="card-provider">${esc(entry.business_name)}</p>` : ''}<button type="button" class="card-action" data-offer="${esc(entry.key)}">View ${entry.kind === 'rooms' ? 'room' : 'listing'} →</button></div></article>`;
     }).join('') || (loading || failures === 2 ? '' : '<div class="market-empty"><h3>No listings here yet</h3><p>Try another campus or category, or be the first to list something.</p><button type="button" data-open-sell>Sell or list on campus →</button></div>');
     $('campusListings').querySelectorAll('img').forEach(img => img.addEventListener('error', () => { img.replaceWith(document.createTextNode('Photo unavailable')); }));
   }

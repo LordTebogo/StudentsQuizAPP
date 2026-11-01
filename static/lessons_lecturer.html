@@ -75,13 +75,18 @@
     <input type="text" id="moduleCodeInput" list="moduleCodeOptions" placeholder="e.g. BIO101" autocapitalize="characters">
     <datalist id="moduleCodeOptions"></datalist>
     <p class="muted">Students pick the module name on the lessons page to see its videos. Use the assigned code across lessons in the same module (not case-sensitive — stored as UPPERCASE).</p>
-    <label for="lessonFile">Lesson JSON file (title, description, questions)</label>
-    <input type="file" id="lessonFile" accept="application/json">
+    <label for="newLessonTitle">Lesson title</label>
+    <input id="newLessonTitle" type="text" maxlength="200" placeholder="e.g. Gluconeogenesis explained">
+    <label for="newLessonDescription">What will students learn?</label>
+    <textarea id="newLessonDescription" rows="3" placeholder="Summarise the lesson and its learning goals"></textarea>
+    <div id="newLessonQuestions"></div>
+    <button class="btn secondary" type="button" id="addNewLessonQuestion">+ Add another question</button>
+    <details><summary>Advanced: upload a prepared lesson JSON file instead</summary><label for="lessonFile">Lesson JSON file</label><input type="file" id="lessonFile" accept="application/json"><p class="muted">A selected JSON file takes precedence over the form above.</p></details>
     <label for="lessonVideo">Video file</label>
     <input type="file" id="lessonVideo" accept="video/*">
     <label for="lessonImages">Question images (optional)</label>
     <input type="file" id="lessonImages" accept="image/*" multiple>
-    <p class="muted">The JSON should look like: <code>{"title": "...", "description": "...", "questions": [...]}</code> — same question format as quizzes (mcq / short / long), each optionally with an <code>"image"</code> field.</p>
+    <p class="muted">Add at least one question so students can check their understanding after the video. Advanced JSON supports multiple choice, short and long answers, and question images.</p>
     <button class="btn" id="uploadLessonBtn">Upload lesson</button>
     <div id="uploadMsg"></div>
     <div id="shareBox" class="hidden">
@@ -234,6 +239,29 @@ if (LECTURER_TOKEN) {
 }
 
 // ---- Upload lesson -----------------------------------------------------
+function addNewLessonQuestion() {
+  const container = document.createElement('fieldset');
+  container.className = 'lesson-question-editor';
+  container.innerHTML = '<legend>Check understanding</legend><label>Question <input class="new-lesson-question" type="text" required placeholder="What should the learner be able to answer?"></label><label>Option A <input class="new-lesson-option" type="text" required></label><label>Option B <input class="new-lesson-option" type="text" required></label><label>Option C <input class="new-lesson-option" type="text"></label><label>Option D <input class="new-lesson-option" type="text"></label><label>Correct option <select class="new-lesson-answer"><option value="0">A</option><option value="1">B</option><option value="2">C</option><option value="3">D</option></select></label><button type="button" class="btn secondary remove-new-lesson-question">Remove question</button>';
+  container.querySelector('.remove-new-lesson-question').addEventListener('click', () => { if ($('newLessonQuestions').children.length > 1) container.remove(); });
+  $('newLessonQuestions').appendChild(container);
+}
+$('addNewLessonQuestion').addEventListener('click', addNewLessonQuestion);
+addNewLessonQuestion();
+function lessonFromForm() {
+  const title = $('newLessonTitle').value.trim();
+  if (!title) throw new Error('Enter a lesson title.');
+  const questions = [...$('newLessonQuestions').children].map((row, index) => {
+    const question = row.querySelector('.new-lesson-question').value.trim();
+    const options = [...row.querySelectorAll('.new-lesson-option')].map(input => input.value.trim()).filter(Boolean);
+    const answerIndex = Number(row.querySelector('.new-lesson-answer').value);
+    const answer = row.querySelectorAll('.new-lesson-option')[answerIndex].value.trim();
+    if (!question || options.length < 2 || !answer) throw new Error(`Complete question ${index + 1}, at least two options, and its correct answer.`);
+    if (new Set(options.map(option => option.toLocaleLowerCase())).size !== options.length) throw new Error(`Question ${index + 1} has duplicate options.`);
+    return { type: 'mcq', question, options, answer, marks: 1 };
+  });
+  return new File([JSON.stringify({ title, description: $('newLessonDescription').value.trim(), questions })], 'lesson.json', { type: 'application/json' });
+}
 $('uploadLessonBtn').addEventListener('click', async () => {
   const fileInput = $('lessonFile');
   const videoInput = $('lessonVideo');
@@ -242,11 +270,13 @@ $('uploadLessonBtn').addEventListener('click', async () => {
   const msgBox = $('uploadMsg');
   const moduleCode = moduleInput.value.trim();
   if (!moduleCode) { showMsg(msgBox, 'Enter a module code first.', 'error'); return; }
-  if (!fileInput.files.length) { showMsg(msgBox, 'Choose a lesson JSON file first.', 'error'); return; }
+  let lessonFile;
+  try { lessonFile = fileInput.files[0] || lessonFromForm(); }
+  catch (err) { showMsg(msgBox, err.message, 'error'); return; }
   if (!videoInput.files.length) { showMsg(msgBox, 'Choose a video file first.', 'error'); return; }
 
   const formData = new FormData();
-  formData.append('file', fileInput.files[0]);
+  formData.append('file', lessonFile);
   formData.append('video', videoInput.files[0]);
   formData.append('module_code', moduleCode);
   for (const img of imagesInput.files) formData.append('images', img);
@@ -262,6 +292,8 @@ $('uploadLessonBtn').addEventListener('click', async () => {
     $('shareLink').textContent = link;
     $('shareBox').classList.remove('hidden');
     fileInput.value = ''; videoInput.value = ''; imagesInput.value = '';
+    $('newLessonTitle').value = ''; $('newLessonDescription').value = '';
+    $('newLessonQuestions').replaceChildren(); addNewLessonQuestion();
     // Keep the module code filled in — the lecturer is likely to upload
     // another lesson for the same module next.
     await loadModules();
