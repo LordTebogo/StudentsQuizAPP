@@ -1,0 +1,50 @@
+footer.arounus-footer {
+  box-sizing: border-box;
+  display: block;
+  width: min(1180px, calc(100% - 40px));
+  max-width: none;
+  margin: 28px auto 24px;
+  padding: 32px 32px 18px;
+  border: 1px solid #204b3d;
+  border-radius: 20px;
+  background: #102f26;
+  color: #d2e3da;
+  font: 14px/1.6 Arial, sans-serif;
+  letter-spacing: normal;
+  text-align: left;
+}
+footer.arounus-footer * { box-sizing: border-box; }
+.campus-shell > footer.arounus-footer { width: 100%; }
+.arounus-footer__grid { display: grid; grid-template-columns: 1.25fr .8fr 1.2fr; gap: 32px; }
+footer.arounus-footer a { color: #d2e3da; font: inherit; text-transform: none; text-decoration: none; letter-spacing: normal; }
+footer.arounus-footer a:hover { color: #fff; text-decoration: underline; text-underline-offset: 4px; }
+footer.arounus-footer a:focus-visible, footer.arounus-footer button:focus-visible { outline: 3px solid #b2f0c9; outline-offset: 3px; border-radius: 6px; }
+footer.arounus-footer .arounus-footer__brand { display: inline-flex; align-items: center; gap: 12px; min-height: 44px; padding: 0; color: #fff; text-decoration: none; font-size: 24px; line-height: 1.15; letter-spacing: -.7px; }
+.arounus-footer__brand img { display: block; width: 44px; height: 44px; object-fit: contain; border-radius: 50%; background: #f5f8f6; }
+footer.arounus-footer .arounus-footer__brand strong { color: #a8e5bf; }
+.arounus-footer__brand small { display: block; margin-top: 4px; color: #b5cec0; font-size: 11px; letter-spacing: .7px; }
+.arounus-footer__about p { margin: 16px 0 0; color: #b5cec0; font-size: 13px; line-height: 1.7; }
+footer.arounus-footer h2 { margin: 0 0 10px; color: #fff; font: 700 14px/1.4 Arial, sans-serif; letter-spacing: .2px; }
+footer.arounus-footer .arounus-footer__links { display: flex; flex-direction: column; align-items: flex-start; gap: 0; margin: 0; }
+footer.arounus-footer .arounus-footer__links a { display: flex; align-items: center; min-height: 44px; padding: 4px 0; font-size: 13px; }
+.arounus-footer__contact { min-width: 0; }
+footer.arounus-footer .arounus-footer__contact-link { display: flex; align-items: center; gap: 12px; min-height: 66px; padding: 10px 12px; margin-top: 10px; border: 1px solid #3a5e4e; border-radius: 12px; background: #183b2f; }
+.arounus-footer__contact-link svg { width: 22px; height: 22px; flex-shrink: 0; fill: none; stroke: #b2f0c9; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.arounus-footer__contact-link > span { min-width: 0; }
+.arounus-footer__contact-link small { display: block; color: #b5cec0; font-size: 11px; line-height: 1.4; }
+.arounus-footer__contact-link span span { display: block; color: #fff; font-size: 13px; overflow-wrap: anywhere; }
+.arounus-footer__arrow { margin-left: auto; color: #b2f0c9; }
+.arounus-footer__bottom { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 20px; margin-top: 24px; padding-top: 14px; border-top: 1px solid #3a5e4e; color: #b5cec0; font-size: 11px; }
+footer.arounus-footer .arounus-footer__bottom nav { display: flex; flex-wrap: wrap; gap: 0 18px; margin: 0; }
+footer.arounus-footer .arounus-footer__bottom a { display: inline-flex; align-items: center; min-height: 44px; padding: 4px 0; font-size: 11px; }
+footer.arounus-footer #installAppBtn { min-height: 44px; margin: 0; padding: 6px 12px; border: 1px solid #638a73; border-radius: 8px; background: transparent; color: #d2e3da; font: inherit; cursor: pointer; }
+@media (max-width: 720px) {
+  footer.arounus-footer { width: calc(100% - 24px); padding: 24px 20px 14px; margin-top: 20px; }
+  .arounus-footer__grid { grid-template-columns: minmax(95px, .8fr) minmax(0, 1.4fr); gap: 24px 16px; }
+  .arounus-footer__about { grid-column: 1 / -1; }
+  .arounus-footer__about p { margin-top: 10px; }
+  .arounus-footer__contact-link svg, .arounus-footer__arrow { display: none; }
+  footer.arounus-footer .arounus-footer__contact-link { padding: 10px; }
+  .arounus-footer__bottom { margin-top: 20px; }
+  body:has(.mobile-tabbar) > footer.arounus-footer { margin-bottom: 90px; }
+}

@@ -20,6 +20,7 @@
   @media print { .top, .guide-actions, #videoSection { display: none !important; } .wrap { max-width: none; } .guide-hero, .guide-grid .card { box-shadow: none; break-inside: avoid; } }
 </style>
 <script src="/static/app-traffic.js?v=1" defer></script>
+<link rel="stylesheet" href="/static/site-footer.css?v=1">
 </head>
 <body>
 <script>if (!sessionStorage.getItem('studentToken')) location.replace('/?role=learner');</script>
@@ -60,5 +61,26 @@ fetch('/student/lessons?module_code=AROUNUS', { headers: { 'X-Student-Token': se
   .catch(error => { videos.textContent = error.message; });
 </script>
 <script src="/static/loading.js"></script>
+<footer class="site-footer arounus-footer" aria-label="Arounus footer">
+  <div class="arounus-footer__grid">
+    <div class="arounus-footer__about">
+      <a class="arounus-footer__brand" href="/" aria-label="Arounus home"><img src="/branding/logo" alt="" width="44" height="44" loading="lazy"><span>Aroun<strong>us</strong><small>Around us</small></span></a>
+      <p>Learning, listings and local connections.<br>Find your place. Stay connected.</p>
+    </div>
+    <nav class="arounus-footer__links" aria-label="Explore Arounus">
+      <h2>Explore</h2>
+      <a href="/">Campus market</a>
+      <a href="/learning">Learning</a>
+      <a href="/learning/guide">How to use Arounus</a>
+      <a href="/trust#support">Help &amp; support</a>
+    </nav>
+    <div class="arounus-footer__contact">
+      <h2>Get in touch</h2>
+      <a class="arounus-footer__contact-link" href="https://wa.me/27617048855" target="_blank" rel="noopener noreferrer" aria-label="Contact Arounus on WhatsApp: 061 704 8855"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 11.7a8.5 8.5 0 0 1-12.6 7.5L3 20.5l1.3-4.8a8.5 8.5 0 1 1 16.2-4Z"/><path d="M8.2 7.8c.6 3.6 2.4 5.4 6 6l1.2-1.3 2 1c-.1 1.6-1 2.4-2.5 2.2-4-.5-7.8-4.3-8.2-8.2-.2-1.5.6-2.4 2.2-2.5l1 2Z"/></svg><span><small>WhatsApp</small><span>061 704 8855</span></span><span class="arounus-footer__arrow" aria-hidden="true">↗</span></a>
+      <a class="arounus-footer__contact-link" href="mailto:arounus.com@gmail.com"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 6 9 7 9-7"/></svg><span><small>Email</small><span>arounus.com@gmail.com</span></span><span class="arounus-footer__arrow" aria-hidden="true">↗</span></a>
+    </div>
+  </div>
+  <div class="arounus-footer__bottom"><span>© Arounus by Bioscientist</span><nav aria-label="Policies and safety"><a href="/trust#privacy">Privacy</a><a href="/trust#terms">Terms</a><a href="/trust#popia">POPIA</a><a href="/trust#safety">Safety</a></nav><!-- install-app --></div>
+</footer>
 </body>
 </html>
