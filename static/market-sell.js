@@ -267,7 +267,7 @@
         document.dispatchEvent(new Event('market-listing-changed'));
         const wasRoom = kind === 'room';
         renderChoice();
-        status(wasRoom ? 'Your room was submitted for admin approval.' : 'Your listing is published.');
+        status(wasRoom ? 'Your room was submitted for verification. We will email you a confirmation and alert you with its link when it is approved and live.' : 'Your listing is published.');
       }
     } catch (error) { status(error.message, true); }
     finally { if (form.isConnected) submit.disabled = false; }

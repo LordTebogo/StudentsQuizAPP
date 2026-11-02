@@ -219,6 +219,20 @@ class Accommodation(Base):
     created_at = Column(String, nullable=False)
 
 
+class RoomListingEmail(Base):
+    """Durable delivery state for the two room-listing email notifications."""
+    __tablename__ = "room_listing_emails"
+    __table_args__ = (UniqueConstraint("room_id", "event", name="room_listing_email_event"),)
+
+    id = Column(Integer, primary_key=True)
+    room_id = Column(Integer, ForeignKey("accommodations.id", ondelete="CASCADE"), nullable=False, index=True)
+    event = Column(String(20), nullable=False)
+    status = Column(String(20), nullable=False, default="pending", index=True)
+    attempts = Column(Integer, nullable=False, default=0)
+    next_attempt_at = Column(String(32), nullable=False, index=True)
+    sent_at = Column(String(32))
+
+
 class AccommodationComment(Base):
     __tablename__ = "accommodation_comments"
 

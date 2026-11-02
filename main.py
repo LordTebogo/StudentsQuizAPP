@@ -42,6 +42,7 @@ import subprocess
 import time
 import tempfile
 import threading
+from contextlib import asynccontextmanager
 import urllib.request
 import urllib.error
 import zipfile
@@ -53,7 +54,7 @@ from itertools import permutations
 from typing import List, Optional
 from urllib.parse import urlsplit, urlunsplit
 
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse, JSONResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -89,6 +90,7 @@ except ImportError:  # The app stays usable while push dependencies are being in
 
 from database import Base, SessionLocal, engine, get_db
 from app_traffic import create_traffic_router
+from room_listing_email import queue_room_email, deliver_room_emails, start_room_email_worker
 from models import (
     Answer,
     DirectMessage,
@@ -112,7 +114,7 @@ from models import (
     PremiumPayment,
     PushSubscription,
     StudentModule,
-    Landlord, Accommodation, AccommodationComment, MarketAdvert, MarketListingView, MarketListingRating, MediaFinanceEntry, MediaUploadEvent,
+    Landlord, Accommodation, AccommodationComment, RoomListingEmail, MarketAdvert, MarketListingView, MarketListingRating, MediaFinanceEntry, MediaUploadEvent,
     PasswordResetCode,
     MarketAccountRating,
     SrcPresident,
@@ -500,10 +502,21 @@ ensure_market_account_links_schema()
 
 _API_DOCS_ENABLED = os.getenv("ENABLE_API_DOCS", "0").strip().lower() in {"1", "true", "yes"}
 
+
+@asynccontextmanager
+async def app_lifespan(_app):
+    stop, thread = start_room_email_worker(SessionLocal)
+    try:
+        yield
+    finally:
+        stop.set()
+        await asyncio.to_thread(thread.join, 12)
+
 # Interactive docs and the OpenAPI schema list every route, including the
 # administrator API, so they are only published when explicitly enabled.
 app = FastAPI(
     title="Arounus API",
+    lifespan=app_lifespan,
     docs_url="/docs" if _API_DOCS_ENABLED else None,
     redoc_url="/redoc" if _API_DOCS_ENABLED else None,
     openapi_url="/openapi.json" if _API_DOCS_ENABLED else None,
@@ -5445,12 +5458,16 @@ def admin_market_rooms(_pin_ok: bool = Depends(require_lecturer_pin), db: Sessio
 
 
 @app.put("/admin/market-rooms/{listing_id}/approval")
-def admin_approve_market_room(listing_id: int, approved: bool, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
-    item = db.query(Accommodation).filter(Accommodation.id == listing_id).first()
+def admin_approve_market_room(listing_id: int, approved: bool, background_tasks: BackgroundTasks, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    item = db.query(Accommodation).filter(Accommodation.id == listing_id).with_for_update().first()
     if not item:
         raise HTTPException(status_code=404, detail="Room listing not found")
     item.is_approved = approved
+    if approved:
+        queue_room_email(db, item, "live")
     db.commit()
+    if approved:
+        background_tasks.add_task(deliver_room_emails, SessionLocal)
     return {"ok": True, "is_approved": item.is_approved}
 
 
@@ -5464,7 +5481,7 @@ def admin_delete_market_room(listing_id: int, _pin_ok: bool = Depends(require_le
 
 
 @app.post("/marketing/listings")
-async def create_accommodation(title: str = Form(...), campus: str = Form(...), area: str = Form(...), monthly_rent: str = Form(""), bedrooms: str = Form(""), description: str = Form(...), contact: str = Form(...), latitude: str = Form(""), longitude: str = Form(""), images: Optional[List[UploadFile]] = File(None), image: Optional[UploadFile] = File(None), landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
+async def create_accommodation(background_tasks: BackgroundTasks, title: str = Form(...), campus: str = Form(...), area: str = Form(...), monthly_rent: str = Form(""), bedrooms: str = Form(""), description: str = Form(...), contact: str = Form(...), latitude: str = Form(""), longitude: str = Form(""), images: Optional[List[UploadFile]] = File(None), image: Optional[UploadFile] = File(None), landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
     if not title.strip() or not campus.strip() or not area.strip() or not description.strip():
         raise HTTPException(status_code=400, detail="Add a title, location, area, and description")
     if len(re.sub(r"\D", "", contact)) < 8:
@@ -5481,8 +5498,11 @@ async def create_accommodation(title: str = Form(...), campus: str = Form(...), 
     files = list(images or []) + ([image] if image and image.filename else [])
     image_urls = await _upload_market_images(files, 3, "accommodation_listings", 10 * 1024 * 1024)
     item = Accommodation(landlord_id=landlord.id, title=title.strip()[:180], campus=campus.strip()[:120], area=area.strip()[:160], monthly_rent=rent, bedrooms=bedrooms.strip()[:80], description=description.strip(), contact=contact.strip()[:160], image_url=image_urls[0] if image_urls else None, image_urls=json.dumps(image_urls), latitude=lat, longitude=lng, is_available=True, is_approved=False, created_at=datetime.now(timezone.utc).isoformat())
-    db.add(item); db.commit()
-    return {"ok": True, "message": "Room submitted for approval", "listing": _accommodation_payload(item, landlord)}
+    db.add(item); db.flush()
+    queue_room_email(db, item, "submitted")
+    db.commit()
+    background_tasks.add_task(deliver_room_emails, SessionLocal)
+    return {"ok": True, "message": "Room submitted for verification. We will email you when it is approved and live.", "listing": _accommodation_payload(item, landlord)}
 
 
 @app.put("/marketing/listings/{listing_id}")
@@ -5537,6 +5557,7 @@ def delete_accommodation(listing_id: int, landlord: Landlord = Depends(require_l
 
 
 def _delete_accommodation_record(db: Session, item: Accommodation) -> None:
+    db.query(RoomListingEmail).filter_by(room_id=item.id).delete()
     for comment in db.query(AccommodationComment).filter(AccommodationComment.accommodation_id == item.id).all():
         db.delete(comment)
     db.query(MarketListingView).filter_by(kind="rooms", listing_id=item.id).delete()
