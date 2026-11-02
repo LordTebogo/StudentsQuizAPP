@@ -1,5 +1,33 @@
 # Quiz + Video Lessons App (cloud-deployable version)
 
+## Marketplace reports and safety
+
+Each real market card, listing dialog and permanent listing page has a **Report**
+action. Guests can flag unavailable offers, stale details, suspected scams or
+misleading content without signing in. The form records the listing and reason,
+accepts optional details, and shows a report reference only after the server saves it.
+The trust centre also accepts a pasted listing link and includes email support if
+submission fails or a listing has disappeared.
+
+Reports are stored in `market_listing_reports`, created by the existing startup
+schema setup. Administrators use **Local market → Listing reports** to review the
+latest 100 open or reviewed reports, open the affected listing and mark it reviewed
+or reopen it. Review status does not remove listings. Use **Remove approval** for rooms or **Pause listing** for other offers to
+withdraw a listing while preserving it for review. **Publish** restores a paused offer. Report text is not public
+and is not sent to the provider. Duplicate submissions from the same hashed network
+identifier within an hour return the original reference; distinct reports are
+limited to ten per hour per identifier. Configure the hosting proxy to supply the
+real client address to the application; raw forwarded headers are not trusted by
+the report handler. Reports retain a title snapshot if the listing is later deleted.
+
+`/trust#verification` explains that room approval is for publication and does not
+verify identity, ownership, condition or availability. `/trust#contact` explains
+account-linked in-app messaging and direct contact outside Arounus. No marketplace
+provider verification badge is shown without an implemented verification process.
+
+Focused checks: `.venv/Scripts/python.exe -m unittest discover -s tests -p test_market_safety.py`
+and `node --test tests/market-safety.test.cjs`.
+
 ## Compact market homepage
 
 Use **Saved** beside the listings heading, or **Saved listings** in any footer,

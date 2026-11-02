@@ -90,6 +90,7 @@ except ImportError:  # The app stays usable while push dependencies are being in
 
 from database import Base, SessionLocal, engine, get_db
 from app_traffic import create_traffic_router
+from market_safety import create_market_safety_router
 from room_listing_email import queue_room_email, deliver_room_emails, start_room_email_worker
 from models import (
     Answer,
@@ -5421,6 +5422,9 @@ def rate_market_listing(kind: str, listing_id: int, payload: MarketRatingInput, 
     return {"rating": round(item.rating_total / item.rating_count, 1), "rating_count": item.rating_count, "your_rating": payload.stars}
 
 
+app.include_router(create_market_safety_router(require_lecturer_pin, LANDLORD_SESSION_SECRET))
+
+
 @app.get("/marketing/listings")
 def list_accommodations(search: str = "", campus: str = "", db: Session = Depends(get_db)):
     query = db.query(Accommodation, Landlord).join(Landlord, Landlord.id == Accommodation.landlord_id).filter(Landlord.active == True, Accommodation.is_approved == True)  # noqa: E712
@@ -8197,8 +8201,8 @@ def public_market_listing(kind: str, listing_id: int, db: Session = Depends(get_
     body = f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{escape(title)} | Arounus</title><meta name="description" content="{escape(description)}"><meta name="robots" content="{'noindex,follow' if is_demo else 'index,follow'}"><link rel="canonical" href="{path}">
 <meta property="og:type" content="product"><meta property="og:title" content="{escape(title)}"><meta property="og:description" content="{escape(description)}"><meta property="og:url" content="{path}">{image_meta}
-<meta name="twitter:card" content="summary_large_image">{structured_html}<link rel="stylesheet" href="/static/style.css"><link rel="stylesheet" href="/static/site-footer.css?v=1"><style>body{{background:#f5f8f6;color:#18312d}}.listing-page{{max-width:820px;margin:30px auto;padding:28px;background:white;border:1px solid #d5e4db;border-radius:20px}}.photo{{width:100%;max-height:460px;object-fit:cover;border-radius:14px}}.listing-page p{{line-height:1.6}}.listing-page a{{color:#087c6f}}@media(max-width:650px){{.listing-page{{margin:12px;padding:18px}}}}</style></head>
-<body><script src="/static/app-traffic.js?v=1" defer></script><main class="listing-page"><p><a href="/">← Browse local market</a></p>{'<p><strong>Example only — this is not a real offer.</strong></p>' if is_demo else ''}<h1>{escape(title)}</h1>{image_html}<p>{escape(data.get('campus') or 'Location not specified')}{' · ' + escape(data.get('area')) if data.get('area') else ''}</p><p><strong>{escape(price)}</strong></p>{'<p>Listed by ' + escape(seller) + '</p>' if seller and not is_demo else ''}<p>{escape(full_description)}</p>{'<p><strong>Contact:</strong> ' + escape(contact) + '</p>' if not is_demo else ''}<p>Check the listing and provider independently before paying. <a href="/trust#safety">Read market safety guidance</a>.</p><p><a href="/">Find more listings</a></p></main>{footer_html}</body></html>"""
+<meta name="twitter:card" content="summary_large_image">{structured_html}<link rel="stylesheet" href="/static/market-safety.css?v=1"><script src="/static/market-safety.js?v=1" defer></script><link rel="stylesheet" href="/static/style.css"><link rel="stylesheet" href="/static/site-footer.css?v=1"><style>body{{background:#f5f8f6;color:#18312d}}.listing-page{{max-width:820px;margin:30px auto;padding:28px;background:white;border:1px solid #d5e4db;border-radius:20px}}.photo{{width:100%;max-height:460px;object-fit:cover;border-radius:14px}}.listing-page p{{line-height:1.6}}.listing-page a{{color:#087c6f}}@media(max-width:650px){{.listing-page{{margin:12px;padding:18px}}}}</style></head>
+<body><script src="/static/app-traffic.js?v=1" defer></script><main class="listing-page"><p><a href="/">← Browse local market</a></p>{'<p><strong>Example only — this is not a real offer.</strong></p>' if is_demo else ''}<h1>{escape(title)}</h1>{image_html}<p>{escape(data.get('campus') or 'Location not specified')}{' · ' + escape(data.get('area')) if data.get('area') else ''}</p><p><strong>{escape(price)}</strong></p>{'<p>Listed by ' + escape(seller) + '</p>' if seller and not is_demo else ''}<p>{escape(full_description)}</p>{('<p><strong>Provider contact:</strong> ' + escape(contact) + '</p><p class="market-contact-note">Contact the provider directly using these details, or <a href="/?listing=' + kind + '-' + str(listing_id) + '">open this listing on the market</a> and sign in to message them. In-app messages are linked to your account. Phone, WhatsApp and website contact happens outside Arounus. <a href="/trust#contact">How contact works</a>.</p><p class="market-verification-note">Provider identity, ownership and availability are not independently verified. ' + ('Rooms are reviewed for publication; approval is not a property inspection.' if kind == 'room' else 'Other listings can publish automatically.') + ' <a href="/trust#verification">What we check</a>.</p><p><a href="/trust?listing=' + kind + '-' + str(listing_id) + '#report" data-report-listing="' + kind + '-' + str(listing_id) + '" data-report-title="' + escape(title) + '">Report stale or suspicious listing</a></p>') if not is_demo else ''}<p>Check the listing and provider independently before paying. <a href="/trust#safety">Read market safety guidance</a>.</p><p><a href="/">Find more listings</a></p></main>{footer_html}</body></html>"""
     return HTMLResponse(body, headers={"Cache-Control": "public, max-age=60"})
 
 

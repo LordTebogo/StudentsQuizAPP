@@ -35,16 +35,18 @@
 <link rel="stylesheet" href="/static/campus-browse.css?v=3">
 <script src="/static/campus-redirect.js?v=1"></script>
 <script src="/static/media-url.js?v=1" defer></script>
-<script src="/static/campus-home.js?v=9" defer></script>
+<script src="/static/campus-home.js?v=10" defer></script>
 <script src="/static/market-auth.js?v=1" defer></script>
 <script src="/static/market-sell.js?v=6" defer></script>
-<script src="/static/market-contact.js?v=2" defer></script>
+<script src="/static/market-contact.js?v=3" defer></script>
 <script src="/static/video-access.js?v=5" defer></script>
 <script src="/static/market-metrics.js?v=4" defer></script>
 <script src="/static/pwa.js?v=18" defer></script>
 <script src="/static/app-traffic.js?v=1" defer></script>
 <script src="/static/floating-video.js?v=2" defer></script>
 <link rel="stylesheet" href="/static/site-footer.css?v=1">
+<link rel="stylesheet" href="/static/market-safety.css?v=1">
+<script src="/static/market-safety.js?v=1" defer></script>
 </head>
 <body class="campus-home brand-intro-active">
 <div class="brand-intro" id="brandIntro" aria-hidden="true"><div class="brand-intro__mark"><img src="/branding/logo" alt=""><span class="brand-intro__light"></span><span class="brand-intro__glint"></span><span class="brand-intro__star">✦</span></div></div>
@@ -61,6 +63,7 @@
 <section class="market-browser" id="marketBrowse" aria-label="Browse the local market">
 <div class="results-heading"><h1 id="resultsTitle">Around you</h1><button class="market-saved-toggle" id="showSavedListings" type="button" aria-label="Saved listings, 0 saved" aria-pressed="false" aria-controls="campusListings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4Z"/></svg><span data-saved-label>Saved</span><span class="market-saved-count" data-saved-count>0</span></button></div>
 <p id="marketStatus" role="status" aria-live="polite">Loading local listings…</p><button id="retryListings" type="button" hidden>Retry loading listings</button>
+<p class="market-trust-note">Listings come from providers. Confirm availability before paying. <a href="/trust#contact">How contact works</a> · <a href="/trust#verification">What we check</a> · <a href="/trust#report">Report a listing</a></p>
 <div id="campusListings" class="campus-listings" aria-busy="true"></div>
 </section>
 </main>

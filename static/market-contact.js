@@ -16,7 +16,7 @@
       providerId=id;
       document.getElementById('contactTitle').textContent=`Message ${button.dataset.providerName||'provider'}`;
       status.textContent='';
-      content.innerHTML='<form id="contactForm"><label for="contactText">Your message</label><textarea id="contactText" maxlength="2000" required></textarea><button type="submit">Send message</button></form><button class="sell-back" type="button" data-market-messages>View my messages</button>';
+      content.innerHTML='<p>Your message is sent to this provider’s Arounus inbox and is linked to your account. It is not anonymous. Never share passwords or payment details. <a href="/trust#contact">How contact works</a>.</p><form id="contactForm"><label for="contactText">Your message</label><textarea id="contactText" maxlength="2000" required></textarea><button type="submit">Send message</button></form><button class="sell-back" type="button" data-market-messages>View my messages</button>';
       if(!dialog.open)dialog.showModal();
       document.getElementById('contactText').focus();
     } catch(error) {

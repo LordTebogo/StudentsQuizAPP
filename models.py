@@ -299,6 +299,20 @@ class MarketAdvert(Base):
     updated_at = Column(String, nullable=False)
 
 
+class MarketListingReport(Base):
+    __tablename__ = "market_listing_reports"
+    id = Column(Integer, primary_key=True)
+    kind = Column(String(16), nullable=False)
+    listing_id = Column(Integer, nullable=False)
+    listing_title = Column(String(180), nullable=False)
+    reason = Column(String(40), nullable=False)
+    details = Column(Text, nullable=False, default="")
+    reporter_key = Column(String(64), nullable=False, index=True)
+    status = Column(String(16), nullable=False, default="open", index=True)
+    created_at = Column(String, nullable=False, index=True)
+    reviewed_at = Column(String)
+
+
 class MarketListingView(Base):
     __tablename__ = "market_listing_views"
     __table_args__ = (UniqueConstraint("kind", "listing_id", "viewer_key", name="market_listing_view_unique"),)

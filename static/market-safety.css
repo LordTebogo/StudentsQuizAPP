@@ -1,0 +1,17 @@
+.market-trust-note { margin: 12px 0; padding: 12px 16px; border: 1px solid #d5e4db; border-radius: 10px; background: #eef6f1; color: #395a52; font-size: 13px; line-height: 1.6; }
+.market-trust-note a, .market-contact-note a, .market-verification-note a { color: #075e53; text-decoration: underline; text-underline-offset: 3px; }
+.market-contact-note, .market-verification-note { font-size: 14px; line-height: 1.65; color: #395a52; }
+.campus-home .card-tools { flex-wrap: wrap; }
+.campus-home a.card-tool { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 12px; color: #395a52; font-size: 13px; text-decoration: underline; }
+#marketReportDialog { box-sizing: border-box; width: min(520px, calc(100% - 24px)); max-height: calc(100dvh - 24px); overflow: auto; padding: 24px; border: 1px solid #bfd5ca; border-radius: 16px; background: #fff; color: #19312e; }
+#marketReportDialog::backdrop { background: #09191588; }
+.market-report-heading { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+.market-report-heading h2 { margin: 0; font-size: 24px; }
+.market-report-heading button { min-width: 44px; min-height: 44px; border: 0; background: #eef6f1; color: #19312e; border-radius: 8px; font-size: 26px; }
+.market-report-form label { display: block; margin: 16px 0; font-weight: 700; }
+.market-report-form input, .market-report-form select, .market-report-form textarea { display: block; box-sizing: border-box; width: 100%; min-height: 46px; margin-top: 8px; padding: 10px 12px; border: 1px solid #9bb8aa; border-radius: 8px; background: #fff; color: #19312e; font: 400 16px/1.5 Arial, sans-serif; }
+.market-report-form button { min-height: 46px; padding: 12px 18px; border: 0; border-radius: 8px; background: #087f70; color: #fff; font-weight: 700; cursor: pointer; }
+.market-report-form button:disabled { opacity: .7; cursor: default; }
+.market-report-form p, #marketReportDialog > p { font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
+.market-report-status { min-height: 24px; }
+.market-report-form :focus-visible, #marketReportDialog :focus-visible { outline: 3px solid #087f70; outline-offset: 3px; }
