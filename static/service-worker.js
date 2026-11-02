@@ -1,4 +1,4 @@
-const OFFLINE_VERSION = "v64";
+const OFFLINE_VERSION = "v65";
 const SHELL_CACHE = `nucleocampus-shell-${OFFLINE_VERSION}`;
 const DATA_CACHE = `nucleocampus-data-${OFFLINE_VERSION}`;
 const EXTERNAL_CACHE = `nucleocampus-external-${OFFLINE_VERSION}`;
@@ -15,6 +15,7 @@ const APP_SHELL = [
   "/static/media-compressor.js?v=2", "/static/admin-workspace.css?v=3", "/static/admin-workspace.js?v=3",
   "/static/document-organizer.js",
   "/static/site-footer.css?v=1",
+  "/about", "/static/about.css?v=1", "/static/about.js?v=1", "/static/images/founder-tebogo-manyubele.png",
   "/static/style.css", "/static/ui.css?v=2", "/static/product.css", "/static/theme.css?v=2",
   "/static/brand-intro.css?v=1", "/static/brand-intro.js?v=2",
   "/static/floating-video.css?v=1", "/static/floating-video.js?v=2", "/static/media/campus-intro.jpg",
@@ -46,7 +47,7 @@ const LEGACY_PAGE_URLS = {
   'admin.html': '/admin', 'pdf_tools.html': '/tools/pdf',
   'media_compressor.html': '/tools/media', 'trust.html': '/trust',
   'premium.html': '/premium', 'comrade.html': '/comrade',
-  'reset-password.html': '/reset-password'
+  'reset-password.html': '/reset-password', 'about.html': '/about'
 };
 
 // These libraries are cached when their corresponding workspace first uses

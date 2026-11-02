@@ -7991,6 +7991,7 @@ FRONTEND_PAGES = {
     "/tools/pdf": "pdf_tools.html",
     "/tools/media": "media_compressor.html",
     "/trust": "trust.html",
+    "/about": "about.html",
     "/premium": "premium.html",
     "/comrade": "comrade.html",
     "/reset-password": "reset-password.html",
