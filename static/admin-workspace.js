@@ -4,7 +4,7 @@
     learning: ['Learning content', 'Manage quizzes, lessons, and learner scripts.'],
     people: ['People & access', 'Support learners, tutors, and every registered account.'],
     community: ['Community', 'Review posts and keep discussions welcoming.'],
-    market: ['Campus market', 'Review rooms and manage marketplace listings.'],
+    market: ['Local market', 'Review rooms and manage marketplace listings.'],
     finance: ['Finance', 'Track media costs and promotion income.']
   };
   let current = 'overview';

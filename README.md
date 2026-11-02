@@ -3,7 +3,7 @@
 ## Compact market homepage
 
 The homepage starts with listings under a slim Arounus / Around us header.
-Use the magnifying-glass button to open campus, keyword, price, category and
+Use the magnifying-glass button to open location, keyword, price, category and
 sort filters. Show listings applies the selection and closes the panel;
 Clear filters resets it. Active filters appear as a count on the search icon.
 The panel supports keyboard focus, Escape and a close button. Learning,
@@ -11,7 +11,7 @@ messages and selling remain available in the header.
 
 ## Floating homepage video
 
-The campus homepage opens the welcome video in a movable bottom-right player.
+The homepage opens the welcome video in a movable bottom-right player.
 It starts with sound enabled, with English captions, and includes play/pause, seeking,
 mute/unmute, captions, full-screen and close controls. Drag its title bar with
 a mouse or touch, or focus the title bar and use arrow keys. Closing stops
@@ -92,7 +92,7 @@ python -m unittest discover -s tests -p test_app_traffic.py -v
 - New lesson, community, and advert video uploads create a public copy capped at 480p. If the uploaded original is higher resolution, its HD copy is stored as a Cloudinary authenticated asset. Videos load only after a viewer chooses Play.
 - Learners can choose Premium HD access at `/premium`: R15 for their first 30 days, R50 for each additional 30-day purchase, R150 for six calendar months, or R400 for 365 days. The introductory price is available once per learner account; repeat introductory checkout requests reuse the same pending payment. Existing lifetime access and payments already in progress are honoured. These are prepaid periods and do not renew automatically. They can then choose PayU or Google Pay through Paystack's hosted checkout. PayU is enabled when `PUBLIC_BASE_URL` (HTTPS), `PAYU_SA_SAFEKEY`, `PAYU_SA_SOAP_USERNAME`, and `PAYU_SA_SOAP_PASSWORD` are configured. Set `PAYU_SA_ENVIRONMENT=staging` for PayU tests. Google Pay is enabled when the Paystack South Africa merchant account has Google Pay and Card active, `PAYSTACK_SECRET_KEY` is a live secret key, and `PAYSTACK_GOOGLE_PAY_ENABLED=true`. The server independently verifies either provider's payment reference, amount, currency and final transaction state before granting access. Admin grants in **Admin → All accounts** continue to work.
 - Community uploads remain limited to 50 MB per video and 10 videos per learner each month. Lesson and advert upload size limits remain in place.
-- Campus market cards show unique views and an average rating out of five. A view is counted once per browser and listing using a long-lived cookie and a database uniqueness rule; clearing cookies or using another device can count separately. An approved learner can rate a listing once and update that rating later.
+- Local market cards show unique views and an average rating out of five. A view is counted once per browser and listing using a long-lived cookie and a database uniqueness rule; clearing cookies or using another device can count separately. An approved learner can rate a listing once and update that rating later.
 - Feed images request smaller Cloudinary versions, while opening the gallery requests the full image. The admin media finance panel shows videos uploaded and unique listing views for a selected month, alongside Cloudinary's rolling usage report. Administrators record actual advert income and Cloudinary, hosting, or other costs in rand to see the monthly difference. Featured adverts still require administrator approval; payment arrangements are handled outside the app until a payment provider is connected.
 - Videos uploaded before this change can still have publicly accessible high-resolution originals at Cloudinary. The app requests a 480p version for those older videos, but protecting their originals requires re-uploading or migrating them to authenticated storage. External video URLs added directly by an administrator are outside this upload control.
 
@@ -543,8 +543,8 @@ below) need an `X-Lecturer-Pin: 90435` header.
 - PDF export currently covers quizzes only, not video lesson submissions.
 - The lecturer PIN (`LECTURER_PIN`) and Cloudinary/Postgres credentials all come from environment variables now — never hardcode them in a `.py` file, and never commit a real `.env` file (it's in `.gitignore`).
 
-## Campus marketplace home
+## Local marketplace home
 
-The root page, `/market`, and installed app open one public campus market. Visitors can filter available rooms and approved offers by university/college, category, search text, and price. The chosen campus is remembered on the device. "Sell or list" opens advertiser registration or sign in on this page; one provider account can publish accommodation and submit transport, item, or service offers for review. Providers can manage listings and reply to customer messages there. The Academics button opens `/learning` for learner and tutor tools. The retired `/static/marketing.html` URL redirects to `/market` so old links still work.
+The root page, `/market`, and installed app open one public local market. Visitors can filter available rooms and approved offers by location or organisation, category, search text, and price. The chosen location is remembered on the device. "Sell or list" opens advertiser registration or sign in on this page; one provider account can publish accommodation and submit transport, item, or service offers for review. Providers can manage listings and reply to customer messages there. The Academics button opens `/learning` for learner and tutor tools. The retired `/static/marketing.html` URL redirects to `/market` so old links still work.
 
 Run frontend regression checks with `npm ci --prefix tests` then `npm test --prefix tests`.

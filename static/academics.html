@@ -139,7 +139,7 @@
 <div class="wrap" id="welcome">
   <header class="top">
     <div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Aroun<span>us</span></div><div class="brand-tagline">Bioscientist</div></div></div>
-    <nav><a href="/" class="btn secondary">← Campus market</a><div class="student-home-actions" id="studentHomeActions"><button class="home-message-button" id="homeMessagesBtn" type="button" aria-label="Open messages">✉<span class="home-message-count hidden" id="homeMessageCount">0</span></button><span class="home-profile-name" id="homeStudentName"></span><img class="home-profile-avatar" id="homeStudentAvatar" src="/branding/logo" alt="Student profile picture"></div><button class="install-app-btn" id="installAppBtn" type="button" title="Add Arounus to your home screen for faster, full-screen access">Install Arounus</button></nav>
+    <nav><a href="/" class="btn secondary">← Local market</a><div class="student-home-actions" id="studentHomeActions"><button class="home-message-button" id="homeMessagesBtn" type="button" aria-label="Open messages">✉<span class="home-message-count hidden" id="homeMessageCount">0</span></button><span class="home-profile-name" id="homeStudentName"></span><img class="home-profile-avatar" id="homeStudentAvatar" src="/branding/logo" alt="Student profile picture"></div><button class="install-app-btn" id="installAppBtn" type="button" title="Add Arounus to your home screen for faster, full-screen access">Install Arounus</button></nav>
   </header>
 
   <main id="mainContent">
@@ -161,26 +161,26 @@
       <div class="entry-message" id="entryMessage" role="status" aria-live="polite" tabindex="-1"></div>
     </div>
   </section>
-  <section class="home-ad-belt hidden" id="homeAdvertBelt" aria-label="Sponsored campus adverts">
-    <div class="home-ad-head"><div class="home-ad-label">Campus offers</div><div class="home-ad-controls"><button class="home-ad-control" id="homeAdPrevious" type="button" aria-label="Previous advert">&#8249;</button><span class="home-ad-count" id="homeAdCount"></span><button class="home-ad-control" id="homeAdNext" type="button" aria-label="Next advert">&#8250;</button></div></div>
+  <section class="home-ad-belt hidden" id="homeAdvertBelt" aria-label="Sponsored local adverts">
+    <div class="home-ad-head"><div class="home-ad-label">Local offers</div><div class="home-ad-controls"><button class="home-ad-control" id="homeAdPrevious" type="button" aria-label="Previous advert">&#8249;</button><span class="home-ad-count" id="homeAdCount"></span><button class="home-ad-control" id="homeAdNext" type="button" aria-label="Next advert">&#8250;</button></div></div>
     <div class="home-ad-viewport"><div class="home-ad-track" id="homeAdTrack"></div></div>
     <div class="home-ad-dots" id="homeAdDots" aria-label="Choose advert"></div>
   </section>
   <section class="card hidden" id="studentPortal"><span class="kicker">Learner account active</span><h2>Your learner workspace</h2><p class="muted">Your quizzes, lessons, posts, and private notifications in one place.</p><div class="role-grid"><a class="role-card" href="/students"><h3>Quizzes &amp; scripts</h3><p>Take assessments and download your work.</p></a><a class="role-card" href="/students/lessons"><h3>Video lessons</h3><p>Learn at your pace and answer lesson questions.</p></a><a class="role-card" href="/community"><h3>Posts</h3><p>Read posts and view tags.</p></a><a class="role-card" href="/tools/media"><h3>Compress media</h3><p>Reduce image and video files on your device.</p></a></div><button class="btn secondary" id="studentSignOut">Sign out</button></section>
   <aside class="home-inbox hidden" id="homeInbox"><h3>Messages &amp; mentions</h3><div id="homeInboxList"></div></aside>
   <section class="card hidden" id="lecturerPortal"><span class="kicker">Tutor account active</span><h2>Your tutor workspace</h2><p class="muted">Only tutor tools are shown here.</p><div class="role-grid"><a class="role-card" href="/lecturers"><h3>Quizzes &amp; marking</h3></a><a class="role-card" href="/lecturers/lessons"><h3>Video lessons</h3></a><a class="role-card" href="/tools/media"><h3>Compress media</h3><p>Reduce image and video files on your device.</p></a></div><button class="btn secondary" id="lecturerSignOut">Sign out</button></section>
-  <section class="card hidden" id="advertiserPortal"><span class="kicker">Advertiser account active</span><h2>Your advertiser workspace</h2><p class="muted">Manage accommodation, services and sales from the campus market.</p><div class="role-grid"><a class="role-card" href="/market?sell=1"><h3>Open campus market</h3><p>Manage listings and submit reviewed offers.</p></a></div><button class="btn secondary" id="advertiserSignOut">Sign out</button></section>
+  <section class="card hidden" id="advertiserPortal"><span class="kicker">Advertiser account active</span><h2>Your advertiser workspace</h2><p class="muted">Manage accommodation, services and sales from the local market.</p><div class="role-grid"><a class="role-card" href="/market?sell=1"><h3>Open local market</h3><p>Manage listings and submit reviewed offers.</p></a></div><button class="btn secondary" id="advertiserSignOut">Sign out</button></section>
 </main>
 </div>
 <footer class="site-footer arounus-footer" aria-label="Arounus footer">
   <div class="arounus-footer__grid">
     <div class="arounus-footer__about">
       <a class="arounus-footer__brand" href="/" aria-label="Arounus home"><img src="/branding/logo" alt="" width="44" height="44" loading="lazy"><span>Aroun<strong>us</strong><small>Around us</small></span></a>
-      <p>Learning, listings and local connections.<br>Find your place. Stay connected.</p>
+      <p>Learning, listings and local connections.<br>Around companies, schools, colleges, universities, mines and more.</p>
     </div>
     <nav class="arounus-footer__links" aria-label="Explore Arounus">
       <h2>Explore</h2>
-      <a href="/">Campus market</a>
+      <a href="/">Local market</a>
       <a href="/learning">Learning</a>
       <a href="/learning/guide">How to use Arounus</a>
       <a href="/trust#support">Help &amp; support</a>
@@ -293,7 +293,7 @@
 
       if (role === 'visitor') {
         modeTabWrap.classList.add('hidden');
-        note.textContent = 'No account is needed to browse public campus spaces.';
+        note.textContent = 'No account is needed to browse public local listings.';
         form.innerHTML = `<div class="visitor-entry"><p>Explore public adverts, accommodation, services and community information.</p><button class="btn" type="submit">Continue as visitor</button></div>`;
         return;
       }
@@ -552,7 +552,7 @@
     }
   }
 </script>
-<script src="/static/experience.js"></script>
+<script src="/static/experience.js?v=17"></script>
 <script src="/static/loading.js"></script>
 <script src="/static/pwa.js?v=18"></script>
 <script>
@@ -590,7 +590,7 @@
     try {
       const listings = await fetch('/marketing/listings').then(response => response.ok ? response.json() : []);
       const images = listings.filter(item => item.is_available && item.image_url).map(item => item.image_url);
-      if (!images.length) { label.textContent = 'Fresh campus spaces'; return; }
+      if (!images.length) { label.textContent = 'Fresh local listings'; return; }
       let imageIndex = 0;
       const showImage = () => {
         const image = images[imageIndex % images.length];
@@ -601,11 +601,11 @@
       };
       showImage();
       if (images.length > 1) window.setInterval(showImage, 4200);
-    } catch (_) { label.textContent = 'Fresh campus spaces'; }
+    } catch (_) { label.textContent = 'Fresh local listings'; }
   })();
 
   // The homepage belt uses the same reviewed, date-limited adverts as the
-  // campus market. A business website takes priority over WhatsApp.
+  // local market. A business website takes priority over WhatsApp.
   (async () => {
     const belt = document.getElementById('homeAdvertBelt');
     const track = document.getElementById('homeAdTrack');

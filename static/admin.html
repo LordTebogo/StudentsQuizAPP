@@ -50,7 +50,7 @@
 <body>
 <div class="wrap admin-gate" id="gateWrap">
   <header class="top"><div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Aroun<span>us</span></div><div class="brand-tagline">Administration</div></div></div><nav><a href="/">Home</a><a href="/lecturers">Tutor</a></nav></header>
-  <div class="admin-gate-hero"><span class="kicker">Arounus control room</span><h1>Welcome back, admin.</h1><p class="lede">A calm place to run learning, people, the campus market, and your platform.</p></div>
+  <div class="admin-gate-hero"><span class="kicker">Arounus control room</span><h1>Welcome back, admin.</h1><p class="lede">A calm place to run learning, people, the local market, and your platform.</p></div>
   <aside class="safety-banner"><strong>Protected workspace</strong><span>Enter your administrator PIN to continue. Your PIN stays private and failed attempts are limited.</span></aside>
   <div class="card"><label for="pinInput">Administrator PIN</label><input id="pinInput" type="password" inputmode="numeric" autocomplete="current-password" placeholder="Enter administrator PIN"><button class="btn" id="unlockBtn">Open administration</button><div id="pinMsg"></div></div>
 </div>
@@ -58,8 +58,8 @@
 <main class="wrap hidden admin-app" id="appWrap">
   <header class="top"><div class="brand-group"><img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'"><div class="brand-text"><div class="brand">Aroun<span>us</span></div><div class="brand-tagline">Content control</div></div></div><nav><a href="/">Home</a><a href="/lecturers">Tutor</a><a href="#" id="lockBtn">Lock</a></nav></header>
   <section class="admin-intro"><div><span class="kicker">Arounus administration</span><h1 id="adminAreaTitle">Overview</h1><p id="adminAreaDescription">Your workspaces, live activity, and the next task at a glance.</p></div><span class="admin-private-pill">● Protected workspace</span></section>
-  <div class="admin-layout"><nav class="admin-sidebar" aria-label="Admin sections"><span class="admin-sidebar-label">WORKSPACES</span><button type="button" class="active" data-admin-nav="overview">Overview</button><button type="button" data-admin-nav="learning">Learning content</button><button type="button" data-admin-nav="people">People &amp; access</button><button type="button" data-admin-nav="community">Community</button><button type="button" data-admin-nav="market">Campus market</button><button type="button" data-admin-nav="finance">Finance</button><div class="admin-sidebar-note">Choose a workspace to focus on one task at a time.</div></nav><div class="admin-content">
-  <section class="admin-dashboard" data-admin-area="overview"><div class="admin-welcome"><span class="kicker">Today at Arounus</span><h2>Everything in its place.</h2><p>Open a workspace to manage its records and actions. Your learning content remains protected once learners submit work.</p><a class="admin-media-link" href="/tools/media">Compress videos &amp; images <span aria-hidden="true">→</span></a></div><div class="admin-shortcuts"><button type="button" data-admin-go="learning"><span class="shortcut-icon">✦</span><strong>Learning content</strong><small>Quizzes, lessons, and scripts</small><span class="shortcut-arrow">→</span></button><button type="button" data-admin-go="people"><span class="shortcut-icon">◎</span><strong>People &amp; access</strong><small>Learners, tutors, and accounts</small><span class="shortcut-arrow">→</span></button><button type="button" data-admin-go="community"><span class="shortcut-icon">◌</span><strong>Community</strong><small>Posts and conversations</small><span class="shortcut-arrow">→</span></button><button type="button" data-admin-go="market"><span class="shortcut-icon">▣</span><strong>Campus market</strong><small>Rooms and advertisements</small><span class="shortcut-arrow">→</span></button><button type="button" data-admin-go="finance"><span class="shortcut-icon">▥</span><strong>Finance</strong><small>Costs and promotion income</small><span class="shortcut-arrow">→</span></button></div></section>
+  <div class="admin-layout"><nav class="admin-sidebar" aria-label="Admin sections"><span class="admin-sidebar-label">WORKSPACES</span><button type="button" class="active" data-admin-nav="overview">Overview</button><button type="button" data-admin-nav="learning">Learning content</button><button type="button" data-admin-nav="people">People &amp; access</button><button type="button" data-admin-nav="community">Community</button><button type="button" data-admin-nav="market">Local market</button><button type="button" data-admin-nav="finance">Finance</button><div class="admin-sidebar-note">Choose a workspace to focus on one task at a time.</div></nav><div class="admin-content">
+  <section class="admin-dashboard" data-admin-area="overview"><div class="admin-welcome"><span class="kicker">Today at Arounus</span><h2>Everything in its place.</h2><p>Open a workspace to manage its records and actions. Your learning content remains protected once learners submit work.</p><a class="admin-media-link" href="/tools/media">Compress videos &amp; images <span aria-hidden="true">→</span></a></div><div class="admin-shortcuts"><button type="button" data-admin-go="learning"><span class="shortcut-icon">✦</span><strong>Learning content</strong><small>Quizzes, lessons, and scripts</small><span class="shortcut-arrow">→</span></button><button type="button" data-admin-go="people"><span class="shortcut-icon">◎</span><strong>People &amp; access</strong><small>Learners, tutors, and accounts</small><span class="shortcut-arrow">→</span></button><button type="button" data-admin-go="community"><span class="shortcut-icon">◌</span><strong>Community</strong><small>Posts and conversations</small><span class="shortcut-arrow">→</span></button><button type="button" data-admin-go="market"><span class="shortcut-icon">▣</span><strong>Local market</strong><small>Rooms and advertisements</small><span class="shortcut-arrow">→</span></button><button type="button" data-admin-go="finance"><span class="shortcut-icon">▥</span><strong>Finance</strong><small>Costs and promotion income</small><span class="shortcut-arrow">→</span></button></div></section>
 
   <section class="card admin-panel" id="appTrafficCard" data-admin-area="overview" aria-labelledby="appTrafficTitle">
     <div class="admin-editor-heading"><div><span class="kicker">App audience</span><h2 id="appTrafficTitle">Visitor traffic</h2></div><button class="btn secondary" id="refreshAppTraffic" type="button">Refresh traffic</button></div>
@@ -627,22 +627,22 @@ new MutationObserver(addAdminMessageButtons).observe($('appWrap'), {childList:tr
 if (pin) unlock(pin);
 setInterval(() => { if (pin && !$('appWrap').classList.contains('hidden')) loadLiveSessions(); }, 15000);
 </script>
-<script src="/static/admin-market-ads.js"></script>
-<script src="/static/admin-workspace.js?v=2"></script>
+<script src="/static/admin-market-ads.js?v=2"></script>
+<script src="/static/admin-workspace.js?v=3"></script>
 <script src="/static/admin-finance.js?v=1"></script>
 <script src="/static/admin-traffic.js?v=1"></script>
-<script src="/static/experience.js"></script>
+<script src="/static/experience.js?v=17"></script>
 <script src="/static/loading.js"></script>
 <script src="/static/pwa.js?v=18"></script>
 <footer class="site-footer arounus-footer" aria-label="Arounus footer">
   <div class="arounus-footer__grid">
     <div class="arounus-footer__about">
       <a class="arounus-footer__brand" href="/" aria-label="Arounus home"><img src="/branding/logo" alt="" width="44" height="44" loading="lazy"><span>Aroun<strong>us</strong><small>Around us</small></span></a>
-      <p>Learning, listings and local connections.<br>Find your place. Stay connected.</p>
+      <p>Learning, listings and local connections.<br>Around companies, schools, colleges, universities, mines and more.</p>
     </div>
     <nav class="arounus-footer__links" aria-label="Explore Arounus">
       <h2>Explore</h2>
-      <a href="/">Campus market</a>
+      <a href="/">Local market</a>
       <a href="/learning">Learning</a>
       <a href="/learning/guide">How to use Arounus</a>
       <a href="/trust#support">Help &amp; support</a>

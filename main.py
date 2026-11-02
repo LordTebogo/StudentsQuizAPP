@@ -5130,7 +5130,7 @@ FUN_STICKERS = {
 }
 
 # ---------------------------------------------------------------------------
-# Campus marketing / accommodation marketplace
+# Local marketing / accommodation marketplace
 # ---------------------------------------------------------------------------
 
 def _landlord_profile(landlord: Landlord) -> dict:
@@ -5466,7 +5466,7 @@ def admin_delete_market_room(listing_id: int, _pin_ok: bool = Depends(require_le
 @app.post("/marketing/listings")
 async def create_accommodation(title: str = Form(...), campus: str = Form(...), area: str = Form(...), monthly_rent: str = Form(""), bedrooms: str = Form(""), description: str = Form(...), contact: str = Form(...), latitude: str = Form(""), longitude: str = Form(""), images: Optional[List[UploadFile]] = File(None), image: Optional[UploadFile] = File(None), landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
     if not title.strip() or not campus.strip() or not area.strip() or not description.strip():
-        raise HTTPException(status_code=400, detail="Add a title, campus, area, and description")
+        raise HTTPException(status_code=400, detail="Add a title, location, area, and description")
     if len(re.sub(r"\D", "", contact)) < 8:
         raise HTTPException(status_code=400, detail="Add a valid contact number for this room")
     if len(description.strip()) > 2500:
@@ -5493,7 +5493,7 @@ async def update_accommodation(listing_id: int, title: str = Form(...), campus: 
     if not contact.strip() or len(re.sub(r"\D", "", contact)) < 8:
         raise HTTPException(status_code=400, detail="Add a valid contact number for this room")
     if not title.strip() or not campus.strip() or not area.strip() or not description.strip():
-        raise HTTPException(status_code=400, detail="Add a title, campus, area, and description")
+        raise HTTPException(status_code=400, detail="Add a title, location, area, and description")
     try:
         rent = int(monthly_rent) if monthly_rent.strip() else None
     except ValueError:
@@ -8075,7 +8075,7 @@ def security_txt():
     return Response(body, media_type="text/plain", headers={"Cache-Control": "public, max-age=86400"})
 
 
-_NOT_FOUND_PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Page not found | Arounus</title><link rel="icon" type="image/png" href="/static/icons/favicon-96x96.png?v=5"><link rel="stylesheet" href="/static/style.css"><style>body{background:#f5f8f6;color:#18312d}.nf{max-width:560px;margin:12vh auto;padding:32px;background:#fff;border:1px solid #d5e4db;border-radius:20px;text-align:center}.nf a{display:inline-block;margin:8px;padding:12px 18px;border-radius:10px;background:#087f70;color:#fff;font-weight:700;text-decoration:none}.nf a+a{background:#e7f5ed;color:#10291f}</style></head><body><main class="nf"><p>404</p><h1>This page isn't here</h1><p>The listing may have been removed, or the link is mistyped.</p><a href="/">Browse campus listings</a><a href="/learning">Go to Learning</a></main></body></html>"""
+_NOT_FOUND_PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Page not found | Arounus</title><link rel="icon" type="image/png" href="/static/icons/favicon-96x96.png?v=5"><link rel="stylesheet" href="/static/style.css"><style>body{background:#f5f8f6;color:#18312d}.nf{max-width:560px;margin:12vh auto;padding:32px;background:#fff;border:1px solid #d5e4db;border-radius:20px;text-align:center}.nf a{display:inline-block;margin:8px;padding:12px 18px;border-radius:10px;background:#087f70;color:#fff;font-weight:700;text-decoration:none}.nf a+a{background:#e7f5ed;color:#10291f}</style></head><body><main class="nf"><p>404</p><h1>This page isn't here</h1><p>The listing may have been removed, or the link is mistyped.</p><a href="/">Browse local listings</a><a href="/learning">Go to Learning</a></main></body></html>"""
 
 
 @app.exception_handler(StarletteHTTPException)
@@ -8156,7 +8156,7 @@ def public_market_listing(kind: str, listing_id: int, db: Session = Depends(get_
         "name": str(title),
         "description": description,
         "url": path,
-        "category": "Student accommodation" if kind == "room" else str(data.get("category") or "Campus service"),
+        "category": "Accommodation" if kind == "room" else str(data.get("category") or "Local service"),
     }
     if photo:
         structured["image"] = photo
@@ -8176,7 +8176,7 @@ def public_market_listing(kind: str, listing_id: int, db: Session = Depends(get_
 <title>{escape(title)} | Arounus</title><meta name="description" content="{escape(description)}"><meta name="robots" content="{'noindex,follow' if is_demo else 'index,follow'}"><link rel="canonical" href="{path}">
 <meta property="og:type" content="product"><meta property="og:title" content="{escape(title)}"><meta property="og:description" content="{escape(description)}"><meta property="og:url" content="{path}">{image_meta}
 <meta name="twitter:card" content="summary_large_image">{structured_html}<link rel="stylesheet" href="/static/style.css"><link rel="stylesheet" href="/static/site-footer.css?v=1"><style>body{{background:#f5f8f6;color:#18312d}}.listing-page{{max-width:820px;margin:30px auto;padding:28px;background:white;border:1px solid #d5e4db;border-radius:20px}}.photo{{width:100%;max-height:460px;object-fit:cover;border-radius:14px}}.listing-page p{{line-height:1.6}}.listing-page a{{color:#087c6f}}@media(max-width:650px){{.listing-page{{margin:12px;padding:18px}}}}</style></head>
-<body><script src="/static/app-traffic.js?v=1" defer></script><main class="listing-page"><p><a href="/">← Browse campus market</a></p>{'<p><strong>Example only — this is not a real offer.</strong></p>' if is_demo else ''}<h1>{escape(title)}</h1>{image_html}<p>{escape(data.get('campus') or 'Campus not specified')}{' · ' + escape(data.get('area')) if data.get('area') else ''}</p><p><strong>{escape(price)}</strong></p>{'<p>Listed by ' + escape(seller) + '</p>' if seller and not is_demo else ''}<p>{escape(full_description)}</p>{'<p><strong>Contact:</strong> ' + escape(contact) + '</p>' if not is_demo else ''}<p>Check the listing and provider independently before paying. <a href="/trust#safety">Read market safety guidance</a>.</p><p><a href="/">Find more listings</a></p></main>{footer_html}</body></html>"""
+<body><script src="/static/app-traffic.js?v=1" defer></script><main class="listing-page"><p><a href="/">← Browse local market</a></p>{'<p><strong>Example only — this is not a real offer.</strong></p>' if is_demo else ''}<h1>{escape(title)}</h1>{image_html}<p>{escape(data.get('campus') or 'Location not specified')}{' · ' + escape(data.get('area')) if data.get('area') else ''}</p><p><strong>{escape(price)}</strong></p>{'<p>Listed by ' + escape(seller) + '</p>' if seller and not is_demo else ''}<p>{escape(full_description)}</p>{'<p><strong>Contact:</strong> ' + escape(contact) + '</p>' if not is_demo else ''}<p>Check the listing and provider independently before paying. <a href="/trust#safety">Read market safety guidance</a>.</p><p><a href="/">Find more listings</a></p></main>{footer_html}</body></html>"""
     return HTMLResponse(body, headers={"Cache-Control": "public, max-age=60"})
 
 

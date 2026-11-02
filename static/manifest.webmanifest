@@ -1,7 +1,7 @@
 {
   "name": "Arounus",
   "short_name": "Arounus",
-  "description": "Learning and campus life, connected.",
+  "description": "Local listings, services and learning around you.",
   "id": "/",
   "start_url": "/",
   "scope": "/",

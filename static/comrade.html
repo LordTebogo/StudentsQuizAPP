@@ -29,8 +29,8 @@
 </head>
 <body>
   <main class="wrap">
-    <header class="top"><div class="brand-group"><img class="brand-logo" src="/branding/logo" alt=""><div class="brand-text"><div class="brand">Aroun<span>us</span></div><div class="brand-tagline">Campus community</div></div></div><nav><a href="/">Home</a><a href="/community">Posts</a></nav></header>
-    <section class="comrade-hero"><div><span class="kicker">Campus civic space</span><h1>Comrade Page</h1><p class="lede">Official SRC and party announcements.</p></div></section>
+    <header class="top"><div class="brand-group"><img class="brand-logo" src="/branding/logo" alt=""><div class="brand-text"><div class="brand">Aroun<span>us</span></div><div class="brand-tagline">Local community</div></div></div><nav><a href="/">Home</a><a href="/community">Posts</a></nav></header>
+    <section class="comrade-hero"><div><span class="kicker">Community civic space</span><h1>Comrade Page</h1><p class="lede">Official SRC and party announcements.</p></div></section>
 
     <details class="card src-access" id="srcAccess"><summary><span class="desk-symbol">&#128100;</span> SRC president access <span class="desk-hint">create or sign in</span></summary><div class="account-grid">
       <form class="account-panel" id="srcLoginForm"><h3>Sign in</h3><p>Use the password you created for your SRC profile.</p><input id="srcLoginEmail" type="email" required placeholder="SRC email"><input id="srcLoginPassword" type="password" required autocomplete="current-password" placeholder="Password"><button class="btn" type="submit">Sign in to SRC desk</button><p class="desk-status" id="srcLoginStatus" aria-live="polite"></p></form>
@@ -42,7 +42,7 @@
     <details class="card president-desk hidden" id="presidentDesk" open><summary><span class="desk-symbol">&#9998;</span> Publish an SRC announcement <span class="desk-hint">official channel</span></summary><form class="desk-form" id="announcementForm"><textarea id="announcement" maxlength="2000" required placeholder="Write the announcement for the university community"></textarea><div><button class="btn" type="submit">Publish announcement</button><p class="desk-status" id="deskStatus" aria-live="polite"></p></div></form></details>
 
     <aside class="safety-banner"><strong>Community standard:</strong> Official announcements are identified by their SRC party profile. Student replies must remain respectful, relevant, and free of private information. Content may be moderated or removed. <a href="/trust#support">Report a concern</a>.</aside>
-    <section aria-labelledby="announcementTitle"><div class="feed-head"><div><span class="kicker">Official channel</span><h2 id="announcementTitle">Campus announcements</h2></div><span id="feedCount"></span></div><div id="feed" aria-live="polite"><div class="loading-skeleton" aria-label="Loading announcements"></div></div></section>
+    <section aria-labelledby="announcementTitle"><div class="feed-head"><div><span class="kicker">Official channel</span><h2 id="announcementTitle">Community announcements</h2></div><span id="feedCount"></span></div><div id="feed" aria-live="polite"><div class="loading-skeleton" aria-label="Loading announcements"></div></div></section>
   </main>
   <script>
     const studentToken = sessionStorage.getItem('studentToken'); let srcToken = sessionStorage.getItem('srcToken'); let srcProfile = null; let comradeMembers = [];
@@ -77,18 +77,18 @@
     if(location.hash==='#srcAccess'||location.hash==='#srcRegister'){byId('srcAccess').open=true;setTimeout(()=>{byId('srcAccess').scrollIntoView({behavior:'smooth',block:'start'});if(location.hash==='#srcRegister')byId('srcRegisterForm').querySelector('input').focus();},0);}
     (async()=>{await hydrateSrc();await loadMembers();await loadPosts();})();
   </script>
-<script src="/static/experience.js"></script>
+<script src="/static/experience.js?v=17"></script>
 <script src="/static/loading.js"></script>
 <script src="/static/pwa.js?v=18"></script>
 <footer class="site-footer arounus-footer" aria-label="Arounus footer">
   <div class="arounus-footer__grid">
     <div class="arounus-footer__about">
       <a class="arounus-footer__brand" href="/" aria-label="Arounus home"><img src="/branding/logo" alt="" width="44" height="44" loading="lazy"><span>Aroun<strong>us</strong><small>Around us</small></span></a>
-      <p>Learning, listings and local connections.<br>Find your place. Stay connected.</p>
+      <p>Learning, listings and local connections.<br>Around companies, schools, colleges, universities, mines and more.</p>
     </div>
     <nav class="arounus-footer__links" aria-label="Explore Arounus">
       <h2>Explore</h2>
-      <a href="/">Campus market</a>
+      <a href="/">Local market</a>
       <a href="/learning">Learning</a>
       <a href="/learning/guide">How to use Arounus</a>
       <a href="/trust#support">Help &amp; support</a>

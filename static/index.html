@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#f5f8f6">
-<meta name="description" content="Find a room, a ride, textbooks and campus services near your university or college. Browse current listings, or list your own room, shuttle or item on Arounus.">
+<meta name="description" content="Find rooms, rides, items and services around your company, school, college, university, mine or neighbourhood. Browse local listings and learn with Arounus.">
 <meta name="robots" content="index,follow,max-image-preview:large">
 <link rel="canonical" href="https://arounus.com/">
 <link rel="icon" type="image/png" href="/static/icons/favicon-96x96.png?v=5">
@@ -12,20 +12,20 @@
 <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png?v=5">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Arounus">
-<meta property="og:title" content="Campus Market — rooms, rides and items around your campus">
-<meta property="og:description" content="Find a room, a ride, textbooks and campus services near your university or college. Browse campus listings on Arounus.">
+<meta property="og:title" content="Local Market — rooms, rides and items around you">
+<meta property="og:description" content="Find rooms, rides, items and services around any organisation or neighbourhood. Browse local listings on Arounus.">
 <meta property="og:url" content="https://arounus.com/">
 <meta property="og:image" content="https://arounus.com/static/icons/og-card.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Arounus campus market">
+<meta property="og:image:alt" content="Arounus local market">
 <meta property="og:locale" content="en_ZA">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Campus Market — rooms, rides and items around your campus">
-<meta name="twitter:description" content="Find a room, a ride, textbooks and campus services near your university or college.">
+<meta name="twitter:title" content="Local Market — rooms, rides and items around you">
+<meta name="twitter:description" content="Find rooms, rides, items and services around any organisation or neighbourhood.">
 <meta name="twitter:image" content="https://arounus.com/static/icons/og-card.png">
 <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://arounus.com/#org","name":"Arounus","url":"https://arounus.com/","logo":"https://arounus.com/static/icons/icon-512x512.png"},{"@type":"WebSite","@id":"https://arounus.com/#website","name":"Arounus","url":"https://arounus.com/","publisher":{"@id":"https://arounus.com/#org"},"inLanguage":"en-ZA","potentialAction":{"@type":"SearchAction","target":"https://arounus.com/?q={search_term_string}","query-input":"required name=search_term_string"}}]}</script>
-<title>Campus Market — rooms, rides and items around your campus | Arounus</title>
+<title>Local Market — rooms, rides and items around you | Arounus</title>
 <link rel="stylesheet" href="/static/style.css">
 <link rel="stylesheet" href="/static/campus-home.css?v=6">
 <link rel="stylesheet" href="/static/light.css?v=5">
@@ -35,9 +35,9 @@
 <link rel="stylesheet" href="/static/campus-browse.css?v=1">
 <script src="/static/campus-redirect.js?v=1"></script>
 <script src="/static/media-url.js?v=1" defer></script>
-<script src="/static/campus-home.js?v=6" defer></script>
+<script src="/static/campus-home.js?v=7" defer></script>
 <script src="/static/market-auth.js?v=1" defer></script>
-<script src="/static/market-sell.js?v=3" defer></script>
+<script src="/static/market-sell.js?v=4" defer></script>
 <script src="/static/market-contact.js?v=2" defer></script>
 <script src="/static/video-access.js?v=5" defer></script>
 <script src="/static/market-metrics.js?v=4" defer></script>
@@ -58,22 +58,22 @@
 </nav>
 </header>
 <main id="market">
-<section class="market-browser" id="marketBrowse" aria-label="Browse the campus market">
-<div class="results-heading"><h1 id="resultsTitle">Around campus</h1></div>
-<p id="marketStatus" role="status" aria-live="polite">Loading campus listings…</p><button id="retryListings" type="button" hidden>Retry loading listings</button>
+<section class="market-browser" id="marketBrowse" aria-label="Browse the local market">
+<div class="results-heading"><h1 id="resultsTitle">Around you</h1></div>
+<p id="marketStatus" role="status" aria-live="polite">Loading local listings…</p><button id="retryListings" type="button" hidden>Retry loading listings</button>
 <div id="campusListings" class="campus-listings" aria-busy="true"></div>
 </section>
-<section class="campus-cta"><div><span class="eyebrow">MAKE CAMPUS CONNECTIONS</span><h2>Have something to offer?</h2><p>List a room, promote your transport service, or sell to your campus community.</p></div><button type="button" data-open-sell>Sell or list →</button></section>
+<section class="campus-cta"><div><span class="eyebrow">MAKE LOCAL CONNECTIONS</span><h2>Have something to offer?</h2><p>List a room, promote your transport service, or sell to your local community.</p></div><button type="button" data-open-sell>Sell or list →</button></section>
 </main>
 <footer class="site-footer arounus-footer" aria-label="Arounus footer">
   <div class="arounus-footer__grid">
     <div class="arounus-footer__about">
       <a class="arounus-footer__brand" href="/" aria-label="Arounus home"><img src="/branding/logo" alt="" width="44" height="44" loading="lazy"><span>Aroun<strong>us</strong><small>Around us</small></span></a>
-      <p>Learning, listings and local connections.<br>Find your place. Stay connected.</p>
+      <p>Learning, listings and local connections.<br>Around companies, schools, colleges, universities, mines and more.</p>
     </div>
     <nav class="arounus-footer__links" aria-label="Explore Arounus">
       <h2>Explore</h2>
-      <a href="/">Campus market</a>
+      <a href="/">Local market</a>
       <a href="/learning">Learning</a>
       <a href="/learning/guide">How to use Arounus</a>
       <a href="/trust#support">Help &amp; support</a>
@@ -90,14 +90,14 @@
 <dialog id="marketSearchDialog" aria-labelledby="marketSearchTitle">
 <div class="market-search-heading"><h2 id="marketSearchTitle">Search listings</h2><button type="button" id="closeMarketSearch" aria-label="Close search">×</button></div>
 <form id="campusSearch" class="campus-search">
-<div class="market-search-fields"><div><label for="campus">University or college</label><input id="campus" name="campus" list="campusOptions" placeholder="Choose or type your campus" autocomplete="off"><datalist id="campusOptions"></datalist></div><div><label for="search">What are you looking for?</label><input id="search" name="search" type="search" placeholder="Room, shuttle, textbooks…"></div></div>
+<div class="market-search-fields"><div><label for="campus">Location or organisation</label><input id="campus" name="campus" list="campusOptions" placeholder="Company, school, mine, university..." autocomplete="off"><datalist id="campusOptions"></datalist></div><div><label for="search">What are you looking for?</label><input id="search" name="search" type="search" placeholder="Room, shuttle, textbooks…"></div></div>
 <div class="market-refine"><label for="maxPrice">Maximum price (R)</label><input id="maxPrice" name="max" type="number" min="0" inputmode="numeric" placeholder="Any price"><label for="sortListings">Sort by</label><select id="sortListings" name="sort"><option value="newest">Newest first</option><option value="price-low">Price: low to high</option><option value="price-high">Price: high to low</option></select></div>
 <div class="market-categories" role="group" aria-label="Listing category"><button type="button" data-category="all" aria-pressed="true">All listings</button><button type="button" data-category="rooms" aria-pressed="false">Rooms</button><button type="button" data-category="transport" aria-pressed="false">Transport</button><button type="button" data-category="items" aria-pressed="false">Items for sale</button><button type="button" data-category="services" aria-pressed="false">Other services</button></div>
 <div class="market-search-actions"><button id="clearFilters" type="button">Clear filters</button><button type="submit">Show listings</button></div>
 </form>
 </dialog>
 <dialog id="offerDialog" aria-labelledby="offerTitle"><button id="closeOffer" type="button" aria-label="Close listing">×</button><div id="offerDetails"></div></dialog>
-<dialog id="sellDialog" aria-labelledby="sellTitle"><div class="sell-dialog-head"><div><span class="eyebrow">CAMPUS MARKET</span><h2 id="sellTitle">Sell or list</h2><p id="sellIntro">One advertiser account for rooms, rides, items, and services.</p></div><button type="button" id="closeSell" aria-label="Close sell or list">×</button></div><div id="sellContent"></div><p id="sellMessage" role="status" aria-live="polite"></p></dialog>
+<dialog id="sellDialog" aria-labelledby="sellTitle"><div class="sell-dialog-head"><div><span class="eyebrow">LOCAL MARKET</span><h2 id="sellTitle">Sell or list</h2><p id="sellIntro">One advertiser account for rooms, rides, items, and services.</p></div><button type="button" id="closeSell" aria-label="Close sell or list">×</button></div><div id="sellContent"></div><p id="sellMessage" role="status" aria-live="polite"></p></dialog>
 <dialog id="contactDialog" aria-labelledby="contactTitle"><button type="button" id="closeContact" aria-label="Close message">×</button><h2 id="contactTitle">Message provider</h2><div id="contactContent"></div><p id="contactStatus" role="status" aria-live="polite"></p></dialog>
 <dialog id="marketAuthDialog" aria-labelledby="marketAuthTitle"><div class="sell-dialog-head"><h2 id="marketAuthTitle">Your Arounus account</h2><button type="button" data-close-market-auth aria-label="Close sign in">×</button></div><div id="marketAuthContent"></div><p id="marketAuthStatus" role="status" aria-live="polite"></p></dialog>
 <script src="/static/brand-intro.js?v=2"></script>
@@ -107,7 +107,7 @@
     <button type="button" data-video-close aria-label="Close video" title="Close video"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
   </div>
   <div class="campus-video__screen">
-    <video src="/static/media/campus-intro.mp4" poster="/static/media/campus-intro.jpg" autoplay playsinline preload="metadata" aria-label="Discover Arounus campus market"><track kind="captions" src="/static/media/campus-intro.vtt" srclang="en" label="English" default></video>
+    <video src="/static/media/campus-intro.mp4" poster="/static/media/campus-intro.jpg" autoplay playsinline preload="metadata" aria-label="Discover Arounus local market"><track kind="captions" src="/static/media/campus-intro.vtt" srclang="en" label="English" default></video>
     <p class="campus-video__notice" data-video-notice role="status" hidden></p>
   </div>
   <div class="campus-video__controls" role="group" aria-label="Video controls">

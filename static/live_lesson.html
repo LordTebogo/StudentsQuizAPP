@@ -126,7 +126,7 @@
 }
 @media(max-width:560px){#callArea.slides-active .attendee-panel .equal-participant-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
 </style>
-<script src="/static/experience.js"></script><script>
+<script src="/static/experience.js?v=17"></script><script>
 const $=id=>document.getElementById(id),studentToken=sessionStorage.getItem('studentToken')||'',lecturerToken=sessionStorage.getItem('lecturerToken')||'',role=lecturerToken?'lecturer':studentToken?'student':'',authToken=lecturerToken||studentToken;let room=null,roomCode='',cameraRequested=false,mobileScreenPublications=[],androidScreenSharing=false,sessionRecorder=null,recordingCapture=null,recordingMicCapture=null,recordingChunks=[],recordingAudioContext=null,recordingDestination=null,recordingStopPromise=null,resolveRecordingStop=null,recordingDownloadUrl=null,recordingNeedsConfirmation=false,reactionSocket=null,reactionSocketRetry=null,meetingAudioContext=null,localHandRaised=false,meetingSoundsEnabled=localStorage.getItem('nucleoMeetingSounds')!=='off',activePresentation=null,slideUploadBusy=false;const recordingAudioTracks=new Map();let {Room,RoomEvent,Track}=window.LivekitClient||{};
 if(role==='lecturer'){$('joinTitle').textContent='Start a live classroom';$('joinIntro').textContent='Create or enter a room code, then share it with all your students.';$('generateRoom').classList.remove('hidden');if($('backLink'))$('backLink').href='/lecturers'}else if(role==='student'){if($('backLink'))$('backLink').href='/students'}else{$('joinCamera').disabled=true;$('joinListen').disabled=true;message('Sign in as a student or lecturer first.')}
 const invited=NucleoLiveInvite.roomCode(new URLSearchParams(location.search).get('room'));if(invited)$('roomCode').value=invited;if(role==='lecturer')$('copyJoinInvite').classList.remove('hidden');
@@ -591,11 +591,11 @@ const savedMeeting=(()=>{try{return JSON.parse(sessionStorage.getItem('nucleoAct
   <div class="arounus-footer__grid">
     <div class="arounus-footer__about">
       <a class="arounus-footer__brand" href="/" aria-label="Arounus home"><img src="/branding/logo" alt="" width="44" height="44" loading="lazy"><span>Aroun<strong>us</strong><small>Around us</small></span></a>
-      <p>Learning, listings and local connections.<br>Find your place. Stay connected.</p>
+      <p>Learning, listings and local connections.<br>Around companies, schools, colleges, universities, mines and more.</p>
     </div>
     <nav class="arounus-footer__links" aria-label="Explore Arounus">
       <h2>Explore</h2>
-      <a href="/">Campus market</a>
+      <a href="/">Local market</a>
       <a href="/learning">Learning</a>
       <a href="/learning/guide">How to use Arounus</a>
       <a href="/trust#support">Help &amp; support</a>
