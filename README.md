@@ -1,5 +1,14 @@
 # Quiz + Video Lessons App (cloud-deployable version)
 
+## Compact market homepage
+
+The homepage starts with listings under a slim Arounus / Around us header.
+Use the magnifying-glass button to open campus, keyword, price, category and
+sort filters. Show listings applies the selection and closes the panel;
+Clear filters resets it. Active filters appear as a count on the search icon.
+The panel supports keyboard focus, Escape and a close button. Learning,
+messages and selling remain available in the header.
+
 ## Floating homepage video
 
 The campus homepage opens the welcome video in a movable bottom-right player.

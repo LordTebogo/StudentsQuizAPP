@@ -18,6 +18,20 @@
     document.querySelectorAll('[data-category]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.category === category)));
   }
   const deepLinkKey = params.get('listing') || '';
+  const searchDialog = $('marketSearchDialog');
+  const searchToggle = $('openMarketSearch');
+  searchToggle.addEventListener('click', () => {
+    searchDialog.showModal();
+    searchToggle.setAttribute('aria-expanded', 'true');
+    $('search').focus();
+  });
+  const closeSearch = () => {
+    if (searchDialog.open) searchDialog.close();
+    searchToggle.setAttribute('aria-expanded', 'false');
+  };
+  $('closeMarketSearch').addEventListener('click', closeSearch);
+  searchDialog.addEventListener('close', () => searchToggle.setAttribute('aria-expanded', 'false'));
+  searchDialog.addEventListener('cancel', () => searchToggle.setAttribute('aria-expanded', 'false'));
   const listingUrl = entry => `/listing/${entry.kind === 'rooms' ? 'room' : 'offer'}/${entry.id}`;
 
   const photos = entry => (entry.image_urls?.length ? entry.image_urls : [entry.image_url]).map(safeUrl).filter(Boolean).slice(0, 3);
@@ -71,6 +85,10 @@
     $('campusListings').querySelectorAll('.campus-card').forEach(stopPreview);
     const campus = normalized($('campus').value), search = normalized($('search').value);
     const maximum = $('maxPrice').value === '' ? null : Number($('maxPrice').value);
+    const filterCount = Number(Boolean(campus)) + Number(Boolean(search)) + Number(maximum !== null) + Number(category !== 'all') + Number($('sortListings').value !== 'newest');
+    $('marketFilterCount').hidden = filterCount === 0;
+    $('marketFilterCount').textContent = String(filterCount);
+    searchToggle.setAttribute('aria-label', filterCount ? `Search listings, ${filterCount} active filter${filterCount === 1 ? '' : 's'}` : 'Search listings');
     const filtered = entries.filter(entry => (!campus || normalized(entry.campus).includes(campus)) && (category === 'all' || entry.kind === category) && (!search || normalized([entry.title, entry.headline, entry.description, entry.area, entry.business_name].join(' ')).includes(search)) && (maximum === null || (priceValue(entry) !== null && priceValue(entry) !== undefined && Number(priceValue(entry)) <= maximum)));
     const sort = $('sortListings').value;
     if (sort !== 'newest') filtered.sort((a, b) => {
@@ -150,7 +168,7 @@
     }
   }
 
-  $('campusSearch').addEventListener('submit', event => { event.preventDefault(); try { localStorage.setItem('marketCampus', $('campus').value.trim()); } catch {} render(); });
+  $('campusSearch').addEventListener('submit', event => { event.preventDefault(); clearTimeout(searchTimer); try { localStorage.setItem('marketCampus', $('campus').value.trim()); } catch {} render(); closeSearch(); });
   let searchTimer;
   $('search').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(render, 180); });
   $('maxPrice').addEventListener('input', render);
