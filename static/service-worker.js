@@ -1,4 +1,4 @@
-const OFFLINE_VERSION = "v67";
+const OFFLINE_VERSION = "v68";
 const SHELL_CACHE = `nucleocampus-shell-${OFFLINE_VERSION}`;
 const DATA_CACHE = `nucleocampus-data-${OFFLINE_VERSION}`;
 const EXTERNAL_CACHE = `nucleocampus-external-${OFFLINE_VERSION}`;
@@ -14,7 +14,7 @@ const APP_SHELL = [
   "/static/campus-home.css?v=6", "/static/campus-home.js?v=8", "/static/campus-browse.css?v=2", "/static/campus-redirect.js?v=1",
   "/static/media-compressor.js?v=2", "/static/admin-workspace.css?v=3", "/static/admin-workspace.js?v=3",
   "/static/document-organizer.js",
-  "/static/site-footer.css?v=1", "/static/compact-entry.css?v=1",
+  "/static/site-footer.css?v=1", "/static/compact-entry.css?v=2",
   "/about", "/static/about.css?v=1", "/static/about.js?v=1", "/static/images/founder-tebogo-manyubele.png",
   "/static/style.css", "/static/ui.css?v=2", "/static/product.css", "/static/theme.css?v=2",
   "/static/brand-intro.css?v=1", "/static/brand-intro.js?v=2",
