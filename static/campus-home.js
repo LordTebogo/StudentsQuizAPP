@@ -34,6 +34,46 @@
   searchDialog.addEventListener('close', () => searchToggle.setAttribute('aria-expanded', 'false'));
   searchDialog.addEventListener('cancel', () => searchToggle.setAttribute('aria-expanded', 'false'));
   const listingUrl = entry => `/listing/${entry.kind === 'rooms' ? 'room' : 'offer'}/${entry.id}`;
+  const shareDialog = $('listingShareDialog');
+  let shareRequest = 0;
+  function openShare(entry) {
+    shareRequest++;
+    const title = entry.title || entry.headline;
+    const url = `${location.origin}${listingUrl(entry)}`;
+    $('listingShareName').textContent = title;
+    $('listingShareUrl').value = url;
+    $('listingShareWhatsApp').href = `https://wa.me/?text=${encodeURIComponent(`${title} on Arounus\n${url}`)}`;
+    $('listingShareStatus').textContent = '';
+    $('copyListingLink').disabled = false;
+    if (!shareDialog.open) shareDialog.showModal();
+  }
+  $('closeListingShare').addEventListener('click', () => shareDialog.close());
+  shareDialog.addEventListener('close', () => { shareRequest++; $('copyListingLink').disabled = false; });
+  $('copyListingLink').addEventListener('click', async () => {
+    const request = ++shareRequest;
+    const link = $('listingShareUrl');
+    const button = $('copyListingLink');
+    let timer;
+    button.disabled = true;
+    $('listingShareStatus').textContent = 'Copying link…';
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
+      await Promise.race([
+        navigator.clipboard.writeText(link.value),
+        new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Clipboard timed out')), 2000); })
+      ]);
+      if (request === shareRequest && shareDialog.open) $('listingShareStatus').textContent = 'Link copied. Paste it into a message or post.';
+    } catch (_) {
+      if (request === shareRequest && shareDialog.open) {
+        link.focus();
+        link.select();
+        $('listingShareStatus').textContent = 'Link selected. Press Ctrl+C or ⌘C, or touch and hold to copy.';
+      }
+    } finally {
+      clearTimeout(timer);
+      if (request === shareRequest) button.disabled = false;
+    }
+  });
 
   const photos = entry => (entry.image_urls?.length ? entry.image_urls : [entry.image_url]).map(safeUrl).filter(Boolean).slice(0, 3);
   const image = entry => photos(entry)[0] || '';
@@ -245,12 +285,7 @@
       event.preventDefault();
       const entry = entries.find(item => item.key === shareButton.dataset.share);
       if (!entry) return;
-      const shareUrl = `${location.origin}${listingUrl(entry)}`;
-      const shareData = {title: entry.title || entry.headline, text: `${entry.title || entry.headline} on Arounus`, url: shareUrl};
-      const done = () => { const original = shareButton.textContent; shareButton.textContent = 'Link copied'; setTimeout(() => { shareButton.textContent = original; }, 1800); };
-      if (navigator.share) navigator.share(shareData).catch(() => {});
-      else if (navigator.clipboard?.writeText) navigator.clipboard.writeText(shareUrl).then(done).catch(() => {});
-      else { window.prompt('Copy this link', shareUrl); }
+      openShare(entry);
       return;
     }
     if (event.target.closest('.market-stars button')) return;

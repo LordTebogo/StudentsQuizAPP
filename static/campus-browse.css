@@ -39,6 +39,21 @@
 #marketSearchDialog #clearFilters { background: #fff; color: #395a52; border: 1px solid #bfd5ca; border-radius: 8px; }
 #marketSearchDialog button[type="submit"] { background: #087f70; color: #fff; }
 .market-search-toggle:hover, #closeMarketSearch:hover { background: #e7f5ed; }
+#listingShareDialog { width: min(460px, calc(100% - 24px)); max-height: calc(100dvh - 24px); padding: 24px; overflow: auto; border: 1px solid #bfd5ca; border-radius: 16px; background: #fff; color: #19312e; box-shadow: 0 24px 80px #142d2840; }
+#listingShareDialog::backdrop { background: #09191588; }
+.listing-share-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.listing-share-heading h2 { margin: 0; font-size: 23px; letter-spacing: -.5px; }
+#closeListingShare { min-width: 44px; min-height: 44px; margin: 0; padding: 0; border: 0; border-radius: 8px; background: transparent; color: #395a52; font-size: 28px; }
+#closeListingShare:hover { background: #e7f5ed; }
+#listingShareName { margin: 12px 0 20px; color: #526b65; font-size: 14px; overflow-wrap: anywhere; }
+#listingShareDialog label { display: block; margin-bottom: 8px; color: #395a52; font-size: 12px; font-weight: 700; }
+#listingShareDialog input { display: block; width: 100%; min-height: 46px; margin: 0; padding: 11px 12px; font-size: 16px; }
+.listing-share-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 18px; }
+#listingShareDialog .listing-share-actions > * { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; margin: 0; padding: 12px; border: 1px solid #087f70; border-radius: 9px; background: #087f70; color: #fff; font: 700 13px/1.4 Arial, sans-serif; text-decoration: none; }
+#listingShareDialog #listingShareWhatsApp { background: #edf7f1; color: #075e53; border-color: #85bca9; }
+.listing-share-actions svg { flex-shrink: 0; width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+#listingShareStatus { min-height: 20px; margin: 12px 0 0; color: #087f70; font-size: 13px; line-height: 1.5; }
+@media (max-width: 360px) { #listingShareDialog { padding: 18px; } .listing-share-actions { grid-template-columns: 1fr; gap: 8px; } }
 @media (max-width: 640px) {
   .campus-home .campus-shell { padding: 0 12px; }
   .campus-home .campus-header { gap: 6px; min-height: 56px; }
