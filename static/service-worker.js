@@ -1,4 +1,4 @@
-const OFFLINE_VERSION = "v58";
+const OFFLINE_VERSION = "v60";
 const SHELL_CACHE = `nucleocampus-shell-${OFFLINE_VERSION}`;
 const DATA_CACHE = `nucleocampus-data-${OFFLINE_VERSION}`;
 const EXTERNAL_CACHE = `nucleocampus-external-${OFFLINE_VERSION}`;
@@ -16,6 +16,7 @@ const APP_SHELL = [
   "/static/document-organizer.js",
   "/static/style.css", "/static/ui.css?v=2", "/static/product.css", "/static/theme.css?v=2",
   "/static/brand-intro.css?v=1", "/static/brand-intro.js?v=2",
+  "/static/floating-video.css?v=1", "/static/floating-video.js?v=1", "/static/media/campus-intro.jpg",
   "/static/light.css?v=5", "/static/messaging.css",
   "/static/market-sell.css?v=3",
   "/static/lesson-insights.css", "/static/quiz-builder.css",
@@ -147,6 +148,10 @@ self.addEventListener("fetch", event => {
     event.respondWith(fetch(request).catch(() => offlineJson("This action needs an internet connection. Your current page and unsaved entries are still available.")));
     return;
   }
+
+  // Let the browser stream video (including range requests) without saving
+  // an entire promotional video in the installed app's offline cache.
+  if (url.origin === self.location.origin && url.pathname === '/static/media/campus-intro.mp4') return;
 
   if (url.origin !== self.location.origin) {
     if (TRUSTED_EXTERNAL_ORIGINS.has(url.origin)) {

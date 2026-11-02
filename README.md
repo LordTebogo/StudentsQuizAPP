@@ -1,5 +1,23 @@
 # Quiz + Video Lessons App (cloud-deployable version)
 
+## Floating homepage video
+
+The campus homepage opens the welcome video in a movable bottom-right player.
+It starts muted, with English captions, and includes play/pause, seeking,
+mute/unmute, captions, full-screen and close controls. Drag its title bar with
+a mouse or touch, or focus the title bar and use arrow keys. Closing stops
+playback and downloading for the current page; reloading the homepage shows
+the video again. If autoplay is blocked, visitors can press Play.
+
+The optimized video, poster and captions live in `static/media/campus-intro.*`.
+The original YouTube URL is the playback-error fallback. The service worker
+caches the small player files and poster but streams the video without storing
+it in the offline app cache. Regression checks:
+
+```powershell
+node --test tests/floating-video.test.cjs tests/campus-home.test.cjs tests/service-worker-urls.test.cjs
+```
+
 ## Document workspace
 
 PDF tools support previews, merge/reorder, selection, rotation, extraction and
