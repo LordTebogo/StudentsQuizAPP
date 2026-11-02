@@ -128,12 +128,13 @@
       const locationStatus = locationButton.parentElement.querySelector('.sell-location-status');
       if (!navigator.geolocation) {
         locationStatus.hidden = false;
-        locationStatus.textContent = 'Location is unavailable on this device. You can enter coordinates manually.';
+        locationStatus.textContent = 'This browser cannot get your location. You can leave coordinates blank and use the area or suburb instead.';
         locationStatus.classList.add('error');
         status(locationStatus.textContent, true);
         return;
       }
       const form = locationButton.closest('form');
+      const isActive = () => form.isConnected && dialog.open && !form.elements.latitude.disabled;
       locationButton.disabled = true;
       locationButton.classList.add('is-loading');
       locationButton.setAttribute('aria-busy', 'true');
@@ -149,18 +150,25 @@
         locationButton.textContent = 'Use my current location';
         locationStatus.textContent = text;
         locationStatus.classList.toggle('error', error);
-        if (form.isConnected) status(text, error);
+        if (isActive()) status(text, error);
       };
       try {
         navigator.geolocation.getCurrentPosition(position => {
-          if (form.isConnected) {
+          if (isActive()) {
             form.elements.latitude.value = position.coords.latitude.toFixed(6);
             form.elements.longitude.value = position.coords.longitude.toFixed(6);
           }
           finish('Location added to this listing.');
-        }, () => finish('Location was not shared. You can enter coordinates manually.', true), {timeout:15000});
+        }, error => {
+          const messages = {
+            1: 'Location access is blocked. Allow location for arounus.com in your browser\u2019s site settings, check that device Location is on, then try again. Coordinates are optional.',
+            2: 'Your device could not find its location. Check that Location is on and try again, or leave coordinates blank and use the area or suburb.',
+            3: 'Finding your location took too long. Try again, or leave coordinates blank and use the area or suburb.'
+          };
+          finish(messages[error?.code] || 'Location could not be fetched. Try again, or leave coordinates blank and use the area or suburb.', true);
+        }, {timeout:15000, maximumAge:60000});
       } catch (_) {
-        finish('Location could not be fetched. You can enter coordinates manually.', true);
+        finish('Location could not be fetched. Try again, or leave coordinates blank and use the area or suburb.', true);
       }
       return;
     }

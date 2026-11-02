@@ -74,6 +74,12 @@ class SiteHardeningTest(unittest.TestCase):
             self.assertTrue("src=" in tag or 'type="application/ld+json"' in tag, f"strict CSP would block {tag}")
         self.assertIsNone(re.search(r"\son[a-z]+=", index), "strict CSP blocks inline event handlers")
 
+    def test_listing_location_is_allowed_only_for_same_origin(self):
+        for path in ("/", "/market"):
+            policy = self.client.get(path).headers["permissions-policy"]
+            self.assertIn("geolocation=(self)", policy)
+            self.assertNotIn("geolocation=*", policy)
+
     def test_static_cache_headers(self):
         versioned = self.client.get("/static/campus-home.js?v=5")
         self.assertIn("immutable", versioned.headers["cache-control"])

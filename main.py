@@ -587,7 +587,7 @@ async def security_headers_and_head(request: Request, call_next):
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     response.headers.setdefault(
         "Permissions-Policy",
-        "camera=(self), microphone=(self), display-capture=(self), geolocation=()",
+        "camera=(self), microphone=(self), display-capture=(self), geolocation=(self)",
     )
     response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
     path = request.url.path
