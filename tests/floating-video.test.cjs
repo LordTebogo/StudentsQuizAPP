@@ -44,12 +44,12 @@ async function setup(blockAutoplay = false) {
   return {dom, w, d, player, video, drag, click, loads: () => loads};
 }
 
-test('homepage autoplays silently, supports sound and pause, and closes without downloading', async t => {
+test('homepage requests autoplay with sound, supports mute and pause, and closes without downloading', async t => {
   const s = await setup(); t.after(() => s.dom.window.close());
   assert.equal(s.video.paused, false);
-  assert.equal(s.video.muted, true);
-  s.click('mute'); assert.equal(s.video.muted, false);
+  assert.equal(s.video.muted, false);
   s.click('mute'); assert.equal(s.video.muted, true);
+  s.click('mute'); assert.equal(s.video.muted, false);
   s.click('play'); assert.equal(s.video.paused, true);
   s.click('close');
   assert.equal(s.player.hidden, true);
@@ -63,6 +63,7 @@ test('blocked autoplay leaves an obvious working Play action', async t => {
   assert.equal(s.video.paused, true);
   s.click('play'); await new Promise(setImmediate);
   assert.equal(s.video.paused, false);
+  assert.equal(s.video.muted, false);
   assert.equal(s.player.querySelector('[data-video-notice]').hidden, true);
 });
 

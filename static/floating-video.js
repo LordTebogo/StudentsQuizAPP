@@ -35,7 +35,7 @@
   async function start() {
     try { await video.play(); notice.hidden = true; }
     catch (_) {
-      notice.textContent = 'Tap Play to watch.';
+      notice.textContent = 'Tap Play to watch with sound.';
       notice.hidden = false;
     }
     sync();
@@ -145,8 +145,8 @@
   window.visualViewport?.addEventListener('resize', reflow);
   window.visualViewport?.addEventListener('scroll', reflow);
   document.addEventListener('fullscreenchange', () => { sync(); reflow(); });
-  // Browsers allow muted autoplay; sound only starts after a visitor chooses it.
-  video.muted = true;
+  // Try autoplay with sound. Browsers that block it keep the Play action available.
+  video.muted = false;
   sync();
   start();
 })();
