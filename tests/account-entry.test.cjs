@@ -28,28 +28,65 @@ test('all changed page scripts parse', () => {
   }
 });
 
-test('role and mode tabs retain keyboard focus and have a labelled panel', () => {
+test('sign-in is role-free and registration asks for the account type first', () => {
   const dom = setup('academics.html', 'function renderEntry()');
-  const { document, KeyboardEvent } = dom.window;
-  const learner = document.getElementById('roleTab-learner');
-  learner.focus();
-  learner.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
-  assert.equal(document.activeElement.id, 'roleTab-lecturer');
-  assert.equal(document.getElementById('roleTab-lecturer').getAttribute('aria-selected'), 'true');
-  assert.equal(learner.tabIndex, -1);
-  assert.equal(document.getElementById('accountEntry').getAttribute('aria-labelledby'), 'roleTab-lecturer');
-  const mode = document.getElementById('modeTab-login');
-  mode.focus();
-  mode.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
-  assert.equal(document.activeElement.id, 'modeTab-register');
-  assert.equal(document.getElementById('entryForm').getAttribute('aria-labelledby'), 'modeTab-register');
-  assert.equal(document.querySelectorAll('h1').length, 1);
-  assert.ok(document.querySelector('main #entryForm'));
+  const {document,KeyboardEvent}=dom.window;
+  assert.equal(document.getElementById('entryRoleChoices').hidden,true);
+  assert.equal(document.querySelectorAll('#entryForm input').length,2);
+  assert.equal(document.querySelector('#entryForm select'),null);
+  assert.equal(document.querySelector('#entryForm [type=submit]').textContent,'Sign in');
+  assert.equal(document.getElementById('entryForgotPassword').getAttribute('href'),'/reset-password');
+  document.getElementById('modeTab-register').click();
+  assert.equal(document.getElementById('entryRoleChoices').hidden,false);
+  assert.equal(document.getElementById('entryForm').hidden,true);
+  assert.equal(document.activeElement.id,'roleTab-learner');
+  const student=document.getElementById('roleTab-learner');
+  student.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));
+  assert.equal(document.activeElement.id,'roleTab-lecturer');
+  assert.equal(document.getElementById('roleTab-lecturer').getAttribute('aria-selected'),'true');
+  assert.equal(document.getElementById('entryForm').getAttribute('aria-labelledby'),'roleTab-lecturer');
+  document.getElementById('roleTab-advertiser').click();
+  assert.ok(document.getElementById('entryPhone'));
+  assert.equal(document.getElementById('entryHeading').textContent,'Create advertiser account');
+  document.getElementById('modeTab-login').click();
+  assert.equal(document.getElementById('entryRoleChoices').hidden,true);
+  assert.equal(document.activeElement.id,'entryIdentifier');
+  assert.equal(document.querySelectorAll('h1').length,1);
   dom.window.close();
 });
 
+for(const [detected,key,active] of [['student','studentToken','student'],['lecturer','lecturerToken','lecturer'],['landlord','landlordToken','advertiser']]) {
+  test(`one sign-in detects ${detected} and stores the correct session`,async()=>{
+    const dom=setup('academics.html','function renderEntry()');
+    const {document,Event}=dom.window;let calls=0;
+    document.getElementById('entryIdentifier').value='  person@example.test  ';
+    document.getElementById('entryPassword').value='short';
+    dom.window.sessionStorage.setItem('studentToken','old-session');
+    dom.window.sessionStorage.setItem('lecturerToken','old-session');
+    dom.window.fetch=async(url,options)=>{calls++;assert.equal(url,'/marketing/login');assert.deepEqual(JSON.parse(options.body),{identifier:'person@example.test',password:'short'});return {ok:true,json:async()=>({role:detected,token:'detected-session',market_token:'market-session',profile:{full_name:'Person'}})}};
+    document.getElementById('entryForm').dispatchEvent(new Event('submit',{cancelable:true}));
+    await tick();
+    assert.equal(calls,1);
+    assert.equal(dom.window.sessionStorage.getItem(key),'detected-session');
+    assert.equal(dom.window.sessionStorage.getItem('activeRole'),active);
+    assert.equal(dom.window.sessionStorage.getItem('marketSessionSource'),key+':detected-session');
+    for(const other of ['studentToken','lecturerToken','landlordToken'].filter(item=>item!==key))assert.equal(dom.window.sessionStorage.getItem(other),null);
+    dom.window.close();
+  });
+}
+
+test('a rejected unified sign-in keeps the form usable and shows the server message',async()=>{
+  const dom=setup('academics.html','function renderEntry()');const {document,Event}=dom.window;
+  document.getElementById('entryIdentifier').value='person@example.test';document.getElementById('entryPassword').value='wrong';
+  dom.window.fetch=async()=>({ok:false,json:async()=>({detail:'Email, username or password is incorrect'})});
+  document.getElementById('entryForm').dispatchEvent(new Event('submit',{cancelable:true}));await tick();
+  assert.match(document.getElementById('entryMessage').textContent,/password is incorrect/);
+  assert.equal(document.querySelector('#entryForm [type=submit]').disabled,false);
+  assert.equal(dom.window.sessionStorage.getItem('studentToken'),null);dom.window.close();
+});
+
 test('invalid registration focuses and describes the first invalid field', () => {
-  const dom = setup('academics.html', 'function renderEntry()', '?mode=register');
+  const dom = setup('academics.html', 'function renderEntry()', '?mode=register&role=learner');
   const { document, Event } = dom.window;
   document.getElementById('entryForm').dispatchEvent(new Event('submit', { cancelable: true }));
   assert.equal(document.activeElement.id, 'entryUsername');
@@ -75,22 +112,22 @@ test('password reveal works on sign in', () => {
   dom.window.close();
 });
 
-for (const role of ['learner', 'lecturer']) {
+for (const role of ['learner', 'lecturer', 'advertiser']) {
   test(`${role} registration sends confirmation and saves the returned session`, async () => {
     const dom = setup('academics.html', 'function renderEntry()', `?role=${role}&mode=register`);
     const { document, Event } = dom.window;
     for (const [id, value] of Object.entries({ entryUsername: 'Learner-01', entryFullName: 'Test Learner',
-      entryEmail: 'learner@example.test', entryPassword: 'A-password-123', entryConfirmPassword: 'A-password-123' })) {
+      entryPhone:'0712345678', entryEmail: 'learner@example.test', entryPassword: 'A-password-123', entryConfirmPassword: 'A-password-123' })) {
       if (document.getElementById(id)) document.getElementById(id).value = value;
     }
     dom.window.fetch = async (url, options) => {
-      assert.equal(url, role === 'learner' ? '/students/register' : '/lecturers/register');
+      assert.equal(url, role === 'learner' ? '/students/register' : role === 'lecturer' ? '/lecturers/register' : '/marketing/landlords/register');
       assert.equal(options.body.get('confirm_password'), 'A-password-123');
       return { ok: true, json: async () => ({ token: 'test-session' }) };
     };
     document.getElementById('entryForm').dispatchEvent(new Event('submit', { cancelable: true }));
     await tick();
-    assert.equal(dom.window.sessionStorage.getItem(role === 'learner' ? 'studentToken' : 'lecturerToken'), 'test-session');
+    assert.equal(dom.window.sessionStorage.getItem(role === 'learner' ? 'studentToken' : role === 'lecturer' ? 'lecturerToken' : 'landlordToken'), 'test-session');
     dom.window.close();
   });
 }

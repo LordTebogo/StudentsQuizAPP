@@ -1,0 +1,33 @@
+/* Keep sign-in small; account choices belong to registration. */
+body #guestChoices.entry-shell { width: min(100%, 420px); max-width: 420px; margin: 24px auto; padding: 24px; border-radius: 16px; box-shadow: 0 8px 28px #19312e0d; scroll-margin-top: 90px; }
+#guestChoices .entry-heading { text-align: left; }
+#guestChoices .entry-heading h1 { font-size: 27px; line-height: 1.2; letter-spacing: -.7px; margin: 0 0 18px; }
+#guestChoices .entry-form { width: 100%; max-width: none; margin: 0; }
+#guestChoices .entry-form .field { margin-top: 12px; }
+#guestChoices .entry-form .field > label { margin: 0 0 5px; font-size: 12px; }
+#guestChoices .entry-form input, #guestChoices .entry-form select { min-height: 44px; padding: 10px 12px; border-radius: 8px; font-size: 14px; }
+#guestChoices .entry-form .pw-wrap input { padding-right: 64px; }
+#guestChoices .entry-form .pw-toggle { min-height: 40px; margin: 0; padding: 6px 10px; font-size: 11px; }
+#guestChoices .entry-form button[type="submit"] { min-height: 44px; margin: 18px 0 0; padding: 10px 16px; border-radius: 8px; font-size: 13px; }
+#guestChoices .entry-secondary-links { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0 12px; margin-top: 8px; }
+#guestChoices .entry-secondary-links a { display: inline-flex; align-items: center; min-height: 44px; padding: 4px 0; font-size: 12px; font-weight: 600; color: #087f70; text-underline-offset: 3px; }
+#guestChoices .entry-choice-label { margin: 0 0 12px; color: #526b65; font-size: 13px; }
+#guestChoices .entry-role-tabs { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 6px; margin: 0 0 18px; }
+#guestChoices .entry-role-tabs .entry-tab { min-height: 44px; margin: 0; padding: 8px 5px; border-radius: 8px; font-size: 12px; }
+#guestChoices [hidden] { display: none !important; }
+#guestChoices .entry-message { margin-top: 0; }
+#guestChoices .entry-message:empty { display: none; }
+#guestChoices .entry-form .field-hint { margin-top: 5px; font-size: 11px; }
+#guestChoices .entry-form .field-error { font-size: 12px; }
+@media (max-width: 560px) {
+  body #guestChoices.entry-shell { margin: 18px auto; padding: 20px; }
+  body #welcome:not(.dashboard-mode) > header.top { display: flex !important; flex-direction: row; flex-wrap: nowrap; align-items: center !important; justify-content: space-between; gap: 8px; min-height: 56px; padding: 7px 10px; margin-bottom: 18px; border-radius: 12px; }
+  #welcome:not(.dashboard-mode) > header.top .brand-group { flex: 0 0 auto; width: auto; height: 44px; min-height: 0; gap: 7px; }
+  #welcome:not(.dashboard-mode) > header.top .brand-logo { width: 30px; height: 30px; max-width: 30px; }
+  #welcome:not(.dashboard-mode) > header.top .brand { font-size: 17px; }
+  #welcome:not(.dashboard-mode) > header.top .brand-tagline { display: none; }
+  #welcome:not(.dashboard-mode) > header.top nav { flex: 0 0 auto; width: auto; margin: 0; flex-direction: row; flex-wrap: nowrap; gap: 5px; }
+  #welcome:not(.dashboard-mode) > header.top nav a { min-height: 44px; padding: 6px 8px; font-size: 11px; }
+  #welcome:not(.dashboard-mode) > header.top #installAppBtn { width: 40px; min-width: 40px; min-height: 44px; margin: 0; padding: 6px; font-size: 0; }
+  #welcome:not(.dashboard-mode) > header.top #installAppBtn::before { content: '↓'; font: 700 21px/1 Arial, sans-serif; }
+}

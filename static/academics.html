@@ -12,7 +12,6 @@
 <link rel="manifest" href="/static/manifest.webmanifest">
 <title>Learning — Arounus</title>
 <link rel="stylesheet" href="/static/style.css"><link rel="stylesheet" href="/static/ui.css?v=2">
-<script>if(new URLSearchParams(location.search).get('role')==='advertiser')location.replace('/market?sell=1'+(new URLSearchParams(location.search).get('mode')==='login'?'&mode=login':''));</script>
 <script src="/static/live-invite.js"></script>
 <script defer src="/static/username-suggestion.js"></script>
 <style>
@@ -134,6 +133,7 @@
 </style>
 <script src="/static/app-traffic.js?v=1" defer></script>
 <link rel="stylesheet" href="/static/site-footer.css?v=1">
+<link rel="stylesheet" href="/static/compact-entry.css?v=1">
 </head>
 <body>
 <div class="wrap" id="welcome">
@@ -144,20 +144,19 @@
 
   <main id="mainContent">
   <section class="entry-shell" id="guestChoices" aria-labelledby="entryHeading">
-    <div class="entry-heading"><span class="kicker">Learning</span><h1 id="entryHeading">Learn. Teach. Connect.</h1><p>Choose your space to continue.</p></div>
-    <div class="entry-role-tabs" role="tablist" aria-label="Choose account type">
-      <button class="entry-tab active" type="button" role="tab" id="roleTab-learner" aria-controls="accountEntry" aria-selected="true" tabindex="0" data-entry-role="learner">Learner</button>
-      <button class="entry-tab" type="button" role="tab" id="roleTab-lecturer" aria-controls="accountEntry" aria-selected="false" tabindex="-1" data-entry-role="lecturer">Tutor</button>
-      <button class="entry-tab" type="button" role="tab" id="roleTab-visitor" aria-controls="accountEntry" aria-selected="false" tabindex="-1" data-entry-role="visitor">Visitor</button>
-    </div>
-    <p class="entry-role-extra"><a href="/market?sell=1">Selling something? Open the advertiser portal &rarr;</a></p>
-    <div id="accountEntry" role="tabpanel" aria-labelledby="roleTab-learner" tabindex="-1">
-      <div class="entry-mode-tabs" id="entryModeTabs" role="tablist" aria-label="Sign in or create an account">
-        <button class="entry-tab active" type="button" role="tab" id="modeTab-login" aria-controls="entryForm" aria-selected="true" tabindex="0" data-entry-mode="login">Sign in</button>
-        <button class="entry-tab" type="button" role="tab" id="modeTab-register" aria-controls="entryForm" aria-selected="false" tabindex="-1" data-entry-mode="register">Create account</button>
+    <div class="entry-heading"><h1 id="entryHeading">Sign in</h1></div>
+    <div id="entryRoleChoices" hidden>
+      <p class="entry-choice-label">Which account would you like to create?</p>
+      <div class="entry-role-tabs" role="tablist" aria-label="Choose account type">
+        <button class="entry-tab" type="button" role="tab" id="roleTab-learner" aria-controls="accountEntry" aria-selected="false" tabindex="0" data-entry-role="learner">Student</button>
+        <button class="entry-tab" type="button" role="tab" id="roleTab-lecturer" aria-controls="accountEntry" aria-selected="false" tabindex="-1" data-entry-role="lecturer">Tutor</button>
+        <button class="entry-tab" type="button" role="tab" id="roleTab-advertiser" aria-controls="accountEntry" aria-selected="false" tabindex="-1" data-entry-role="advertiser">Advertiser</button>
       </div>
-      <p class="entry-role-note" id="entryRoleNote"></p>
-      <form class="entry-form" id="entryForm" aria-labelledby="modeTab-login" novalidate></form>
+    </div>
+    <div id="accountEntry" role="region" aria-labelledby="entryHeading">
+      <p class="entry-role-note" id="entryRoleNote" hidden></p>
+      <form class="entry-form" id="entryForm" aria-labelledby="entryHeading" novalidate></form>
+      <div class="entry-secondary-links"><a id="entryForgotPassword" href="/reset-password">Forgot password?</a><a id="modeTab-register" href="/learning?mode=register" data-entry-mode="register">Create account</a><a id="modeTab-login" href="/learning" data-entry-mode="login" hidden>Back to sign in</a></div>
       <div class="entry-message" id="entryMessage" role="status" aria-live="polite" tabindex="-1"></div>
     </div>
   </section>
@@ -181,6 +180,7 @@
     <nav class="arounus-footer__links" aria-label="Explore Arounus">
       <h2>Explore</h2>
       <a href="/">Local market</a>
+      <a href="/?saved=1">Saved listings</a>
       <a href="/learning">Learning</a>
       <a href="/about">About us</a>
       <a href="/?sell=1" data-open-sell>Sell or list</a>
@@ -201,14 +201,15 @@
     const roleTabs = [...document.querySelectorAll('[data-entry-role]')];
     const modeTabs = [...document.querySelectorAll('[data-entry-mode]')];
     const form = document.getElementById('entryForm');
-    const modeTabWrap = document.getElementById('entryModeTabs');
+    const roleChoices = document.getElementById('entryRoleChoices');
+    const heading = document.getElementById('entryHeading');
     const note = document.getElementById('entryRoleNote');
     const message = document.getElementById('entryMessage');
     const panel = document.getElementById('accountEntry');
     if (!form) return;
 
     const params = new URLSearchParams(location.search);
-    let role = ['learner', 'lecturer', 'visitor', 'advertiser'].includes(params.get('role')) ? params.get('role') : 'learner';
+    let role = ['learner', 'lecturer', 'advertiser'].includes(params.get('role')) ? params.get('role') : null;
     let mode = (params.get('mode') === 'register' || location.hash === '#register') ? 'register' : 'login';
 
     const esc = value => { const d = document.createElement('div'); d.textContent = value ?? ''; return d.innerHTML; };
@@ -259,7 +260,7 @@
       return `<div class="field">
         <label for="${id}">${label}${required ? ' <span aria-hidden="true">*</span>' : ''}</label>
         <span class="pw-wrap">
-          <input id="${id}" name="${name}" type="password"${autocomplete ? ` autocomplete="${autocomplete}"` : ''}${required ? ' required aria-required="true" minlength="8"' : ''}${hint ? ` aria-describedby="${id}-hint"` : ''}>
+          <input id="${id}" name="${name}" type="password"${autocomplete ? ` autocomplete="${autocomplete}"` : ''}${required ? ` required aria-required="true"${autocomplete === 'new-password' ? ' minlength="8"' : ''}` : ''}${hint ? ` aria-describedby="${id}-hint"` : ''}>
           <button type="button" class="pw-toggle" data-pw-toggle="${id}" aria-controls="${id}" aria-pressed="false">Show</button>
         </span>
         ${hint ? `<span class="field-hint" id="${id}-hint">${hint}</span>` : ''}
@@ -282,40 +283,25 @@
         const active = tab.dataset.entryRole === role;
         tab.classList.toggle('active', active);
         tab.setAttribute('aria-selected', String(active));
-        tab.tabIndex = active ? 0 : -1;
+        tab.tabIndex = active || (!role && tab === roleTabs[0]) ? 0 : -1;
       });
-      modeTabs.forEach(tab => {
-        const active = tab.dataset.entryMode === mode;
-        tab.classList.toggle('active', active);
-        tab.setAttribute('aria-selected', String(active));
-        tab.tabIndex = active ? 0 : -1;
-      });
-      panel.setAttribute('aria-labelledby', `roleTab-${role === 'advertiser' ? 'learner' : role}`);
-      form.setAttribute('aria-labelledby', role === 'visitor' ? 'roleTab-visitor' : `modeTab-${mode}`);
-
-      if (role === 'visitor') {
-        modeTabWrap.classList.add('hidden');
-        note.textContent = 'No account is needed to browse public local listings.';
-        form.innerHTML = `<div class="visitor-entry"><p>Explore public adverts, accommodation, services and community information.</p><button class="btn" type="submit">Continue as visitor</button></div>`;
-        return;
-      }
-      modeTabWrap.classList.remove('hidden');
-      const labels = {
-        learner: 'Access quizzes, lessons and saved progress.',
-        lecturer: 'Manage teaching content, quizzes and learner work.',
-        advertiser: 'Manage accommodation, sales, transport or other services.'
-      };
-      const roleLabel = role === 'lecturer' ? 'tutor' : role;
-      note.textContent = labels[role];
-
-      if (mode === 'login') {
-        const identifier = role === 'learner'
-          ? field({ id: 'entryIdentifier', name: 'identifier', label: 'Username or email', autocomplete: 'username', required: true })
-          : field({ id: 'entryEmail', name: 'email', label: 'Email', type: 'email', autocomplete: 'email', required: true });
-        form.innerHTML = `${identifier}
-          ${passwordField({ autocomplete: 'current-password', hint: '' })}
-          <p class="entry-forgot"><a href="/reset-password?role=${role}">Forgot password?</a></p>
-          <button class="btn" type="submit">Sign in as ${roleLabel}</button>`;
+      const registering = mode === 'register';
+      const roleLabel = role === 'learner' ? 'student' : role === 'lecturer' ? 'tutor' : 'advertiser';
+      heading.textContent = registering ? (role ? `Create ${roleLabel} account` : 'Create account') : 'Sign in';
+      roleChoices.hidden = !registering;
+      document.getElementById('entryForgotPassword').hidden = registering;
+      document.getElementById('modeTab-register').hidden = registering;
+      document.getElementById('modeTab-login').hidden = !registering;
+      form.hidden = registering && !role;
+      panel.setAttribute('aria-labelledby', 'entryHeading');
+      form.setAttribute('aria-labelledby', registering && role ? `roleTab-${role}` : 'entryHeading');
+      note.hidden = true;
+      note.textContent = '';
+      if (registering && !role) { form.replaceChildren(); return; }
+      if (!registering) {
+        form.innerHTML = `${field({id:'entryIdentifier',name:'identifier',label:'Username or email',autocomplete:'username',required:true})}
+          ${passwordField({autocomplete:'current-password'})}
+          <button class="btn" type="submit">Sign in</button>`;
         wirePasswordToggles();
         return;
       }
@@ -333,7 +319,7 @@
           ${password}
           ${confirm}
           ${optionalDetails('Optional profile details', 'About you')}
-          <button class="btn" type="submit">Create learner account</button>`;
+          <button class="btn" type="submit">Create student account</button>`;
       } else if (role === 'lecturer') {
         form.innerHTML = `
           ${field({ id: 'entryFullName', name: 'full_name', label: 'Full name', autocomplete: 'name', required: true })}
@@ -344,13 +330,6 @@
           <button class="btn" type="submit">Create tutor account</button>`;
       } else {
         form.innerHTML = `
-          <div class="field"><label for="entryProviderType">What do you provide? <span aria-hidden="true">*</span></label>
-            <select id="entryProviderType" name="provider_type" required aria-required="true">
-              <option value="residence">Student accommodation</option>
-              <option value="transport">Transport or delivery</option>
-              <option value="sales">Sales</option>
-              <option value="other">Other</option>
-            </select><span class="field-error" id="entryProviderType-error" role="alert"></span></div>
           ${field({ id: 'entryFullName', name: 'full_name', label: 'Full name', autocomplete: 'name', required: true })}
           ${field({ id: 'entryEmail', name: 'email', label: 'Email', type: 'email', autocomplete: 'email', required: true })}
           ${field({ id: 'entryPhone', name: 'phone', label: 'Contact number', type: 'tel', autocomplete: 'tel', required: true })}
@@ -419,7 +398,7 @@
       }
 
       const pw = form.querySelector('#entryPassword');
-      if (pw && pw.value && pw.value.length < 8) fail(pw, 'Use at least 8 characters.');
+      if (mode === 'register' && pw && pw.value && pw.value.length < 8) fail(pw, 'Use at least 8 characters.');
       const confirm = form.querySelector('#entryConfirmPassword');
       if (pw && confirm && confirm.value && pw.value !== confirm.value) fail(confirm, 'The passwords do not match.');
 
@@ -435,6 +414,13 @@
       sessionStorage.removeItem('studentToken');
       sessionStorage.removeItem('lecturerToken');
       sessionStorage.removeItem('landlordToken');
+      ['marketToken','marketSessionSource','marketProfile'].forEach(key => sessionStorage.removeItem(key));
+      if (result.market_token) {
+        const key = kind === 'learner' ? 'studentToken' : kind === 'lecturer' ? 'lecturerToken' : 'landlordToken';
+        sessionStorage.setItem('marketToken', result.market_token);
+        sessionStorage.setItem('marketSessionSource', `${key}:${result.token}`);
+        sessionStorage.setItem('marketProfile', JSON.stringify(result.profile || {}));
+      }
       if (kind === 'learner') {
         sessionStorage.setItem('studentToken', result.token);
         sessionStorage.setItem('activeRole', 'student');
@@ -447,7 +433,7 @@
       } else {
         sessionStorage.setItem('landlordToken', result.token);
         sessionStorage.setItem('activeRole', 'advertiser');
-        location.href = '/market';
+        location.href = '/market?sell=1';
       }
     }
 
@@ -459,9 +445,11 @@
     }
     function selectMode(tab) {
       mode = tab.dataset.entryMode;
+      if (mode === 'register') role = null;
       renderEntry();
-      const first = form.querySelector('input, select, button');
+      const first = form.hidden ? roleTabs[0] : form.querySelector('input, select, button');
       if (first) first.focus();
+      document.getElementById('guestChoices').scrollIntoView?.({block:'start',behavior:'auto'});
     }
 
     function wireTabs(tabs, onSelect) {
@@ -477,15 +465,11 @@
     }
 
     wireTabs(roleTabs, selectRole);
-    wireTabs(modeTabs, selectMode);
+    modeTabs.forEach(link => link.addEventListener('click', event => { event.preventDefault(); selectMode(link); }));
 
     form.addEventListener('submit', async event => {
       event.preventDefault();
-      if (role === 'visitor') {
-        sessionStorage.setItem('activeRole', 'visitor');
-        location.href = '/market';
-        return;
-      }
+      if (mode === 'register' && !role) { roleTabs[0].focus(); return; }
       if (!validate()) return;
       const submit = form.querySelector('button[type="submit"]');
       if (submit) submit.disabled = true;
@@ -493,16 +477,10 @@
       try {
         if (mode === 'login') {
           const values = Object.fromEntries(new FormData(form));
-          if (role === 'learner') {
-            const result = await request('/students/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ identifier: values.identifier, password: values.password }) });
-            storeSession('learner', result);
-          } else if (role === 'lecturer') {
-            const result = await request('/lecturers/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: values.email, password: values.password }) });
-            storeSession('lecturer', result);
-          } else {
-            const result = await request('/marketing/landlords/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: values.email, password: values.password }) });
-            storeSession('advertiser', result);
-          }
+          const result = await request('/marketing/login', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({identifier:values.identifier.trim(),password:values.password})});
+          const detectedRole = {student:'learner',lecturer:'lecturer',landlord:'advertiser'}[result.role];
+          if (!detectedRole || !result.token) throw new Error('Sign in could not be completed. Please try again.');
+          storeSession(detectedRole, result);
           return;
         }
 

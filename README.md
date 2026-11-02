@@ -2,6 +2,12 @@
 
 ## Compact market homepage
 
+Use **Saved** beside the listings heading, or **Saved listings** in any footer,
+to open `/?saved=1`. Existing bookmarks are retained in this browser on this
+device. The saved view shows all available saved items across locations,
+independent of browsing filters. Unsave a card to remove it; **All listings**
+returns to browsing with your previous filters.
+
 The homepage starts with listings under a slim Arounus / Around us header.
 Use the magnifying-glass button to open location, keyword, price, category and
 sort filters. Show listings applies the selection and closes the panel;

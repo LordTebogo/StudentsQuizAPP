@@ -9,6 +9,7 @@
   try { $('campus').value = localStorage.getItem('marketCampus') || ''; } catch {}
 
   const params = new URLSearchParams(location.search);
+  let savedOnly = params.get('saved') === '1';
   if (params.has('campus')) $('campus').value = params.get('campus');
   if (params.has('q')) $('search').value = params.get('q');
   if (params.has('max')) $('maxPrice').value = params.get('max');
@@ -64,9 +65,35 @@
   };
   const MAX_DEMOS_WITH_LIVE = 6;
   const SAVED_KEY = 'arounusSavedListings';
-  let saved = new Set();
-  try { saved = new Set(JSON.parse(localStorage.getItem(SAVED_KEY) || '[]')); } catch { saved = new Set(); }
+  function readSaved() {
+    try {
+      const stored = JSON.parse(localStorage.getItem(SAVED_KEY) || '[]');
+      return new Set(Array.isArray(stored) ? stored.filter(key => typeof key === 'string' && /^(room|offer)-\d+$/.test(key)) : []);
+    } catch { return new Set(); }
+  }
+  let saved = readSaved();
   const persistSaved = () => { try { localStorage.setItem(SAVED_KEY, JSON.stringify([...saved])); } catch {} };
+  function syncSavedButton() {
+    const button = $('showSavedListings');
+    button.setAttribute('aria-pressed', String(savedOnly));
+    button.setAttribute('aria-label', savedOnly ? 'Back to all listings' : `Saved listings, ${saved.size} saved`);
+    button.querySelector('[data-saved-label]').textContent = savedOnly ? 'All listings' : 'Saved';
+    const count = button.querySelector('[data-saved-count]');
+    count.textContent = String(saved.size);
+    count.hidden = savedOnly;
+    button.querySelector('svg').innerHTML = savedOnly ? '<path d="m12 5-7 7 7 7M5 12h15"/>' : '<path d="M6 3h12v18l-6-4-6 4Z"/>';
+  }
+  function showSaved(value) {
+    savedOnly = value;
+    closeSearch();
+    render();
+  }
+  $('showSavedListings').addEventListener('click', () => showSaved(!savedOnly));
+  window.addEventListener('storage', event => {
+    if (event.key !== SAVED_KEY && event.key !== null) return;
+    saved = readSaved();
+    render();
+  });
 
   function syncUrl() {
     const next = new URLSearchParams(location.search);
@@ -77,11 +104,14 @@
     set('sort', $('sortListings').value === 'newest' ? '' : $('sortListings').value);
     set('category', category === 'all' ? '' : category);
     set('listing', openKey);
+    set('saved', savedOnly ? '1' : '');
     const query = next.toString();
     try { history.replaceState(null, '', location.pathname + (query ? '?' + query : '') + location.hash); } catch {}
   }
 
   function render() {
+    syncSavedButton();
+    searchToggle.hidden = savedOnly;
     $('campusListings').querySelectorAll('.campus-card').forEach(stopPreview);
     const campus = normalized($('campus').value), search = normalized($('search').value);
     const maximum = $('maxPrice').value === '' ? null : Number($('maxPrice').value);
@@ -89,7 +119,7 @@
     $('marketFilterCount').hidden = filterCount === 0;
     $('marketFilterCount').textContent = String(filterCount);
     searchToggle.setAttribute('aria-label', filterCount ? `Search listings, ${filterCount} active filter${filterCount === 1 ? '' : 's'}` : 'Search listings');
-    const filtered = entries.filter(entry => (!campus || normalized([entry.campus, entry.area].filter(Boolean).join(' ')).includes(campus)) && (category === 'all' || entry.kind === category) && (!search || normalized([entry.title, entry.headline, entry.description, entry.area, entry.business_name].join(' ')).includes(search)) && (maximum === null || (priceValue(entry) !== null && priceValue(entry) !== undefined && Number(priceValue(entry)) <= maximum)));
+    const filtered = entries.filter(entry => savedOnly ? saved.has(entry.key) : (!campus || normalized([entry.campus, entry.area].filter(Boolean).join(' ')).includes(campus)) && (category === 'all' || entry.kind === category) && (!search || normalized([entry.title, entry.headline, entry.description, entry.area, entry.business_name].join(' ')).includes(search)) && (maximum === null || (priceValue(entry) !== null && priceValue(entry) !== undefined && Number(priceValue(entry)) <= maximum)));
     const sort = $('sortListings').value;
     if (sort !== 'newest') filtered.sort((a, b) => {
       if (isDemo(a) !== isDemo(b)) return isDemo(a) ? 1 : -1;
@@ -100,32 +130,34 @@
     });
     else filtered.sort((a, b) => Number(isDemo(a)) - Number(isDemo(b)) || String(b.created_at || '').localeCompare(String(a.created_at || '')));
     // Examples help an empty market, but should not crowd out real offers.
-    if (filtered.some(entry => !isDemo(entry))) {
+    if (!savedOnly && filtered.some(entry => !isDemo(entry))) {
       let demosShown = 0;
       for (let index = 0; index < filtered.length;) {
         if (isDemo(filtered[index]) && ++demosShown > MAX_DEMOS_WITH_LIVE) filtered.splice(index, 1);
         else index++;
       }
     }
-    $('resultsTitle').textContent = $('campus').value.trim() ? `Around ${$('campus').value.trim()}` : 'Around you';
+    $('resultsTitle').textContent = savedOnly ? 'Saved listings' : $('campus').value.trim() ? `Around ${$('campus').value.trim()}` : 'Around you';
     const demoCount = filtered.filter(isDemo).length;
     const liveCount = filtered.length - demoCount;
-    $('marketStatus').textContent = loading ? 'Loading local listings…'
+    $('marketStatus').textContent = loading ? (savedOnly ? 'Loading saved listings…' : 'Loading local listings…')
       : failures === 2 ? 'Listings could not be loaded. Please try again.'
+      : savedOnly ? `${filtered.length} saved listing${filtered.length === 1 ? '' : 's'} available · Saved on this browser and device.${!failures && saved.size > filtered.length ? ` ${saved.size - filtered.length} no longer available.` : ''}${failures ? ' Some listings could not be loaded. Retry to see everything.' : ''}`
       : `${liveCount} live listing${liveCount === 1 ? '' : 's'}${campus ? ' near your selected location' : ' across all locations'}${demoCount ? ` · ${demoCount} example${demoCount === 1 ? '' : 's'} clearly marked` : ''}${failures ? ' · Some listings could not be loaded. Retry to see everything.' : ''}`;
     $('retryListings').hidden = !failures;
     $('campusListings').setAttribute('aria-busy', String(loading));
-    const demoNotice = demoCount && !liveCount && !loading
+    const demoNotice = savedOnly && demoCount ? '<p class="demo-notice">Cards marked “Example only” are samples, not real offers.</p>' : demoCount && !liveCount && !loading
       ? `<p class="demo-notice">No live listings here yet. The cards below are clearly marked examples of what people post on Arounus — nothing here is a real offer.</p>`
       : demoCount && liveCount
         ? `<p class="demo-notice demo-notice--soft">Live listings are shown first. The ${demoCount} card${demoCount === 1 ? '' : 's'} marked “Example only” are samples, not real offers.</p>`
         : '';
+    const savedEmpty = `<div class="market-empty"><h3>${saved.size && failures ? 'Saved listings could not be loaded' : saved.size ? 'Saved listings are no longer available' : 'No saved listings yet'}</h3><p>${saved.size && failures ? 'Retry loading to check your saved listings. They are still saved in this browser.' : saved.size ? 'A saved room may have been filled or a listing removed. Browse current listings to find more.' : 'Tap Save on any listing to keep it here. Your saved items stay on this browser and device.'}</p><button type="button" data-show-all-listings>Browse all listings</button></div>`;
     $('campusListings').innerHTML = demoNotice + (filtered.map(entry => {
       const title = entry.title || entry.headline, src = image(entry), seller = sellerName(entry), posted = postedLabel(entry), demo = isDemo(entry);
       const meta = [entry.campus || 'Location not specified', entry.area, posted].filter(Boolean).join(' · ');
       const savedNow = saved.has(entry.key);
       return `<article class="campus-card" data-demo="${demo}" data-market-kind="${entry.kind === 'rooms' ? 'rooms' : 'adverts'}" data-market-id="${entry.id}" data-market-views="${entry.views || 0}" data-market-rating="${entry.rating || ''}" data-market-rating-count="${entry.rating_count || 0}" data-view-on-open="true" data-entry-key="${esc(entry.key)}"><button type="button" class="campus-card-media" data-offer="${esc(entry.key)}" aria-label="View ${esc(title)} and its photos">${src ? `<img src="${esc(window.arounusThumb?.(src, 560) || src)}" alt="${esc(title)}" loading="lazy">` : `<span>${categories[entry.kind]}</span>`}${photos(entry).length > 1 ? `<small class="photo-count">${photos(entry).length} photos</small>` : ''}</button><div class="campus-card-body"><span class="card-kind">${categories[entry.kind]}${sponsored(entry) ? ' · Sponsored' : ''}${demo ? ' · Example only' : ''}</span><h3>${esc(title)}</h3><p class="card-meta">${esc(meta)}</p><p class="card-price">${esc(offerPrice(entry))}</p>${seller ? `<p class="card-provider">${esc(seller)}${isVerified(entry) ? ' <span class="verified-badge" title="Verified provider">✓ Verified</span>' : ''}</p>` : ''}<div class="card-tools"><button type="button" class="card-tool" data-save="${esc(entry.key)}" aria-pressed="${savedNow}" aria-label="${savedNow ? 'Remove from saved: ' : 'Save '}${esc(title)}">${savedNow ? 'Saved' : 'Save'}</button><button type="button" class="card-tool" data-share="${esc(entry.key)}" aria-label="Share ${esc(title)}">Share</button></div><button type="button" class="card-action" data-offer="${esc(entry.key)}">View ${entry.kind === 'rooms' ? 'room' : 'listing'} →</button></div></article>`;
-    }).join('') || (loading || failures === 2 ? '' : '<div class="market-empty"><h3>No listings here yet</h3><p>Try another location or category, or be the first to list something.</p><button type="button" data-open-sell>Sell or list near you →</button></div>'));
+    }).join('') || (loading || failures === 2 ? '' : savedOnly ? savedEmpty : '<div class="market-empty"><h3>No listings here yet</h3><p>Try another location or category, or be the first to list something.</p><button type="button" data-open-sell>Sell or list near you →</button></div>'));
     $('campusListings').querySelectorAll('img').forEach(img => img.addEventListener('error', () => { img.replaceWith(document.createTextNode('Photo unavailable')); }));
     syncUrl();
   }
@@ -193,12 +225,15 @@
     if (card && !card.contains(event.relatedTarget)) stopPreview(card);
   });
   $('campusListings').addEventListener('click', event => {
+    if (event.target.closest('[data-show-all-listings]')) { showSaved(false); $('showSavedListings').focus(); return; }
     const saveButton = event.target.closest('[data-save]');
     if (saveButton) {
       event.preventDefault();
       const key = saveButton.dataset.save;
       if (saved.has(key)) saved.delete(key); else saved.add(key);
       persistSaved();
+      syncSavedButton();
+      if (savedOnly) { render(); $('showSavedListings').focus(); return; }
       const on = saved.has(key);
       saveButton.setAttribute('aria-pressed', String(on));
       saveButton.textContent = on ? 'Saved' : 'Save';
