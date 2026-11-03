@@ -253,8 +253,9 @@
         if(!threads.has(key))threads.set(key,{type,id,name:row.peer_name||row.sender_name,messages:[]});
         threads.get(key).messages.push(row);
       });
-      content.innerHTML=`<button class="sell-back" type="button" data-sell-back>← Back to listings</button><div class="sell-inbox">${[...threads].map(([key,thread])=>`<section><h3>${escapeHtml(thread.name)}</h3><div class="sell-thread">${thread.messages.reverse().map(row=>`<p><strong>${escapeHtml(row.is_outgoing?'You':row.sender_name)}:</strong> ${escapeHtml(row.content)}</p>`).join('')}</div><form data-reply-to="${escapeHtml(key)}"><label>Reply<textarea name="content" maxlength="2000" required></textarea></label><button type="submit">Send reply</button></form></section>`).join('')||'<p>No messages yet.</p>'}</div>`;
-      for(const thread of threads.values())request('/marketing/provider/messages/read',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target_type:thread.type,target_id:thread.id})}).catch(()=>{});
+      content.innerHTML=`<button class="sell-back" type="button" data-sell-back>← Back to listings</button><p class="muted" data-market-notification-note role="status"></p><div class="sell-inbox">${[...threads].map(([key,thread])=>`<section><h3>${escapeHtml(thread.name)}</h3><div class="sell-thread">${thread.messages.reverse().map(row=>`<p><strong>${escapeHtml(row.is_outgoing?'You':row.sender_name)}:</strong> ${escapeHtml(row.content)}</p>`).join('')}</div><form data-reply-to="${escapeHtml(key)}"><label>Reply<textarea name="content" maxlength="2000" required></textarea></label><button type="submit">Send reply</button></form></section>`).join('')||'<p>No messages yet.</p>'}</div>`;
+      document.dispatchEvent(new Event('market-notifications-view'));
+      for(const thread of threads.values())request('/marketing/provider/messages/read',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target_type:thread.type,target_id:thread.id})}).then(()=>document.dispatchEvent(new Event('market-messages-updated'))).catch(()=>{});
     } catch (error) { status(error.message, true); renderChoice(); }
   }
   async function open(showMessages=false) {
@@ -466,7 +467,9 @@
     finally { if (form.isConnected) submit.disabled = false; }
   });
   const params = new URLSearchParams(location.search);
-  if (params.has('sell') || params.has('create') || params.get('role') === 'advertiser' || location.hash === '#sell') {
+  if (params.get('messages') === '1') {
+    window.addEventListener('load', () => open(true), {once:true});
+  } else if (params.has('sell') || params.has('create') || params.get('role') === 'advertiser' || location.hash === '#sell') {
     window.addEventListener('load', () => open(), {once:true});
   }
 })();

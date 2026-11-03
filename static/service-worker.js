@@ -1,4 +1,4 @@
-const OFFLINE_VERSION = "v76";
+const OFFLINE_VERSION = "v77";
 const SHELL_CACHE = `nucleocampus-shell-${OFFLINE_VERSION}`;
 const DATA_CACHE = `nucleocampus-data-${OFFLINE_VERSION}`;
 const EXTERNAL_CACHE = `nucleocampus-external-${OFFLINE_VERSION}`;
@@ -6,6 +6,7 @@ const EXTERNAL_CACHE = `nucleocampus-external-${OFFLINE_VERSION}`;
 // Everything required to open every Arounus workspace is downloaded when
 // the app is installed. Keep this list limited to files that ship with the app.
 const APP_SHELL = [
+  "/static/market-notifications.js?v=1",
   "/static/room-availability.css?v=2",
   "/static/market-safety.css?v=1", "/static/market-safety.js?v=1",
   "/static/app-traffic.js?v=1", "/static/admin-traffic.js?v=1", "/static/admin-traffic.css?v=1",
@@ -22,13 +23,13 @@ const APP_SHELL = [
   "/static/brand-intro.css?v=1", "/static/brand-intro.js?v=2",
   "/static/floating-video.css?v=1", "/static/floating-video.js?v=2", "/static/media/campus-intro.jpg",
   "/static/light.css?v=5", "/static/messaging.css",
-  "/static/market-sell.css?v=6",
+  "/static/market-sell.css?v=7",
   "/static/lesson-insights.css", "/static/quiz-builder.css",
   "/static/quiz-math-tools.css", "/static/mathlive-fonts.css?v=1",
   "/static/experience.js?v=17", "/static/loading.js", "/static/pwa.js?v=18",
   "/static/module-names.js", "/static/student-module-enrollment.js", "/static/username-suggestion.js", "/static/student-messaging.js",
   "/static/lecturer-messaging.js", "/static/admin-messaging.js",
-  "/static/admin-market-ads.js?v=3", "/static/market-auth.js?v=1", "/static/market-sell.js?v=9", "/static/market-contact.js?v=3",
+  "/static/admin-market-ads.js?v=3", "/static/market-auth.js?v=1", "/static/market-sell.js?v=10", "/static/market-contact.js?v=3",
   "/static/market-metrics.js?v=4", "/static/video-access.js?v=5", "/static/media-url.js?v=1",
   "/static/lesson-insights.js", "/static/admin-finance.js?v=1", "/static/quiz-builder.js?v=16",
   "/static/quiz-import-template.csv", "/static/standard-quiz-template.json",
@@ -223,9 +224,15 @@ self.addEventListener("push", event => {
 
 self.addEventListener("notificationclick", event => {
   event.notification.close();
-  const destination = new URL(event.notification.data?.url || "/students", self.location.origin).href;
-  event.waitUntil(clients.matchAll({ type: "window", includeUncontrolled: true }).then(windows => {
-    const existing = windows.find(client => client.url.startsWith(self.location.origin));
-    return existing ? existing.focus() : clients.openWindow(destination);
+  const requested = new URL(event.notification.data?.url || "/students", self.location.origin);
+  const destination = requested.origin === self.location.origin ? requested.href : self.location.origin + "/";
+  event.waitUntil(clients.matchAll({ type: "window", includeUncontrolled: true }).then(async windows => {
+    const existing = windows.find(client => new URL(client.url).origin === self.location.origin);
+    if (!existing) return clients.openWindow(destination);
+    try {
+      if (existing.navigate) await existing.navigate(destination);
+      else return clients.openWindow(destination);
+      return await existing.focus();
+    } catch (_) { return clients.openWindow(destination); }
   }));
 });

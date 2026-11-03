@@ -113,7 +113,7 @@ from models import (
     Submission,
     Student,
     PremiumPayment,
-    PushSubscription,
+    PushSubscription, MarketPushSubscription,
     StudentModule,
     Landlord, Accommodation, AccommodationComment, RoomListingEmail, MarketAdvert, MarketListingView, MarketListingRating, MediaFinanceEntry, MediaUploadEvent,
     PasswordResetCode,
@@ -4600,38 +4600,63 @@ def _push_enabled() -> bool:
     return bool(webpush and VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY and VAPID_SUBJECT)
 
 
-def _notify_students_by_push(db: Session, student_ids: List[int], title: str, body: str, url: str, tag: str):
-    """Deliver a best-effort browser push notification to every opted-in device.
-
-    Notifications are intentionally generic: message text stays inside the
-    authenticated app instead of appearing on a locked phone screen.
-    """
-    if not _push_enabled() or not student_ids:
+def _deliver_push(db: Session, subscriptions, title: str, body: str, url: str, tag: str):
+    """Push failures never discard an already saved message; expired devices are removed."""
+    if not _push_enabled():
         return
-    subscriptions = db.query(PushSubscription).filter(
-        PushSubscription.student_id.in_(set(student_ids))
-    ).all()
     payload = json.dumps({"title": title[:90], "body": body[:180], "url": url, "tag": tag[:80]})
-    removed = False
+    seen, removed = set(), False
     for subscription in subscriptions:
+        if subscription.endpoint in seen:
+            continue
+        seen.add(subscription.endpoint)
         try:
-            webpush(
-                subscription_info=json.loads(subscription.subscription_json),
-                data=payload,
-                vapid_private_key=VAPID_PRIVATE_KEY,
-                vapid_claims={"sub": VAPID_SUBJECT},
-                ttl=60 * 60 * 24,
-            )
+            webpush(subscription_info=json.loads(subscription.subscription_json), data=payload,
+                    vapid_private_key=VAPID_PRIVATE_KEY, vapid_claims={"sub": VAPID_SUBJECT},
+                    ttl=60 * 60 * 24, timeout=10)
         except WebPushException as error:
-            status = getattr(getattr(error, "response", None), "status_code", None)
-            if status in (404, 410):
-                db.delete(subscription)
-                removed = True
+            if getattr(getattr(error, "response", None), "status_code", None) in (404, 410):
+                db.delete(subscription); removed = True
         except (TypeError, ValueError, json.JSONDecodeError):
-            db.delete(subscription)
-            removed = True
+            db.delete(subscription); removed = True
+        except Exception:
+            # Temporary network/service errors must not turn a saved message into a send failure.
+            pass
     if removed:
         db.commit()
+
+
+def _notify_students_by_push(db: Session, student_ids: List[int], title: str, body: str, url: str, tag: str):
+    if not _push_enabled() or not student_ids:
+        return
+    subscriptions = db.query(PushSubscription).filter(PushSubscription.student_id.in_(set(student_ids))).all()
+    _deliver_push(db, subscriptions, title, body, url, tag)
+
+
+def _notify_market_message_by_push(db: Session, recipient_type: str, recipient_id: int, message_id: int):
+    if not _push_enabled():
+        return
+    aliases = _market_message_aliases(db, recipient_type, recipient_id)
+    provider_ids = [person_id for kind, person_id in aliases if kind == "landlord"]
+    student_ids = [person_id for kind, person_id in aliases if kind == "student"]
+    subscriptions = db.query(MarketPushSubscription).join(Landlord).filter(MarketPushSubscription.landlord_id.in_(provider_ids), Landlord.active.is_(True)).all() if provider_ids else []
+    if student_ids:
+        subscriptions += db.query(PushSubscription).filter(PushSubscription.student_id.in_(student_ids)).all()
+    _deliver_push(db, subscriptions, "New Arounus message", "You have a new marketplace message. Open Arounus to read it.", "/?messages=1", f"message-{message_id}")
+
+
+def _push_subscription_data(payload: PushSubscriptionCreate):
+    endpoint = payload.endpoint.strip()
+    try:
+        parsed = urlsplit(endpoint)
+        host = (parsed.hostname or "").lower()
+        trusted = host in {"fcm.googleapis.com", "updates.push.services.mozilla.com", "web.push.apple.com"} or host.endswith((".push.services.mozilla.com", ".notify.windows.com", ".push.apple.com"))
+        valid = parsed.scheme == "https" and trusted and parsed.port in (None, 443) and not parsed.username and not parsed.password and not parsed.fragment
+    except ValueError:
+        valid = False
+    if not valid or len(endpoint) > 4096 or not all(0 < len(payload.keys.get(key, "")) <= 1024 for key in ("p256dh", "auth")):
+        raise HTTPException(status_code=422, detail="That device notification subscription is invalid")
+    return endpoint, json.dumps({"endpoint": endpoint, "keys": {key:payload.keys[key] for key in ("p256dh", "auth")}})
 
 
 def _create_direct_message(db: Session, sender_type: str, sender_id: Optional[int], payload: DirectMessageCreate):
@@ -4658,7 +4683,9 @@ def _create_direct_message(db: Session, sender_type: str, sender_id: Optional[in
                             is_anonymous=bool(payload.is_anonymous and sender_type == "student"),
                             created_at=datetime.now(timezone.utc).isoformat())
     db.add(message); db.commit(); db.refresh(message)
-    if recipient_type == "student":
+    if sender_type == "landlord" or recipient_type == "landlord":
+        _notify_market_message_by_push(db, recipient_type, recipient_id, message.id)
+    elif recipient_type == "student":
         _notify_students_by_push(
             db,
             [recipient.id],
@@ -4699,19 +4726,21 @@ def subscribe_student_notifications(
 ):
     if not _push_enabled():
         raise HTTPException(status_code=503, detail="Push notifications have not been configured yet")
-    endpoint = payload.endpoint.strip()
-    if not endpoint.startswith("https://") or not payload.keys.get("p256dh") or not payload.keys.get("auth"):
-        raise HTTPException(status_code=422, detail="That device notification subscription is invalid")
+    endpoint, subscription_json = _push_subscription_data(payload)
+    for previous in db.query(MarketPushSubscription).filter_by(endpoint=endpoint).all():
+        provider = db.get(Landlord, previous.landlord_id)
+        if not provider or provider.linked_student_id != student.id:
+            db.delete(previous)
     saved = db.query(PushSubscription).filter(PushSubscription.endpoint == endpoint).first()
     if saved:
         saved.student_id = student.id
-        saved.subscription_json = json.dumps({"endpoint": endpoint, "keys": payload.keys})
+        saved.subscription_json = subscription_json
         saved.created_at = datetime.now(timezone.utc).isoformat()
     else:
         db.add(PushSubscription(
             student_id=student.id,
             endpoint=endpoint,
-            subscription_json=json.dumps({"endpoint": endpoint, "keys": payload.keys}),
+            subscription_json=subscription_json,
             created_at=datetime.now(timezone.utc).isoformat(),
         ))
     db.commit()
@@ -4732,6 +4761,47 @@ def unsubscribe_student_notifications(
         db.delete(subscription)
         db.commit()
     return {"ok": True}
+
+
+@app.post("/marketing/notifications/subscribe")
+def subscribe_market_notifications(payload: PushSubscriptionCreate, response: Response, landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = "private, no-store"
+    if not _push_enabled():
+        raise HTTPException(status_code=503, detail="Push notifications have not been configured yet")
+    endpoint, subscription_json = _push_subscription_data(payload)
+    # One browser endpoint follows the account currently using it, avoiding alerts for a previous user.
+    db.query(PushSubscription).filter(PushSubscription.endpoint == endpoint, PushSubscription.student_id != (landlord.linked_student_id or -1)).delete(synchronize_session=False)
+    saved = db.query(MarketPushSubscription).filter_by(endpoint=endpoint).first()
+    if not saved:
+        saved = MarketPushSubscription(endpoint=endpoint, landlord_id=landlord.id, subscription_json=subscription_json, created_at=datetime.now(timezone.utc).isoformat())
+        db.add(saved)
+    else:
+        saved.landlord_id, saved.subscription_json = landlord.id, subscription_json
+        saved.created_at = datetime.now(timezone.utc).isoformat()
+    db.commit()
+    return {"ok": True}
+
+
+@app.delete("/marketing/notifications/subscribe")
+def unsubscribe_market_notifications(payload: PushSubscriptionDelete, response: Response, landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = "private, no-store"
+    db.query(MarketPushSubscription).filter_by(endpoint=payload.endpoint.strip(), landlord_id=landlord.id).delete(synchronize_session=False)
+    if landlord.linked_student_id:
+        db.query(PushSubscription).filter_by(endpoint=payload.endpoint.strip(), student_id=landlord.linked_student_id).delete(synchronize_session=False)
+    db.commit()
+    return {"ok": True}
+
+
+@app.get("/marketing/provider/messages/unread")
+def market_unread_messages(response: Response, landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = "private, no-store"
+    aliases = _market_message_aliases(db, "landlord", landlord.id)
+    count = db.query(DirectMessage).filter(
+        _message_identity_filter(DirectMessage.recipient_type, DirectMessage.recipient_id, aliases),
+        (DirectMessage.sender_type == "landlord") | (DirectMessage.recipient_type == "landlord"),
+        DirectMessage.read_at.is_(None),
+    ).count()
+    return {"count": count}
 
 
 @app.get("/student/message-lecturers")

@@ -175,6 +175,16 @@ class PushSubscription(Base):
 # Campus marketing: landlord-owned student accommodation listings
 # ---------------------------------------------------------------------------
 
+class MarketPushSubscription(Base):
+    """An opted-in market account's device; separate from legacy learner rows."""
+    __tablename__ = "market_push_subscriptions"
+    id = Column(Integer, primary_key=True)
+    landlord_id = Column(Integer, ForeignKey("landlords.id", ondelete="CASCADE"), nullable=False, index=True)
+    endpoint = Column(Text, nullable=False, unique=True)
+    subscription_json = Column(Text, nullable=False)
+    created_at = Column(String, nullable=False)
+
+
 class Landlord(Base):
     __tablename__ = "landlords"
 

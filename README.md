@@ -28,6 +28,28 @@ provider verification badge is shown without an implemented verification process
 Focused checks: `.venv/Scripts/python.exe -m unittest discover -s tests -p test_market_safety.py`
 and `node --test tests/market-safety.test.cjs`.
 
+## Advertiser message notifications
+
+Installed market apps request notification permission during installation where
+supported, with a first-tap fallback in the installed app. No notification buttons
+are added. Already allowed devices reconnect automatically after sign-in and on
+returning to the app. New marketplace messages trigger a generic push alert to the
+recipient’s opted-in devices, including advertiser accounts and linked learner or
+tutor accounts. The message text stays inside the inbox. Tapping an alert opens
+`/?messages=1`, including when an app window is already running.
+
+The existing Messages control shows an unread count refreshed while the app is
+visible. Reading a conversation clears that count. Sign-out detaches the current
+account’s device, and a shared device follows the newly signed-in account.
+Notifications require the user’s Allow permission and working device/browser
+notification settings. A previously blocked permission must be changed in those
+settings; the app cannot override it.
+
+Production uses the existing `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and
+`VAPID_SUBJECT`. Keep those keys stable across deployments. New advertiser device
+rows use `market_push_subscriptions`, created by the existing startup schema setup.
+Delivery failures do not discard messages; expired device endpoints are removed.
+
 ## Preview before publishing
 
 New listings use **Preview listing** before any upload or publication request.
