@@ -5276,6 +5276,19 @@ def _retained_market_images(raw: str, existing: List[str]) -> List[str]:
     return selected
 
 
+def _market_photo_order(raw: str, count: int) -> List[int]:
+    """Validate a permutation; index zero in the result becomes the thumbnail."""
+    if not raw:
+        return list(range(count))
+    try:
+        order = json.loads(raw)
+    except (TypeError, json.JSONDecodeError):
+        raise HTTPException(status_code=400, detail="Choose a valid photo order")
+    if not isinstance(order, list) or any(type(index) is not int for index in order) or sorted(order) != list(range(count)):
+        raise HTTPException(status_code=400, detail="Include every selected photo exactly once in the photo order")
+    return order
+
+
 def _free_video_url(value: Optional[str]) -> Optional[str]:
     """Show older public Cloudinary videos at no more than 480p in the app."""
     if not value:
@@ -5485,7 +5498,7 @@ def admin_delete_market_room(listing_id: int, _pin_ok: bool = Depends(require_le
 
 
 @app.post("/marketing/listings")
-async def create_accommodation(background_tasks: BackgroundTasks, title: str = Form(...), campus: str = Form(...), area: str = Form(...), monthly_rent: str = Form(""), bedrooms: str = Form(""), description: str = Form(...), contact: str = Form(...), latitude: str = Form(""), longitude: str = Form(""), images: Optional[List[UploadFile]] = File(None), image: Optional[UploadFile] = File(None), landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
+async def create_accommodation(background_tasks: BackgroundTasks, title: str = Form(...), campus: str = Form(...), area: str = Form(...), monthly_rent: str = Form(""), bedrooms: str = Form(""), description: str = Form(...), contact: str = Form(...), latitude: str = Form(""), longitude: str = Form(""), image_order: str = Form(""), images: Optional[List[UploadFile]] = File(None), image: Optional[UploadFile] = File(None), landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
     if not title.strip() or not campus.strip() or not area.strip() or not description.strip():
         raise HTTPException(status_code=400, detail="Add a title, location, area, and description")
     if len(re.sub(r"\D", "", contact)) < 8:
@@ -5500,7 +5513,9 @@ async def create_accommodation(background_tasks: BackgroundTasks, title: str = F
         raise HTTPException(status_code=400, detail="Monthly rent cannot be negative")
     lat, lng = _accommodation_coordinates(latitude, longitude)
     files = list(images or []) + ([image] if image and image.filename else [])
+    photo_order = _market_photo_order(image_order, len([file for file in files if file and file.filename]))
     image_urls = await _upload_market_images(files, 3, "accommodation_listings", 10 * 1024 * 1024)
+    image_urls = [image_urls[index] for index in photo_order]
     item = Accommodation(landlord_id=landlord.id, title=title.strip()[:180], campus=campus.strip()[:120], area=area.strip()[:160], monthly_rent=rent, bedrooms=bedrooms.strip()[:80], description=description.strip(), contact=contact.strip()[:160], image_url=image_urls[0] if image_urls else None, image_urls=json.dumps(image_urls), latitude=lat, longitude=lng, is_available=True, is_approved=False, created_at=datetime.now(timezone.utc).isoformat())
     db.add(item); db.flush()
     queue_room_email(db, item, "submitted")
@@ -5510,7 +5525,7 @@ async def create_accommodation(background_tasks: BackgroundTasks, title: str = F
 
 
 @app.put("/marketing/listings/{listing_id}")
-async def update_accommodation(listing_id: int, title: str = Form(...), campus: str = Form(...), area: str = Form(""), monthly_rent: str = Form(""), bedrooms: str = Form(""), description: str = Form(...), contact: str = Form(""), latitude: str = Form(""), longitude: str = Form(""), is_available: bool = Form(True), booked_until: str = Form(""), retained_image_urls: str = Form(""), images: Optional[List[UploadFile]] = File(None), image: Optional[UploadFile] = File(None), landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
+async def update_accommodation(listing_id: int, title: str = Form(...), campus: str = Form(...), area: str = Form(""), monthly_rent: str = Form(""), bedrooms: str = Form(""), description: str = Form(...), contact: str = Form(""), latitude: str = Form(""), longitude: str = Form(""), is_available: bool = Form(True), booked_until: str = Form(""), retained_image_urls: str = Form(""), image_order: str = Form(""), images: Optional[List[UploadFile]] = File(None), image: Optional[UploadFile] = File(None), landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
     item = db.query(Accommodation).filter(Accommodation.id == listing_id, Accommodation.landlord_id == landlord.id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Accommodation listing not found")
@@ -5540,12 +5555,14 @@ async def update_accommodation(listing_id: int, title: str = Form(...), campus: 
     files = list(images or []) + ([image] if image and image.filename else [])
     if len(kept_images) + len([file for file in files if file and file.filename]) > 3:
         raise HTTPException(status_code=400, detail="Choose no more than 3 photos in total")
+    photo_order = _market_photo_order(image_order, len(kept_images) + len([file for file in files if file and file.filename]))
     new_images = await _upload_market_images(files, 3, "accommodation_listings", 10 * 1024 * 1024)
     image_urls = kept_images + new_images
+    image_urls = [image_urls[index] for index in photo_order]
     item.title, item.campus, item.area = title.strip()[:180], campus.strip()[:120], area.strip()[:160]
     item.monthly_rent, item.bedrooms, item.description = rent, bedrooms.strip()[:80], description.strip()[:2500]
     item.contact, item.latitude, item.longitude, item.is_available, item.booked_until = contact.strip()[:160], lat, lng, is_available, booked_until.strip() or None
-    if retained_image_urls or new_images:
+    if retained_image_urls or new_images or image_order:
         item.image_url, item.image_urls = image_urls[0] if image_urls else None, json.dumps(image_urls)
     db.commit()
     return {"ok": True, "listing": _accommodation_payload(item, landlord)}
@@ -5676,7 +5693,7 @@ async def create_market_advert(
     business_name: str = Form(...), headline: str = Form(...), description: str = Form(...),
     category: str = Form(...), service_detail: str = Form(""), price: Optional[int] = Form(None), stock_quantity: Optional[int] = Form(None), campus: str = Form(""), area: str = Form(""), latitude: str = Form(""), longitude: str = Form(""), contact: str = Form(...), website_url: str = Form(""),
     placement: str = Form("spotlight"), starts_at: str = Form(""), expires_at: str = Form(""),
-    images: Optional[List[UploadFile]] = File(None), image: Optional[UploadFile] = File(None),
+    image_order: str = Form(""), images: Optional[List[UploadFile]] = File(None), image: Optional[UploadFile] = File(None),
     video: Optional[UploadFile] = File(None), x_student_token: Optional[str] = Header(None, alias="X-Student-Token"),
     x_landlord_token: Optional[str] = Header(None, alias="X-Landlord-Token"), db: Session = Depends(get_db),
 ):
@@ -5705,7 +5722,9 @@ async def create_market_advert(
     lat, lng = _accommodation_coordinates(latitude, longitude)
     files = list(images or []) + ([image] if image and image.filename else [])
     image_limit = 3
+    photo_order = _market_photo_order(image_order, len([file for file in files if file and file.filename]))
     image_urls = await _upload_market_images(files, image_limit, "market_adverts", 8 * 1024 * 1024)
+    image_urls = [image_urls[index] for index in photo_order]
     video_url = None
     premium_asset = None
     if video and video.filename:
@@ -5753,7 +5772,7 @@ async def update_market_advert(
     service_detail: str = Form(""), description: str = Form(...), price: str = Form(""), stock_quantity: str = Form(""),
     campus: str = Form(""), area: str = Form(""), latitude: str = Form(""), longitude: str = Form(""),
     contact: str = Form(...), website_url: str = Form(""), status: str = Form("approved"),
-    retained_image_urls: str = Form(""), images: Optional[List[UploadFile]] = File(None),
+    retained_image_urls: str = Form(""), image_order: str = Form(""), images: Optional[List[UploadFile]] = File(None),
     landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db),
 ):
     item = db.query(MarketAdvert).filter(MarketAdvert.id == advert_id, _provider_advert_ownership(landlord)).first()
@@ -5786,14 +5805,16 @@ async def update_market_advert(
     files = list(images or [])
     if len(kept_images) + len([file for file in files if file and file.filename]) > 3:
         raise HTTPException(status_code=400, detail="Choose no more than 3 photos in total")
+    photo_order = _market_photo_order(image_order, len(kept_images) + len([file for file in files if file and file.filename]))
     new_images = await _upload_market_images(files, 3, "market_adverts", 8 * 1024 * 1024)
     urls = kept_images + new_images
+    urls = [urls[index] for index in photo_order]
     item.business_name, item.headline, item.category = business_name.strip()[:160], headline.strip()[:180], category.strip()[:80]
     item.service_detail, item.description = service_detail.strip()[:160], description.strip()
     item.price, item.stock_quantity, item.campus, item.area = parsed_price, parsed_stock, campus.strip()[:120], area.strip()[:160]
     item.latitude, item.longitude, item.contact, item.website_url = lat, lng, contact.strip()[:160], website[:500]
     item.status, item.updated_at = status, datetime.now(timezone.utc).isoformat()
-    if retained_image_urls or new_images:
+    if retained_image_urls or new_images or image_order:
         item.image_url, item.image_urls = urls[0] if urls else None, json.dumps(urls)
     db.commit(); db.refresh(item)
     return {"ok": True, "advert": _advert_payload(item)}

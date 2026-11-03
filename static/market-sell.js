@@ -7,6 +7,8 @@
   let kind = '';
   let preview = null, saving = false;
   const previewUrls = [];
+  const photoOrders = new WeakMap();
+  let draggedPhoto = null, pointerPhoto = null, suppressPhotoClick = false;
 
   async function request(path,options={}) {
     const result=await ArounusMarketAuth.request(path,options);
@@ -18,6 +20,7 @@
     message.classList.toggle('error', error);
   }
   function clearPreview() {
+    clearPhotoDrag();
     previewUrls.splice(0).forEach(url => URL.revokeObjectURL(url));
     if (!preview) return;
     preview.panel.remove();
@@ -41,6 +44,37 @@
     if (form.id === 'editListingForm') data.set('retained_image_urls', JSON.stringify(retained));
     return {data, added, retained};
   }
+  function orderedDraftPhotos(form, values) {
+    const pool = [...values.retained.map(url => ({type:'existing', value:url})), ...values.added.map(file => ({type:'upload', value:file}))];
+    const ordered = [];
+    for (const old of photoOrders.get(form) || []) {
+      const match = pool.find(photo => photo.type === old.type && photo.value === old.value && !ordered.includes(photo));
+      if (match) ordered.push(match);
+    }
+    pool.forEach(photo => { if (!ordered.includes(photo)) ordered.push(photo); });
+    photoOrders.set(form, ordered);
+    return ordered;
+  }
+  function photoControls() {
+    if (!preview) return;
+    const host = preview.panel.querySelector('.sell-preview-thumbs');
+    if (!host) return;
+    host.innerHTML = preview.photos.map((url,index) => `<li class="sell-preview-photo" draggable="${!saving}" data-preview-photo-item="${index}"><span class="sell-photo-drag-handle" data-photo-drag="${index}">⠿ Drag</span><button type="button" class="sell-photo-image" data-preview-photo="${index}" aria-label="View photo ${index + 1}${index === 0 ? ', listing thumbnail' : ''}" aria-pressed="${index === 0}"><img src="${escapeHtml(url)}" alt="" draggable="false"></button><strong class="sell-photo-position">${index === 0 ? 'Thumbnail' : `Photo ${index + 1}`}</strong><button class="sell-photo-first" type="button" data-photo-first="${index}" ${index === 0 ? 'disabled' : ''} aria-label="Make photo ${index + 1} the thumbnail">${index === 0 ? 'First photo' : 'Make first'}</button><div class="sell-photo-arrows"><button type="button" data-photo-move="${index}" data-step="-1" ${index === 0 ? 'disabled' : ''} aria-label="Move photo ${index + 1} earlier">←</button><button type="button" data-photo-move="${index}" data-step="1" ${index === preview.photos.length - 1 ? 'disabled' : ''} aria-label="Move photo ${index + 1} later">→</button></div></li>`).join('');
+  }
+  function movePhoto(from, to) {
+    if (!preview || saving || !Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < 0 || from >= preview.photos.length || to >= preview.photos.length || from === to) return;
+    const [photo] = preview.order.splice(from, 1), [url] = preview.photos.splice(from, 1);
+    preview.order.splice(to, 0, photo); preview.photos.splice(to, 0, url);
+    photoOrders.set(preview.form, preview.order);
+    preview.panel.querySelector('[data-preview-main]').src = preview.photos[0];
+    photoControls();
+    preview.panel.querySelector('[data-photo-order-status]').textContent = to === 0 ? `Photo ${from + 1} is now the thumbnail and will appear first.` : `Photo moved to position ${to + 1}. The first photo is the thumbnail.`;
+    preview.panel.querySelector(`[data-preview-photo="${to}"]`)?.focus({preventScroll:true});
+  }
+  function clearPhotoDrag() {
+    draggedPhoto = null; pointerPhoto = null;
+    preview?.panel.querySelectorAll('.is-dragging,.is-drop-target').forEach(node => node.classList.remove('is-dragging','is-drop-target'));
+  }
   function showPreview(form) {
     const values = listingData(form);
     if (!values) return;
@@ -54,8 +88,11 @@
     const price = amount !== '' ? `R${Number(amount).toLocaleString('en-ZA')}${room ? ' / month' : ''}` : room ? 'Price on request' : 'Ask for price';
     const available = room && (form.id !== 'editListingForm' || form.elements.is_available.checked);
     const badge = room ? `<span class="room-availability room-availability--${available ? 'available' : 'filled'}"><span aria-hidden="true">●</span> ${available ? 'Available' : 'Filled'}</span>` : '';
-    const photos = values.retained.map(safePreviewUrl).filter(Boolean);
-    values.added.forEach(file => { const url = URL.createObjectURL(file); previewUrls.push(url); photos.push(url); });
+    const order = orderedDraftPhotos(form, values);
+    const photos = order.map(photo => {
+      if (photo.type === 'existing') return safePreviewUrl(photo.value);
+      const url = URL.createObjectURL(photo.value); previewUrls.push(url); return url;
+    });
     const seller = room ? profile.full_name : get('business_name');
     const meta = [get('campus') || 'Location not specified', get('area'), form.id === 'sellListingForm' ? 'Posted today' : ''].filter(Boolean).join(' · ');
     const details = [['Location',get('campus')],['Area',get('area')],['Room type',get('bedrooms')],['Contact number',get('contact')],['Activity or service',get('service_detail')],['Stock available',get('stock_quantity')],['Website or social link',get('website_url')],['Latitude',get('latitude')],['Longitude',get('longitude')],['Fully booked until',get('booked_until')],['Opening hours',get('opening_hours')],['Available dates',get('available_dates')],['Available times',get('available_times')],['Closed dates',get('closed_dates')],['Consultation format',get('consultation_mode')]];
@@ -66,14 +103,15 @@
     const action = form.id === 'editListingForm' ? 'Save changes' : room ? 'Submit room for approval' : 'Publish listing';
     panel.innerHTML = `<h3 id="sellPreviewHeading" tabindex="-1">Preview your listing</h3><p>${form.id === 'editListingForm' ? 'Review your changes before saving them.' : 'Nothing has been published yet. Check your photos and details before continuing.'}</p>
       <article class="campus-card sell-preview-card"><div class="campus-card-media sell-preview-media">${photos.length ? `<img src="${escapeHtml(photos[0])}" alt="${escapeHtml(title)}" data-preview-main>` : `<span>${categoryLabel}</span>`}${badge}${photos.length > 1 ? `<small class="photo-count">${photos.length} photos</small>` : ''}</div><div class="campus-card-body"><span class="card-kind">${categoryLabel}</span><h3>${escapeHtml(title)}</h3><p class="card-meta">${escapeHtml(meta)}</p><p class="card-price">${escapeHtml(price)}</p><p class="card-provider">${escapeHtml(seller)}</p></div></article>
-      ${photos.length > 1 ? `<div class="sell-preview-thumbs" aria-label="Preview photos">${photos.map((url,index) => `<button type="button" data-preview-photo="${index}" aria-label="Show preview photo ${index + 1}" aria-pressed="${index === 0}"><img src="${escapeHtml(url)}" alt=""></button>`).join('')}</div>` : ''}
+      ${photos.length > 1 ? '<div class="sell-photo-organizer"><h3>Choose your thumbnail and photo order</h3><p>Drag photos to reorder them, or use Make first and the arrows. The first photo is the thumbnail people see on your listing.</p><ol class="sell-preview-thumbs" aria-label="Listing photo order"></ol><p class="sell-photo-order-status" data-photo-order-status role="status" aria-live="polite">The first photo is your thumbnail.</p></div>' : ''}
       <h3>Listing details</h3><p class="sell-preview-description">${escapeHtml(get('description'))}</p><dl class="sell-preview-details">${details.filter(([,value]) => value !== '').map(([label,value]) => `<div><dt>${label}</dt><dd>${escapeHtml(value)}</dd></div>`).join('')}</dl>
       <p class="sell-preview-note">${room && form.id === 'sellListingForm' ? 'Your room will be sent for administrator approval. It appears publicly after approval.' : 'Your listing will use these photos and details. Its layout may adapt to the viewer’s screen.'}</p>
       <div class="sell-publish-progress" role="status" aria-live="polite" hidden><span class="sell-publish-spinner" aria-hidden="true"></span><div><strong data-publish-label></strong><p>Uploading photos and saving your listing. This may take a moment.</p></div></div>
       <div class="sell-preview-actions"><button type="button" data-edit-preview>Edit details</button><button type="button" data-confirm-listing>${action}</button></div>`;
-    preview = {form, panel, photos, title:document.getElementById('sellTitle').textContent, intro:document.getElementById('sellIntro').textContent, hidden:[...content.children].map(node => [node,node.hidden])};
+    preview = {form, panel, photos, order, title:document.getElementById('sellTitle').textContent, intro:document.getElementById('sellIntro').textContent, hidden:[...content.children].map(node => [node,node.hidden])};
     preview.hidden.forEach(([node]) => { node.hidden = true; });
     content.append(panel);
+    photoControls();
     document.getElementById('sellTitle').textContent = 'Review before publishing';
     document.getElementById('sellIntro').textContent = 'Preview → Edit if needed → Publish or submit';
     status(''); panel.querySelector('h3').focus();
@@ -84,6 +122,9 @@
     document.getElementById('closeSell').disabled = active;
     if (!preview) return;
     preview.panel.querySelectorAll('button').forEach(button => { button.disabled = active; });
+    preview.panel.querySelectorAll('[data-preview-photo-item]').forEach(item => { item.draggable = !active; });
+    if (active) clearPhotoDrag();
+    else photoControls();
     preview.panel.querySelector('.sell-publish-progress').hidden = !active;
     if (active) {
       const text = preview.form.id === 'editListingForm' ? 'Saving your changes…' : kind === 'room' ? 'Submitting your room…' : 'Publishing your listing…';
@@ -101,6 +142,8 @@
     publishingState(true);
     try {
       const data = values.data;
+      const order = orderedDraftPhotos(form, values);
+      data.set('image_order', JSON.stringify(order.map(photo => photo.type === 'existing' ? values.retained.indexOf(photo.value) : values.retained.length + values.added.indexOf(photo.value))));
       if (form.id === 'editListingForm') {
         if (form.dataset.type === 'room') {
           data.set('is_available', String(form.elements.is_available.checked));
@@ -242,8 +285,13 @@
     if (saving) return;
     if (event.target.closest('[data-edit-preview]')) { const form = preview?.form; clearPreview(); status(''); form?.querySelector('input:not([type=hidden]),select,textarea')?.focus(); return; }
     if (event.target.closest('[data-confirm-listing]')) { await publishPreview(); return; }
+    const first = event.target.closest('[data-photo-first]');
+    if (first) { movePhoto(Number(first.dataset.photoFirst), 0); return; }
+    const move = event.target.closest('[data-photo-move]');
+    if (move) { const from = Number(move.dataset.photoMove); movePhoto(from, from + Number(move.dataset.step)); return; }
     const photo = event.target.closest('[data-preview-photo]');
     if (photo && preview) {
+      if (suppressPhotoClick) { event.preventDefault(); return; }
       preview.panel.querySelector('[data-preview-main]').src = preview.photos[Number(photo.dataset.previewPhoto)];
       preview.panel.querySelectorAll('[data-preview-photo]').forEach(button => button.setAttribute('aria-pressed', String(button === photo)));
       return;
@@ -336,6 +384,56 @@
       if (item) renderEditListing('advert', item);
     }
   });
+  dialog.addEventListener('dragstart', event => {
+    if (pointerPhoto) { event.preventDefault(); return; }
+    const item = event.target.closest('[data-preview-photo-item]');
+    if (!item || !preview || saving) return;
+    draggedPhoto = Number(item.dataset.previewPhotoItem);
+    item.classList.add('is-dragging');
+    if (event.dataTransfer) { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', String(draggedPhoto)); }
+  });
+  dialog.addEventListener('dragover', event => {
+    const item = event.target.closest('[data-preview-photo-item]');
+    if (!item || draggedPhoto === null || saving) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+    preview.panel.querySelectorAll('.is-drop-target').forEach(node => node.classList.remove('is-drop-target'));
+    item.classList.add('is-drop-target');
+  });
+  dialog.addEventListener('drop', event => {
+    const item = event.target.closest('[data-preview-photo-item]');
+    if (!item || draggedPhoto === null || saving) return;
+    event.preventDefault(); const from = draggedPhoto, to = Number(item.dataset.previewPhotoItem);
+    clearPhotoDrag(); movePhoto(from,to);
+  });
+  dialog.addEventListener('dragend', clearPhotoDrag);
+  dialog.addEventListener('pointerdown', event => {
+    const handle = event.target.closest('[data-photo-drag], [data-preview-photo]');
+    if (!handle || !preview || saving || (event.button !== undefined && event.button !== 0)) return;
+    event.preventDefault();
+    const from = Number(handle.dataset.photoDrag ?? handle.dataset.previewPhoto);
+    pointerPhoto = {id:event.pointerId, from, to:from, x:event.clientX, y:event.clientY, moved:false};
+    handle.setPointerCapture?.(event.pointerId);
+    if (handle.hasAttribute('data-photo-drag')) handle.closest('[data-preview-photo-item]').classList.add('is-dragging');
+  });
+  dialog.addEventListener('pointermove', event => {
+    if (!pointerPhoto || pointerPhoto.id !== event.pointerId || saving) return;
+    if (!pointerPhoto.moved && Math.hypot(event.clientX - pointerPhoto.x, event.clientY - pointerPhoto.y) < 6) return;
+    pointerPhoto.moved = true;
+    preview.panel.querySelector(`[data-preview-photo-item="${pointerPhoto.from}"]`)?.classList.add('is-dragging');
+    event.preventDefault();
+    const item = document.elementFromPoint(event.clientX,event.clientY)?.closest('[data-preview-photo-item]');
+    if (!item || !preview.panel.contains(item)) return;
+    pointerPhoto.to = Number(item.dataset.previewPhotoItem);
+    preview.panel.querySelectorAll('.is-drop-target').forEach(node => node.classList.remove('is-drop-target'));
+    item.classList.add('is-drop-target');
+  });
+  dialog.addEventListener('pointerup', event => {
+    if (!pointerPhoto || pointerPhoto.id !== event.pointerId) return;
+    const {from,to,moved} = pointerPhoto; clearPhotoDrag();
+    if (moved) { suppressPhotoClick = true; setTimeout(() => { suppressPhotoClick = false; }, 0); movePhoto(from,to); }
+  });
+  dialog.addEventListener('pointercancel', clearPhotoDrag);
   dialog.addEventListener('change', event => {
     if (event.target.name !== 'category') return;
     const form = event.target.form;

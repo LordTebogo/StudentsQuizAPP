@@ -33,7 +33,12 @@ and `node --test tests/market-safety.test.cjs`.
 New listings use **Preview listing** before any upload or publication request.
 The preview shows a market-style card, selected photos and public listing details.
 **Edit details** returns to the same form, retaining text, coordinates and selected
-files. Existing listings use **Preview changes** before saving their updates.
+files. Drag photos in the preview to rearrange them; the first photo is labelled
+**Thumbnail** and becomes the published card image. **Make first** and earlier/later
+arrows provide touch and keyboard alternatives. The Drag handle supports touch
+dragging. Photo order stays intact when returning to edit and is saved for new
+uploads, existing photos, or a mix of both. Existing listings use **Preview changes**
+before saving their updates.
 
 Only **Publish listing**, **Submit room for approval** or **Save changes** in the
 preview sends the request. During saving, an animated indicator and status message

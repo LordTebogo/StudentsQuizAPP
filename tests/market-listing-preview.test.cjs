@@ -130,3 +130,70 @@ test('editing a listing previews retained photos and does not update until confi
     assert.deepEqual(JSON.parse(update.options.body.get('retained_image_urls')),item.image_urls);
   }finally{w.close()}
 });
+
+test('Make first changes the thumbnail and persists photo order through editing and publishing',async()=>{
+  const {w,d,form,submit,requests,urls}=await setup();
+  try{
+    const files=['one','two','three'].map(name=>new w.File([name],`${name}.jpg`,{type:'image/jpeg'}));
+    Object.defineProperty(form.elements.images,'files',{value:files});
+    submit();d.querySelector('[data-photo-first="2"]').click();
+    assert.equal(d.querySelector('[data-preview-main]').src,urls[2].url);
+    assert.match(d.querySelector('[data-preview-photo-item="0"]').textContent,/Thumbnail/);
+    assert.match(d.querySelector('[data-photo-order-status]').textContent,/now the thumbnail/);
+    d.querySelector('[data-edit-preview]').click();form.elements.title.value='Revised room';submit();
+    // Newly created preview URLs follow the retained draft order, while the input itself is untouched.
+    assert.equal(urls[3].file,files[2]);assert.equal(form.elements.images.files[0],files[0]);
+    d.querySelector('[data-preview-photo="1"]').click();
+    d.querySelector('[data-confirm-listing]').click();await tick();
+    assert.deepEqual(JSON.parse(requests[0].options.body.get('image_order')),[2,0,1]);
+  }finally{w.close()}
+});
+
+test('native drag and keyboard photo controls reorder without submitting the draft',async()=>{
+  const {w,d,form,submit,requests,urls}=await setup();
+  try{
+    Object.defineProperty(form.elements.images,'files',{value:['one','two','three'].map(name=>new w.File([name],`${name}.jpg`,{type:'image/jpeg'}))});
+    submit();
+    const event=type=>{const e=new w.Event(type,{bubbles:true,cancelable:true});Object.defineProperty(e,'dataTransfer',{value:{setData(){}}});return e};
+    d.querySelector('[data-preview-photo-item="2"]').dispatchEvent(event('dragstart'));
+    d.querySelector('[data-preview-photo-item="0"]').dispatchEvent(event('dragover'));
+    d.querySelector('[data-preview-photo-item="0"]').dispatchEvent(event('drop'));
+    assert.equal(d.querySelector('[data-preview-main]').src,urls[2].url);
+    d.querySelector('[data-photo-move="0"][data-step="1"]').click();
+    assert.equal(d.querySelector('[data-preview-main]').src,urls[0].url);
+    assert.equal(d.querySelector('[data-photo-move="0"][data-step="-1"]').disabled,true);
+    assert.equal(d.querySelector('[data-photo-move="2"][data-step="1"]').disabled,true);
+    assert.equal(requests.length,0);
+  }finally{w.close()}
+});
+
+for (const target of ['handle','image']) test(`pointer dragging by ${target} moves a photo into the thumbnail position`,async()=>{
+  const {w,d,form,submit,urls}=await setup();
+  try{
+    Object.defineProperty(form.elements.images,'files',{value:['one','two'].map(name=>new w.File([name],`${name}.jpg`,{type:'image/jpeg'}))});submit();
+    const pointer=type=>{const e=new w.Event(type,{bubbles:true,cancelable:true});for(const [key,value] of Object.entries({pointerId:1,button:0,clientX:type==='pointermove'?30:10,clientY:20}))Object.defineProperty(e,key,{value});return e};
+    d.elementFromPoint=()=>d.querySelector('[data-preview-photo-item="0"]');
+    const handle=d.querySelector(target==='handle'?'[data-photo-drag="1"]':'[data-preview-photo="1"]');
+    handle.dispatchEvent(pointer('pointerdown'));handle.dispatchEvent(pointer('pointermove'));handle.dispatchEvent(pointer('pointerup'));
+    assert.equal(d.querySelector('[data-preview-main]').src,urls[1].url);
+  }finally{w.close()}
+});
+
+test('a new photo stays first when an existing photo is removed while editing',async()=>{
+  const item={id:7,title:'Existing room',campus:'Village',area:'Centre',monthly_rent:1000,description:'Room',contact:'0791112233',is_available:true,is_approved:true,image_urls:['https://images.example.test/one.jpg','https://images.example.test/two.jpg']};
+  const {w,d,requests}=await setup('room',async path=>path==='/marketing/landlord/listings'?[item]:path==='/marketing/my-adverts'?[]:{ok:true});
+  try{
+    d.querySelector('[data-sell-back]').click();d.querySelector('[data-my-listings]').click();await tick();d.querySelector('[data-edit-room="7"]').click();
+    const form=d.getElementById('editListingForm');
+    Object.defineProperty(form.elements.images,'files',{value:[new w.File(['new'],'new.jpg',{type:'image/jpeg'})]});
+    const submit=()=>form.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));
+    submit();d.querySelector('[data-photo-first="2"]').click();d.querySelector('[data-edit-preview]').click();
+    form.querySelector('[data-keep-photo="0"]').checked=false;submit();
+    assert.match(d.querySelector('[data-preview-main]').src,/^blob:/);
+    assert.equal(d.querySelectorAll('[data-preview-photo-item]').length,2);
+    d.querySelector('[data-confirm-listing]').click();await tick();
+    const update=requests.find(r=>r.options?.method==='PUT');
+    assert.deepEqual(JSON.parse(update.options.body.get('image_order')),[1,0]);
+    assert.deepEqual(JSON.parse(update.options.body.get('retained_image_urls')),[item.image_urls[1]]);
+  }finally{w.close()}
+});
