@@ -5359,7 +5359,7 @@ def landlord_me(landlord: Landlord = Depends(require_landlord_account)):
 
 def _market_item(kind: str, listing_id: int, db: Session):
     if kind == "rooms":
-        item = db.query(Accommodation).filter(Accommodation.id == listing_id, Accommodation.is_approved == True, Accommodation.is_available == True).first()  # noqa: E712
+        item = db.query(Accommodation).join(Landlord).filter(Accommodation.id == listing_id, Accommodation.is_approved == True, Landlord.active == True).first()  # noqa: E712
     elif kind == "adverts":
         item = db.query(MarketAdvert).filter(MarketAdvert.id == listing_id, MarketAdvert.status == "approved").first()
     else:
@@ -8143,7 +8143,7 @@ def public_market_listing(kind: str, listing_id: int, db: Session = Depends(get_
     if kind == "room":
         row = db.query(Accommodation, Landlord).join(Landlord, Landlord.id == Accommodation.landlord_id).filter(
             Accommodation.id == listing_id, Accommodation.is_approved == True,
-            Accommodation.is_available == True, Landlord.active == True,
+            Landlord.active == True,
         ).first()
         if not row:
             raise HTTPException(status_code=404, detail="Listing unavailable")
@@ -8175,6 +8175,9 @@ def public_market_listing(kind: str, listing_id: int, db: Session = Depends(get_
     image_meta = f'<meta property="og:image" content="{escape(photo)}">' if photo else ""
     image_html = f'<img class="photo" src="{escape(photo)}" alt="{escape(title)}">' if photo else ""
     contact = data.get("contact") or "Ask the provider for contact details."
+    room_available = kind == "room" and data.get("is_available") is True
+    room_status_html = (f'<p><span class="room-availability room-availability--{"available" if room_available else "filled"}"><span aria-hidden="true">●</span> {"Available" if room_available else "Filled"}</span></p>'
+        + ('' if room_available else '<p>This room is filled and is not currently available. <a href="/?category=rooms">Browse available rooms</a>.</p>')) if kind == "room" else ''
     amount = data.get("monthly_rent") if kind == "room" else data.get("price")
     structured = {
         "@context": "https://schema.org",
@@ -8191,7 +8194,7 @@ def public_market_listing(kind: str, listing_id: int, db: Session = Depends(get_
             "@type": "Offer",
             "price": str(amount),
             "priceCurrency": "ZAR",
-            "availability": "https://schema.org/InStock",
+            "availability": "https://schema.org/OutOfStock" if kind == "room" and not room_available else "https://schema.org/InStock",
             "url": path,
             **({"seller": {"@type": "Organization", "name": seller}} if seller else {}),
         }
@@ -8201,8 +8204,8 @@ def public_market_listing(kind: str, listing_id: int, db: Session = Depends(get_
     body = f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{escape(title)} | Arounus</title><meta name="description" content="{escape(description)}"><meta name="robots" content="{'noindex,follow' if is_demo else 'index,follow'}"><link rel="canonical" href="{path}">
 <meta property="og:type" content="product"><meta property="og:title" content="{escape(title)}"><meta property="og:description" content="{escape(description)}"><meta property="og:url" content="{path}">{image_meta}
-<meta name="twitter:card" content="summary_large_image">{structured_html}<link rel="stylesheet" href="/static/market-safety.css?v=1"><script src="/static/market-safety.js?v=1" defer></script><link rel="stylesheet" href="/static/style.css"><link rel="stylesheet" href="/static/site-footer.css?v=1"><style>body{{background:#f5f8f6;color:#18312d}}.listing-page{{max-width:820px;margin:30px auto;padding:28px;background:white;border:1px solid #d5e4db;border-radius:20px}}.photo{{width:100%;max-height:460px;object-fit:cover;border-radius:14px}}.listing-page p{{line-height:1.6}}.listing-page a{{color:#087c6f}}@media(max-width:650px){{.listing-page{{margin:12px;padding:18px}}}}</style></head>
-<body><script src="/static/app-traffic.js?v=1" defer></script><main class="listing-page"><p><a href="/">← Browse local market</a></p>{'<p><strong>Example only — this is not a real offer.</strong></p>' if is_demo else ''}<h1>{escape(title)}</h1>{image_html}<p>{escape(data.get('campus') or 'Location not specified')}{' · ' + escape(data.get('area')) if data.get('area') else ''}</p><p><strong>{escape(price)}</strong></p>{'<p>Listed by ' + escape(seller) + '</p>' if seller and not is_demo else ''}<p>{escape(full_description)}</p>{('<p><strong>Provider contact:</strong> ' + escape(contact) + '</p><p class="market-contact-note">Contact the provider directly using these details, or <a href="/?listing=' + kind + '-' + str(listing_id) + '">open this listing on the market</a> and sign in to message them. In-app messages are linked to your account. Phone, WhatsApp and website contact happens outside Arounus. <a href="/trust#contact">How contact works</a>.</p><p class="market-verification-note">Provider identity, ownership and availability are not independently verified. ' + ('Rooms are reviewed for publication; approval is not a property inspection.' if kind == 'room' else 'Other listings can publish automatically.') + ' <a href="/trust#verification">What we check</a>.</p><p><a href="/trust?listing=' + kind + '-' + str(listing_id) + '#report" data-report-listing="' + kind + '-' + str(listing_id) + '" data-report-title="' + escape(title) + '">Report stale or suspicious listing</a></p>') if not is_demo else ''}<p>Check the listing and provider independently before paying. <a href="/trust#safety">Read market safety guidance</a>.</p><p><a href="/">Find more listings</a></p></main>{footer_html}</body></html>"""
+<meta name="twitter:card" content="summary_large_image">{structured_html}<link rel="stylesheet" href="/static/room-availability.css?v=1"><link rel="stylesheet" href="/static/market-safety.css?v=1"><script src="/static/market-safety.js?v=1" defer></script><link rel="stylesheet" href="/static/style.css"><link rel="stylesheet" href="/static/site-footer.css?v=1"><style>body{{background:#f5f8f6;color:#18312d}}.listing-page{{max-width:820px;margin:30px auto;padding:28px;background:white;border:1px solid #d5e4db;border-radius:20px}}.photo{{width:100%;max-height:460px;object-fit:cover;border-radius:14px}}.listing-page p{{line-height:1.6}}.listing-page a{{color:#087c6f}}@media(max-width:650px){{.listing-page{{margin:12px;padding:18px}}}}</style></head>
+<body><script src="/static/app-traffic.js?v=1" defer></script><main class="listing-page"><p><a href="/">← Browse local market</a></p>{'<p><strong>Example only — this is not a real offer.</strong></p>' if is_demo else ''}<h1>{escape(title)}</h1>{room_status_html}{image_html}<p>{escape(data.get('campus') or 'Location not specified')}{' · ' + escape(data.get('area')) if data.get('area') else ''}</p><p><strong>{escape(price)}</strong></p>{'<p>Listed by ' + escape(seller) + '</p>' if seller and not is_demo else ''}<p>{escape(full_description)}</p>{('<p><strong>Provider contact:</strong> ' + escape(contact) + '</p><p class="market-contact-note">Contact the provider directly using these details, or <a href="/?listing=' + kind + '-' + str(listing_id) + '">open this listing on the market</a> and sign in to message them. In-app messages are linked to your account. Phone, WhatsApp and website contact happens outside Arounus. <a href="/trust#contact">How contact works</a>.</p><p class="market-verification-note">Provider identity, ownership and availability are not independently verified. ' + ('Rooms are reviewed for publication; approval is not a property inspection.' if kind == 'room' else 'Other listings can publish automatically.') + ' <a href="/trust#verification">What we check</a>.</p><p><a href="/trust?listing=' + kind + '-' + str(listing_id) + '#report" data-report-listing="' + kind + '-' + str(listing_id) + '" data-report-title="' + escape(title) + '">Report stale or suspicious listing</a></p>') if not is_demo else ''}<p>Check the listing and provider independently before paying. <a href="/trust#safety">Read market safety guidance</a>.</p><p><a href="/">Find more listings</a></p></main>{footer_html}</body></html>"""
     return HTMLResponse(body, headers={"Cache-Control": "public, max-age=60"})
 
 

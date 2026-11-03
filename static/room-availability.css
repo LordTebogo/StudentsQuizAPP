@@ -1,0 +1,24 @@
+.room-availability {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  margin: 8px 0;
+  padding: 5px 10px;
+  border: 1px solid;
+  border-radius: 20px;
+  font: 700 13px/1.4 Arial, sans-serif;
+  white-space: nowrap;
+}
+.room-availability--available {
+  color: #166534;
+  background: #dcfce7;
+  border-color: #86efac;
+}
+.room-availability--available > span { color: #15803d; }
+.room-availability--filled {
+  color: #854d0e;
+  background: #fef9c3;
+  border-color: #facc15;
+}
+.room-availability--filled > span { color: #ca8a04; }

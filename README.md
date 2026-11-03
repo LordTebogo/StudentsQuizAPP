@@ -28,6 +28,16 @@ provider verification badge is shown without an implemented verification process
 Focused checks: `.venv/Scripts/python.exe -m unittest discover -s tests -p test_market_safety.py`
 and `node --test tests/market-safety.test.cjs`.
 
+## Room availability
+
+The default market order shows available rooms first, followed by other offers,
+then filled rooms. Available rooms have a green **Available** label; filled rooms
+remain visible with a yellow **Filled** label. Search, saved listings, room details
+and shared room links retain these status labels. Price sorting applies within
+availability groups, so filled rooms stay after available rooms. Providers update
+availability through **My listings → Mark filled / Mark available**. These are
+provider-supplied statuses; visitors should confirm availability directly.
+
 ## Compact market homepage
 
 Use **Saved** beside the listings heading, or **Saved listings** in any footer,

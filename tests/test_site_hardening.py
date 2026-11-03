@@ -53,7 +53,7 @@ class SiteHardeningTest(unittest.TestCase):
         page = self.client.get("/no-such-page", headers=HTML)
         self.assertEqual(page.status_code, 404)
         self.assertIn("text/html", page.headers["content-type"])
-        self.assertIn("Browse campus listings", page.text)
+        self.assertIn("Browse local listings", page.text)
         api = self.client.get("/no-such-page", headers={"Accept": "application/json"})
         self.assertEqual(api.status_code, 404)
         self.assertEqual(api.json(), {"detail": "Not Found"})
