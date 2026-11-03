@@ -22,3 +22,16 @@
   border-color: #facc15;
 }
 .room-availability--filled > span { color: #ca8a04; }
+
+.room-photo { position: relative; }
+.room-photo > img { display: block; }
+.campus-card-media > .room-availability,
+.room-photo > .room-availability {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 2;
+  margin: 0;
+  pointer-events: none;
+  box-shadow: 0 2px 8px #00000026;
+}
