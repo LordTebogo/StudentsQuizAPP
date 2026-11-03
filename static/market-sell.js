@@ -239,24 +239,18 @@
   }
   async function renderMessages() {
     clearPreview();
-    document.getElementById('sellTitle').textContent = 'My market messages';
-    document.getElementById('sellIntro').textContent = 'Read and reply to conversations with your Arounus market contacts.';
-    content.innerHTML = '<button class="sell-back" type="button" data-sell-back>← Back to listings</button><p>Loading messages…</p>';
-    try {
-      const rows = await request('/marketing/provider/messages');
-      const threads = new Map();
-      rows.forEach(row => {
-        const type=row.peer_type||(row.sender_type==='landlord'?row.recipient_type:row.sender_type);
-        const id=row.peer_id||(row.sender_type==='landlord'?row.recipient_id:row.sender_id);
-        if(!id)return;
-        const key=type+':'+id;
-        if(!threads.has(key))threads.set(key,{type,id,name:row.peer_name||row.sender_name,messages:[]});
-        threads.get(key).messages.push(row);
-      });
-      content.innerHTML=`<button class="sell-back" type="button" data-sell-back>← Back to listings</button><p class="muted" data-market-notification-note role="status"></p><div class="sell-inbox">${[...threads].map(([key,thread])=>`<section><h3>${escapeHtml(thread.name)}</h3><div class="sell-thread">${thread.messages.reverse().map(row=>`<p><strong>${escapeHtml(row.is_outgoing?'You':row.sender_name)}:</strong> ${escapeHtml(row.content)}</p>`).join('')}</div><form data-reply-to="${escapeHtml(key)}"><label>Reply<textarea name="content" maxlength="2000" required></textarea></label><button type="submit">Send reply</button></form></section>`).join('')||'<p>No messages yet.</p>'}</div>`;
-      document.dispatchEvent(new Event('market-notifications-view'));
-      for(const thread of threads.values())request('/marketing/provider/messages/read',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target_type:thread.type,target_id:thread.id})}).then(()=>document.dispatchEvent(new Event('market-messages-updated'))).catch(()=>{});
-    } catch (error) { status(error.message, true); renderChoice(); }
+    document.getElementById('sellTitle').textContent = 'Messages';
+    document.getElementById('sellIntro').textContent = 'Messages show your account name. Keep passwords and payment details private.';
+    content.innerHTML = '<button class="sell-back" type="button" data-sell-back>← Back to listings</button><p class="muted" data-market-notification-note role="status"></p><div data-market-chats></div>';
+    const chats=window.ArounusChat.mount(content.querySelector('[data-market-chats]'),{
+      load:async()=>({rows:await request('/marketing/provider/messages')}),
+      canReply:t=>['student','lecturer','landlord'].includes(t.type),
+      send:(t,text)=>request('/marketing/provider/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({recipient_type:t.type,recipient_id:t.id,content:text,is_anonymous:false})}),
+      read:(t,rows)=>request('/marketing/provider/messages/read-items',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message_ids:rows.map(m=>m.id)})}),
+      onRead:()=>document.dispatchEvent(new Event('market-messages-updated'))
+    });
+    document.dispatchEvent(new Event('market-notifications-view'));
+    return chats;
   }
   async function open(showMessages=false) {
     if (saving) return;
@@ -267,12 +261,18 @@
       profile=session.profile;
       document.getElementById('contactDialog')?.close();
       if(!dialog.open)dialog.showModal();
-      if(showMessages)await renderMessages();else renderChoice();
+      if(showMessages)return await renderMessages();else renderChoice();
     } catch(error) {
       status(error.message,true);
       if(!dialog.open)dialog.showModal();
     }
   }
+  window.openMarketConversation = async (id, name, image) => {
+    const chats = await open(true);
+    if (!chats) return;
+    await chats.ready;
+    chats.open('landlord', id, name || 'Market contact', image);
+  };
   document.addEventListener('click',event=>{
     const messages=event.target.closest('[data-market-messages]');
     if(!messages&&!event.target.closest('[data-open-sell]'))return;
@@ -451,20 +451,13 @@
   });
   dialog.addEventListener('submit', async event => {
     event.preventDefault();
-    if (saving) return;
+    if (saving || event.target.closest('.arounus-chat')) return;
     const form = event.target;
     if (form.id === 'sellListingForm' || form.id === 'editListingForm') {
       try { showPreview(form); } catch (error) { status(error.message, true); }
       return;
     }
-    if (!form.dataset.replyTo) return;
-    const submit = form.querySelector('[type="submit"]');
-    submit.disabled = true; status('Sending…');
-    try {
-      await request('/marketing/provider/messages', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({recipient_type:form.dataset.replyTo.split(':')[0], recipient_id:Number(form.dataset.replyTo.split(':')[1]), content:form.elements.content.value, is_anonymous:false})});
-      status('Message sent.'); await renderMessages();
-    } catch (error) { status(error.message, true); }
-    finally { if (form.isConnected) submit.disabled = false; }
+
   });
   const params = new URLSearchParams(location.search);
   if (params.get('messages') === '1') {

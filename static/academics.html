@@ -532,7 +532,7 @@
     }
   }
 </script>
-<script src="/static/experience.js?v=17"></script>
+<script src="/static/experience.js?v=18"></script>
 <script src="/static/loading.js"></script>
 <script src="/static/pwa.js?v=18"></script>
 <script>
@@ -542,7 +542,7 @@
   const guest = document.getElementById('guestChoices');
   const escapeHome = value => { const element=document.createElement('div'); element.textContent=value ?? ''; return element.innerHTML; };
   async function studentApi(path) { const response=await fetch(path,{headers:{'X-Student-Token':studentToken}}); const data=await response.json().catch(()=>null); if(!response.ok) throw new Error(data?.detail || 'Could not load messages'); return data; }
-  async function loadHomeInbox() { try { const messages=await studentApi('/student/messages'); document.getElementById('homeInboxList').innerHTML=messages.length ? messages.map(message=>`<div class="q"><strong>${escapeHome(message.sender_name)}</strong><small>${escapeHome(message.created_at)}</small><div>${escapeHome(message.content)}</div></div>`).join('') : '<p class="muted">No messages or mentions yet.</p>'; document.getElementById('homeMessageCount').classList.add('hidden'); } catch(error) { document.getElementById('homeInboxList').innerHTML=`<p class="muted">${escapeHome(error.message)}</p>`; } }
+  function loadHomeInbox() { window.openHomeChats?.(); }
   if (studentToken) { guest.classList.add('hidden'); document.getElementById('studentPortal').classList.remove('hidden'); document.getElementById('studentHomeActions').classList.add('active'); studentApi('/student/me').then(profile=>{document.getElementById('homeStudentName').textContent=profile.full_name; if(profile.profile_image_url) document.getElementById('homeStudentAvatar').src=profile.profile_image_url;}); studentApi('/student/messages/unread').then(result=>{const badge=document.getElementById('homeMessageCount'); badge.textContent=result.count || 0; badge.classList.toggle('hidden',!result.count);}).catch(()=>{}); document.getElementById('homeMessagesBtn').addEventListener('click',()=>{const inbox=document.getElementById('homeInbox'); inbox.classList.toggle('hidden'); if(!inbox.classList.contains('hidden')) loadHomeInbox();}); }
   else if (lecturerToken) { guest.classList.add('hidden'); document.getElementById('lecturerPortal').classList.remove('hidden'); }
   else if (advertiserToken) { guest.classList.add('hidden'); document.getElementById('advertiserPortal').classList.remove('hidden'); }
@@ -560,7 +560,7 @@
   document.getElementById('menuEditProfile').addEventListener('click',()=>{ location.href=studentToken ? '/students' : '/lecturers'; });
   document.getElementById('menuSignOut').addEventListener('click',()=>{ sessionStorage.removeItem(studentToken ? 'studentToken' : 'lecturerToken'); location.reload(); });
   if (studentToken) document.getElementById('studentSignOut').classList.add('hidden');
-  if (lecturerToken) { document.getElementById('lecturerSignOut').classList.add('hidden'); guest.classList.add('hidden'); document.getElementById('lecturerPortal').classList.remove('hidden'); actionBar.classList.add('active'); fetch('/lecturer/me',{headers:{'X-Lecturer-Token':lecturerToken}}).then(r=>r.json()).then(profile=>{document.getElementById('homeStudentName').textContent=profile.full_name; if(profile.profile_image_url) avatar.src=profile.profile_image_url;}); fetch('/lecturer/messages/unread',{headers:{'X-Lecturer-Token':lecturerToken}}).then(r=>r.json()).then(result=>{const badge=document.getElementById('homeMessageCount');badge.textContent=result.count||0;badge.classList.toggle('hidden',!result.count)}); document.getElementById('homeMessagesBtn').addEventListener('click',async()=>{const inbox=document.getElementById('homeInbox');inbox.classList.toggle('hidden');if(!inbox.classList.contains('hidden')){const rows=await fetch('/lecturer/messages',{headers:{'X-Lecturer-Token':lecturerToken}}).then(r=>r.json());document.getElementById('homeInboxList').innerHTML=rows.length?rows.map(m=>`<div class="q"><strong>${escapeHome(m.sender_name)}</strong><small>${escapeHome(m.created_at)}</small><div>${escapeHome(m.content)}</div></div>`).join(''):'<p class="muted">No messages yet.</p>';}}); }
+  if (lecturerToken) { document.getElementById('lecturerSignOut').classList.add('hidden'); guest.classList.add('hidden'); document.getElementById('lecturerPortal').classList.remove('hidden'); actionBar.classList.add('active'); fetch('/lecturer/me',{headers:{'X-Lecturer-Token':lecturerToken}}).then(r=>r.json()).then(profile=>{document.getElementById('homeStudentName').textContent=profile.full_name; if(profile.profile_image_url) avatar.src=profile.profile_image_url;}); fetch('/lecturer/messages/unread',{headers:{'X-Lecturer-Token':lecturerToken}}).then(r=>r.json()).then(result=>{const badge=document.getElementById('homeMessageCount');badge.textContent=result.count||0;badge.classList.toggle('hidden',!result.count)}); document.getElementById('homeMessagesBtn').addEventListener('click',()=>{const inbox=document.getElementById('homeInbox');inbox.classList.toggle('hidden');if(!inbox.classList.contains('hidden'))loadHomeInbox();}); }
   // Available accommodation images become a quiet, rotating window into the
   // market. The card keeps its colour treatment when no images exist yet.
   (async () => {
@@ -675,5 +675,6 @@
     } catch (_) { belt.classList.add('hidden'); }
   })();
 </script>
+<link rel="stylesheet" href="/static/chat-ui.css?v=1"><script src="/static/chat-ui.js?v=1"></script><script src="/static/home-messaging.js?v=1"></script>
 </body>
 </html>

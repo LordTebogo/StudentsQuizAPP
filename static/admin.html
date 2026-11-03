@@ -359,7 +359,7 @@ function clearLecturerForm() {
   ['lecturerName','lecturerEmail','lecturerPassword','lecturerPhone','lecturerInstitution','lecturerBio','lecturerModules'].forEach(id => $(id).value = '');
   $('lecturerLimit').value = 1; $('lecturerEmail').disabled = false; $('lecturerPassword').classList.remove('hidden'); $('passwordResetFields').classList.add('hidden'); $('lecturerMsg').innerHTML = '';
 }
-async function quickAdminMessage(type, id, name) { const content = window.prompt(`Message ${name}:`); if (!content || !content.trim()) return; try { await api('/admin/messages', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({recipient_type:type, recipient_id:Number(id), content:content.trim()})}); window.alert(`Message sent to ${name}.`); } catch (error) { window.alert(error.message); } }
+async function quickAdminMessage(type, id, name) { if(window.openAdminChat)window.openAdminChat(type,Number(id),name); }
 function accountState(item) { return `${item.approved ? 'Approved' : 'Not approved'} · ${item.active ? 'Active' : 'Inactive'}`; }
 function accessControls(kind, item) {
   const activeAction = item.active ? 'Deactivate' : 'Activate';
@@ -631,7 +631,7 @@ setInterval(() => { if (pin && !$('appWrap').classList.contains('hidden')) loadL
 <script src="/static/admin-workspace.js?v=3"></script>
 <script src="/static/admin-finance.js?v=1"></script>
 <script src="/static/admin-traffic.js?v=1"></script>
-<script src="/static/experience.js?v=17"></script>
+<script src="/static/experience.js?v=18"></script>
 <script src="/static/loading.js"></script>
 <script src="/static/pwa.js?v=18"></script>
 <footer class="site-footer arounus-footer" aria-label="Arounus footer">

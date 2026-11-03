@@ -1,4 +1,4 @@
-const OFFLINE_VERSION = "v77";
+const OFFLINE_VERSION = "v78";
 const SHELL_CACHE = `nucleocampus-shell-${OFFLINE_VERSION}`;
 const DATA_CACHE = `nucleocampus-data-${OFFLINE_VERSION}`;
 const EXTERNAL_CACHE = `nucleocampus-external-${OFFLINE_VERSION}`;
@@ -6,6 +6,7 @@ const EXTERNAL_CACHE = `nucleocampus-external-${OFFLINE_VERSION}`;
 // Everything required to open every Arounus workspace is downloaded when
 // the app is installed. Keep this list limited to files that ship with the app.
 const APP_SHELL = [
+  "/static/chat-ui.js?v=1", "/static/chat-ui.css?v=1", "/static/home-messaging.js?v=1",
   "/static/market-notifications.js?v=1",
   "/static/room-availability.css?v=2",
   "/static/market-safety.css?v=1", "/static/market-safety.js?v=1",
@@ -14,7 +15,7 @@ const APP_SHELL = [
   "/students/lessons", "/lecturers/lessons", "/lecturers/guide", "/live",
   "/posts", "/community", "/src", "/market", "/admin", "/comrade",
   "/tools/pdf", "/tools/media", "/trust", "/premium", "/reset-password",
-  "/static/campus-home.css?v=6", "/static/campus-home.js?v=12", "/static/campus-browse.css?v=3", "/static/campus-redirect.js?v=1",
+  "/static/campus-home.css?v=6", "/static/campus-home.js?v=13", "/static/campus-browse.css?v=3", "/static/campus-redirect.js?v=1",
   "/static/media-compressor.js?v=2", "/static/admin-workspace.css?v=3", "/static/admin-workspace.js?v=3",
   "/static/document-organizer.js",
   "/static/site-footer.css?v=1", "/static/compact-entry.css?v=2",
@@ -26,10 +27,10 @@ const APP_SHELL = [
   "/static/market-sell.css?v=7",
   "/static/lesson-insights.css", "/static/quiz-builder.css",
   "/static/quiz-math-tools.css", "/static/mathlive-fonts.css?v=1",
-  "/static/experience.js?v=17", "/static/loading.js", "/static/pwa.js?v=18",
-  "/static/module-names.js", "/static/student-module-enrollment.js", "/static/username-suggestion.js", "/static/student-messaging.js",
-  "/static/lecturer-messaging.js", "/static/admin-messaging.js",
-  "/static/admin-market-ads.js?v=3", "/static/market-auth.js?v=1", "/static/market-sell.js?v=10", "/static/market-contact.js?v=3",
+  "/static/experience.js?v=18", "/static/loading.js", "/static/pwa.js?v=18",
+  "/static/module-names.js", "/static/student-module-enrollment.js", "/static/username-suggestion.js", "/static/student-messaging.js?v=2",
+  "/static/lecturer-messaging.js?v=2", "/static/admin-messaging.js?v=2",
+  "/static/admin-market-ads.js?v=3", "/static/market-auth.js?v=1", "/static/market-sell.js?v=11", "/static/market-contact.js?v=4",
   "/static/market-metrics.js?v=4", "/static/video-access.js?v=5", "/static/media-url.js?v=1",
   "/static/lesson-insights.js", "/static/admin-finance.js?v=1", "/static/quiz-builder.js?v=16",
   "/static/quiz-import-template.csv", "/static/standard-quiz-template.json",

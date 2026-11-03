@@ -80,13 +80,14 @@ test('market inbox groups provider conversations and replies to the actual accou
   const {dom,w}=setup();w.sessionStorage.setItem('lecturerToken','tutor-token');let sent;
   w.fetch=async(url,options={})=>{
     if(url==='/marketing/session')return response({role:'lecturer',token:'tutor-token',market_token:'market-token',profile:{id:9,full_name:'Tutor'}});
-    if(url.endsWith('/read'))return response({ok:true});
+    if(url.endsWith('/read')||url.endsWith('/read-items'))return response({ok:true});
     if(options.method==='POST'){sent=JSON.parse(options.body);return response({ok:true});}
     return response([{id:1,peer_type:'landlord',peer_id:7,peer_name:'Campus provider',sender_type:'landlord',sender_id:7,recipient_type:'landlord',recipient_id:9,sender_name:'Campus provider',content:'Welcome',is_outgoing:false},{id:2,peer_type:'landlord',peer_id:7,peer_name:'Campus provider',sender_type:'landlord',sender_id:9,recipient_type:'landlord',recipient_id:7,sender_name:'Tutor',content:'Thank you',is_outgoing:true}]);
   };
-  w.eval(script('market-sell'));w.document.querySelector('[data-market-messages]').click();await tick();
-  assert.equal(w.document.querySelectorAll('[data-reply-to]').length,1);
-  const form=w.document.querySelector('[data-reply-to]');assert.equal(form.dataset.replyTo,'landlord:7');
-  form.elements.content.value='Is this available?';form.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await tick();
+  w.eval(script('chat-ui'));w.eval(script('market-sell'));w.document.querySelector('[data-market-messages]').click();await tick();
+  assert.equal(w.document.querySelectorAll('.chat-contact').length,1);
+  w.document.querySelector('.chat-contact').click();
+  const form=w.document.querySelector('.chat-composer');
+  form.elements.message.value='Is this available?';form.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await tick();
   assert.equal(sent.recipient_type,'landlord');assert.equal(sent.recipient_id,7);dom.window.close();
 });

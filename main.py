@@ -4551,16 +4551,33 @@ def _message_person(db: Session, kind: str, person_id: Optional[int]) -> str:
     return person.full_name if person else "Unknown account"
 
 
+def _message_avatar(db: Session, kind: str, person_id: Optional[int]):
+    model = {"student": Student, "lecturer": Lecturer, "landlord": Landlord, "src_president": SrcPresident}.get(kind)
+    person = db.get(model, person_id) if model and person_id else None
+    return getattr(person, "profile_image_url", None)
+
+
 def _message_dict(db: Session, message: DirectMessage, viewer_type: str = "", viewer_id: Optional[int] = None):
     anonymous = bool(getattr(message, "is_anonymous", False) and message.sender_type == "student")
     viewing_own = viewer_type == "student" and viewer_id == message.sender_id
     sender_name = "You (anonymous)" if anonymous and viewing_own else "Anonymous student" if anonymous else _message_person(db, message.sender_type, message.sender_id)
-    return {"id": message.id, "sender_type": message.sender_type, "sender_id": message.sender_id if not anonymous or viewing_own else None,
+    outgoing = message.sender_type == viewer_type and (message.sender_id == viewer_id or viewer_type == "admin")
+    incoming = message.recipient_type == viewer_type and (message.recipient_id == viewer_id or viewer_type == "admin")
+    peer_type, peer_id = (message.recipient_type, message.recipient_id) if outgoing else (message.sender_type, message.sender_id)
+    hidden_peer = anonymous and not outgoing
+    review = viewer_type == "admin" and not outgoing and not incoming
+    return {"is_outgoing": outgoing, "peer_type": peer_type, "peer_id": None if hidden_peer else peer_id,
+            "peer_name": (sender_name + " → " + _message_person(db, message.recipient_type, message.recipient_id)) if review else (_message_person(db, peer_type, peer_id) if not hidden_peer else "Anonymous student"),
+            "peer_image_url": None if hidden_peer else _message_avatar(db, peer_type, peer_id),
+            "sender_image_url": None if anonymous else _message_avatar(db, message.sender_type, message.sender_id),
+            "recipient_image_url": _message_avatar(db, message.recipient_type, message.recipient_id),
+            "review_only": review,
+            "id": message.id, "sender_type": message.sender_type, "sender_id": message.sender_id if not anonymous or viewing_own else None,
             "sender_name": sender_name, "is_anonymous": anonymous,
             "recipient_type": message.recipient_type, "recipient_id": message.recipient_id,
             "recipient_name": _message_person(db, message.recipient_type, message.recipient_id),
             "content": message.content, "read_at": message.read_at,
-            "unread": bool(message.read_at is None and message.recipient_type == viewer_type and message.recipient_id == viewer_id),
+            "unread": bool(message.read_at is None and incoming),
             "created_at": message.created_at}
 
 
@@ -4698,13 +4715,6 @@ def _create_direct_message(db: Session, sender_type: str, sender_id: Optional[in
 
 
 def _inbox(db: Session, kind: str, person_id: int):
-    unread = db.query(DirectMessage).filter(DirectMessage.recipient_type == kind,
-        DirectMessage.recipient_id == person_id, DirectMessage.read_at.is_(None)).all()
-    now = datetime.now(timezone.utc).isoformat()
-    for item in unread:
-        item.read_at = now
-    if unread:
-        db.commit()
     rows = db.query(DirectMessage).filter(
         ((DirectMessage.recipient_type == kind) & (DirectMessage.recipient_id == person_id)) |
         ((DirectMessage.sender_type == kind) & (DirectMessage.sender_id == person_id))
@@ -4810,14 +4820,14 @@ def student_message_lecturers(student: Student = Depends(require_student_account
     rows = db.query(Lecturer).join(LecturerModule).filter(
         Lecturer.approved.is_(True), Lecturer.active.is_(True), LecturerModule.module_code.in_(module_codes)
     ).distinct().order_by(Lecturer.full_name).all() if module_codes else []
-    return [{"id": item.id, "full_name": item.full_name,
+    return [{"id": item.id, "full_name": item.full_name, "profile_image_url": item.profile_image_url,
              "module_codes": [module.module_code for module in item.modules if module.module_code in module_codes]} for item in rows]
 
 
 @app.get("/lecturer/message-students")
 def lecturer_message_students(lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db)):
     assigned = {item.module_code for item in lecturer.modules}
-    return [{"id": item.id, "full_name": item.full_name, "username": item.student_number, "student_number": item.student_number,
+    return [{"id": item.id, "full_name": item.full_name, "profile_image_url": item.profile_image_url, "username": item.student_number, "student_number": item.student_number,
              "module_codes": [module.module_code for module in item.modules if module.module_code in assigned]}
             for item in db.query(Student).join(StudentModule).filter(Student.approved.is_(True), Student.active.is_(True), StudentModule.module_code.in_(assigned)).distinct().order_by(Student.full_name).all()] if assigned else []
 
@@ -4838,6 +4848,35 @@ def student_messages(student: Student = Depends(require_student_account), db: Se
 @app.get("/lecturer/messages")
 def lecturer_messages(lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db)):
     return _inbox(db, "lecturer", lecturer.id)
+
+
+class MessageReadRequest(BaseModel):
+    message_ids: List[int] = Field(default_factory=list, max_length=500)
+
+
+def _read_open_messages(db: Session, kind: str, person_id: int, payload: MessageReadRequest):
+    rows = db.query(DirectMessage).filter(DirectMessage.id.in_(payload.message_ids),
+        DirectMessage.recipient_type == kind, DirectMessage.recipient_id == person_id,
+        DirectMessage.read_at.is_(None)).all()
+    for row in rows:
+        row.read_at = datetime.now(timezone.utc).isoformat()
+    db.commit()
+    return {"ok": True, "read_count": len(rows)}
+
+
+@app.post("/student/messages/read")
+def student_read_messages(payload: MessageReadRequest, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+    return _read_open_messages(db, "student", student.id, payload)
+
+
+@app.post("/lecturer/messages/read")
+def lecturer_read_messages(payload: MessageReadRequest, lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db)):
+    return _read_open_messages(db, "lecturer", lecturer.id, payload)
+
+
+@app.post("/admin/messages/read")
+def admin_read_messages(payload: MessageReadRequest, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    return _read_open_messages(db, "admin", 0, payload)
 
 
 @app.get("/student/messages/unread")
@@ -4885,8 +4924,22 @@ def provider_messages(landlord: Landlord = Depends(require_landlord_account), db
         result.append({**_message_dict(db, row, viewer_type, viewer_id), "is_outgoing": outgoing,
                        "unread": not outgoing and row.read_at is None,
                        "peer_type": kind, "peer_id": person_id,
-                       "peer_name": _message_person(db, kind, person_id) if person_id else "Anonymous sender"})
+                       "peer_name": _message_person(db, kind, person_id) if person_id else "Anonymous sender",
+                       "peer_image_url": _message_avatar(db, kind, person_id) if person_id else None})
     return result
+
+
+@app.post("/marketing/provider/messages/read-items")
+def market_read_open_messages(payload: MessageReadRequest, landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
+    own = _market_message_aliases(db, "landlord", landlord.id)
+    rows = db.query(DirectMessage).filter(DirectMessage.id.in_(payload.message_ids),
+        _message_identity_filter(DirectMessage.recipient_type, DirectMessage.recipient_id, own),
+        or_(DirectMessage.sender_type == "landlord", DirectMessage.recipient_type == "landlord"),
+        DirectMessage.read_at.is_(None)).all()
+    for row in rows:
+        row.read_at = datetime.now(timezone.utc).isoformat()
+    db.commit()
+    return {"ok": True, "read_count": len(rows)}
 
 
 @app.post("/marketing/provider/messages/read")
@@ -5003,12 +5056,14 @@ def student_unblock_message_account(payload: MessageBlockRequest, student: Stude
 
 @app.post("/lecturer/messages")
 def lecturer_send_message(payload: DirectMessageCreate, lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db)):
-    if payload.recipient_type.strip().lower() != "student":
-        raise HTTPException(status_code=400, detail="Tutors can message students only")
-    assigned = {item.module_code for item in lecturer.modules}
-    student_codes = {item.module_code for item in db.query(StudentModule).filter(StudentModule.student_id == payload.recipient_id).all()}
-    if not assigned.intersection(student_codes):
-        raise HTTPException(status_code=403, detail="You can message students enrolled in your modules only")
+    recipient_type = payload.recipient_type.strip().lower()
+    if recipient_type not in {"student", "landlord", "admin"}:
+        raise HTTPException(status_code=400, detail="Choose a learner, marketplace provider or administrator")
+    if recipient_type == "student":
+        assigned = {item.module_code for item in lecturer.modules}
+        student_codes = {item.module_code for item in db.query(StudentModule).filter(StudentModule.student_id == payload.recipient_id).all()}
+        if not assigned.intersection(student_codes):
+            raise HTTPException(status_code=403, detail="You can message students enrolled in your modules only")
     return _create_direct_message(db, "lecturer", lecturer.id, payload)
 
 
