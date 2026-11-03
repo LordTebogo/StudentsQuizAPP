@@ -38,10 +38,16 @@ test('sell or list opens one advertiser registration and uses its login for room
   for (const [name,value] of Object.entries({title:'Campus room',campus:'UL',area:'Mankweng',monthly_rent:'1500',description:'Near campus',contact:'0723456789'})) room.elements[name].value = value;
   room.dispatchEvent(new w.Event('submit', {bubbles:true,cancelable:true}));
   await tick();
+  assert.equal(posts.length,1);
+  w.document.querySelector('[data-confirm-listing]').click();
+  await tick();
   w.document.querySelector('[data-sell-kind="advert"]').click();
   const advert = w.document.getElementById('sellListingForm');
   for (const [name,value] of Object.entries({headline:'Textbooks',category:'Sales & retail',description:'Used books',contact:'0712345678'})) advert.elements[name].value = value;
   advert.dispatchEvent(new w.Event('submit', {bubbles:true,cancelable:true}));
+  await tick();
+  assert.equal(posts.length,2);
+  w.document.querySelector('[data-confirm-listing]').click();
   await tick();
   assert.deepEqual(posts.map(post => post.url), ['/marketing/landlords/register','/marketing/listings','/marketing/adverts']);
   assert.equal(posts[1].options.headers['X-Landlord-Token'], 'one-provider-token');

@@ -28,6 +28,20 @@ provider verification badge is shown without an implemented verification process
 Focused checks: `.venv/Scripts/python.exe -m unittest discover -s tests -p test_market_safety.py`
 and `node --test tests/market-safety.test.cjs`.
 
+## Preview before publishing
+
+New listings use **Preview listing** before any upload or publication request.
+The preview shows a market-style card, selected photos and public listing details.
+**Edit details** returns to the same form, retaining text, coordinates and selected
+files. Existing listings use **Preview changes** before saving their updates.
+
+Only **Publish listing**, **Submit room for approval** or **Save changes** in the
+preview sends the request. During saving, an animated indicator and status message
+are shown, repeat clicks and closing are blocked, and the result is confirmed after
+the server responds. Reduced-motion preferences disable the spinner animation.
+If saving fails, the preview and draft stay available for editing or retrying.
+Rooms still require administrator approval before appearing publicly.
+
 ## Room availability
 
 The default market order shows available rooms first, followed by other offers,
