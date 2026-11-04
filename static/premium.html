@@ -15,7 +15,7 @@
     .plan{background:white;border:1px solid #c9dcd2;border-radius:20px;padding:24px;box-shadow:0 12px 30px #163d3010}
     .plan h2{font-size:1.15rem;margin:0 0 18px}.price{font-size:2.6rem;font-weight:800;letter-spacing:-.06em;margin:0}
     .plan p{color:#526b65;min-height:48px}.plan button{width:100%;border:0;border-radius:11px;padding:14px;background:#007868;color:white;font:700 1rem system-ui;cursor:pointer}
-    .payment-options{display:grid;gap:9px}.plan button.google-pay{background:#172724}
+    .payment-options{display:grid;gap:9px}.plan button.paystack-pay{background:#172724}
     .plan button:disabled{opacity:.55;cursor:not-allowed}
     .status{background:#e1f3e9;border:1px solid #a8d5bd;border-radius:12px;padding:15px;line-height:1.5;max-width:700px}
     .spinner{display:inline-block;width:16px;height:16px;border:2px solid #ffffff80;border-top-color:white;border-radius:50%;animation:spin .7s linear infinite;vertical-align:-3px;margin-right:8px}
@@ -28,10 +28,10 @@
 <main>
   <a class="back" href="/students/lessons">← Back to lessons</a>
   <h1>Watch in Premium HD</h1>
-  <p class="intro">Choose the access period that suits you, then choose Google Pay or PayU. Each option unlocks higher quality video on your learner account.</p>
+  <p class="intro">Choose an access period and pay securely using the checkout options below. Each option unlocks higher quality video on your learner account.</p>
   <div id="status" class="status" role="status" aria-live="polite">Checking Premium HD availability…</div>
   <div class="plans" id="plans"></div>
-  <p class="intro">Google Pay opens Paystack’s secure checkout. Its wallet option appears when your device and saved card are eligible.</p>
+  <p class="intro">Paystack’s secure checkout offers the payment methods approved for Arounus, including eligible cards, bank payments and wallets. Available options depend on approval and your device.</p>
   <p class="intro">Your first 30 days cost R15; each additional 30-day purchase costs R50. You can also choose six months for R150 or one year for R400. All plans are prepaid and do not renew automatically.</p>
 </main>
 <script>
@@ -52,7 +52,7 @@ async function load(){
     const response=await fetch('/billing/premium/plans',{cache:'no-store',headers:token?{'X-Student-Token':token}:{}});
     if(!response.ok) throw Error('Plans could not be loaded.');
     const data=await response.json();
-    if(!payment) statusBox.textContent=(data.checkout_available||data.google_pay_available)?'Choose a plan and payment option.':'Checkout is being set up. Plans are shown below, but payment is not available yet.';
+    if(!payment) statusBox.textContent=(data.checkout_available||(data.paystack_available??data.google_pay_available))?'Choose a plan and payment option.':'Payments are not available yet. Please check back later.';
     if(!token) statusBox.innerHTML='Sign in as a learner to purchase Premium HD. <a href="/students">Go to learner sign in</a>.';
     const hasLifetime=Boolean(access?.lifetime);
     if(access?.active&&(!payment||payment==='pending'))statusBox.textContent=access.lifetime?'Your lifetime Premium HD access is active.':`Your Premium HD access is active${access.until?' until '+new Date(access.until).toLocaleDateString():''}.`;
@@ -68,15 +68,16 @@ async function load(){
           const result=await fetch('/billing/premium/checkout',{method:'POST',headers:{'Content-Type':'application/json','X-Student-Token':token},body:JSON.stringify({plan:plan.id,provider})});
           const body=await result.json();if(!result.ok||!body.checkout_url)throw Error(body.detail||'Checkout could not open.');
           location.assign(body.checkout_url);
-        }catch(error){statusBox.textContent=error.message||'Checkout could not open.';button.disabled=false;button.textContent=provider==='payu'?'Pay with PayU':'Continue to Google Pay';}
+        }catch(error){statusBox.textContent=error.message||'Checkout could not open.';button.disabled=false;button.textContent=provider==='payu'?'Pay with PayU':'Pay with Paystack';}
       }
       const button=document.createElement('button');button.type='button';button.textContent=hasLifetime?'Already active':'Pay with PayU';button.disabled=!token||!data.checkout_available||hasLifetime;
       button.addEventListener('click',()=>openCheckout(button,'payu'));
-      const google=document.createElement('button');google.type='button';google.className='google-pay';
-      google.textContent=hasLifetime?'Already active':data.google_pay_available?'Continue to Google Pay':'Google Pay · setup required';
-      google.disabled=!token||!data.google_pay_available||hasLifetime;
-      google.addEventListener('click',()=>openCheckout(google,'paystack'));
-      const options=document.createElement('div');options.className='payment-options';options.append(button,google);
+      const paystack=document.createElement('button');paystack.type='button';paystack.className='paystack-pay';
+      paystack.textContent=hasLifetime?'Already active':'Pay with Paystack';
+      paystack.disabled=!token||!(data.paystack_available??data.google_pay_available)||hasLifetime;
+      paystack.addEventListener('click',()=>openCheckout(paystack,'paystack'));
+      const options=document.createElement('div');options.className='payment-options';options.append(paystack);
+      if(data.checkout_available)options.append(button);
       card.append(title,price,description,options);plansBox.append(card);
     }
   }catch(error){statusBox.textContent=error.message||'Plans could not be loaded.';}

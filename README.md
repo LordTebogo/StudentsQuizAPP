@@ -175,7 +175,7 @@ python -m unittest discover -s tests -p test_app_traffic.py -v
 ## Media and marketplace sustainability
 
 - New lesson, community, and advert video uploads create a public copy capped at 480p. If the uploaded original is higher resolution, its HD copy is stored as a Cloudinary authenticated asset. Videos load only after a viewer chooses Play.
-- Learners can choose Premium HD access at `/premium`: R15 for their first 30 days, R50 for each additional 30-day purchase, R150 for six calendar months, or R400 for 365 days. The introductory price is available once per learner account; repeat introductory checkout requests reuse the same pending payment. Existing lifetime access and payments already in progress are honoured. These are prepaid periods and do not renew automatically. They can then choose PayU or Google Pay through Paystack's hosted checkout. PayU is enabled when `PUBLIC_BASE_URL` (HTTPS), `PAYU_SA_SAFEKEY`, `PAYU_SA_SOAP_USERNAME`, and `PAYU_SA_SOAP_PASSWORD` are configured. Set `PAYU_SA_ENVIRONMENT=staging` for PayU tests. Google Pay is enabled when the Paystack South Africa merchant account has Google Pay and Card active, `PAYSTACK_SECRET_KEY` is a live secret key, and `PAYSTACK_GOOGLE_PAY_ENABLED=true`. The server independently verifies either provider's payment reference, amount, currency and final transaction state before granting access. Admin grants in **Admin → All accounts** continue to work.
+- Learners can choose Premium HD access at `/premium`: R15 for their first 30 days, R50 for each additional 30-day purchase, R150 for six calendar months, or R400 for 365 days. The introductory price is available once per learner account; repeat introductory checkout requests reuse the same pending payment. Existing lifetime access and payments already in progress are honoured. These are prepaid periods and do not renew automatically. They can choose Paystack's hosted checkout or PayU. Paystack shows the channels approved in the merchant dashboard, such as eligible cards, bank payments, QR and wallets. PayU is enabled when `PUBLIC_BASE_URL` (HTTPS), `PAYU_SA_SAFEKEY`, `PAYU_SA_SOAP_USERNAME`, and `PAYU_SA_SOAP_PASSWORD` are configured. Set `PAYU_SA_ENVIRONMENT=staging` for PayU tests. Paystack is enabled only after activation approval, a live `PAYSTACK_SECRET_KEY`, `PUBLIC_BASE_URL=https://arounus.com`, and `PAYSTACK_ENABLED=true`. Leave it disabled while compliance is under review. The older `PAYSTACK_GOOGLE_PAY_ENABLED` switch remains a fallback only when `PAYSTACK_ENABLED` is absent. No channels restriction is sent to Paystack; its approved merchant preferences and device eligibility determine what appears. The server independently verifies either provider's payment reference, amount, currency and final transaction state before granting access. Admin grants in **Admin → All accounts** continue to work.
 - Community uploads remain limited to 50 MB per video and 10 videos per learner each month. Lesson and advert upload size limits remain in place.
 - Local market cards show unique views and an average rating out of five. A view is counted once per browser and listing using a long-lived cookie and a database uniqueness rule; clearing cookies or using another device can count separately. An approved learner can rate a listing once and update that rating later.
 - Feed images request smaller Cloudinary versions, while opening the gallery requests the full image. The admin media finance panel shows videos uploaded and unique listing views for a selected month, alongside Cloudinary's rolling usage report. Administrators record actual advert income and Cloudinary, hosting, or other costs in rand to see the monthly difference. Featured adverts still require administrator approval; payment arrangements are handled outside the app until a payment provider is connected.
@@ -670,3 +670,24 @@ Run frontend regression checks with `npm ci --prefix tests` then `npm test --pre
 
 
 Private messaging uses a shared conversation view across the marketplace, learner and tutor workspaces, administrator workspace, and learning-home inbox. Contacts show their profile photo (or initials), latest message and unread count. Select a name to open the conversation; phone layouts show one pane at a time. Only the opened messages are marked read, and unsent drafts survive switching conversations and failed sends within that view. Anonymous incoming messages never expose a sender photo or reply identity. Classroom group chat uses matching avatar and message-bubble styling and remains temporary.
+
+
+## Paystack payment confirmation
+
+Set the Paystack webhook URL to
+`https://arounus.com/billing/premium/paystack/webhook` under API Keys & Webhooks.
+If Paystack provides a webhook signing secret for the mode, save the complete
+`whsec_` value as `PAYSTACK_WEBHOOK_SECRET` in Render. The endpoint verifies the
+current `Paystack-Signature` timestamp and HMAC SHA512 before processing; events
+older than five minutes or carrying an invalid signature are rejected. While no
+signing secret is active, legacy `x-paystack-signature` delivery is supported with
+the API secret. Once `PAYSTACK_WEBHOOK_SECRET` is set, legacy-only delivery is
+rejected to prevent downgrade. Both secrets stay server-side.
+
+A `charge.success` event triggers an independent Paystack transaction verification.
+The reference, learner email, exact server price, ZAR currency and live mode must
+all match before Premium is granted. Duplicate delivery cannot extend access a
+second time. Temporary verification failures return an error so Paystack retries;
+other products' events are acknowledged without changing Premium. Test-mode
+payments never grant production access. Customer bank, card and wallet credentials
+are entered on Paystack's hosted checkout, not on Arounus.

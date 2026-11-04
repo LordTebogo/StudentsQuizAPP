@@ -1,6 +1,10 @@
-"""Paystack hosted checkout for South African Google Pay payments."""
+"""Paystack hosted checkout and signed payment events for South Africa."""
 
 import json
+import hashlib
+import hmac
+import re
+import time
 import os
 import urllib.error
 import urllib.parse
@@ -12,15 +16,51 @@ class PaystackError(Exception):
 
 
 def configured():
-    """Only expose live checkout after the merchant enables Google Pay."""
-    return (os.getenv("PAYSTACK_SECRET_KEY", "").startswith("sk_live_")
-            and os.getenv("PAYSTACK_GOOGLE_PAY_ENABLED", "").lower() == "true")
+    """Expose real checkout only after the merchant explicitly enables it."""
+    enabled = os.getenv("PAYSTACK_ENABLED")
+    if enabled is None:
+        # Compatibility with deployments using the former Google Pay switch.
+        enabled = os.getenv("PAYSTACK_GOOGLE_PAY_ENABLED", "false")
+    return (os.getenv("PAYSTACK_SECRET_KEY", "").strip().startswith("sk_live_")
+            and enabled.strip().lower() == "true")
+
+
+def verify_webhook_signature(body, signature=None, legacy_signature=None, now=None):
+    """Verify current timestamped signatures, or the legacy header until migration."""
+    signing_secret = os.getenv("PAYSTACK_WEBHOOK_SECRET", "").strip()
+    if signature or signing_secret:
+        if not signing_secret.startswith("whsec_") or not isinstance(signature, str):
+            return False
+        timestamps, signatures = [], []
+        for field in signature.split(","):
+            name, separator, value = field.strip().partition("=")
+            if not separator:
+                continue
+            if name == "t":
+                timestamps.append(value)
+            elif name == "v1":
+                key_id, separator, digest = value.partition(":")
+                if separator and key_id.startswith("whk_") and re.fullmatch(r"[0-9a-f]{128}", digest):
+                    signatures.append(digest)
+        if len(timestamps) != 1 or not re.fullmatch(r"[0-9]{1,12}", timestamps[0]):
+            return False
+        timestamp = int(timestamps[0])
+        if abs((time.time() if now is None else now) - timestamp) > 300:
+            return False
+        signed = timestamps[0].encode("ascii") + b"." + body
+        expected = hmac.new(signing_secret.encode(), signed, hashlib.sha512).hexdigest()
+        return any(hmac.compare_digest(expected, candidate) for candidate in signatures)
+    secret = os.getenv("PAYSTACK_SECRET_KEY", "").strip()
+    if not secret or not isinstance(legacy_signature, str) or not re.fullmatch(r"[0-9a-f]{128}", legacy_signature):
+        return False
+    expected = hmac.new(secret.encode(), body, hashlib.sha512).hexdigest()
+    return hmac.compare_digest(expected, legacy_signature)
 
 
 def _request(path, payload=None):
     secret = os.getenv("PAYSTACK_SECRET_KEY", "").strip()
     if not secret:
-        raise PaystackError("Google Pay checkout is not configured")
+        raise PaystackError("Paystack checkout is not configured")
     body = json.dumps(payload).encode("utf-8") if payload is not None else None
     request = urllib.request.Request("https://api.paystack.co" + path, body,
                                      {"Authorization": "Bearer " + secret, "Content-Type": "application/json"},
@@ -42,9 +82,8 @@ def start(reference, email, amount_cents, callback_url):
         "amount": amount_cents,
         "currency": "ZAR",
         "callback_url": callback_url,
-        # Google Pay appears on Paystack's hosted checkout when the account,
-        # card and device are eligible. It uses the card channel.
-        "channels": ["card"],
+        # Omit channels so hosted checkout uses the merchant's approved dashboard
+        # preferences, currency, and device eligibility (cards, banks and wallets).
     })
     url = data.get("authorization_url", "")
     parsed = urllib.parse.urlsplit(url)

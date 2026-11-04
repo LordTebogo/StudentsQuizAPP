@@ -124,7 +124,7 @@ from models import (
 from quiz_spreadsheet import QuizSpreadsheetError, parse_quiz_spreadsheet
 from cloudinary_utils import upload_image_bytes, upload_video_variants, premium_video_url, delete_lesson_video_variants
 from payu_checkout import PLANS as PREMIUM_PLANS, PayUError, configured as payu_configured, start as payu_start, verify as payu_verify
-from paystack_checkout import PaystackError, configured as paystack_configured, start as paystack_start, verify as paystack_verify
+from paystack_checkout import PaystackError, configured as paystack_configured, start as paystack_start, verify as paystack_verify, verify_webhook_signature as paystack_verify_webhook_signature
 
 # Matplotlib is loaded lazily for equation rendering. Give it a writable
 # cache in local and cloud environments where the default home may be read-only.
@@ -3440,6 +3440,8 @@ def premium_plans(
         "currency": "ZAR",
         "plans": plans,
         "checkout_available": bool(payu_configured() and os.getenv("PUBLIC_BASE_URL", "").startswith("https://")),
+        "paystack_available": bool(paystack_configured() and os.getenv("PUBLIC_BASE_URL", "").startswith("https://")),
+        # Older installed clients still read this field.
         "google_pay_available": bool(paystack_configured() and os.getenv("PUBLIC_BASE_URL", "").startswith("https://")),
     })
     response.headers["Cache-Control"] = "private, no-store"
@@ -3470,11 +3472,16 @@ def premium_checkout(payload: PremiumCheckoutRequest, student: Student = Depends
     if not plan:
         raise HTTPException(status_code=400, detail="Choose a valid Premium HD plan")
     if payload.provider not in ("payu", "paystack"):
-        raise HTTPException(status_code=400, detail="Choose PayU or Google Pay")
+        raise HTTPException(status_code=400, detail="Choose PayU or Paystack")
     # Serialize checkouts per account and reserve the first-month offer once.
     student = db.query(Student).filter(Student.id == student.id).populate_existing().with_for_update().one()
     if student.premium_lifetime:
         raise HTTPException(status_code=400, detail="Your lifetime Premium HD access is already active")
+    public_base = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
+    if (not public_base.startswith("https://") or
+            (payload.provider == "payu" and not payu_configured()) or
+            (payload.provider == "paystack" and not paystack_configured())):
+        raise HTTPException(status_code=503, detail="Premium checkout is being set up. Please try again later.")
     introductory = payload.plan == "monthly" and _premium_intro_available(db, student)
     pending_intro = db.query(PremiumPayment).filter(
         PremiumPayment.student_id == student.id,
@@ -3486,11 +3493,6 @@ def premium_checkout(payload: PremiumCheckoutRequest, student: Student = Depends
         if not pending_intro.checkout_url:
             raise HTTPException(status_code=409, detail="Your first-month checkout is still being prepared. Please try again shortly.")
         return JSONResponse({"checkout_url": pending_intro.checkout_url}, headers={"Cache-Control": "private, no-store"})
-    public_base = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
-    if (not public_base.startswith("https://") or
-            (payload.provider == "payu" and not payu_configured()) or
-            (payload.provider == "paystack" and not paystack_configured())):
-        raise HTTPException(status_code=503, detail="Premium checkout is being set up. Please try again later.")
     reference = "AR" + secrets.token_hex(16).upper()
     payment = PremiumPayment(student_id=student.id, merchant_reference=reference, plan="intro" if introductory else payload.plan,
                              provider=payload.provider, amount_cents=plan["intro_amount_cents"] if introductory else plan["amount_cents"], status="pending",
@@ -3522,7 +3524,7 @@ def premium_checkout(payload: PremiumCheckoutRequest, student: Student = Depends
 
 
 def _confirm_premium_payment(reference: str, db: Session) -> str:
-    payment = db.query(PremiumPayment).filter(PremiumPayment.merchant_reference == reference).with_for_update().first()
+    payment = db.query(PremiumPayment).filter(PremiumPayment.merchant_reference == reference).populate_existing().with_for_update().first()
     if not payment:
         return "unknown"
     if payment.status == "paid":
@@ -3594,6 +3596,44 @@ def premium_payment_return(reference: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Invalid payment reference")
     status = _confirm_premium_payment(reference, db)
     return RedirectResponse(url=f"/premium?payment={status}&reference={reference}", status_code=303)
+
+
+async def _paystack_webhook_body(request: Request) -> bytes:
+    body = bytearray()
+    async for chunk in request.stream():
+        body.extend(chunk)
+        if len(body) > 256 * 1024:
+            raise HTTPException(status_code=413, detail="Webhook payload too large")
+    return bytes(body)
+
+
+@app.post("/billing/premium/paystack/webhook", include_in_schema=False)
+def premium_paystack_webhook(request: Request, body: bytes = Depends(_paystack_webhook_body), db: Session = Depends(get_db)):
+    """Authenticate delivery and independently verify the transaction before credit."""
+    if not paystack_configured():
+        raise HTTPException(status_code=503, detail="Payments are not enabled")
+    if not paystack_verify_webhook_signature(body, request.headers.get("Paystack-Signature"), request.headers.get("x-paystack-signature")):
+        raise HTTPException(status_code=401, detail="Invalid webhook signature")
+    try:
+        event = json.loads(body)
+        if not isinstance(event, dict):
+            raise ValueError
+    except (ValueError, UnicodeDecodeError):
+        raise HTTPException(status_code=400, detail="Invalid webhook payload")
+    if event.get("event") != "charge.success":
+        return {"received": True}
+    data = event.get("data") or {}
+    reference = data.get("reference") if isinstance(data, dict) else None
+    if not isinstance(reference, str) or not re.fullmatch(r"AR[A-F0-9]{32}", reference):
+        return {"received": True}
+    row = db.query(PremiumPayment.id).filter(PremiumPayment.merchant_reference == reference, PremiumPayment.provider == "paystack").first()
+    if not row:
+        return {"received": True}
+    status = _confirm_premium_payment(reference, db)
+    if status == "pending":
+        # A temporary verification failure must be retried by Paystack.
+        raise HTTPException(status_code=503, detail="Payment verification is pending", headers={"Retry-After": "30"})
+    return {"received": True}
 
 
 @app.get("/billing/premium/paystack/return")
