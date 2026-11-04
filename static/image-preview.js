@@ -35,16 +35,26 @@
     img.style.width = ''; img.style.height = '';
     status.textContent = 'Loading photo…';
     img.alt = `${dialog.querySelector('[data-preview-title]').textContent}, photo ${index + 1} of ${gallery.length}`;
-    img.src = gallery[index];
+    if (window.ArounusPhotos) {
+      ArounusPhotos.show(img, gallery[index], {
+        onReady: () => { status.textContent = ''; sizePhoto(); },
+        onError: () => { status.textContent = 'This photo could not load. Try another photo or close the preview and try again.'; }
+      });
+    } else img.src = gallery[index];
     dialog.querySelector('[data-preview-count]').textContent = `${index + 1} of ${gallery.length}`;
     dialog.querySelectorAll('[data-preview-step]').forEach(button => { button.hidden = gallery.length < 2; });
     // Keep the listing gallery on the photo selected in the preview.
     document.querySelector(`#offerDetails [data-gallery-index="${index}"]`)?.click();
-    if (img.complete && img.naturalWidth) { status.textContent = ''; sizePhoto(); }
+    if (img.complete && img.naturalWidth && !img.hasAttribute('data-photo-pending')) { status.textContent = ''; sizePhoto(); }
   }
-  function changeZoom(value) { zoom = Math.max(1, Math.min(3, value)); sizePhoto(); }
-  img.addEventListener('load', () => { status.textContent = ''; sizePhoto(); });
-  img.addEventListener('error', () => { status.textContent = 'This photo could not load. Try another photo or close the preview and try again.'; });
+  function changeZoom(value) {
+    zoom = Math.max(1, Math.min(3, value));
+    sizePhoto();
+    // Download the original only when the learner asks to inspect it closely.
+    if (zoom > 1 && window.ArounusPhotos) ArounusPhotos.show(img, gallery[index], {full: true, onReady: sizePhoto});
+  }
+  img.addEventListener('load', () => { if (!img.hasAttribute('data-photo-pending')) { status.textContent = ''; sizePhoto(); } });
+  img.addEventListener('error', () => { if (!window.ArounusPhotos) status.textContent = 'This photo could not load. Try another photo or close the preview and try again.'; });
   document.addEventListener('click', event => {
     const trigger = event.target.closest('[data-image-preview]');
     if (!trigger) return;
@@ -56,6 +66,7 @@
     index = Number(details.dataset.galleryIndex || 0);
     if (!Number.isInteger(index) || index < 0 || index >= gallery.length) index = 0;
     dialog.querySelector('[data-preview-title]').textContent = details.querySelector('h2')?.textContent || 'Listing photos';
+    window.ArounusPhotos?.prepare(gallery, index);
     dialog.showModal();
     showPhoto(index);
   });
@@ -103,5 +114,5 @@
   stage.addEventListener('pointercancel', () => { drag = null; });
   window.addEventListener('resize', sizePhoto);
   document.getElementById('offerDialog')?.addEventListener('close', () => { if (dialog.open) dialog.close(); });
-  dialog.addEventListener('close', () => { drag = null; img.removeAttribute('src'); status.textContent = ''; });
+  dialog.addEventListener('close', () => { drag = null; window.ArounusPhotos?.cancel(img); img.removeAttribute('src'); status.textContent = ''; });
 })();
