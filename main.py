@@ -152,6 +152,8 @@ VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "").strip()
 VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "").strip()
 VAPID_SUBJECT = os.getenv("VAPID_SUBJECT", "mailto:admin@example.com").strip()
 GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY", "").strip()
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+GEMINI_QUIZ_MODEL = os.getenv("GEMINI_QUIZ_MODEL", "gemini-3.1-flash-lite").strip() or "gemini-3.1-flash-lite"
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
 OPENAI_QUIZ_MODEL = os.getenv("OPENAI_QUIZ_MODEL", "gpt-5.4-mini").strip() or "gpt-5.4-mini"
 MAX_COMMUNITY_VIDEOS_PER_MONTH = 10
@@ -2105,6 +2107,113 @@ def _response_output_text(response: dict) -> str:
     return "".join(parts)
 
 
+def _call_gemini_quiz(prompt: str, question_count: int) -> tuple[str, str]:
+    """Generate server-side structured output; credentials never appear in URLs."""
+    if not re.fullmatch(r"[A-Za-z0-9._-]+", GEMINI_QUIZ_MODEL):
+        raise HTTPException(status_code=503, detail="AI question generation needs a valid model configuration.")
+    config = {
+        "temperature": 0.3,
+        "candidateCount": 1,
+        "responseMimeType": "application/json",
+        "responseJsonSchema": _generated_quiz_schema(),
+        "maxOutputTokens": min(20000, 2000 + question_count * 600),
+    }
+    if GEMINI_QUIZ_MODEL.startswith("gemini-2.5-flash"):
+        config["thinkingConfig"] = {"thinkingBudget": 0}
+    request_body = {
+        "systemInstruction": {"parts": [{"text": "You are an expert assessment designer. Return only the requested structured quiz data."}]},
+        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "generationConfig": config,
+    }
+    request = urllib.request.Request(
+        f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_QUIZ_MODEL}:generateContent",
+        data=json.dumps(request_body).encode("utf-8"),
+        headers={"x-goog-api-key": GEMINI_API_KEY, "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=90) as response:
+            result = json.loads(response.read())
+    except urllib.error.HTTPError as exc:
+        # Never forward raw provider messages: they may contain credentials or notes.
+        if exc.code in {401, 403}:
+            detail = "AI question generation could not authenticate. Contact Arounus support."
+        elif exc.code == 429:
+            raise HTTPException(status_code=429, detail="AI question generation has reached its current usage limit. Try again later.", headers={"Retry-After": "60"}) from exc
+        elif exc.code == 404:
+            detail = "The configured AI model is unavailable. Contact Arounus support."
+        elif exc.code >= 500:
+            detail = "AI question generation is temporarily unavailable. Try again shortly."
+        else:
+            detail = "The AI service could not process this request. Try a shorter topic or fewer questions."
+        raise HTTPException(status_code=502, detail=detail) from exc
+    except (urllib.error.URLError, TimeoutError) as exc:
+        raise HTTPException(status_code=504, detail="Question generation timed out. Please try again.") from exc
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise HTTPException(status_code=502, detail="The AI service returned an unreadable response. Please try again.") from exc
+    try:
+        candidate = (result.get("candidates") or [])[0]
+        if candidate.get("finishReason") != "STOP":
+            raise ValueError("Incomplete or blocked output")
+        parts = (candidate.get("content") or {}).get("parts") or []
+        output_text = "".join(part["text"] for part in parts if isinstance(part.get("text"), str) and not part.get("thought"))
+        if not output_text:
+            raise ValueError("Empty output")
+    except (AttributeError, IndexError, KeyError, TypeError, ValueError) as exc:
+        raise HTTPException(status_code=502, detail="The AI service did not return a complete quiz. Try fewer questions or revise the topic.") from exc
+    return output_text, GEMINI_QUIZ_MODEL
+
+
+def _call_openai_quiz(prompt: str, question_count: int, lecturer_id: int) -> tuple[str, str]:
+    request_body = {
+        "model": OPENAI_QUIZ_MODEL,
+        "instructions": "You are an expert assessment designer. Return only the requested structured quiz data.",
+        "input": prompt,
+        "text": {
+            "format": {
+                "type": "json_schema",
+                "name": "generated_quiz",
+                "strict": True,
+                "schema": _generated_quiz_schema(),
+            }
+        },
+        "max_output_tokens": min(16000, 1800 + question_count * 450),
+        "store": False,
+        "safety_identifier": hashlib.sha256(f"lecturer:{lecturer_id}".encode()).hexdigest()[:32],
+    }
+    request = urllib.request.Request(
+        "https://api.openai.com/v1/responses",
+        data=json.dumps(request_body).encode("utf-8"),
+        headers={"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=90) as response:
+            result = json.loads(response.read())
+    except urllib.error.HTTPError as exc:
+        try:
+            upstream = json.loads(exc.read()).get("error", {}).get("message", "")
+        except (json.JSONDecodeError, AttributeError):
+            upstream = ""
+        detail = upstream or "The quiz-generation service rejected the request"
+        if exc.code == 401:
+            detail = "The quiz-generation API key is invalid"
+        elif exc.code == 429:
+            detail = "Quiz generation is temporarily at capacity. Please try again shortly"
+        elif exc.code >= 500:
+            detail = "The quiz-generation service is temporarily unavailable"
+        raise HTTPException(status_code=502, detail=detail) from exc
+    except (urllib.error.URLError, TimeoutError) as exc:
+        raise HTTPException(status_code=504, detail="Quiz generation timed out. Please try again.") from exc
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=502, detail="The quiz-generation service returned an unreadable response") from exc
+
+    output_text = _response_output_text(result)
+    if not output_text:
+        raise HTTPException(status_code=502, detail="The quiz-generation service returned no quiz")
+    return output_text, OPENAI_QUIZ_MODEL
+
+
 @app.post("/lecturer/quiz/generate")
 def lecturer_generate_quiz(
     payload: QuizGenerationInput,
@@ -2112,10 +2221,10 @@ def lecturer_generate_quiz(
     db: Session = Depends(get_db),
 ):
     """Generate an editable quiz draft. Nothing is saved or published here."""
-    if not OPENAI_API_KEY:
+    if not GEMINI_API_KEY and not OPENAI_API_KEY:
         raise HTTPException(
             status_code=503,
-            detail="AI quiz generation is not configured. Add OPENAI_API_KEY to the server environment.",
+            detail="AI question generation is not configured. Contact Arounus support.",
         )
     if len(payload.topic.strip()) < 3:
         raise HTTPException(status_code=400, detail="Describe the quiz topic or learning outcomes")
@@ -2166,52 +2275,10 @@ Rules:
 
 Lecturer source material:
 {payload.source_text.strip() or '(No source material supplied.)'}"""
-    request_body = {
-        "model": OPENAI_QUIZ_MODEL,
-        "instructions": "You are an expert assessment designer. Return only the requested structured quiz data.",
-        "input": prompt,
-        "text": {
-            "format": {
-                "type": "json_schema",
-                "name": "generated_quiz",
-                "strict": True,
-                "schema": _generated_quiz_schema(),
-            }
-        },
-        "max_output_tokens": min(16000, 1800 + payload.question_count * 450),
-        "store": False,
-        "safety_identifier": hashlib.sha256(f"lecturer:{lecturer.id}".encode()).hexdigest()[:32],
-    }
-    request = urllib.request.Request(
-        "https://api.openai.com/v1/responses",
-        data=json.dumps(request_body).encode("utf-8"),
-        headers={"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=90) as response:
-            result = json.loads(response.read())
-    except urllib.error.HTTPError as exc:
-        try:
-            upstream = json.loads(exc.read()).get("error", {}).get("message", "")
-        except (json.JSONDecodeError, AttributeError):
-            upstream = ""
-        detail = upstream or "The quiz-generation service rejected the request"
-        if exc.code == 401:
-            detail = "The quiz-generation API key is invalid"
-        elif exc.code == 429:
-            detail = "Quiz generation is temporarily at capacity. Please try again shortly"
-        elif exc.code >= 500:
-            detail = "The quiz-generation service is temporarily unavailable"
-        raise HTTPException(status_code=502, detail=detail) from exc
-    except (urllib.error.URLError, TimeoutError) as exc:
-        raise HTTPException(status_code=504, detail="Quiz generation timed out. Please try again.") from exc
-    except json.JSONDecodeError as exc:
-        raise HTTPException(status_code=502, detail="The quiz-generation service returned an unreadable response") from exc
-
-    output_text = _response_output_text(result)
-    if not output_text:
-        raise HTTPException(status_code=502, detail="The quiz-generation service returned no quiz")
+    if GEMINI_API_KEY:
+        output_text, model_used = _call_gemini_quiz(prompt, payload.question_count)
+    else:
+        output_text, model_used = _call_openai_quiz(prompt, payload.question_count, lecturer.id)
     try:
         generated = json.loads(output_text)
         raw_questions = generated.get("questions") or []
@@ -2224,7 +2291,10 @@ Lecturer source material:
         raise HTTPException(status_code=502, detail="The generator returned unexpected question types. Please try again.")
     for index, question in enumerate(questions, start=1):
         if question.type == "mcq" and (
-            len(question.options or []) != 4 or question.correct_answer not in (question.options or [])
+            len(question.options or []) != 4
+            or len({option.strip().casefold() for option in question.options or []}) != 4
+            or any(not option.strip() for option in question.options or [])
+            or question.correct_answer not in (question.options or [])
         ):
             raise HTTPException(status_code=502, detail=f"Generated question {index} has an invalid answer key. Please try again.")
     try:
@@ -2236,7 +2306,8 @@ Lecturer source material:
         "module_code": module_code,
         "questions": [question.model_dump() for question in questions],
         "num_questions": len(questions),
-        "model": OPENAI_QUIZ_MODEL,
+        "model": model_used,
+        "provider": "gemini" if GEMINI_API_KEY else "openai",
     }
 
 
