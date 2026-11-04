@@ -16,7 +16,7 @@ async function setup(clipboard){
   if(clipboard)Object.defineProperty(w.navigator,'clipboard',{value:{writeText:clipboard}});
   w.fetch=async url=>({ok:true,json:async()=>url.includes('adverts')?[{id:3,headline:'Tutorials <&>',campus:'Limpopo',category:'Tutoring'}]:[{id:7,title:'Nearby room',is_available:true}]});
   w.eval(script);await tick();
-  return {w,d,open:(key='offer-3')=>d.querySelector(`[data-share="${key}"]`).click()};
+  return {w,d,open:(key='offer-3')=>{d.querySelector(`[data-offer="${key}"]`).click();d.querySelector(`#offerDetails [data-share="${key}"]`).click()}};
 }
 test('Share directly offers Copy link and WhatsApp for the selected listing',async()=>{
   const {w,d,open}=await setup();try{

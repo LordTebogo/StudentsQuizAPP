@@ -6,6 +6,9 @@
   const categories = {rooms:'Rooms', transport:'Transport', items:'Items for sale', services:'Other services'};
   const classify = ad => /transport|ride|shuttle|courier|delivery/i.test(ad.category) ? 'transport' : /sales|retail|technology|second.?hand|textbook/i.test(ad.category) ? 'items' : 'services';
   let entries = [], category = 'all', failures = 0, loading = false, openKey = '';
+  let closingFromHistory = false;
+  const bookmarkIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4Z"/></svg>';
+  const pageTitle = document.title;
   try { $('campus').value = localStorage.getItem('marketCampus') || ''; } catch {}
 
   const params = new URLSearchParams(location.search);
@@ -83,7 +86,7 @@
     hoverTimers.delete(card);
     const entry = entries.find(item => item.key === card.dataset.entryKey);
     const img = card.querySelector('.campus-card-media img');
-    if (img && entry && image(entry)) img.src = window.arounusThumb?.(image(entry), 560) || image(entry);
+    if (img && entry && image(entry)) img.src = window.arounusThumb?.(image(entry), 360) || image(entry);
   }
   const roomPrice = entry => entry.monthly_rent !== null && entry.monthly_rent !== undefined && Number.isFinite(Number(entry.monthly_rent)) ? `R${Number(entry.monthly_rent).toLocaleString('en-ZA')} / month` : 'Price on request';
   const priceValue = entry => entry.kind === 'rooms' ? entry.monthly_rent : entry.price;
@@ -137,7 +140,7 @@
     render();
   });
 
-  function syncUrl() {
+  function syncUrl(mode = 'replace') {
     const next = new URLSearchParams(location.search);
     const set = (key, value) => { if (value) next.set(key, value); else next.delete(key); };
     set('campus', $('campus').value.trim());
@@ -148,7 +151,7 @@
     set('listing', openKey);
     set('saved', savedOnly ? '1' : '');
     const query = next.toString();
-    try { history.replaceState(null, '', location.pathname + (query ? '?' + query : '') + location.hash); } catch {}
+    try { history[mode === 'push' ? 'pushState' : 'replaceState'](mode === 'push' ? {arounusListing: true} : history.state, '', location.pathname + (query ? '?' + query : '') + location.hash); } catch {}
   }
 
   function render() {
@@ -200,27 +203,37 @@
         : '';
     const savedEmpty = `<div class="market-empty"><h3>${saved.size && failures ? 'Saved listings could not be loaded' : saved.size ? 'Saved listings are no longer available' : 'No saved listings yet'}</h3><p>${saved.size && failures ? 'Retry loading to check your saved listings. They are still saved in this browser.' : saved.size ? 'A saved listing may have been removed or unpublished. Browse current listings to find more.' : 'Tap Save on any listing to keep it here. Your saved items stay on this browser and device.'}</p><button type="button" data-show-all-listings>Browse all listings</button></div>`;
     $('campusListings').innerHTML = demoNotice + (filtered.map(entry => {
-      const title = entry.title || entry.headline, src = image(entry), seller = sellerName(entry), posted = postedLabel(entry), demo = isDemo(entry);
-      const meta = [entry.campus || 'Location not specified', entry.area, posted].filter(Boolean).join(' · ');
+      const title = entry.title || entry.headline, src = image(entry), demo = isDemo(entry);
       const savedNow = saved.has(entry.key);
-      return `<article class="campus-card" data-demo="${demo}" data-market-kind="${entry.kind === 'rooms' ? 'rooms' : 'adverts'}" data-market-id="${entry.id}" data-market-views="${entry.views || 0}" data-market-rating="${entry.rating || ''}" data-market-rating-count="${entry.rating_count || 0}" data-view-on-open="true" data-entry-key="${esc(entry.key)}"><button type="button" class="campus-card-media" data-offer="${esc(entry.key)}" aria-label="View ${esc(title)} and its photos${entry.kind === 'rooms' ? ` — ${isFilledRoom(entry) ? 'Filled' : 'Available'}` : ''}">${src ? `<img src="${esc(window.arounusThumb?.(src, 560) || src)}" alt="${esc(title)}" loading="lazy">` : `<span>${categories[entry.kind]}</span>`}${photos(entry).length > 1 ? `<small class="photo-count">${photos(entry).length} photos</small>` : ''}${roomAvailability(entry)}</button><div class="campus-card-body"><span class="card-kind">${categories[entry.kind]}${sponsored(entry) ? ' · Sponsored' : ''}${demo ? ' · Example only' : ''}</span><h3>${esc(title)}</h3><p class="card-meta">${esc(meta)}</p><p class="card-price">${esc(offerPrice(entry))}</p>${seller ? `<p class="card-provider">${esc(seller)}</p>` : ''}<div class="card-tools"><button type="button" class="card-tool" data-save="${esc(entry.key)}" aria-pressed="${savedNow}" aria-label="${savedNow ? 'Remove from saved: ' : 'Save '}${esc(title)}">${savedNow ? 'Saved' : 'Save'}</button><button type="button" class="card-tool" data-share="${esc(entry.key)}" aria-label="Share ${esc(title)}">Share</button>${!demo ? `<a class="card-tool" href="/trust?listing=${entry.kind === 'rooms' ? 'room' : 'offer'}-${entry.id}#report" data-report-listing="${entry.kind === 'rooms' ? 'room' : 'offer'}-${entry.id}" data-report-title="${esc(title)}" aria-label="Report ${esc(title)}">Report</a>` : ''}</div><button type="button" class="card-action" data-offer="${esc(entry.key)}">View ${entry.kind === 'rooms' ? 'room' : 'listing'} →</button></div></article>`;
+      return `<article class="campus-card" data-demo="${demo}" data-market-kind="${entry.kind === 'rooms' ? 'rooms' : 'adverts'}" data-market-id="${entry.id}" data-market-views="${entry.views || 0}" data-market-rating="${esc(entry.rating || '')}" data-market-rating-count="${entry.rating_count || 0}" data-rating-readonly="true" data-view-on-open="true" data-entry-key="${esc(entry.key)}">
+        <button type="button" class="campus-card-media" data-offer="${esc(entry.key)}" aria-label="View ${esc(title)} and its photos${entry.kind === 'rooms' ? ` — ${isFilledRoom(entry) ? 'Filled' : 'Available'}` : ''}">${src ? `<img src="${esc(window.arounusThumb?.(src, 360) || src)}" alt="${esc(title)}" loading="lazy">` : `<span>${categories[entry.kind]}</span>`}${roomAvailability(entry)}</button>
+        <button type="button" class="card-save" data-save="${esc(entry.key)}" aria-pressed="${savedNow}" aria-label="${savedNow ? 'Remove from saved: ' : 'Save '}${esc(title)}">${bookmarkIcon}</button>
+        <div class="campus-card-body"><span class="card-kind">${categories[entry.kind]}${sponsored(entry) ? ' · Sponsored' : ''}${demo ? ' · Example only' : ''}</span><h3><button type="button" class="card-title" data-offer="${esc(entry.key)}">${esc(title)}</button></h3><p class="card-price">${esc(offerPrice(entry))}</p></div></article>`;
     }).join('') || (loading || failures === 2 ? '' : savedOnly ? savedEmpty : '<div class="market-empty"><h3>No listings here yet</h3><p>Try another location or category, or be the first to list something.</p><button type="button" data-open-sell>Sell or list near you →</button></div>'));
     $('campusListings').querySelectorAll('img').forEach(img => img.addEventListener('error', () => { img.replaceWith(document.createTextNode('Photo unavailable')); }));
     syncUrl();
   }
 
-  function openOffer(entry) {
+  function openOffer(entry, fromHistory = false) {
     if (!entry) return;
     const gallery = photos(entry), url = safeUrl(entry.website_url), providerId = entry.kind === 'rooms' ? entry.landlord?.id : entry.provider_id;
     const availability = entry.service_availability || {};
     const availabilityHtml = entry.kind === 'services' && Object.keys(availability).length ? `<section class="service-availability"><h3>Service availability</h3>${availability.opening_hours ? `<p>Opening hours: ${esc(availability.opening_hours)}</p>` : ''}${availability.available_dates?.length ? `<p>Available dates: ${availability.available_dates.map(esc).join(', ')}</p>` : ''}${availability.available_times?.length ? `<p>Available times: ${availability.available_times.map(esc).join(', ')}</p>` : ''}${availability.closed_dates?.length ? `<p>Closed dates: ${availability.closed_dates.map(esc).join(', ')}</p>` : ''}${availability.booked_until ? `<p>Fully booked until: ${esc(availability.booked_until)}</p>` : ''}${availability.consultations ? `<p>Consultations: ${availability.consultation_minutes ? `${esc(availability.consultation_minutes)} minutes` : 'Available'}${availability.consultation_mode ? ` · ${esc(availability.consultation_mode)}` : ''}. Contact the provider to arrange a time.</p>` : ''}</section>` : '';
     const seller = sellerName(entry), posted = postedLabel(entry);
-    $('offerDetails').innerHTML = `<span class="eyebrow">${categories[entry.kind]}${sponsored(entry) ? ' · Sponsored' : ''}${isDemo(entry) ? ' · Example only' : ''}</span><h2 id="offerTitle">${esc(entry.title || entry.headline)}</h2>${gallery.length ? '' : roomAvailability(entry)}${isFilledRoom(entry) ? '<p>This room is filled and is not currently available. Browse the green Available listings for rooms you can enquire about.</p>' : ''}${gallery.length ? `<div class="offer-gallery"><div class="room-photo"><img class="offer-gallery-main" src="${esc(gallery[0])}" alt="Photo 1 of ${gallery.length}: ${esc(entry.title || entry.headline)}">${roomAvailability(entry)}</div><div class="offer-gallery-controls">${gallery.length > 1 ? `<button type="button" data-gallery-step="-1" aria-label="Previous photo">‹</button><span data-gallery-count>1 of ${gallery.length}</span><button type="button" data-gallery-step="1" aria-label="Next photo">›</button>` : ''}</div><div class="offer-gallery-thumbs">${gallery.map((src, index) => `<button type="button" data-gallery-index="${index}" aria-label="Show photo ${index + 1}" aria-pressed="${index === 0}"><img src="${esc(window.arounusThumb?.(src, 160) || src)}" alt=""></button>`).join('')}</div></div>` : ''}${entry.video_url ? `<video controls preload="none" data-free-video="${esc(safeUrl(entry.video_url))}" data-video-kind="advert" data-video-id="${entry.id}" data-premium-available="${Boolean(entry.premium_available)}" style="width:100%;max-height:320px"></video>` : ''}<p>${esc(entry.campus || 'Location not specified')}${entry.area ? ' · ' + esc(entry.area) : ''}${posted ? ' · ' + esc(posted) : ''}</p><strong>${esc(offerPrice(entry))}</strong>${seller ? `<p>Listed by ${esc(seller)}</p>` : ''}${entry.service_detail ? `<p>Activity or service: ${esc(entry.service_detail)}</p>` : ''}<p>${esc(entry.description)}</p>${isFilledRoom(entry) && entry.booked_until ? `<p>Fully booked until: ${esc(entry.booked_until)}</p>` : ''}${entry.stock_quantity != null ? `<p>${entry.stock_quantity === 0 ? 'Out of stock' : `Stock available: ${esc(entry.stock_quantity)}`}</p>` : ''}${availabilityHtml}${!isDemo(entry) ? `<p>Provider contact: ${esc(entry.contact || 'No contact details supplied.')}</p><p class="market-contact-note">Use the provider’s listed contact details directly, or sign in to message them on Arounus. In-app messages are linked to your account, not anonymous. A phone, WhatsApp or website link takes contact outside Arounus. <a href="/trust#contact">How contact works</a>.</p><p class="market-verification-note">Provider identity, ownership and availability are not independently verified. ${entry.kind === 'rooms' ? 'Rooms are reviewed for publication; approval is not a property inspection.' : 'Other listings can publish automatically.'} <a href="/trust#verification">What we check</a>.</p><p><a href="/trust?listing=${entry.kind === 'rooms' ? 'room' : 'offer'}-${entry.id}#report" data-report-listing="${entry.kind === 'rooms' ? 'room' : 'offer'}-${entry.id}" data-report-title="${esc(entry.title || entry.headline)}">Report stale or suspicious listing</a></p>` : ''}${safeUrl(entry.directions_url) ? `<p><a href="${esc(entry.directions_url)}" target="_blank" rel="noopener noreferrer">Directions ↗</a></p>` : ''}${url ? `<p><a href="${esc(url)}" target="_blank" rel="noopener noreferrer">Visit seller website ↗</a></p>` : ''}${providerId && !isDemo(entry) ? `<p><button type="button" data-contact-provider="${Number(providerId)}" data-provider-name="${esc(entry.business_name || entry.landlord?.name || 'provider')}" data-provider-image="${esc(entry.landlord?.profile_image_url || entry.profile_image_url || '')}">Message provider</button></p>` : ''}<p><a href="${listingUrl(entry)}">Open and share this listing</a></p><p class="offer-safety">Never pay a deposit before you have seen the room or item. Read the <a href="/trust#safety">safety guidance</a>.</p>`;
+    const card = [...$('campusListings').querySelectorAll('.campus-card')].find(item => item.dataset.entryKey === entry.key);
+    const rating = card?.dataset.marketRating || entry.rating || '';
+    const ratingCount = card?.dataset.marketRatingCount || entry.rating_count || 0;
+    $('offerDetails').innerHTML = `<article class="offer-detail" data-demo="${isDemo(entry)}" data-market-kind="${entry.kind === 'rooms' ? 'rooms' : 'adverts'}" data-market-id="${entry.id}" data-market-rating="${esc(rating)}" data-market-rating-count="${esc(ratingCount)}" data-view-on-open="true"><div class="offer-detail-body"><span class="eyebrow">${categories[entry.kind]}${sponsored(entry) ? ' · Sponsored' : ''}${isDemo(entry) ? ' · Example only' : ''}</span><h2 id="offerTitle">${esc(entry.title || entry.headline)}</h2>${gallery.length ? '' : roomAvailability(entry)}${isFilledRoom(entry) ? '<p>This room is filled and is not currently available. Browse the green Available listings for rooms you can enquire about.</p>' : ''}${gallery.length ? `<div class="offer-gallery"><div class="room-photo"><img class="offer-gallery-main" src="${esc(gallery[0])}" alt="Photo 1 of ${gallery.length}: ${esc(entry.title || entry.headline)}">${roomAvailability(entry)}</div><div class="offer-gallery-controls">${gallery.length > 1 ? `<button type="button" data-gallery-step="-1" aria-label="Previous photo">‹</button><span data-gallery-count>1 of ${gallery.length}</span><button type="button" data-gallery-step="1" aria-label="Next photo">›</button>` : ''}</div><div class="offer-gallery-thumbs">${gallery.map((src, index) => `<button type="button" data-gallery-index="${index}" aria-label="Show photo ${index + 1}" aria-pressed="${index === 0}"><img src="${esc(window.arounusThumb?.(src, 160) || src)}" alt=""></button>`).join('')}</div></div>` : ''}${entry.video_url ? `<video controls preload="none" data-free-video="${esc(safeUrl(entry.video_url))}" data-video-kind="advert" data-video-id="${entry.id}" data-premium-available="${Boolean(entry.premium_available)}" style="width:100%;max-height:320px"></video>` : ''}<p>${esc(entry.campus || 'Location not specified')}${entry.area ? ' · ' + esc(entry.area) : ''}${posted ? ' · ' + esc(posted) : ''}</p><p class="offer-price">${esc(offerPrice(entry))}</p><div class="offer-actions"><button type="button" data-save="${esc(entry.key)}" aria-pressed="${saved.has(entry.key)}">${saved.has(entry.key) ? 'Saved' : 'Save listing'}</button><button type="button" data-share="${esc(entry.key)}">Share</button></div>${seller ? `<p>Listed by ${esc(seller)}</p>` : ''}${entry.service_detail ? `<p>Activity or service: ${esc(entry.service_detail)}</p>` : ''}<p>${esc(entry.description)}</p>${isFilledRoom(entry) && entry.booked_until ? `<p>Fully booked until: ${esc(entry.booked_until)}</p>` : ''}${entry.stock_quantity != null ? `<p>${entry.stock_quantity === 0 ? 'Out of stock' : `Stock available: ${esc(entry.stock_quantity)}`}</p>` : ''}${availabilityHtml}${!isDemo(entry) ? `<p>Provider contact: ${esc(entry.contact || 'No contact details supplied.')}</p><p class="market-contact-note">Use the provider’s listed contact details directly, or sign in to message them on Arounus. In-app messages are linked to your account, not anonymous. A phone, WhatsApp or website link takes contact outside Arounus. <a href="/trust#contact">How contact works</a>.</p><p class="market-verification-note">Provider identity, ownership and availability are not independently verified. ${entry.kind === 'rooms' ? 'Rooms are reviewed for publication; approval is not a property inspection.' : 'Other listings can publish automatically.'} <a href="/trust#verification">What we check</a>.</p><p><a href="/trust?listing=${entry.kind === 'rooms' ? 'room' : 'offer'}-${entry.id}#report" data-report-listing="${entry.kind === 'rooms' ? 'room' : 'offer'}-${entry.id}" data-report-title="${esc(entry.title || entry.headline)}">Report stale or suspicious listing</a></p>` : ''}${safeUrl(entry.directions_url) ? `<p><a href="${esc(entry.directions_url)}" target="_blank" rel="noopener noreferrer">Directions ↗</a></p>` : ''}${url ? `<p><a href="${esc(url)}" target="_blank" rel="noopener noreferrer">Visit seller website ↗</a></p>` : ''}${providerId && !isDemo(entry) ? `<p><button type="button" data-contact-provider="${Number(providerId)}" data-provider-name="${esc(entry.business_name || entry.landlord?.name || 'provider')}" data-provider-image="${esc(entry.landlord?.profile_image_url || entry.profile_image_url || '')}">Message provider</button></p>` : ''}<p><a href="${listingUrl(entry)}">Open and share this listing</a></p><p class="offer-safety">Never pay a deposit before you have seen the room or item. Read the <a href="/trust#safety">safety guidance</a>.</p></div></article>`;
     $('offerDetails').dataset.gallery = JSON.stringify(gallery);
     $('offerDetails').dataset.galleryIndex = '0';
+    const opening = !$('offerDialog').open;
     openKey = entry.key;
-    syncUrl();
-    $('offerDialog').showModal();
+    syncUrl(opening && !fromHistory ? 'push' : 'replace');
+    document.title = `${entry.title || entry.headline} | Arounus`;
+    document.documentElement.classList.add('listing-open');
+    if (opening) $('offerDialog').showModal();
+    $('offerDialog').scrollTop = 0;
+    document.dispatchEvent(new Event('market-listing-opened'));
   }
 
   async function load() {
@@ -243,7 +256,7 @@
     loading = false; render();
     if (deepLinkKey) {
       const target = entries.find(entry => entry.key === deepLinkKey);
-      if (target) openOffer(target);
+      if (target) openOffer(target, true);
     }
   }
 
@@ -264,14 +277,14 @@
     let index = 0;
     hoverTimers.set(card, setInterval(() => {
       index = (index + 1) % gallery.length;
-      img.src = window.arounusThumb?.(gallery[index], 560) || gallery[index];
+      img.src = window.arounusThumb?.(gallery[index], 360) || gallery[index];
     }, 1700));
   });
   $('campusListings').addEventListener('pointerout', event => {
     const card = event.target.closest('.campus-card');
     if (card && !card.contains(event.relatedTarget)) stopPreview(card);
   });
-  $('campusListings').addEventListener('click', event => {
+  function handleListingClick(event) {
     if (event.target.closest('[data-show-all-listings]')) { showSaved(false); $('showSavedListings').focus(); return; }
     const saveButton = event.target.closest('[data-save]');
     if (saveButton) {
@@ -280,11 +293,15 @@
       if (saved.has(key)) saved.delete(key); else saved.add(key);
       persistSaved();
       syncSavedButton();
-      if (savedOnly) { render(); $('showSavedListings').focus(); return; }
       const on = saved.has(key);
-      saveButton.setAttribute('aria-pressed', String(on));
-      saveButton.textContent = on ? 'Saved' : 'Save';
-      saveButton.setAttribute('aria-label', `${on ? 'Remove from saved: ' : 'Save '}${saveButton.closest('.campus-card')?.querySelector('h3')?.textContent || 'listing'}`);
+      const entry = entries.find(item => item.key === key);
+      document.querySelectorAll('[data-save]').forEach(button => {
+        if (button.dataset.save !== key) return;
+        button.setAttribute('aria-pressed', String(on));
+        if (!button.classList.contains('card-save')) button.textContent = on ? 'Saved' : 'Save listing';
+        button.setAttribute('aria-label', `${on ? 'Remove from saved: ' : 'Save '}${entry?.title || entry?.headline || 'listing'}`);
+      });
+      if (savedOnly) { render(); if (!$('offerDialog').open) $('showSavedListings').focus(); }
       return;
     }
     const shareButton = event.target.closest('[data-share]');
@@ -299,7 +316,9 @@
     const card = event.target.closest('.campus-card');
     if (!card) return;
     openOffer(entries.find(item => item.key === card.dataset.entryKey));
-  });
+  }
+  $('campusListings').addEventListener('click', handleListingClick);
+  $('offerDetails').addEventListener('click', handleListingClick);
   $('offerDetails').addEventListener('click', event => {
     const selected = event.target.closest('.offer-gallery-thumbs [data-gallery-index]'), step = event.target.closest('.offer-gallery-controls [data-gallery-step]');
     if (!selected && !step) return;
@@ -315,7 +334,29 @@
     $('offerDetails').querySelectorAll('[data-gallery-index]').forEach(button => button.setAttribute('aria-pressed', String(Number(button.dataset.galleryIndex) === index)));
   });
   $('closeOffer').addEventListener('click', () => $('offerDialog').close());
-  $('offerDialog').addEventListener('close', () => { openKey = ''; syncUrl(); });
+  $('offerDialog').addEventListener('close', () => {
+    if (shareDialog.open) shareDialog.close();
+    openKey = '';
+    document.title = pageTitle;
+    document.documentElement.classList.remove('listing-open');
+    $('offerDetails').querySelectorAll('video').forEach(video => video.pause());
+    if (closingFromHistory) { closingFromHistory = false; return; }
+    if (history.state?.arounusListing) history.back(); else syncUrl();
+  });
+  window.addEventListener('popstate', () => {
+    const key = new URLSearchParams(location.search).get('listing');
+    const entry = entries.find(item => item.key === key);
+    if (entry) openOffer(entry, true);
+    else if ($('offerDialog').open) {
+      closingFromHistory = true;
+      $('offerDialog').close();
+    }
+  });
+  document.addEventListener('market-rating-updated', event => {
+    const update = event.detail;
+    const entry = entries.find(item => String(item.id) === update.id && (item.kind === 'rooms' ? 'rooms' : 'adverts') === update.kind);
+    if (entry) { entry.rating = update.rating; entry.rating_count = update.count; }
+  });
   document.addEventListener('market-listing-changed', load);
   load();
 })();

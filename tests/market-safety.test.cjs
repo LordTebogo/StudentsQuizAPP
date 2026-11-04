@@ -15,12 +15,13 @@ function setup(fetch){
   w.eval(safety);
   return {w,d:w.document};
 }
-test('grid report opens a prefilled guest form without opening listing; content is escaped',async()=>{
+test('listing detail report opens a prefilled guest form and escapes seller content',async()=>{
   const {w,d}=setup(async url=>({ok:true,json:async()=>url.includes('adverts')?[]:[{id:7,title:'Room <script>bad</script>',is_available:true,is_verified:true,landlord:{name:'Provider',verified:true}}]}));
   try{
     w.eval(home); await tick();
-    d.querySelector('[data-report-listing]').click();
-    assert.equal(d.getElementById('offerDialog').open,false);
+    d.querySelector('[data-offer="room-7"]').click();
+    d.querySelector('#offerDetails [data-report-listing]').click();
+    assert.equal(d.getElementById('offerDialog').open,true);
     assert.equal(d.getElementById('marketReportDialog').open,true);
     assert.equal(d.querySelector('.market-report-name').textContent,'Room <script>bad</script>');
     assert.equal(d.querySelector('.market-report-name script'),null);
