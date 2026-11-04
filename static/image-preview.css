@@ -1,0 +1,23 @@
+.campus-home .offer-photo-open { position: relative; display: block; width: 100%; margin: 0; padding: 0; border: 0; border-radius: 10px; overflow: hidden; background: #e4f2e9; cursor: zoom-in; }
+.offer-photo-open > span { position: absolute; right: 10px; bottom: 10px; padding: 6px 10px; border-radius: 20px; color: white; background: #102a25df; font: 600 12px/1.4 Arial, sans-serif; }
+.image-preview { position: fixed; inset: 0; width: 100%; height: 100%; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; border-radius: 0; background: #101917; color: #fff; overflow: hidden; }
+.image-preview[open] { display: flex; flex-direction: column; }
+.image-preview::backdrop { background: #101917; }
+.image-preview-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: max(8px, env(safe-area-inset-top)) 16px 8px; background: #101917; }
+.image-preview-header > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 15px/1.4 Arial, sans-serif; }
+.image-preview button { display: inline-grid; place-items: center; flex-shrink: 0; min-width: 44px; min-height: 44px; margin: 0; padding: 8px 12px; border: 1px solid #6e827c; border-radius: 8px; background: #20352e; color: #fff; font: 600 22px/1.2 Arial, sans-serif; cursor: pointer; }
+.image-preview button:disabled { opacity: .4; cursor: default; }
+.image-preview :focus-visible { outline: 3px solid #9de2c8; outline-offset: 2px; }
+.image-preview-stage { position: relative; flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; touch-action: pan-y pinch-zoom; }
+.image-preview-canvas { display: grid; place-items: center; width: max-content; height: max-content; min-width: 100%; min-height: 100%; }
+.image-preview-canvas img { display: block; max-width: 100vw; max-height: 100dvh; object-fit: contain; cursor: zoom-in; user-select: none; }
+.image-preview-stage.is-zoomed { touch-action: pan-x pan-y pinch-zoom; }
+.image-preview-stage.is-zoomed img { max-width: none; max-height: none; cursor: grab; }
+.image-preview-stage.is-zoomed img:active { cursor: grabbing; }
+.image-preview-status { position: absolute; left: 16px; right: 16px; top: 16px; margin: 0; padding: 12px; border-radius: 8px; background: #101917e8; color: #fff; text-align: center; }
+.image-preview-status:empty { display: none; }
+.image-preview-controls { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 12px 16px max(12px, env(safe-area-inset-bottom)); background: #101917; }
+.image-preview-paging, .image-preview-zoom { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.image-preview-paging span { min-width: 64px; text-align: center; font: 500 14px/1.4 Arial, sans-serif; }
+.image-preview [data-preview-fit] { font-size: 14px; }
+@media(max-width: 420px) { .image-preview-controls { justify-content: center; gap: 8px 16px; padding-left: 8px; padding-right: 8px; } .image-preview-header { padding-left: 12px; padding-right: 12px; } }
