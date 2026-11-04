@@ -130,25 +130,24 @@ from paystack_checkout import PaystackError, configured as paystack_configured, 
 # cache in local and cloud environments where the default home may be read-only.
 os.environ.setdefault("MPLCONFIGDIR", os.path.join(tempfile.gettempdir(), "nucleocampus-matplotlib"))
 
-# Lecturer-only areas (uploading quizzes, viewing/marking submissions) require
-# this PIN. It's sent as a header (X-Lecturer-Pin) on those requests.
-# This is intentionally simple (a shared PIN, not per-user accounts).
-# For anything beyond a small trusted class, move this to an environment
-# variable too (os.getenv("LECTURER_PIN", "90435")) so it isn't baked into
-# the deployed code.
+# Production authentication fails closed when secrets are absent or unsafe.
+from session_security import clean_setting, production_environment, load_session_secrets, issue_token, verify_token
+
+
 def _clean_secret_setting(name: str, default: str) -> str:
-    """Normalise dashboard-entered secrets without ever logging their value."""
-    value = os.getenv(name, default).strip()
-    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
-        value = value[1:-1].strip()
-    return value or default
+    return clean_setting(os.getenv(name)) or default
 
 
 LECTURER_PIN = _clean_secret_setting("LECTURER_PIN", "90435")
-LECTURER_SESSION_SECRET = os.getenv("LECTURER_SESSION_SECRET", LECTURER_PIN)
-STUDENT_SESSION_SECRET = os.getenv("STUDENT_SESSION_SECRET", LECTURER_SESSION_SECRET)
-SRC_SESSION_SECRET = os.getenv("SRC_SESSION_SECRET", STUDENT_SESSION_SECRET)
-LANDLORD_SESSION_SECRET = os.getenv("LANDLORD_SESSION_SECRET", STUDENT_SESSION_SECRET)
+if production_environment(os.environ) and (LECTURER_PIN == "90435" or len(LECTURER_PIN) < 8):
+    raise RuntimeError("Set LECTURER_PIN to a new private value of at least 8 characters before starting production.")
+# Fingerprints of old public example keys: copied examples are compromised too.
+_PUBLIC_SESSION_KEY_FINGERPRINTS = ('a1ba71b130ca352ae0f64b4c72a7c43ac4865d3055478b68bebacbb0088451f4', '2c302e048ce9f6f924bc04127196b00b72138f4214d07c723f02d3bf94fb4ccb')
+_session_secrets = load_session_secrets(os.environ, _PUBLIC_SESSION_KEY_FINGERPRINTS)
+LECTURER_SESSION_SECRET = _session_secrets["lecturer"]
+STUDENT_SESSION_SECRET = _session_secrets["student"]
+SRC_SESSION_SECRET = _session_secrets["src"]
+LANDLORD_SESSION_SECRET = _session_secrets["landlord"]
 VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "").strip()
 VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "").strip()
 VAPID_SUBJECT = os.getenv("VAPID_SUBJECT", "mailto:admin@example.com").strip()
@@ -1001,94 +1000,46 @@ def _password_matches(password: str, stored: str) -> bool:
     return any(hmac.compare_digest(_password_hash(candidate, salt), stored) for candidate in candidates)
 
 
-def _issue_lecturer_token(lecturer_id: int) -> str:
-    expires = int((datetime.now(timezone.utc) + timedelta(hours=12)).timestamp())
-    payload = f"{lecturer_id}:{expires}".encode("utf-8")
-    signature = hmac.new(LECTURER_SESSION_SECRET.encode("utf-8"), payload, hashlib.sha256).digest()
-    return f"{base64.urlsafe_b64encode(payload).decode().rstrip('=')}.{base64.urlsafe_b64encode(signature).decode().rstrip('=')}"
-
-
-def _issue_student_token(student_id: int) -> str:
-    expires = int((datetime.now(timezone.utc) + timedelta(hours=12)).timestamp())
-    payload = f"{student_id}:{expires}".encode("utf-8")
-    signature = hmac.new(STUDENT_SESSION_SECRET.encode("utf-8"), payload, hashlib.sha256).digest()
-    return f"{base64.urlsafe_b64encode(payload).decode().rstrip('=')}.{base64.urlsafe_b64encode(signature).decode().rstrip('=')}"
-
-
-def _issue_src_token(src_president_id: int) -> str:
-    expires = int((datetime.now(timezone.utc) + timedelta(hours=12)).timestamp())
-    payload = f"{src_president_id}:{expires}".encode("utf-8")
-    signature = hmac.new(SRC_SESSION_SECRET.encode("utf-8"), payload, hashlib.sha256).digest()
-    return f"{base64.urlsafe_b64encode(payload).decode().rstrip('=')}.{base64.urlsafe_b64encode(signature).decode().rstrip('=')}"
-
-
-def _issue_landlord_token(landlord_id: int) -> str:
-    expires = int((datetime.now(timezone.utc) + timedelta(hours=12)).timestamp())
-    payload = f"{landlord_id}:{expires}".encode("utf-8")
-    signature = hmac.new(LANDLORD_SESSION_SECRET.encode("utf-8"), payload, hashlib.sha256).digest()
-    return f"{base64.urlsafe_b64encode(payload).decode().rstrip('=')}.{base64.urlsafe_b64encode(signature).decode().rstrip('=')}"
+def _issue_lecturer_token(account_id: int) -> str:
+    return issue_token("lecturer", account_id, LECTURER_SESSION_SECRET)
 
 
 def _lecturer_id_from_token(token: Optional[str]) -> int:
-    if not token or "." not in token:
-        raise HTTPException(status_code=401, detail="Sign in as a lecturer first")
-    encoded_payload, encoded_signature = token.split(".", 1)
     try:
-        payload = base64.urlsafe_b64decode(encoded_payload + "=" * (-len(encoded_payload) % 4))
-        signature = base64.urlsafe_b64decode(encoded_signature + "=" * (-len(encoded_signature) % 4))
-        expected = hmac.new(LECTURER_SESSION_SECRET.encode("utf-8"), payload, hashlib.sha256).digest()
-        lecturer_id_text, expires_text = payload.decode("utf-8").split(":", 1)
-        if not hmac.compare_digest(signature, expected) or int(expires_text) < int(datetime.now(timezone.utc).timestamp()):
-            raise ValueError
-        return int(lecturer_id_text)
+        return verify_token(token, "lecturer", LECTURER_SESSION_SECRET)
     except (ValueError, UnicodeDecodeError):
         raise HTTPException(status_code=401, detail="Your lecturer session has expired. Sign in again.")
 
 
+def _issue_student_token(account_id: int) -> str:
+    return issue_token("student", account_id, STUDENT_SESSION_SECRET)
+
+
 def _student_id_from_token(token: Optional[str]) -> int:
-    if not token or "." not in token:
-        raise HTTPException(status_code=401, detail="Sign in as a student first")
-    encoded_payload, encoded_signature = token.split(".", 1)
     try:
-        payload = base64.urlsafe_b64decode(encoded_payload + "=" * (-len(encoded_payload) % 4))
-        signature = base64.urlsafe_b64decode(encoded_signature + "=" * (-len(encoded_signature) % 4))
-        expected = hmac.new(STUDENT_SESSION_SECRET.encode("utf-8"), payload, hashlib.sha256).digest()
-        student_id_text, expires_text = payload.decode("utf-8").split(":", 1)
-        if not hmac.compare_digest(signature, expected) or int(expires_text) < int(datetime.now(timezone.utc).timestamp()):
-            raise ValueError
-        return int(student_id_text)
+        return verify_token(token, "student", STUDENT_SESSION_SECRET)
     except (ValueError, UnicodeDecodeError):
         raise HTTPException(status_code=401, detail="Your student session has expired. Sign in again.")
 
 
+def _issue_src_token(account_id: int) -> str:
+    return issue_token("src", account_id, SRC_SESSION_SECRET)
+
+
 def _src_president_id_from_token(token: Optional[str]) -> int:
-    if not token or "." not in token:
-        raise HTTPException(status_code=401, detail="Sign in as the SRC president first")
-    encoded_payload, encoded_signature = token.split(".", 1)
     try:
-        payload = base64.urlsafe_b64decode(encoded_payload + "=" * (-len(encoded_payload) % 4))
-        signature = base64.urlsafe_b64decode(encoded_signature + "=" * (-len(encoded_signature) % 4))
-        expected = hmac.new(SRC_SESSION_SECRET.encode("utf-8"), payload, hashlib.sha256).digest()
-        president_id_text, expires_text = payload.decode("utf-8").split(":", 1)
-        if not hmac.compare_digest(signature, expected) or int(expires_text) < int(datetime.now(timezone.utc).timestamp()):
-            raise ValueError
-        return int(president_id_text)
+        return verify_token(token, "src", SRC_SESSION_SECRET)
     except (ValueError, UnicodeDecodeError):
         raise HTTPException(status_code=401, detail="Your SRC session has expired. Sign in again.")
 
 
+def _issue_landlord_token(account_id: int) -> str:
+    return issue_token("landlord", account_id, LANDLORD_SESSION_SECRET)
+
+
 def _landlord_id_from_token(token: Optional[str]) -> int:
-    if not token or "." not in token:
-        raise HTTPException(status_code=401, detail="Sign in as a landlord first")
-    encoded_payload, encoded_signature = token.split(".", 1)
     try:
-        payload = base64.urlsafe_b64decode(encoded_payload + "=" * (-len(encoded_payload) % 4))
-        signature = base64.urlsafe_b64decode(encoded_signature + "=" * (-len(encoded_signature) % 4))
-        expected = hmac.new(LANDLORD_SESSION_SECRET.encode("utf-8"), payload, hashlib.sha256).digest()
-        landlord_id_text, expires_text = payload.decode("utf-8").split(":", 1)
-        if not hmac.compare_digest(signature, expected) or int(expires_text) < int(datetime.now(timezone.utc).timestamp()):
-            raise ValueError
-        return int(landlord_id_text)
+        return verify_token(token, "landlord", LANDLORD_SESSION_SECRET)
     except (ValueError, UnicodeDecodeError):
         raise HTTPException(status_code=401, detail="Your landlord session has expired. Sign in again.")
 
@@ -8284,8 +8235,16 @@ def sitemap_xml(db: Session = Depends(get_db)):
 
 
 @app.get("/listing/{kind}/{listing_id}", response_class=HTMLResponse, include_in_schema=False)
-def public_market_listing(kind: str, listing_id: int, db: Session = Depends(get_db)):
+def public_market_listing(kind: str, listing_id: str, db: Session = Depends(get_db)):
     """A permanent, indexable page for each currently published market offer."""
+    if kind not in {"room", "offer"} or not re.fullmatch(r"(?:" + re.escape(kind) + r"-)?[0-9]{1,10}", listing_id):
+        raise HTTPException(status_code=404, detail="Listing unavailable")
+    numeric_id = int(listing_id.removeprefix(kind + "-"))
+    if numeric_id <= 0 or numeric_id > 2147483647:
+        raise HTTPException(status_code=404, detail="Listing unavailable")
+    if listing_id != str(numeric_id):
+        return RedirectResponse(f"/listing/{kind}/{numeric_id}", status_code=308, headers={"Cache-Control": "no-store"})
+    listing_id = numeric_id
     if kind == "room":
         row = db.query(Accommodation, Landlord).join(Landlord, Landlord.id == Accommodation.landlord_id).filter(
             Accommodation.id == listing_id, Accommodation.is_approved == True,

@@ -44,7 +44,9 @@ test('learner summary refreshes after modules and messages arrive', async () => 
     w.document.getElementById('appWrap').append(messages);
     w.eval(read('experience.js'));
     w.document.getElementById('moduleList').innerHTML = '<a class="module-card"><strong>Maths</strong><span>2 quizzes</span></a><a class="module-card"><strong>Biology</strong><span>3 quizzes</span></a>';
-    messages.innerHTML = '<article class="message-item">One message</article>';
+    // The conversation component exposes its total through this public handle.
+    messages._arounusChat = {count: 1};
+    messages.innerHTML = '<article class="chat-thread">One conversation</article>';
     await tick();
     assert.equal(w.document.getElementById('learnerStatModules').textContent, '2');
     assert.equal(w.document.getElementById('learnerStatQuizzes').textContent, '5');

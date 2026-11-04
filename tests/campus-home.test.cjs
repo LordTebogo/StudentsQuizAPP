@@ -88,3 +88,23 @@ test('provider status changes refresh room labels and ordering',async()=>{
     assert.match(d.querySelector('[data-entry-key="room-20"] .room-availability').textContent,/Filled/);
   }finally{w.close()}
 });
+
+
+test('compact market keeps Saved access and announces counts without a visible summary panel',async()=>{
+  const {w,d}=await setup();
+  try {
+    assert.equal(d.querySelector('.market-introduction'),null);
+    assert.equal(d.querySelector('.market-trust-note'),null);
+    assert.ok(d.getElementById('resultsTitle').classList.contains('sr-only'));
+    assert.ok(d.getElementById('marketStatus').classList.contains('sr-only'));
+    assert.equal(d.getElementById('marketStatus').getAttribute('aria-live'),'polite');
+    assert.equal(d.getElementById('showSavedListings').hidden,false);
+    d.querySelector('[data-save="offer-2"]').click();
+    d.getElementById('showSavedListings').click();
+    assert.equal(d.querySelectorAll('.campus-card').length,1);
+    assert.match(w.location.search,/saved=1/);
+  } finally {w.close();}
+  const failed=await setup(['/marketing/adverts']);
+  try {assert.equal(failed.d.getElementById('marketStatus').classList.contains('sr-only'),false);}
+  finally {failed.w.close();}
+});

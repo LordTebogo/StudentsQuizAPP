@@ -215,8 +215,16 @@ anywhere (even briefly, even to a private repo) — treat it as compromised:
 - **Postgres**: change the database password from your provider's dashboard
   (e.g. Supabase -> Project Settings -> Database -> reset password), then
   update `DATABASE_URL` everywhere you use it.
-- **Cloudinary**: regenerate the API secret (Dashboard -> Settings ->
-  Security -> API Keys), then update `CLOUDINARY_API_SECRET` everywhere.
+- **Cloudinary**: in Console → Settings → API Keys, generate a new key/secret
+  pair. Update both `CLOUDINARY_API_KEY` and `CLOUDINARY_API_SECRET` in the host
+  environment and local private configuration, verify an upload, then disable
+  the old key. Removing credentials from source does not revoke them or erase
+  public history. See [Cloudinary's rotation procedure](https://cloudinary.com/documentation/ts_how_to_rotate_api_keys_in_the_console).
+- **Account sessions**: set new independent `LECTURER_SESSION_SECRET` and
+  `STUDENT_SESSION_SECRET` values in the host environment. Generate each with
+  `python -c "import secrets; print(secrets.token_urlsafe(48))"`. Never use a PIN,
+  a published example, or a value from a shared archive. The new role-bound
+  token format rejects all old sessions, so users must sign in again.
 
 This app now loads all of these from environment variables — see
 `.env.example` — and never hardcodes them in a `.py` file again.
@@ -243,10 +251,24 @@ CLOUDINARY_API_SECRET=your-api-secret
 OPENAI_API_KEY=your-openai-api-key
 # Optional; defaults to gpt-5.4-mini
 OPENAI_QUIZ_MODEL=gpt-5.4-mini
-LECTURER_PIN=90435
+AROUNUS_ENV=production
+LECTURER_PIN=
+LECTURER_SESSION_SECRET=
+STUDENT_SESSION_SECRET=
 ```
 
-`.env` is already in `.gitignore` — never commit it.
+Fill the blank authentication settings before starting a hosted deployment.
+Use a new private administrator value of at least 8 characters and independently
+generated session keys of at least 32 characters. `SRC_SESSION_SECRET` and
+`LANDLORD_SESSION_SECRET` can be set separately; otherwise they use the student
+key, with tokens cryptographically bound to the account role. All workers must
+use the same configured keys. Production refuses to start with missing or weak
+keys, the old administrator default, or the old published example signing keys.
+
+Local SQLite development without production markers can omit the session keys;
+random process-only keys are generated, and sessions stop working on restart.
+`AROUNUS_ENV=production`, Render deployments, and PostgreSQL configurations all
+require persistent keys. `.env` and private `.env.*` files are ignored by Git.
 
 Then create the database tables (only needed once, or after a schema change):
 
@@ -321,9 +343,10 @@ the generated questions and explicitly publish them. This feature requires
    ```
    Render sets `$PORT` itself — don't hardcode a port number.
 5. Under **Environment**, add: `DATABASE_URL`, `CLOUDINARY_CLOUD_NAME`,
-   `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, and optionally
-   `LECTURER_PIN` (defaults to `90435` if not set). Paste real values here —
-   never in a committed file.
+   `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, `AROUNUS_ENV=production`,
+   `LECTURER_PIN`, `LECTURER_SESSION_SECRET`, and `STUDENT_SESSION_SECRET`.
+   Generate new private values as described above; never copy a public example
+   or put secrets in a committed file. Configure every worker before deploying.
 6. Deploy. On first boot, `Base.metadata.create_all(bind=engine)` creates
    any missing tables automatically.
 7. If you want a logo, commit an `image.png` file to the repo root before
@@ -345,15 +368,14 @@ A couple of Render-specific things worth knowing:
 
 ## 5. Administrator PIN
 
-The Lecturer page is protected by a shared PIN, **90435** by default (or
-whatever you set `LECTURER_PIN` to).
+Administration routes use the private `LECTURER_PIN` setting. Production
+requires a new value of at least 8 characters and rejects the old public default.
+Change it through the host environment, then restart the service; never edit it
+into source. Administrative authentication has an attempt limit.
 
-- Anyone opening `/lecturers` sees a sign-in screen first and must enter this PIN before they can upload quizzes, view submissions, or mark long answers.
-- The PIN is enforced on the backend too (not just hidden in the UI) — the routes `/quiz/upload`, `/quizzes`, `/lecturer/quiz/{id}/submissions`, `/lecturer/submission/{id}`, and `/lecturer/submission/{id}/mark` all require an `X-Lecturer-Pin` header matching the PIN, so students can't call them directly even if they guess the URLs.
-- The Student page (`student.html`) is not protected — anyone on the network can take a quiz and check their own results.
-- To change the PIN, edit the `LECTURER_PIN` constant near the top of `main.py`.
-- The lecturer stays signed in for the browser session (via `sessionStorage`); there's a "Lock" link in the top nav to sign out manually.
-- This is a simple shared PIN, not per-user accounts — fine for a trusted classroom setting, not for anything sensitive.
+Lecturer, student, SRC and advertiser accounts use signed tokens that expire
+after 12 hours and are bound to their role. Changing their signing keys revokes
+existing sessions. These signing keys must never be derived from the shared PIN.
 
 ## 6. Lecturer accounts, modules, and admin management
 

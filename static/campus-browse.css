@@ -11,7 +11,7 @@
 .campus-home .market-search-toggle { position: relative; border: 1px solid #bfd5ca; background: #fff; color: #087f70; }
 .market-filter-count { position: absolute; top: -3px; right: -3px; display: grid; place-items: center; min-width: 17px; height: 17px; padding: 0 3px; border-radius: 20px; background: #087f70; color: #fff; font-size: 10px; font-weight: 700; }
 .header-sell-short { display: none; }
-.campus-home .results-heading { margin-top: 18px; }
+.campus-home .results-heading { justify-content: flex-end; margin-top: 8px; }
 .campus-home .results-heading h1 { font-size: 24px; line-height: 1.2; letter-spacing: -.6px; margin: 0; overflow-wrap: anywhere; }
 .market-saved-toggle { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; gap: 7px; min-height: 44px; margin: 0; padding: 8px 12px; border: 1px solid #bfd5ca; border-radius: 9px; background: #fff; color: #087f70; font-size: 13px; font-weight: 700; }
 .market-saved-toggle svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
@@ -64,7 +64,7 @@
   .campus-home .campus-header .academic-link .header-action-label, .market-inbox-label, .header-sell-long { display: none; }
   .market-inbox-icon, .header-sell-short { display: inline; }
   .campus-home .campus-header .sell-link { min-width: 46px; }
-  .campus-home .results-heading { margin-top: 14px; }
+  .campus-home .results-heading { margin-top: 8px; }
   .campus-home .results-heading h1 { font-size: 21px; }
   .campus-home .campus-listings { gap: 12px; margin-top: 12px; }
   .market-search-fields { grid-template-columns: 1fr; gap: 14px; }

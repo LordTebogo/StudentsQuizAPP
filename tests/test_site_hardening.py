@@ -152,6 +152,52 @@ class SiteHardeningTest(unittest.TestCase):
         self.assertEqual(data["offers"]["priceCurrency"], "ZAR")
         self.assertEqual(data["offers"]["price"], "150")
 
+    def test_listing_alias_redirects_to_canonical_url(self):
+        response = self.client.get(f"/listing/offer/offer-{self.advert_id}", follow_redirects=False)
+        self.assertEqual(response.status_code, 308)
+        self.assertEqual(response.headers["location"], f"/listing/offer/{self.advert_id}")
+        self.assertEqual(self.client.get(response.headers["location"]).status_code, 200)
+
+    def test_bad_and_missing_listing_links_get_branded_404(self):
+        for path in ("/listing/room/not-a-number", "/listing/room/offer-22",
+                     "/listing/room/-1", "/listing/room/0", "/listing/room/9999999999999999999",
+                     "/listing/offer/2147483647", "/listing/unknown/22"):
+            with self.subTest(path=path):
+                response = self.client.get(path, headers=HTML)
+                self.assertEqual(response.status_code, 404)
+                self.assertIn("Browse local listings", response.text)
+                self.assertNotIn("int_parsing", response.text)
+
+    def test_removed_and_unpublished_listing_links_are_unavailable(self):
+        with main.SessionLocal() as db:
+            advert = db.get(MarketAdvert, self.advert_id)
+            advert.status = "rejected"
+            db.commit()
+        try:
+            response = self.client.get(f"/listing/offer/{self.advert_id}", headers=HTML)
+            self.assertEqual(response.status_code, 404)
+            self.assertIn("Browse local listings", response.text)
+        finally:
+            with main.SessionLocal() as db:
+                db.get(MarketAdvert, self.advert_id).status = "approved"
+                db.commit()
+
+    def test_account_tokens_reject_other_roles_and_pin_signatures(self):
+        from session_security import issue_token
+        pairs = [("student", main._student_id_from_token, main._issue_student_token),
+                 ("lecturer", main._lecturer_id_from_token, main._issue_lecturer_token),
+                 ("src", main._src_president_id_from_token, main._issue_src_token),
+                 ("landlord", main._landlord_id_from_token, main._issue_landlord_token)]
+        for role, verify, issue in pairs:
+            self.assertEqual(verify(issue(22)), 22)
+            with self.assertRaises(main.HTTPException) as error:
+                verify(issue_token(role, 22, main.LECTURER_PIN))
+            self.assertEqual(error.exception.status_code, 401)
+            for other, _, other_issue in pairs:
+                if other != role:
+                    with self.assertRaises(main.HTTPException):
+                        verify(other_issue(22))
+
 
     def test_premium_plans_are_priced_in_order(self):
         plans = {plan["id"]: plan["amount_cents"] for plan in self.client.get("/billing/premium/plans").json()["plans"]}

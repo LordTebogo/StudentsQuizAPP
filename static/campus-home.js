@@ -190,6 +190,7 @@
       : failures === 2 ? 'Listings could not be loaded. Please try again.'
       : savedOnly ? `${filtered.length} saved listing${filtered.length === 1 ? '' : 's'}${roomSummary} · Saved on this browser and device.${!failures && saved.size > filtered.length ? ` ${saved.size - filtered.length} no longer available.` : ''}${failures ? ' Some listings could not be loaded. Retry to see everything.' : ''}`
       : `${liveCount} published listing${liveCount === 1 ? '' : 's'}${campus ? ' near your selected location' : ' across all locations'}${roomSummary}${demoCount ? ` · ${demoCount} example${demoCount === 1 ? '' : 's'} clearly marked` : ''}${failures ? ' · Some listings could not be loaded. Retry to see everything.' : ''}`;
+    $('marketStatus').classList.toggle('sr-only', !failures);
     $('retryListings').hidden = !failures;
     $('campusListings').setAttribute('aria-busy', String(loading));
     const demoNotice = savedOnly && demoCount ? '<p class="demo-notice">Cards marked “Example only” are samples, not real offers.</p>' : demoCount && !liveCount && !loading

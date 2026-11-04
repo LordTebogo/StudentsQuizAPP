@@ -5,7 +5,7 @@ const {JSDOM} = require('jsdom');
 const html = fs.readFileSync('static/index.html', 'utf8');
 const script = fs.readFileSync('static/floating-video.js', 'utf8');
 
-async function setup(blockAutoplay = false) {
+async function setup(blockAutoplay = false, dismissed = false, storageBlocked = false) {
   const dom = new JSDOM(html, {url: 'https://arounus.test/', runScripts: 'outside-only'});
   const w = dom.window;
   const d = w.document;
@@ -38,6 +38,8 @@ async function setup(blockAutoplay = false) {
     Object.defineProperty(d, 'fullscreenElement', {value: null, configurable: true});
     d.dispatchEvent(new w.Event('fullscreenchange'));
   };
+  if (dismissed) w.localStorage.setItem('arounusIntroDismissed', '1');
+  if (storageBlocked) Object.defineProperty(w, 'localStorage', {get() { throw new Error('Storage blocked'); }});
   w.eval(script);
   await new Promise(setImmediate);
   const click = name => player.querySelector(`[data-video-${name}]`).click();
@@ -123,4 +125,23 @@ test('service worker leaves promotional video range requests to the browser', ()
   let intercepted = false;
   handlers.fetch({request:{method:'GET', url:'https://arounus.test/static/media/campus-intro.mp4', headers:{Range:'bytes=0-1023'}}, respondWith() {intercepted = true;}});
   assert.equal(intercepted, false);
+});
+
+
+test('closing the intro persists across visits without starting another media download', async t => {
+  const first = await setup(); t.after(() => first.dom.window.close());
+  first.click('close');
+  assert.equal(first.w.localStorage.getItem('arounusIntroDismissed'), '1');
+  const next = await setup(false, true); t.after(() => next.dom.window.close());
+  assert.equal(next.player.hidden, true);
+  assert.equal(next.video.paused, true);
+  assert.equal(next.video.hasAttribute('src'), false);
+});
+
+test('blocking browser storage does not break playback or closing', async t => {
+  const s = await setup(false, false, true); t.after(() => s.dom.window.close());
+  assert.equal(s.video.paused, false);
+  s.click('close'); await new Promise(setImmediate);
+  assert.equal(s.player.hidden, true);
+  assert.equal(s.video.hasAttribute('src'), false);
 });

@@ -11,3 +11,7 @@ lesson_videos/
 *.log
 node_modules/
 local_dev.db
+
+# Private environment variants must never be committed.
+.env.*
+!.env.example

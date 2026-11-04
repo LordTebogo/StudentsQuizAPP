@@ -2,6 +2,14 @@
   const player = document.getElementById('campusVideo');
   if (!player) return;
   const video = player.querySelector('video');
+  const dismissalKey = 'arounusIntroDismissed';
+  try {
+    if (localStorage.getItem(dismissalKey) === '1') {
+      player.hidden = true;
+      return;
+    }
+  } catch (_) { /* The video still works when browser storage is unavailable. */ }
+  if (video.dataset.videoSrc) video.src = video.dataset.videoSrc;
   const drag = player.querySelector('[data-video-drag]');
   const close = player.querySelector('[data-video-close]');
   const play = player.querySelector('[data-video-play]');
@@ -66,6 +74,7 @@
     }
   });
   close.addEventListener('click', async () => {
+    try { localStorage.setItem(dismissalKey, '1'); } catch (_) {}
     video.pause();
     if (document.fullscreenElement === player) {
       try { await document.exitFullscreen(); } catch (_) {}

@@ -1,4 +1,4 @@
-const OFFLINE_VERSION = "v78";
+const OFFLINE_VERSION = "v80";
 const SHELL_CACHE = `nucleocampus-shell-${OFFLINE_VERSION}`;
 const DATA_CACHE = `nucleocampus-data-${OFFLINE_VERSION}`;
 const EXTERNAL_CACHE = `nucleocampus-external-${OFFLINE_VERSION}`;
@@ -15,14 +15,14 @@ const APP_SHELL = [
   "/students/lessons", "/lecturers/lessons", "/lecturers/guide", "/live",
   "/posts", "/community", "/src", "/market", "/admin", "/comrade",
   "/tools/pdf", "/tools/media", "/trust", "/premium", "/reset-password",
-  "/static/campus-home.css?v=6", "/static/campus-home.js?v=13", "/static/campus-browse.css?v=3", "/static/campus-redirect.js?v=1",
+  "/static/campus-home.css?v=6", "/static/campus-home.js?v=14", "/static/campus-browse.css?v=6", "/static/campus-redirect.js?v=1",
   "/static/media-compressor.js?v=2", "/static/admin-workspace.css?v=3", "/static/admin-workspace.js?v=3",
   "/static/document-organizer.js",
   "/static/site-footer.css?v=1", "/static/compact-entry.css?v=2",
   "/about", "/static/about.css?v=1", "/static/about.js?v=1", "/static/images/founder-tebogo-manyubele.png",
   "/static/style.css", "/static/ui.css?v=2", "/static/product.css", "/static/theme.css?v=2",
   "/static/brand-intro.css?v=1", "/static/brand-intro.js?v=2",
-  "/static/floating-video.css?v=1", "/static/floating-video.js?v=2", "/static/media/campus-intro.jpg",
+  "/static/floating-video.css?v=1", "/static/floating-video.js?v=3", "/static/media/campus-intro.jpg",
   "/static/light.css?v=5", "/static/messaging.css",
   "/static/market-sell.css?v=7",
   "/static/lesson-insights.css", "/static/quiz-builder.css",
