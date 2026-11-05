@@ -3466,6 +3466,54 @@ class PremiumCheckoutRequest(BaseModel):
     provider: str = "payu"
 
 
+class SupportCheckoutRequest(BaseModel):
+    amount_rand: int
+    email: str
+
+
+@app.get("/billing/support/status")
+def support_checkout_status():
+    response = JSONResponse({"available": bool(paystack_configured() and os.getenv("PUBLIC_BASE_URL", "").startswith("https://"))})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.post("/billing/support/checkout")
+def support_checkout(payload: SupportCheckoutRequest):
+    if not paystack_configured():
+        raise HTTPException(status_code=503, detail="Paystack donations are not available yet.")
+    public_base = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
+    if not public_base.startswith("https://"):
+        raise HTTPException(status_code=503, detail="Paystack donations are not available yet.")
+    if not 20 <= payload.amount_rand <= 5000:
+        raise HTTPException(status_code=400, detail="Choose an amount from R20 to R5,000.")
+    email = payload.email.strip().lower()
+    if len(email) > 254 or not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
+        raise HTTPException(status_code=400, detail="Enter a valid email address.")
+    reference = "AS" + secrets.token_hex(16).upper()
+    try:
+        checkout_url = paystack_start(reference, email, payload.amount_rand * 100,
+                                      f"{public_base}/billing/support/return")
+    except PaystackError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return JSONResponse({"checkout_url": checkout_url}, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/billing/support/return")
+def support_checkout_return(reference: str):
+    if not re.fullmatch(r"AS[A-F0-9]{32}", reference):
+        raise HTTPException(status_code=400, detail="Invalid payment reference")
+    status = "pending"
+    if paystack_configured():
+        try:
+            result = paystack_verify(reference)
+            if result["reference"] == reference and result["currency"] == "ZAR" and result["domain"] == "live":
+                status = "success" if result["status"] == "success" else "pending"
+        except PaystackError:
+            pass
+    return RedirectResponse(url=f"/about?support={status}#supportArounus", status_code=303)
+
+
 @app.post("/billing/premium/checkout")
 def premium_checkout(payload: PremiumCheckoutRequest, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
     plan = PREMIUM_PLANS.get(payload.plan)
