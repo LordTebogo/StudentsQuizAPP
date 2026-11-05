@@ -4957,12 +4957,41 @@ def _create_direct_message(db: Session, sender_type: str, sender_id: Optional[in
     return _message_dict(db, message, sender_type, sender_id)
 
 
-def _inbox(db: Session, kind: str, person_id: int):
+def _inbox(db: Session, kind: str, person_id: int, summary: bool = False):
     rows = db.query(DirectMessage).filter(
         ((DirectMessage.recipient_type == kind) & (DirectMessage.recipient_id == person_id)) |
         ((DirectMessage.sender_type == kind) & (DirectMessage.sender_id == person_id))
     ).order_by(DirectMessage.created_at.desc()).all()
+    if summary:
+        latest, unread = {}, {}
+        for row in rows:
+            outgoing = row.sender_type == kind and row.sender_id == person_id
+            peer = (row.recipient_type, row.recipient_id) if outgoing else (row.sender_type, row.sender_id)
+            key = (peer[0], f"anonymous-{row.id}" if row.is_anonymous and not outgoing else peer[1])
+            unread[key] = unread.get(key, 0) + int(not outgoing and row.read_at is None)
+            latest.setdefault(key, row)
+        return [{**_conversation_summaries([_message_dict(db, row, kind, person_id)])[0],
+                 "unread_count": unread[key]} for key, row in latest.items()]
     return [_message_dict(db, row, kind, person_id) for row in rows]
+
+
+def _conversation_summaries(messages: List[dict]) -> List[dict]:
+    """Return one lightweight row per peer for the fast inbox sidebar."""
+    latest = {}
+    unread = {}
+    for row in messages:
+        key = (row["peer_type"], row["peer_id"] if row["peer_id"] is not None else f"anonymous-{row['id']}") if not row.get("review_only") else (
+            "review", *sorted((f"{row['sender_type']}:{row['sender_id']}", f"{row['recipient_type']}:{row['recipient_id']}")))
+        unread[key] = unread.get(key, 0) + int(bool(row.get("unread")))
+        if key not in latest or (row["created_at"], row["id"]) > (latest[key]["created_at"], latest[key]["id"]):
+            latest[key] = row
+    return [{"id": row["id"], "peer_type": row["peer_type"], "peer_id": row["peer_id"],
+             "peer_name": row["peer_name"], "peer_image_url": row.get("peer_image_url"),
+             "created_at": row["created_at"], "content": row["content"][:100],
+             "is_outgoing": row["is_outgoing"], "unread_count": unread[key],
+             "sender_type": row["sender_type"], "sender_id": row["sender_id"],
+             "recipient_type": row["recipient_type"], "recipient_id": row["recipient_id"],
+             "review_only": row.get("review_only", False)} for key, row in latest.items()]
 
 
 @app.get("/notifications/config")
@@ -5084,13 +5113,13 @@ def lecturer_students(lecturer: Lecturer = Depends(require_lecturer_account), db
 
 
 @app.get("/student/messages")
-def student_messages(student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
-    return _inbox(db, "student", student.id)
+def student_messages(summary: bool = False, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+    return _inbox(db, "student", student.id, summary)
 
 
 @app.get("/lecturer/messages")
-def lecturer_messages(lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db)):
-    return _inbox(db, "lecturer", lecturer.id)
+def lecturer_messages(summary: bool = False, lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db)):
+    return _inbox(db, "lecturer", lecturer.id, summary)
 
 
 class MessageReadRequest(BaseModel):
@@ -5146,12 +5175,44 @@ def student_send_message(payload: DirectMessageCreate, student: Student = Depend
 
 
 @app.get("/marketing/provider/messages")
-def provider_messages(landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
+def provider_messages(summary: bool = False, landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
     aliases = _market_message_aliases(db, "landlord", landlord.id)
     rows = db.query(DirectMessage).filter(
         or_(_message_identity_filter(DirectMessage.recipient_type, DirectMessage.recipient_id, aliases), _message_identity_filter(DirectMessage.sender_type, DirectMessage.sender_id, aliases)),
         (DirectMessage.sender_type == "landlord") | (DirectMessage.recipient_type == "landlord"),
     ).order_by(DirectMessage.created_at.desc()).all()
+    if summary:
+        student_ids = {row.sender_id if row.sender_type == "student" else row.recipient_id
+                       for row in rows if row.sender_type == "student" or row.recipient_type == "student"}
+        lecturer_ids = {row.sender_id if row.sender_type == "lecturer" else row.recipient_id
+                        for row in rows if row.sender_type == "lecturer" or row.recipient_type == "lecturer"}
+        linked = {}
+        if student_ids or lecturer_ids:
+            for provider in db.query(Landlord).filter(or_(Landlord.linked_student_id.in_(student_ids),
+                                                          Landlord.linked_lecturer_id.in_(lecturer_ids))).all():
+                if provider.linked_student_id:
+                    linked[("student", provider.linked_student_id)] = ("landlord", provider.id)
+                if provider.linked_lecturer_id:
+                    linked[("lecturer", provider.linked_lecturer_id)] = ("landlord", provider.id)
+        latest, unread = {}, {}
+        for row in rows:
+            outgoing = (row.sender_type, row.sender_id) in aliases
+            kind, person_id = (row.recipient_type, row.recipient_id) if outgoing else (row.sender_type, row.sender_id)
+            anonymous = row.is_anonymous and row.sender_type == "student" and not outgoing
+            if anonymous:
+                person_id = None
+            kind, person_id = linked.get((kind, person_id), (kind, person_id))
+            key = (kind, f"anonymous-{row.id}" if anonymous else person_id)
+            unread[key] = unread.get(key, 0) + int(not outgoing and row.read_at is None)
+            latest.setdefault(key, (row, kind, person_id, outgoing))
+        return [{"id": row.id, "peer_type": kind, "peer_id": person_id,
+                 "peer_name": _message_person(db, kind, person_id) if person_id else "Anonymous sender",
+                 "peer_image_url": _message_avatar(db, kind, person_id) if person_id else None,
+                 "created_at": row.created_at, "content": row.content[:100], "is_outgoing": outgoing,
+                 "unread_count": unread[key], "sender_type": row.sender_type,
+                 "sender_id": None if person_id is None and row.is_anonymous else row.sender_id,
+                 "recipient_type": row.recipient_type, "recipient_id": row.recipient_id,
+                 "review_only": False} for key, (row, kind, person_id, outgoing) in latest.items()]
     result = []
     for row in rows:
         outgoing = (row.sender_type, row.sender_id) in aliases
@@ -5328,8 +5389,9 @@ def lecturer_broadcast_message(payload: LecturerBroadcastMessage, lecturer: Lect
 
 
 @app.get("/admin/messages")
-def admin_messages(_pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
-    return [_message_dict(db, item, "admin", None) for item in db.query(DirectMessage).order_by(DirectMessage.created_at.desc()).all()]
+def admin_messages(summary: bool = False, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    rows = [_message_dict(db, item, "admin", None) for item in db.query(DirectMessage).order_by(DirectMessage.created_at.desc()).all()]
+    return _conversation_summaries(rows) if summary else rows
 
 
 @app.post("/admin/messages")

@@ -6,7 +6,7 @@
     if(!token)return;
     if(chat){chat.refresh();return}
     chat=ArounusChat.mount(document.getElementById('homeInboxList'),{
-      load:async()=>({rows:await request('/'+role+'/messages')}),
+      load:async showPreview=>{if(showPreview.initial)showPreview({rows:await request('/'+role+'/messages?summary=true')});return {rows:await request('/'+role+'/messages')};},
       anonymous:role==='student',
       canReply:t=>role==='student'?['admin','lecturer','landlord'].includes(t.type):[ 'student','landlord','admin'].includes(t.type),
       send:(t,content,is_anonymous)=>request('/'+role+'/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({recipient_type:t.type,recipient_id:t.id||0,content,is_anonymous})}),

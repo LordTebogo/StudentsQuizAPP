@@ -1,4 +1,4 @@
-const OFFLINE_VERSION = "v88";
+const OFFLINE_VERSION = "v89";
 const SHELL_CACHE = `nucleocampus-shell-${OFFLINE_VERSION}`;
 const DATA_CACHE = `nucleocampus-data-${OFFLINE_VERSION}`;
 const EXTERNAL_CACHE = `nucleocampus-external-${OFFLINE_VERSION}`;
@@ -8,7 +8,7 @@ const EXTERNAL_CACHE = `nucleocampus-external-${OFFLINE_VERSION}`;
 const APP_SHELL = [
   "/static/market-photos.js?v=44b43ce6983c",
   "/static/image-preview.css?v=9859df73aff4", "/static/image-preview.js?v=b46cba06eb60",
-  "/static/chat-ui.js?v=1", "/static/chat-ui.css?v=1", "/static/home-messaging.js?v=1",
+  "/static/chat-ui.js?v=2", "/static/chat-ui.css?v=2", "/static/home-messaging.js?v=2",
   "/static/market-notifications.js?v=1",
   "/static/room-availability.css?v=2",
   "/static/market-safety.css?v=1", "/static/market-safety.js?v=1",
@@ -32,7 +32,7 @@ const APP_SHELL = [
   "/static/experience.js?v=18", "/static/loading.js", "/static/pwa.js?v=18",
   "/static/module-names.js", "/static/student-module-enrollment.js", "/static/username-suggestion.js", "/static/student-messaging.js?v=2",
   "/static/lecturer-messaging.js?v=2", "/static/admin-messaging.js?v=2",
-  "/static/admin-market-ads.js?v=3", "/static/market-auth.js?v=1", "/static/market-sell.js?v=11", "/static/market-contact.js?v=4",
+  "/static/admin-market-ads.js?v=3", "/static/market-auth.js?v=1", "/static/market-sell.js?v=12", "/static/market-contact.js?v=4",
   "/static/market-metrics.js?v=56f1e17fc63f", "/static/video-access.js?v=5", "/static/media-url.js?v=1",
   "/static/lesson-insights.js", "/static/admin-finance.js?v=1", "/static/quiz-builder.js?v=17",
   "/static/quiz-import-template.csv", "/static/standard-quiz-template.json",

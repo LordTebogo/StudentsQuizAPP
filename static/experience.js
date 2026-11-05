@@ -261,9 +261,9 @@
   const messagingScript = messagingAssets[cleanPath(pagePath)];
   if (messagingScript) {
     const stylesheet = document.createElement('link');
-    stylesheet.rel = 'stylesheet'; stylesheet.href = '/static/chat-ui.css?v=1';
+    stylesheet.rel = 'stylesheet'; stylesheet.href = '/static/chat-ui.css?v=2';
     document.head.appendChild(stylesheet);
-    const core = document.createElement('script'); core.src = '/static/chat-ui.js?v=1';
+    const core = document.createElement('script'); core.src = '/static/chat-ui.js?v=2';
     core.onload = () => { const script = document.createElement('script'); script.src = messagingScript + '?v=2'; document.body.appendChild(script); };
     document.body.appendChild(core);
   }

@@ -10,19 +10,20 @@
   }
   function mount(host, config) {
     host._arounusChat?.destroy();
-    let rows=[],contacts=[],selected=null,filter='',busy=false,loading=false,dead=false,timer,signature='';
-    const drafts=new Map(),readPending=new Set(); let threads=new Map();
+    let rows=[],contacts=[],selected=null,filter='',busy=false,loading=false,dead=false,timer,signature='',messagesLoaded=false;
+    const drafts=new Map(),readPending=new Set(),pending=new Map(); let threads=new Map();
     host.classList.add('arounus-chat');
     host.innerHTML=`<aside class="chat-sidebar" aria-label="Conversations"><div class="chat-list-heading"><div><span class="chat-kicker">YOUR INBOX</span><h3>Chats <span data-chat-count></span></h3></div><button type="button" class="chat-refresh" aria-label="Refresh conversations">↻</button></div><label class="chat-search"><span aria-hidden="true">⌕</span><input type="search" placeholder="Search people or messages" aria-label="Search conversations"></label><div class="chat-contacts"></div></aside><section class="chat-conversation" aria-label="Selected conversation"><div class="chat-welcome"><span aria-hidden="true">◌</span><h3>Your conversations, together</h3><p>Choose a name to read your conversation or send a message.</p></div></section><p class="chat-status" role="status" aria-live="polite"></p>`;
     const list=host.querySelector('.chat-contacts'),pane=host.querySelector('.chat-conversation'),status=host.querySelector('.chat-status');
+    list.innerHTML='<div class="chat-empty" role="status">Loading chats…</div>';
     const keyFor=r=>r.review_only?`review:${[r.sender_type+':'+(r.sender_id??'anonymous-'+r.id),r.recipient_type+':'+r.recipient_id].sort().join('|')}`:`${r.peer_type}:${r.peer_id??('anonymous-'+r.id)}`;
     function build() {
       threads=new Map();
       contacts.forEach(c=>threads.set(`${c.type}:${c.id}`,{...c,key:`${c.type}:${c.id}`,messages:[],unread:0}));
-      [...rows].sort((a,b)=>String(a.created_at).localeCompare(String(b.created_at))||a.id-b.id).forEach(r=>{
+      [...rows,...pending.values()].sort((a,b)=>String(a.created_at).localeCompare(String(b.created_at))||a.id-b.id).forEach(r=>{
         const key=keyFor(r);let t=threads.get(key);
         if(!t){t={key,type:r.peer_type,id:r.peer_id,name:r.peer_name||'Arounus contact',image:r.peer_image_url,messages:[],unread:0,review:r.review_only};threads.set(key,t)}
-        t.messages.push(r);t.unread+=r.unread?1:0;t.latest=r;
+        t.messages.push(r);t.unread+=r.unread_count??(r.unread?1:0);t.latest=r;
         if(r.peer_image_url)t.image=r.peer_image_url;
       });
       drawList();
@@ -31,13 +32,13 @@
       const all=[...threads.values()].sort((a,b)=>String(b.latest?.created_at||'').localeCompare(String(a.latest?.created_at||''))||a.name.localeCompare(b.name));
       const matches=all.filter(t=>(t.name+' '+t.messages.map(m=>m.content).join(' ')).toLocaleLowerCase().includes(filter));
       host.querySelector('[data-chat-count]').textContent=all.length||'';
-      list.innerHTML=matches.map(t=>`<button type="button" class="chat-contact ${t.key===selected?'is-selected':''}" data-chat-key="${esc(t.key)}" aria-pressed="${t.key===selected}">${avatar(t.name,t.image)}<span class="chat-contact-copy"><span class="chat-contact-top"><strong>${esc(t.name)}</strong><time>${esc(date(t.latest?.created_at,true))}</time></span><span class="chat-contact-bottom"><span>${esc(t.latest?(t.latest.is_outgoing?'You: ':'')+t.latest.content:'Start a conversation')}</span>${t.unread?`<span class="chat-unread" aria-label="${t.unread} unread messages">${t.unread}</span>`:''}</span></span></button>`).join('')||`<div class="chat-empty"><strong>${filter?'No matching chats':'No conversations yet'}</strong><p>${filter?'Try another name or word.':'Messages will appear here when someone gets in touch.'}</p></div>`;
+      list.innerHTML=matches.map(t=>`<button type="button" class="chat-contact ${t.key===selected?'is-selected':''}" data-chat-key="${esc(t.key)}" aria-pressed="${t.key===selected}">${avatar(t.name,t.image)}<span class="chat-contact-copy"><span class="chat-contact-top"><strong>${esc(t.name)}</strong><time>${esc(date(t.latest?.created_at,true))}</time></span><span class="chat-contact-bottom"><span>${esc(t.latest?(t.latest.is_outgoing?'You: ':'')+t.latest.content:'Start a conversation')}</span>${t.unread?`<span class="chat-unread" aria-label="${t.unread} unread messages">${t.unread}</span>`:''}</span></span></button>`).join('')||(!messagesLoaded?'<div class="chat-empty" role="status">Loading chats…</div>':`<div class="chat-empty"><strong>${filter?'No matching chats':'No conversations yet'}</strong><p>${filter?'Try another name or word.':'Messages will appear here when someone gets in touch.'}</p></div>`);
       list.querySelectorAll('[data-chat-key]').forEach(b=>b.addEventListener('click',()=>open(b.dataset.chatKey,true)));
     }
     function remember() { const text=pane.querySelector('textarea'); if(text&&selected)drafts.set(selected,{text:text.value,anonymous:!!pane.querySelector('[name=anonymous]')?.checked}); }
     function canReply(t) { return !t.review && (t.id!=null || t.type==='admin') && (!config.canReply || config.canReply(t)); }
     async function markRead(t) {
-      if(!t.unread||!config.read||readPending.has(t.key))return;
+      if(!messagesLoaded||!t.unread||!config.read||readPending.has(t.key))return;
       readPending.add(t.key);
       const unread=t.messages.filter(m=>m.unread);
       try { await config.read(t,unread); const ids=new Set(unread.map(m=>m.id));rows.forEach(m=>{if(ids.has(m.id))m.unread=false}); const current=threads.get(t.key);if(current)current.unread=current.messages.filter(m=>m.unread).length;drawList();Promise.resolve(config.onRead?.()).catch(()=>{}); }
@@ -45,10 +46,10 @@
       finally {readPending.delete(t.key)}
     }
     function open(key, focus=false) {
-      remember(); const t=threads.get(key);if(!t)return;selected=key;host.classList.add('chat-is-open');drawList();
+      if(selected!==key)remember(); const t=threads.get(key);if(!t)return;selected=key;host.classList.add('chat-is-open');drawList();
       const draft=drafts.get(key)||{};
       let previousDay='';
-      pane.innerHTML=`<header class="chat-header"><button class="chat-back" type="button" aria-label="Back to conversations">←</button>${avatar(t.name,t.image)}<div><h3 tabindex="-1">${esc(t.name)}</h3><p>${esc(t.review?'Conversation review':roleName(t.type))}</p></div><span class="chat-private">Private</span></header><div class="chat-log" role="log" aria-label="Conversation with ${esc(t.name)}" tabindex="0">${t.messages.map(m=>{const day=new Date(m.created_at).toLocaleDateString('en-ZA',{day:'numeric',month:'long',year:'numeric'});const divider=day!==previousDay?`<div class="chat-day">${esc(day)}</div>`:'';previousDay=day;return `${divider}<article class="chat-bubble ${m.is_outgoing?'chat-sent':'chat-received'}">${t.review?`<strong>${esc(m.sender_name)}</strong>`:''}<p>${esc(m.content)}</p><footer>${m.is_anonymous?'<span>Anonymous · </span>':''}<time datetime="${esc(m.created_at)}">${esc(date(m.created_at))}</time>${m.is_outgoing?`<span aria-label="${m.read_at?'Read':'Sent'}"> · ${m.read_at?'Read':'Sent'}</span>`:''}</footer></article>`}).join('')||'<div class="chat-empty"><p>This is the beginning of your conversation.</p></div>'}</div>${canReply(t)?`<form class="chat-composer"><label class="chat-input-label"><span class="chat-sr-only">Message ${esc(t.name)}</span><textarea name="message" rows="1" maxlength="2000" placeholder="Write a message…" required>${esc(draft.text||'')}</textarea></label><button type="submit" class="chat-send" aria-label="Send message">Send <span aria-hidden="true">↗</span></button>${config.anonymous?`<label class="chat-anonymous"><input name="anonymous" type="checkbox" ${draft.anonymous?'checked':''}> Send anonymously <small>Your name and photo will be hidden; personal replies are unavailable.</small></label>`:''}</form>`:`<p class="chat-read-only">${t.review?'This conversation is available for review.':(t.id==null?'This sender’s identity is private. Personal replies are unavailable.':'Replies are unavailable for this contact.')}</p>`}`;
+      pane.innerHTML=`<header class="chat-header"><button class="chat-back" type="button" aria-label="Back to conversations">←</button>${avatar(t.name,t.image)}<div><h3 tabindex="-1">${esc(t.name)}</h3><p>${esc(t.review?'Conversation review':roleName(t.type))}</p></div><span class="chat-private">Private</span></header><div class="chat-log" role="log" aria-label="Conversation with ${esc(t.name)}" tabindex="0">${!messagesLoaded?'<div class="chat-empty" role="status">Loading messages…</div>':t.messages.map(m=>{const day=new Date(m.created_at).toLocaleDateString('en-ZA',{day:'numeric',month:'long',year:'numeric'});const divider=day!==previousDay?`<div class="chat-day">${esc(day)}</div>`:'';previousDay=day;const state=m.pending?'Sending':m.failed?'Failed to send':m.read_at?'Read':'Sent';const icon=m.pending?'🕒':m.failed?'!':m.read_at?'📖':'✓';return `${divider}<article class="chat-bubble ${m.is_outgoing?'chat-sent':'chat-received'}" ${m.local_key?`data-local-key="${esc(m.local_key)}"`:''}>${t.review?`<strong>${esc(m.sender_name)}</strong>`:''}<p>${esc(m.content)}</p><footer>${m.is_anonymous?'<span>Anonymous · </span>':''}<time datetime="${esc(m.created_at)}">${esc(date(m.created_at))}</time>${m.is_outgoing?`<span class="chat-delivery" aria-label="${state}" title="${state}"> ${icon}</span>`:''}</footer></article>`}).join('')||'<div class="chat-empty"><p>This is the beginning of your conversation.</p></div>'}</div>${canReply(t)?`<form class="chat-composer"><label class="chat-input-label"><span class="chat-sr-only">Message ${esc(t.name)}</span><textarea name="message" rows="1" maxlength="2000" placeholder="Write a message…" required>${esc(draft.text||'')}</textarea></label><button type="submit" class="chat-send" aria-label="Send message">Send <span aria-hidden="true">↗</span></button>${config.anonymous?`<label class="chat-anonymous"><input name="anonymous" type="checkbox" ${draft.anonymous?'checked':''}> Send anonymously <small>Your name and photo will be hidden; personal replies are unavailable.</small></label>`:''}</form>`:`<p class="chat-read-only">${t.review?'This conversation is available for review.':(t.id==null?'This sender’s identity is private. Personal replies are unavailable.':'Replies are unavailable for this contact.')}</p>`}`;
       pane.querySelector('.chat-back').addEventListener('click',()=>{remember();host.classList.remove('chat-is-open');list.querySelector('[aria-pressed=true]')?.focus()});
       pane.querySelector('form')?.addEventListener('submit',send);
       pane.querySelector('textarea')?.addEventListener('input',remember);
@@ -60,15 +61,26 @@
     async function send(event) {
       event.preventDefault();if(busy)return;
       const t=threads.get(selected),form=event.currentTarget,text=form.elements.message.value.trim();if(!text)return;
-      const key=selected;remember();busy=true;form.querySelector('button').disabled=true;form.querySelector('button').textContent='Sending…';status.textContent='';
-      try { await config.send(t,text,!!form.elements.anonymous?.checked);drafts.delete(key);if(selected===key)form.elements.message.value='';await refresh();if(selected===key)open(key);status.textContent='Message sent.'; }
-      catch(error){status.textContent=error.message||'Message could not send. Your draft is saved.'}
-      finally{busy=false;if(form.isConnected){form.querySelector('button').disabled=false;form.querySelector('button').textContent='Send ↗'}}
+      const key=selected,anonymous=!!form.elements.anonymous?.checked,localKey=`local-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const local={local_key:localKey,id:localKey,peer_type:t.type,peer_id:t.id,peer_name:t.name,peer_image_url:t.image,
+        content:text,is_outgoing:true,is_anonymous:anonymous,created_at:new Date().toISOString(),pending:true};
+      for(const [oldKey,item] of pending)if(item.failed&&keyFor(item)===key&&item.content===text)pending.delete(oldKey);
+      busy=true;drafts.set(key,{text:'',anonymous});form.elements.message.value='';pending.set(localKey,local);build();if(selected===key)open(key);pane.querySelector('.chat-send').disabled=true;status.textContent='';
+      try {
+        const sent=await config.send(t,text,anonymous);
+        pending.delete(localKey);
+        rows.push({...sent,peer_type:t.type,peer_id:t.id,peer_name:t.name,peer_image_url:t.image,is_outgoing:true,unread:false});
+        build();if(selected===key)open(key);refresh();
+      } catch(error) {
+        local.pending=false;local.failed=true;build();
+        if(selected===key){drafts.set(key,{text,anonymous});open(key)}
+        status.textContent=error.message||'Message could not send. Your text is ready to retry.';
+      } finally {busy=false;const button=pane.querySelector('.chat-send');if(button)button.disabled=false}
     }
     async function refresh() {
       if(loading||dead)return;loading=true;const button=host.querySelector('.chat-refresh');button.disabled=true;
-      try {const result=await config.load();if(dead)return;remember();rows=result.rows||[];contacts=result.contacts||[];const next=JSON.stringify(result);const changed=signature!==next;signature=next;build();if(selected&&changed&&!busy&&host.classList.contains('chat-is-open')){const log=pane.querySelector('.chat-log'),scroll=log?.scrollTop||0,nearEnd=!log||log.scrollHeight-log.scrollTop-log.clientHeight<60;const text=pane.querySelector('textarea'),active=document.activeElement===text,start=text?.selectionStart,end=text?.selectionEnd;open(selected);if(!nearEnd)pane.querySelector('.chat-log').scrollTop=scroll;if(active){const nextText=pane.querySelector('textarea');nextText?.focus();nextText?.setSelectionRange(start,end)}}status.textContent='';}
-      catch(error){status.textContent=error.message||'Chats could not load. Try refreshing.'}
+      try {const showPreview=preview=>{if(dead||messagesLoaded)return;rows=preview.rows||[];if(preview.contacts)contacts=preview.contacts;build()};showPreview.initial=!messagesLoaded;const result=await config.load(showPreview);if(dead)return;remember();rows=result.rows||[];if(result.contacts)contacts=result.contacts;messagesLoaded=true;const next=JSON.stringify(result);const changed=signature!==next;signature=next;build();if(selected&&(changed||pane.querySelector('[role="status"]'))&&!busy&&host.classList.contains('chat-is-open')){const log=pane.querySelector('.chat-log'),scroll=log?.scrollTop||0,nearEnd=!log||log.scrollHeight-log.scrollTop-log.clientHeight<60;const text=pane.querySelector('textarea'),active=document.activeElement===text,start=text?.selectionStart,end=text?.selectionEnd;open(selected);if(!nearEnd)pane.querySelector('.chat-log').scrollTop=scroll;if(active){const nextText=pane.querySelector('textarea');nextText?.focus();nextText?.setSelectionRange(start,end)}}status.textContent='';}
+      catch(error){status.textContent=error.message||'Chats could not load. Try refreshing.';if(!messagesLoaded){const log=pane.querySelector('.chat-log');if(log)log.innerHTML='<div class="chat-empty" role="alert">Messages could not load. Try refreshing.</div>';if(!threads.size)list.innerHTML='<div class="chat-empty" role="alert">Chats could not load. Try refreshing.</div>'}}
       finally{loading=false;if(!dead)button.disabled=false}
     }
     host.addEventListener('error',event=>{if(event.target.matches?.('.chat-avatar img'))event.target.remove()},true);
@@ -99,7 +111,8 @@ window.ArounusChat.installWorkspace = role => {
     let people=[];
     const chat=ArounusChat.mount(card.querySelector(role==='student'?'#studentMessagesList':'#workspaceChats'),{
       anonymous:role==='student',
-      load:async()=>{
+      load:async showPreview=>{
+        if(showPreview.initial)showPreview({rows:await request('/'+role+'/messages?summary=true')});
         const rows=await request('/'+role+'/messages');
         if(role!=='admin')people=await request(role==='student'?'/student/message-lecturers':'/lecturer/message-students').catch(()=>[]);
         const contacts=people.map(p=>({type:role==='student'?'lecturer':'student',id:p.id,name:p.full_name,image:p.profile_image_url}));

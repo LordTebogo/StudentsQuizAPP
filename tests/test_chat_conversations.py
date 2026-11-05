@@ -22,6 +22,15 @@ class ChatConversationsTest(unittest.TestCase):
   self.assertEqual(self.client.get('/student/messages/unread',headers=self.sh).json()['count'],2)
   read=self.client.post('/student/messages/read',headers=self.sh,json={'message_ids':[self.messages[0],self.messages[2]]})
   self.assertEqual(read.json()['read_count'],1);self.assertEqual(self.client.get('/student/messages/unread',headers=self.sh).json()['count'],1)
+ def test_sidebar_summary_keeps_names_and_unread_counts_without_full_message_bodies(self):
+  response=self.client.get('/student/messages?summary=true',headers=self.sh)
+  self.assertEqual(response.status_code,200,response.text)
+  rows=response.json();self.assertEqual(len(rows),2)
+  tutor=next(r for r in rows if r['peer_name']=='Tutor')
+  self.assertEqual(tutor['unread_count'],1)
+  self.assertNotIn('read_at',tutor)
+  self.assertLessEqual(len(tutor['content']),100)
+  self.assertEqual(self.client.get('/student/messages?summary=true').status_code,401)
  def test_anonymous_incoming_has_no_profile_or_contact_identity(self):
   row=next(r for r in self.client.get('/lecturer/messages',headers=self.lh).json() if r['id']==self.messages[2])
   self.assertIsNone(row['sender_id']);self.assertIsNone(row['peer_id']);self.assertIsNone(row['sender_image_url']);self.assertIsNone(row['peer_image_url']);self.assertEqual(row['peer_name'],'Anonymous student')
@@ -36,6 +45,11 @@ class ChatConversationsTest(unittest.TestCase):
    row=DirectMessage(sender_type='student',sender_id=self.a,recipient_type='landlord',recipient_id=self.c,content='Hello provider',created_at='2026-11-03');db.add(row);db.commit();mid=row.id
   row=next(r for r in self.client.get('/marketing/provider/messages',headers={'X-Landlord-Token':main._issue_landlord_token(self.c)}).json() if r['id']==mid)
   self.assertEqual(row['peer_image_url'],'https://example.test/learner.png');self.assertEqual(row['peer_name'],'Learner');self.assertFalse(row['is_outgoing'])
+  summary=self.client.get('/marketing/provider/messages?summary=true',headers={'X-Landlord-Token':main._issue_landlord_token(self.c)})
+  self.assertEqual(summary.status_code,200,summary.text)
+  peer=next(r for r in summary.json() if r['peer_name']=='Learner')
+  self.assertEqual(peer['unread_count'],1)
+  self.assertNotIn('read_at',peer)
  def test_admin_review_does_not_offer_a_false_personal_thread(self):
   with main.SessionLocal() as db:
    row=db.get(DirectMessage,self.messages[0]);data=main._message_dict(db,row,'admin',None);self.assertTrue(data['review_only']);self.assertFalse(data['unread']);self.assertIn('Tutor',data['peer_name']);self.assertIn('Learner',data['peer_name'])
@@ -49,6 +63,9 @@ class ChatConversationsTest(unittest.TestCase):
   self.assertEqual(response.json()['read_count'],1)
   with main.SessionLocal() as db:
    self.assertIsNone(db.get(DirectMessage,self.messages[0]).read_at)
+  summary=self.client.get('/marketing/provider/messages?summary=true',headers=headers).json()
+  anonymous=next(r for r in summary if r['id']==mid)
+  self.assertIsNone(anonymous['peer_id']);self.assertIsNone(anonymous['sender_id'])
 
  def test_tutor_can_reply_to_admin_and_market_but_cannot_bypass_learner_module_access(self):
   for kind,person in [('admin',0),('landlord',self.c)]:

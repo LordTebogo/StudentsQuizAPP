@@ -243,7 +243,7 @@
     document.getElementById('sellIntro').textContent = 'Messages show your account name. Keep passwords and payment details private.';
     content.innerHTML = '<button class="sell-back" type="button" data-sell-back>← Back to listings</button><p class="muted" data-market-notification-note role="status"></p><div data-market-chats></div>';
     const chats=window.ArounusChat.mount(content.querySelector('[data-market-chats]'),{
-      load:async()=>({rows:await request('/marketing/provider/messages')}),
+      load:async showPreview=>{if(showPreview.initial)showPreview({rows:await request('/marketing/provider/messages?summary=true')});return {rows:await request('/marketing/provider/messages')};},
       canReply:t=>['student','lecturer','landlord'].includes(t.type),
       send:(t,text)=>request('/marketing/provider/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({recipient_type:t.type,recipient_id:t.id,content:text,is_anonymous:false})}),
       read:(t,rows)=>request('/marketing/provider/messages/read-items',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message_ids:rows.map(m=>m.id)})}),
@@ -270,7 +270,6 @@
   window.openMarketConversation = async (id, name, image) => {
     const chats = await open(true);
     if (!chats) return;
-    await chats.ready;
     chats.open('landlord', id, name || 'Market contact', image);
   };
   document.addEventListener('click',event=>{
