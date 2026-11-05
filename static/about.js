@@ -6,14 +6,15 @@
 
   const result = new URLSearchParams(location.search).get('support');
   const returnMessage = result === 'success'
-    ? 'Thank you for supporting Arounus. Paystack confirmed your payment.'
-    : result === 'pending' ? 'Your payment is not confirmed yet. Check your email or Paystack receipt before trying again.' : '';
+    ? 'Thank you for supporting Arounus. Ozow confirmed your payment.'
+    : result === 'pending' ? 'Your payment is not confirmed yet. Check your Ozow receipt before trying again.'
+    : result === 'failed' ? 'The payment did not complete. You can try again.' : '';
 
   fetch('/billing/support/status', {cache: 'no-store'})
     .then(response => response.ok ? response.json() : Promise.reject())
     .then(data => {
       button.disabled = !data.available;
-      status.textContent = returnMessage || (data.available ? 'Ready to continue to Paystack.' : 'Paystack donations are not available yet. Please check back later.');
+      status.textContent = returnMessage || (data.available ? 'Ready to continue to Ozow.' : 'Ozow payments are not available yet. Please check back later.');
     })
     .catch(() => { status.textContent = returnMessage || 'Payment availability could not be checked. Please try again later.'; });
 
@@ -21,7 +22,7 @@
     event.preventDefault();
     if (button.disabled || !form.reportValidity()) return;
     button.disabled = true;
-    status.textContent = 'Opening secure Paystack checkout…';
+    status.textContent = 'Opening secure Ozow checkout…';
     try {
       const response = await fetch('/billing/support/checkout', {
         method: 'POST',

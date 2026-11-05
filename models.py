@@ -136,10 +136,25 @@ class PremiumPayment(Base):
     student_id = Column(Integer, ForeignKey("students.id"), nullable=False, index=True)
     merchant_reference = Column(String, nullable=False, unique=True, index=True)
     payu_reference = Column(String, unique=True)
+    ozow_payment_id = Column(String, unique=True)
     checkout_url = Column(Text)
     provider = Column(String, nullable=False, default="payu")
     plan = Column(String, nullable=False)
     amount_cents = Column(Integer, nullable=False)
+    status = Column(String, nullable=False, default="pending")
+    created_at = Column(String, nullable=False)
+    confirmed_at = Column(String)
+
+
+class SupportPayment(Base):
+    __tablename__ = "support_payments"
+
+    id = Column(Integer, primary_key=True)
+    merchant_reference = Column(String, nullable=False, unique=True, index=True)
+    ozow_payment_id = Column(String, unique=True)
+    email = Column(String, nullable=False)
+    amount_cents = Column(Integer, nullable=False)
+    checkout_url = Column(Text)
     status = Column(String, nullable=False, default="pending")
     created_at = Column(String, nullable=False)
     confirmed_at = Column(String)

@@ -114,6 +114,7 @@ from models import (
     Submission,
     Student,
     PremiumPayment,
+    SupportPayment,
     PushSubscription, MarketPushSubscription,
     StudentModule,
     Landlord, Accommodation, AccommodationComment, RoomListingEmail, MarketAdvert, MarketListingView, MarketListingRating, MediaFinanceEntry, MediaUploadEvent,
@@ -126,6 +127,7 @@ from quiz_spreadsheet import QuizSpreadsheetError, parse_quiz_spreadsheet
 from cloudinary_utils import upload_image_bytes, upload_video_variants, premium_video_url, delete_lesson_video_variants
 from payu_checkout import PLANS as PREMIUM_PLANS, PayUError, configured as payu_configured, start as payu_start, verify as payu_verify
 from paystack_checkout import PaystackError, configured as paystack_configured, start as paystack_start, verify as paystack_verify, verify_webhook_signature as paystack_verify_webhook_signature
+from ozow_checkout import OzowError, configured as ozow_configured, start as ozow_start, verify as ozow_verify
 
 # Matplotlib is loaded lazily for equation rendering. Give it a writable
 # cache in local and cloud environments where the default home may be read-only.
@@ -420,6 +422,9 @@ def ensure_premium_billing_schema():
                 conn.execute(text("ALTER TABLE premium_payments ADD COLUMN provider VARCHAR DEFAULT 'payu' NOT NULL"))
             if "checkout_url" not in payment_columns:
                 conn.execute(text("ALTER TABLE premium_payments ADD COLUMN checkout_url TEXT"))
+            if "ozow_payment_id" not in payment_columns:
+                conn.execute(text("ALTER TABLE premium_payments ADD COLUMN ozow_payment_id VARCHAR"))
+            conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_premium_ozow_payment_id ON premium_payments (ozow_payment_id)"))
             conn.execute(text(
                 "CREATE UNIQUE INDEX IF NOT EXISTS ux_premium_intro_per_student "
                 "ON premium_payments (student_id) "
@@ -3573,9 +3578,10 @@ def premium_plans(
         "currency": "ZAR",
         "plans": plans,
         "checkout_available": bool(payu_configured() and os.getenv("PUBLIC_BASE_URL", "").startswith("https://")),
-        "paystack_available": bool(paystack_configured() and os.getenv("PUBLIC_BASE_URL", "").startswith("https://")),
+        "paystack_available": False,
+        "ozow_available": bool(ozow_configured() and os.getenv("PUBLIC_BASE_URL", "").startswith("https://")),
         # Older installed clients still read this field.
-        "google_pay_available": bool(paystack_configured() and os.getenv("PUBLIC_BASE_URL", "").startswith("https://")),
+        "google_pay_available": False,
     })
     response.headers["Cache-Control"] = "private, no-store"
     return response
@@ -3585,7 +3591,7 @@ def premium_plans(
 def premium_status(student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
     pending = db.query(PremiumPayment).filter(PremiumPayment.student_id == student.id,
                                                PremiumPayment.status == "pending").order_by(PremiumPayment.id.desc()).first()
-    if pending and (pending.provider == "paystack" or pending.payu_reference):
+    if pending and (pending.provider in ("paystack", "ozow") or pending.payu_reference):
         _confirm_premium_payment(pending.merchant_reference, db)
         db.refresh(student)
     response = JSONResponse({"active": _has_premium_video(student), "until": student.premium_until,
@@ -3606,44 +3612,70 @@ class SupportCheckoutRequest(BaseModel):
 
 @app.get("/billing/support/status")
 def support_checkout_status():
-    response = JSONResponse({"available": bool(paystack_configured() and os.getenv("PUBLIC_BASE_URL", "").startswith("https://"))})
+    response = JSONResponse({"available": bool(ozow_configured() and os.getenv("PUBLIC_BASE_URL", "").startswith("https://"))})
     response.headers["Cache-Control"] = "no-store"
     return response
 
 
 @app.post("/billing/support/checkout")
-def support_checkout(payload: SupportCheckoutRequest):
-    if not paystack_configured():
-        raise HTTPException(status_code=503, detail="Paystack donations are not available yet.")
+def support_checkout(payload: SupportCheckoutRequest, db: Session = Depends(get_db)):
+    if not ozow_configured():
+        raise HTTPException(status_code=503, detail="Ozow payments are not available yet.")
     public_base = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
     if not public_base.startswith("https://"):
-        raise HTTPException(status_code=503, detail="Paystack donations are not available yet.")
+        raise HTTPException(status_code=503, detail="Ozow payments are not available yet.")
     if not 20 <= payload.amount_rand <= 5000:
         raise HTTPException(status_code=400, detail="Choose an amount from R20 to R5,000.")
     email = payload.email.strip().lower()
     if len(email) > 254 or not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
         raise HTTPException(status_code=400, detail="Enter a valid email address.")
     reference = "AS" + secrets.token_hex(16).upper()
+    payment = SupportPayment(merchant_reference=reference, email=email,
+                             amount_cents=payload.amount_rand * 100, status="pending",
+                             created_at=datetime.now(timezone.utc).isoformat())
+    db.add(payment)
+    db.commit()
     try:
-        checkout_url = paystack_start(reference, email, payload.amount_rand * 100,
-                                      f"{public_base}/billing/support/return")
-    except PaystackError as exc:
+        payment_id, checkout_url = ozow_start(reference, payment.amount_cents,
+            f"{public_base}/billing/support/return?reference={reference}")
+    except OzowError as exc:
+        payment.status = "setup_failed"
+        db.commit()
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    payment.ozow_payment_id = payment_id
+    payment.checkout_url = checkout_url
+    db.commit()
     return JSONResponse({"checkout_url": checkout_url}, headers={"Cache-Control": "no-store"})
 
 
+def _confirm_support_payment(reference: str, db: Session) -> str:
+    payment = db.query(SupportPayment).filter(SupportPayment.merchant_reference == reference).populate_existing().with_for_update().first()
+    if not payment:
+        return "unknown"
+    if payment.status == "paid":
+        return "success"
+    if not payment.ozow_payment_id:
+        return "pending"
+    try:
+        result = ozow_verify(payment.ozow_payment_id, reference, payment.amount_cents, payment.created_at)
+    except OzowError:
+        return "pending"
+    if result == "paid":
+        payment.status = "paid"
+        payment.confirmed_at = datetime.now(timezone.utc).isoformat()
+    elif result == "failed":
+        payment.status = "failed"
+    else:
+        return "pending"
+    db.commit()
+    return "success" if result == "paid" else "failed"
+
+
 @app.get("/billing/support/return")
-def support_checkout_return(reference: str):
+def support_checkout_return(reference: str, db: Session = Depends(get_db)):
     if not re.fullmatch(r"AS[A-F0-9]{32}", reference):
         raise HTTPException(status_code=400, detail="Invalid payment reference")
-    status = "pending"
-    if paystack_configured():
-        try:
-            result = paystack_verify(reference)
-            if result["reference"] == reference and result["currency"] == "ZAR" and result["domain"] == "live":
-                status = "success" if result["status"] == "success" else "pending"
-        except PaystackError:
-            pass
+    status = _confirm_support_payment(reference, db)
     return RedirectResponse(url=f"/about?support={status}#supportArounus", status_code=303)
 
 
@@ -3652,8 +3684,8 @@ def premium_checkout(payload: PremiumCheckoutRequest, student: Student = Depends
     plan = PREMIUM_PLANS.get(payload.plan)
     if not plan:
         raise HTTPException(status_code=400, detail="Choose a valid Premium HD plan")
-    if payload.provider not in ("payu", "paystack"):
-        raise HTTPException(status_code=400, detail="Choose PayU or Paystack")
+    if payload.provider not in ("payu", "ozow"):
+        raise HTTPException(status_code=400, detail="Choose PayU or Ozow")
     # Serialize checkouts per account and reserve the first-month offer once.
     student = db.query(Student).filter(Student.id == student.id).populate_existing().with_for_update().one()
     if student.premium_lifetime:
@@ -3661,7 +3693,7 @@ def premium_checkout(payload: PremiumCheckoutRequest, student: Student = Depends
     public_base = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
     if (not public_base.startswith("https://") or
             (payload.provider == "payu" and not payu_configured()) or
-            (payload.provider == "paystack" and not paystack_configured())):
+            (payload.provider == "ozow" and not ozow_configured())):
         raise HTTPException(status_code=503, detail="Premium checkout is being set up. Please try again later.")
     introductory = payload.plan == "monthly" and _premium_intro_available(db, student)
     pending_intro = db.query(PremiumPayment).filter(
@@ -3691,9 +3723,9 @@ def premium_checkout(payload: PremiumCheckoutRequest, student: Student = Depends
                 f"{public_base}/billing/premium/return?reference={reference}&cancelled=1", student.email)
             payment.payu_reference = payu_reference
         else:
-            checkout_url = paystack_start(reference, student.email, payment.amount_cents,
-                                          f"{public_base}/billing/premium/paystack/return")
-    except (PayUError, PaystackError) as exc:
+            payment.ozow_payment_id, checkout_url = ozow_start(reference, payment.amount_cents,
+                f"{public_base}/billing/premium/ozow/return?reference={reference}")
+    except (PayUError, OzowError) as exc:
         payment.status = "setup_failed"
         db.commit()
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -3712,14 +3744,23 @@ def _confirm_premium_payment(reference: str, db: Session) -> str:
         return "paid"
     if payment.provider == "payu" and not payment.payu_reference:
         return "pending"
+    if payment.provider == "ozow" and not payment.ozow_payment_id:
+        return "pending"
     try:
-        result = paystack_verify(reference) if payment.provider == "paystack" else payu_verify(reference)
-    except (PayUError, PaystackError):
+        result = (ozow_verify(payment.ozow_payment_id, reference, payment.amount_cents, payment.created_at)
+                  if payment.provider == "ozow" else
+                  paystack_verify(reference) if payment.provider == "paystack" else payu_verify(reference))
+    except (PayUError, PaystackError, OzowError):
         return "pending"
     student = db.query(Student).filter(Student.id == payment.student_id).populate_existing().with_for_update().first()
     if not student:
         return "unknown"
-    if payment.provider == "paystack":
+    if payment.provider == "ozow":
+        if result == "pending":
+            return "pending"
+        valid = result in ("paid", "failed")
+        state = "SUCCESSFUL" if result == "paid" else "FAILED"
+    elif payment.provider == "paystack":
         if result["status"] not in ("success", "failed"):
             return "pending"
         valid = (result["reference"] == reference and result["amount_cents"] == payment.amount_cents
@@ -3823,6 +3864,18 @@ def premium_paystack_return(reference: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Invalid payment reference")
     payment = db.query(PremiumPayment).filter(PremiumPayment.merchant_reference == reference,
                                                PremiumPayment.provider == "paystack").first()
+    if not payment:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    status = _confirm_premium_payment(reference, db)
+    return RedirectResponse(url=f"/premium?payment={status}&reference={reference}", status_code=303)
+
+
+@app.get("/billing/premium/ozow/return")
+def premium_ozow_return(reference: str, db: Session = Depends(get_db)):
+    if not re.fullmatch(r"AR[A-F0-9]{32}", reference):
+        raise HTTPException(status_code=400, detail="Invalid payment reference")
+    payment = db.query(PremiumPayment).filter(PremiumPayment.merchant_reference == reference,
+                                               PremiumPayment.provider == "ozow").first()
     if not payment:
         raise HTTPException(status_code=404, detail="Payment not found")
     status = _confirm_premium_payment(reference, db)
