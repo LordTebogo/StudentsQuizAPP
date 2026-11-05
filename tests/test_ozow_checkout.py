@@ -55,7 +55,8 @@ class OzowCheckoutTest(unittest.TestCase):
             self.assertIn("fromDate=2026-11-05", request.call_args.args[0])
         for field, value in [("merchantReference", "OTHER"), ("siteCode", "OTHER"),
                              ("amount", {"currency": "ZAR", "value": 1.0}),
-                             ("amount", {"currency": "USD", "value": 15.0})]:
+                             ("amount", {"currency": "USD", "value": 15.0}),
+                             ("amount", {"currency": "ZAR", "value": 15.001})]:
             with self.subTest(field=field), patch.object(ozow, "_token", return_value="access"), patch.object(
                     ozow, "_json_request", return_value={"results": [{**row, field: value}]}):
                 self.assertEqual(ozow.verify(PAYMENT_ID, REFERENCE, 1500, "2026-11-05T00:00:00+00:00"), "pending")

@@ -104,12 +104,12 @@ def verify(payment_id, reference, amount_cents, created_at):
             continue
         amount = row.get("amount") or {}
         try:
-            cents = int(Decimal(str(amount.get("value"))) * 100)
+            cents = Decimal(str(amount.get("value"))) * 100
         except (InvalidOperation, ValueError, TypeError):
             continue
         if (row.get("merchantReference") == reference and
                 row.get("siteCode") == os.environ["OZOW_SITE_CODE"].strip() and
-                amount.get("currency") == "ZAR" and cents == amount_cents):
+                amount.get("currency") == "ZAR" and cents == Decimal(amount_cents)):
             matched.append(row.get("status", "").lower())
     if "successful" in matched:
         return "paid"
