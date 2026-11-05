@@ -6,50 +6,25 @@
   const categories = {rooms:'Rooms', transport:'Transport', items:'Items for sale', services:'Other services'};
   const classify = ad => /transport|ride|shuttle|courier|delivery/i.test(ad.category) ? 'transport' : /sales|retail|technology|second.?hand|textbook/i.test(ad.category) ? 'items' : 'services';
   let entries = [], category = 'all', failures = 0, loading = false, openKey = '';
-  let visitorLocation = null, locationRequest = null, routeStatus = '';
-  const routeDistances = new Map(), routeRequests = new Map();
+  let visitorLocation = null, locationRequest = null;
   const coordinates = entry => {
     if (entry.latitude === null || entry.latitude === undefined || entry.longitude === null || entry.longitude === undefined || entry.latitude === '' || entry.longitude === '') return null;
     const latitude = Number(entry.latitude), longitude = Number(entry.longitude);
     return Number.isFinite(latitude) && Number.isFinite(longitude) && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180 ? {latitude, longitude} : null;
   };
-  const distanceMeters = entry => routeDistances.get(entry.key) ?? null;
+  const distanceMeters = entry => {
+    const target = coordinates(entry);
+    if (!visitorLocation || !target) return null;
+    const toRadians = value => value * Math.PI / 180;
+    const latitudeDelta = toRadians(target.latitude - visitorLocation.latitude);
+    const longitudeDelta = toRadians(target.longitude - visitorLocation.longitude);
+    const a = Math.sin(latitudeDelta / 2) ** 2 + Math.cos(toRadians(visitorLocation.latitude)) * Math.cos(toRadians(target.latitude)) * Math.sin(longitudeDelta / 2) ** 2;
+    return 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  };
   const distanceLabel = entry => {
     const meters = distanceMeters(entry);
-    return meters === null ? '' : `About ${meters < 1000 ? `${Math.round(meters)} m` : `${(meters / 1000).toFixed(1)} km`} away · shortest walking route from Google Maps`;
+    return meters === null ? '' : `About ${meters < 1000 ? `${Math.round(meters)} m` : `${(meters / 1000).toFixed(1)} km`} away · straight-line estimate`;
   };
-  function getRouteDistance(entry) {
-    if (!coordinates(entry) || !visitorLocation) return Promise.resolve(null);
-    if (routeDistances.has(entry.key)) return Promise.resolve(routeDistances.get(entry.key));
-    if (routeRequests.has(entry.key)) return routeRequests.get(entry.key);
-    const kind = entry.kind === 'rooms' ? 'room' : 'offer';
-    const request = fetch(`/marketing/listings/${kind}/${entry.id}/walking-distance`, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify(visitorLocation), signal:AbortSignal.timeout(12000)
-    }).then(response => { if (!response.ok) throw new Error('Route unavailable');return response.json(); })
-      .then(data => {
-        const meters = Number(data.distance_meters);
-        if (!Number.isFinite(meters) || meters < 0) throw new Error('Invalid route');
-        routeDistances.set(entry.key, meters);
-        if ($('sortListings').value === 'nearest') render();
-        return meters;
-      }).finally(() => routeRequests.delete(entry.key));
-    routeRequests.set(entry.key, request);
-    return request;
-  }
-  async function loadRouteDistances() {
-    const pinned = entries.filter(coordinates);
-    let index = 0;
-    async function worker() {
-      while (index < pinned.length && $('sortListings').value === 'nearest') {
-        const entry = pinned[index++];
-        try { await getRouteDistance(entry); } catch {}
-      }
-    }
-    await Promise.all(Array.from({length: Math.min(4, pinned.length)}, worker));
-    routeStatus = routeDistances.size ? 'Sorted by shortest available walking routes from Google Maps. Listings without a route appear last.' : 'Walking routes unavailable. Check that Google Maps routes are enabled, then retry.';
-    updateNearestStatus();
-  }
   function getVisitorLocation() {
     if (visitorLocation) return Promise.resolve(visitorLocation);
     if (locationRequest) return locationRequest;
@@ -66,8 +41,8 @@
   function updateNearestStatus(message = '') {
     const active = $('sortListings').value === 'nearest';
     $('nearestStatus').hidden = !active;
-    $('nearestStatus').textContent = active ? (message || routeStatus || (visitorLocation ? 'Finding walking routes with Google Maps…' : 'Use your location to sort nearby listings.')) : '';
-    $('retryNearestLocation').hidden = !active || (Boolean(visitorLocation) && !routeStatus.startsWith('Walking routes unavailable'));
+    $('nearestStatus').textContent = active ? (message || (visitorLocation ? 'Sorted by straight-line distance from your location. Listings without a map pin appear last.' : 'Use your location to sort nearby listings.')) : '';
+    $('retryNearestLocation').hidden = !active || Boolean(visitorLocation);
   }
   let closingFromHistory = false;
   const bookmarkIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4Z"/></svg>';
@@ -302,10 +277,11 @@
     distance.setAttribute('aria-live', 'polite');
     distance.textContent = !coordinates(entry) ? 'Distance unavailable: this listing has no map pin.' : distanceLabel(entry) || 'Finding your distance…';
     $('offerDetails').querySelector('.offer-price').before(distance);
-    if (coordinates(entry)) getVisitorLocation().then(() => getRouteDistance(entry)).then(() => {
+    if (coordinates(entry) && !visitorLocation) getVisitorLocation().then(() => {
       if (openKey === entry.key && distance.isConnected) distance.textContent = distanceLabel(entry);
+      if ($('sortListings').value === 'nearest') render();
     }).catch(() => {
-      if (openKey === entry.key && distance.isConnected) distance.textContent = visitorLocation ? 'Walking route unavailable from Google Maps.' : 'Distance unavailable. Allow location access to see how far away this is.';
+      if (openKey === entry.key && distance.isConnected) distance.textContent = 'Distance unavailable. Allow location access to see how far away this is.';
     });
     $('offerDetails').dataset.gallery = JSON.stringify(gallery);
     $('offerDetails').dataset.galleryIndex = '0';
@@ -337,7 +313,6 @@
     const campuses = [...new Set(entries.flatMap(entry => [entry.campus?.trim(), entry.area?.trim()]).filter(Boolean))].sort();
     $('campusOptions').replaceChildren(...campuses.map(campus => { const option = document.createElement('option'); option.value = campus; return option; }));
     loading = false; render();
-    if ($('sortListings').value === 'nearest' && visitorLocation) loadRouteDistances();
     if (deepLinkKey) {
       const target = entries.find(entry => entry.key === deepLinkKey);
       if (target) openOffer(target, true);
@@ -349,12 +324,11 @@
   $('search').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(render, 180); });
   $('maxPrice').addEventListener('input', render);
   async function sortNearest() {
-    routeStatus = '';
     updateNearestStatus('Finding your location…');
-    try { await getVisitorLocation();render();await loadRouteDistances(); }
+    try { await getVisitorLocation();render(); }
     catch (error) { render();updateNearestStatus(error.message); }
   }
-  $('sortListings').addEventListener('change', () => { render();if ($('sortListings').value === 'nearest') visitorLocation ? loadRouteDistances() : sortNearest(); });
+  $('sortListings').addEventListener('change', () => { render();if ($('sortListings').value === 'nearest' && !visitorLocation)sortNearest(); });
   $('retryNearestLocation').addEventListener('click', sortNearest);
   document.querySelectorAll('[data-category]').forEach(button => button.addEventListener('click', () => { category = button.dataset.category; document.querySelectorAll('[data-category]').forEach(item => item.setAttribute('aria-pressed', String(item === button))); render(); }));
   $('clearFilters').addEventListener('click', () => { $('campus').value = ''; $('search').value = ''; $('maxPrice').value = ''; $('sortListings').value = 'newest'; try { localStorage.removeItem('marketCampus'); } catch {} document.querySelector('[data-category="all"]').click(); });

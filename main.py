@@ -153,7 +153,6 @@ VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "").strip()
 VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "").strip()
 VAPID_SUBJECT = os.getenv("VAPID_SUBJECT", "mailto:admin@example.com").strip()
 GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY", "").strip()
-GOOGLE_MAPS_ROUTES_API_KEY = os.getenv("GOOGLE_MAPS_ROUTES_API_KEY", "").strip()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 GEMINI_QUIZ_MODEL = os.getenv("GEMINI_QUIZ_MODEL", "gemini-3.1-flash-lite").strip() or "gemini-3.1-flash-lite"
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
@@ -5891,57 +5890,6 @@ def list_accommodations(search: str = "", campus: str = "", db: Session = Depend
 def marketing_maps_config():
     """The browser Maps key is intentionally public, but should be domain-restricted in Google Cloud."""
     return {"api_key": GOOGLE_MAPS_API_KEY}
-
-
-class MarketWalkingDistanceInput(BaseModel):
-    latitude: float = Field(ge=-90, le=90)
-    longitude: float = Field(ge=-180, le=180)
-
-
-@app.post("/marketing/listings/{kind}/{listing_id}/walking-distance")
-def market_walking_distance(kind: str, listing_id: int, payload: MarketWalkingDistanceInput, db: Session = Depends(get_db)):
-    """Return the shortest walking route Google supplies to a published listing."""
-    if kind == "room":
-        item = db.query(Accommodation).join(Landlord, Landlord.id == Accommodation.landlord_id).filter(
-            Accommodation.id == listing_id, Accommodation.is_approved == True, Landlord.active == True  # noqa: E712
-        ).first()
-    elif kind == "offer":
-        today = datetime.now(timezone.utc).date().isoformat()
-        item = db.query(MarketAdvert).filter(
-            MarketAdvert.id == listing_id, MarketAdvert.status == "approved",
-            (MarketAdvert.starts_at.is_(None)) | (MarketAdvert.starts_at <= today),
-            (MarketAdvert.expires_at.is_(None)) | (MarketAdvert.expires_at >= today),
-        ).first()
-    else:
-        raise HTTPException(status_code=404, detail="Listing not found")
-    if not item:
-        raise HTTPException(status_code=404, detail="Listing not found")
-    if item.latitude is None or item.longitude is None:
-        raise HTTPException(status_code=422, detail="This listing has no map pin")
-    key = GOOGLE_MAPS_ROUTES_API_KEY or GOOGLE_MAPS_API_KEY
-    if not key:
-        raise HTTPException(status_code=503, detail="Walking routes are not configured")
-    route_request = {
-        "origin": {"location": {"latLng": {"latitude": payload.latitude, "longitude": payload.longitude}}},
-        "destination": {"location": {"latLng": {"latitude": item.latitude, "longitude": item.longitude}}},
-        "travelMode": "WALK", "computeAlternativeRoutes": True,
-    }
-    request = urllib.request.Request(
-        "https://routes.googleapis.com/directions/v2:computeRoutes",
-        data=json.dumps(route_request).encode("utf-8"),
-        headers={"Content-Type": "application/json", "X-Goog-Api-Key": key,
-                 "X-Goog-FieldMask": "routes.distanceMeters"}, method="POST",
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=8) as response:
-            result = json.load(response)
-    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, ValueError) as exc:
-        raise HTTPException(status_code=503, detail="Google Maps walking route unavailable") from exc
-    distances = [route.get("distanceMeters") for route in result.get("routes", [])]
-    distances = [distance for distance in distances if isinstance(distance, (int, float)) and distance >= 0]
-    if not distances:
-        raise HTTPException(status_code=404, detail="No walking route found")
-    return {"distance_meters": min(distances)}
 
 
 @app.get("/marketing/landlord/listings")
