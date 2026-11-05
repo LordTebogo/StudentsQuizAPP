@@ -30,7 +30,7 @@
     productStyles.href = '/static/product.css';
     document.head.appendChild(productStyles);
   }
-  if (!document.querySelector('link[href="/static/theme.css"]')) {
+  if (!document.querySelector('link[href^="/static/theme.css"]')) {
     const themeStyles = document.createElement('link');
     themeStyles.rel = 'stylesheet';
     themeStyles.href = '/static/theme.css?v=2';
@@ -83,13 +83,14 @@
   ];
   const moreLinks = activeRole === 'admin' ? [
     ['/admin#liveMonitorCard','Live sessions'], ['/admin#adminScripts','Submissions'],
-    ['/admin#adminModeration','Moderation'], ['/tools/media','Compress videos & images'], ['/trust#support','Support'],
+    ['/admin#adminModeration','Moderation'], ['/tools/media','Compress videos & images'],
   ] : activeRole === 'lecturer' ? [
     ['/lecturers/guide', 'Tutor guide'], ['/tools/pdf', 'PDF tools'], ['/tools/media','Compress videos & images'], ['/community', 'Posts'],
     ['/market', 'Market'],
   ] : activeRole === 'student' ? [
     ['/market', 'Market'], ['/tools/pdf', 'PDF tools'], ['/tools/media','Compress videos & images'],
   ] : [['/community', 'Posts']];
+  moreLinks.push(['/trust#support', 'Contact the Arounus team']);
   function toggleMobileMenu(open) {
     let sheet=document.querySelector('.mobile-more-sheet'),scrim=document.querySelector('.mobile-more-scrim');
     if(!sheet){scrim=document.createElement('button');scrim.type='button';scrim.className='mobile-more-scrim';scrim.setAttribute('aria-label','Close menu');sheet=document.createElement('section');sheet.className='mobile-more-sheet';sheet.setAttribute('aria-label','More navigation');const all=[...moreLinks];if(activeRole!=='public')all.push([activeRole==='admin'?'/admin':activeRole==='lecturer'?'/lecturers':'/students',activeRole==='admin'?'Administration overview':'Profile & settings'],['/trust#support','Help & support']);sheet.innerHTML='<div class="mobile-sheet-handle"></div><div class="mobile-sheet-head"><strong>More</strong><button type="button" aria-label="Close menu">×</button></div><nav></nav>';const list=sheet.querySelector('nav');all.forEach(([href,label])=>{const a=document.createElement('a');a.href=href;a.textContent=label;list.appendChild(a)});if(activeRole!=='public'){const signout=document.createElement('button');signout.type='button';signout.className='mobile-signout';signout.textContent=activeRole==='admin'?'Lock administration':'Sign out';signout.addEventListener('click',()=>{sessionStorage.removeItem(activeSessionKey);sessionStorage.removeItem('activeRole');location.href=activeRole==='admin'?'/admin':'/'});list.appendChild(signout)}document.body.append(scrim,sheet);scrim.addEventListener('click',()=>toggleMobileMenu(false));sheet.querySelector('.mobile-sheet-head button').addEventListener('click',()=>toggleMobileMenu(false))}

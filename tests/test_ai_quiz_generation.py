@@ -47,7 +47,10 @@ class AIQuizGenerationTest(unittest.TestCase):
         self.enterContext(patch.object(main, "GEMINI_QUIZ_MODEL", "gemini-3.1-flash-lite"))
         self.enterContext(patch.object(main, "OPENAI_API_KEY", "unit-test-openai-key"))
         self.network = self.enterContext(patch("urllib.request.urlopen"))
-        self.network.return_value = io.BytesIO(json.dumps(gemini_response()).encode())
+        self.mock_quiz(QUIZ)
+
+    def mock_quiz(self, quiz):
+        self.network.side_effect = lambda *args, **kwargs: io.BytesIO(json.dumps(gemini_response(quiz)).encode())
 
     def generate(self, **changes):
         payload = dict(topic="Basic arithmetic", module_code="MATH", question_count=1, question_types="mcq")
@@ -72,6 +75,7 @@ class AIQuizGenerationTest(unittest.TestCase):
 
     def test_openai_used_only_when_gemini_is_not_configured(self):
         with patch.object(main, "GEMINI_API_KEY", ""):
+            self.network.side_effect = None
             self.network.return_value = io.BytesIO(json.dumps({"output_text": json.dumps(QUIZ)}).encode())
             response = self.generate()
         self.assertEqual(response.status_code, 200, response.text)
@@ -121,9 +125,74 @@ class AIQuizGenerationTest(unittest.TestCase):
             if change == "count": quiz["questions"] = []
             if change == "key": quiz["questions"][0]["correct_answer"] = "5"
             if change == "duplicate-options": quiz["questions"][0]["options"] = ["4"] * 4
-            self.network.return_value = io.BytesIO(json.dumps(gemini_response(quiz)).encode())
+            self.mock_quiz(quiz)
             with self.subTest(change=change):
+                self.network.reset_mock()
                 self.assertEqual(self.generate().status_code, 502)
+                self.assertEqual(self.network.call_count, 2)
+
+    def test_physics_key_is_repaired_once_without_changing_requested_types(self):
+        invalid = copy.deepcopy(QUIZ)
+        invalid["questions"][0].update(type="short", question="Find the acceleration.",
+                                        options=[], correct_answer="9.8 m/s²")
+        repaired = copy.deepcopy(invalid)
+        repaired["questions"][0].update(question="What property resists a change in motion?",
+                                         correct_answer="inertia")
+        self.network.side_effect = [
+            io.BytesIO(json.dumps(gemini_response(invalid)).encode()),
+            io.BytesIO(json.dumps(gemini_response(repaired)).encode()),
+        ]
+        response = self.generate(topic="Physics: gravity and Newton's laws", question_types="short")
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["questions"][0]["correct_answer"], "inertia")
+        self.assertEqual(self.network.call_count, 2)
+        requests = [call.args[0] for call in self.network.call_args_list]
+        self.assertEqual(requests[0].full_url, requests[1].full_url)
+        prompt = json.loads(requests[1].data)["contents"][0]["parts"][0]["text"]
+        self.assertIn("previous attempt failed validation", prompt)
+        self.assertIn("Use only short questions", prompt)
+
+    def test_numeric_short_keys_are_rejected_even_when_the_word_limit_passes(self):
+        for answer in ("-5", "9.8", "10 N", "m/s", "F=ma"):
+            with self.subTest(answer=answer):
+                quiz = copy.deepcopy(QUIZ)
+                quiz["questions"][0].update(type="short", options=[], correct_answer=answer)
+                self.mock_quiz(quiz)
+                self.assertEqual(self.generate(question_types="short").status_code, 502)
+
+    def test_physics_mcq_preserves_decimal_sign_and_units(self):
+        quiz = copy.deepcopy(QUIZ)
+        quiz["questions"][0].update(question="Take upward as positive. What is gravitational acceleration?",
+                                     options=["-9.8 m/s²", "9.8 m/s²", "0 m/s²", "-98 m/s²"],
+                                     correct_answer="-9.8 m/s²")
+        self.mock_quiz(quiz)
+        response = self.generate(topic="Physics: gravity")
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["questions"][0]["correct_answer"], "-9.8 m/s²")
+        self.assertEqual(self.network.call_count, 1)
+
+    def test_fun_similar_keys_follow_the_same_rules(self):
+        for question_type in ("mcq", "short"):
+            with self.subTest(question_type=question_type):
+                quiz = copy.deepcopy(QUIZ)
+                question = quiz["questions"][0]
+                question.update(similar_question="A related practice question", similar_correct_answer="4",
+                                similar_options=["4"] * 4)
+                if question_type == "short":
+                    question.update(type="short", options=[], correct_answer="inertia",
+                                    similar_options=[], similar_correct_answer="-5")
+                self.mock_quiz(quiz)
+                self.assertEqual(self.generate(is_fun=True, question_types=question_type).status_code, 502)
+
+    def test_openai_invalid_content_is_repaired_by_openai_only(self):
+        with patch.object(main, "GEMINI_API_KEY", ""):
+            self.network.side_effect = [io.BytesIO(json.dumps({"output_text": "{}"}).encode()),
+                io.BytesIO(json.dumps({"output_text": json.dumps(QUIZ)}).encode())]
+            response = self.generate()
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(self.network.call_count, 2)
+        self.assertTrue(all(call.args[0].full_url == "https://api.openai.com/v1/responses"
+                            for call in self.network.call_args_list))
 
     def test_output_budget_depends_on_question_count(self):
         self.network.return_value = io.BytesIO(json.dumps(gemini_response()).encode())

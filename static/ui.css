@@ -944,6 +944,30 @@ header.top nav a,
   color: #3f4a48;
 }
 
+.team-contact { scroll-margin-top: 150px; }
+.team-contact-links {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 12px;
+  margin: 20px 0;
+  font-style: normal;
+}
+.team-contact-links a {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #b9d5ca;
+  border-radius: 12px;
+  background: #f2faf6;
+  color: #0b5f57;
+  overflow-wrap: anywhere;
+}
+.team-contact-links a:hover { background: #e5f3eb; }
+.team-contact-links a:focus-visible { outline: 3px solid #0b5f57; outline-offset: 3px; }
+.team-contact-links span { font-size: .875rem; }
+
 /* Destructive actions keep a readable red on white. */
 .danger-action {
   color: #b3261e !important;

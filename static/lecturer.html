@@ -182,6 +182,7 @@
     <h2>Grade submission</h2>
     <div id="gradingMeta" class="muted"></div>
     <div id="gradingQuestions"></div>
+    <button class="btn secondary" id="suggestMarksBtn" type="button">Suggest AI marks</button>
     <button class="btn" id="saveMarksBtn">Save marks</button>
     <button class="btn secondary" id="downloadOnePdfBtn">Download this student's answers (PDF)</button>
     <div id="gradingMsg"></div>
@@ -651,6 +652,30 @@ async function openGrading(submissionId) {
   }
 }
 
+$('suggestMarksBtn').addEventListener('click', async () => {
+  const button = $('suggestMarksBtn');
+  button.disabled = true;
+  $('gradingMsg').textContent = 'Checking answers and suggesting marks…';
+  try {
+    const result = await api(`/lecturer/submission/${currentSubmissionId}/suggest-marks`, {method: 'POST'}, true);
+    for (const suggestion of result.suggestions) {
+      const input = $(`mark_${suggestion.question_id}`);
+      if (!input) continue;
+      input.value = suggestion.awarded_marks;
+      let reason = input.parentElement.querySelector('.ai-mark-reason');
+      if (!reason) {
+        reason = document.createElement('p');
+        reason.className = 'ai-mark-reason muted';
+        input.insertAdjacentElement('afterend', reason);
+      }
+      reason.textContent = `AI suggestion: ${suggestion.reason || 'Review this mark.'}`;
+    }
+    $('gradingMsg').textContent = 'Review or edit each suggested mark, then select Save marks.';
+  } catch (error) {
+    $('gradingMsg').textContent = `Could not suggest marks: ${error.message}`;
+  } finally { button.disabled = false; }
+});
+
 $('saveMarksBtn').addEventListener('click', async () => {
   const inputs = document.querySelectorAll('#gradingQuestions input[type="number"]');
   const marks = [];
@@ -698,7 +723,7 @@ $('downloadOnePdfBtn').addEventListener('click', () => {
 });
 </script>
 <script src="/static/experience.js?v=18"></script>
-<script src="/static/quiz-builder.js?v=16"></script>
+<script src="/static/quiz-builder.js?v=17"></script>
 <script src="/static/loading.js"></script>
 <script src="/static/pwa.js?v=18"></script>
 <footer class="site-footer arounus-footer" aria-label="Arounus footer">

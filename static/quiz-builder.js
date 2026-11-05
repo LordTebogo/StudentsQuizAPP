@@ -154,7 +154,7 @@
   function imageFields(question) {
     const selected = question.file ? question.file.name : question.image_url;
     const preview = question.image_url ? `<img src="${attr(question.image_url)}" alt="Question image preview">` : '';
-    return `<div class="question-image-row"><div><label for="q-image-${attr(question.key)}">Question image (optional)</label><input id="q-image-${attr(question.key)}" type="file" accept="image/*" data-image-file></div>${selected ? '<button class="btn secondary" type="button" data-action="clear-image">Remove image</button>' : ''}</div>${selected ? `<div class="question-image-preview">${preview}<small>${html(question.file ? `Selected: ${question.file.name}` : question.image_url)}</small></div>` : ''}`;
+    return `<div class="question-image-row"><div><label for="q-image-${attr(question.key)}">Question image (optional)</label><input id="q-image-${attr(question.key)}" type="file" accept="image/*" data-image-file><input type="text" data-image-guidance placeholder="Image guidance (optional, e.g. free-body diagram)"><button class="btn secondary" type="button" data-action="generate-image">Generate AI image</button></div>${selected ? '<button class="btn secondary" type="button" data-action="clear-image">Remove image</button>' : ''}</div>${selected ? `<div class="question-image-preview">${preview}<small>${html(question.file ? `Selected: ${question.file.name}` : question.image_url)}</small></div>` : ''}`;
   }
 
   function renderQuestions() {
@@ -391,7 +391,7 @@
     const status = byId('aiQuizStatus');
     button.disabled = true;
     button.textContent = 'Generating…';
-    status.textContent = 'Creating questions. This can take up to a minute…';
+    status.textContent = 'Creating and checking questions. This may take a few minutes…';
     try {
       const result = await api('/lecturer/quiz/generate', {
         method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({
@@ -606,6 +606,19 @@
     const question = questionFor(button); if (!question) return;
     const index = state.questions.indexOf(question);
     const action = button.dataset.action;
+    if (action === 'generate-image') {
+      const editor = button.closest('.question-editor');
+      const description = editor.querySelector('[data-image-guidance]').value.trim();
+      if (!question.question.trim()) { showBuilderMessage('Write the question before generating its image.', 'error'); return; }
+      button.disabled = true; button.textContent = 'Generating image…';
+      try {
+        const result = await api('/lecturer/quiz-builder/generate-image', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({question:question.question, description})}, true);
+        question.image_url = result.image_url; question.file = null;
+        renderQuestions(); setDirty(true);
+        showBuilderMessage('AI image attached. Review it before saving or publishing.');
+      } catch (error) { showBuilderMessage(`Could not generate image: ${error.message}`, 'error'); button.disabled = false; button.textContent = 'Generate AI image'; }
+      return;
+    }
     if (action === 'move-up' && index > 0) [state.questions[index - 1], state.questions[index]] = [state.questions[index], state.questions[index - 1]];
     if (action === 'move-down' && index < state.questions.length - 1) [state.questions[index + 1], state.questions[index]] = [state.questions[index], state.questions[index + 1]];
     if (action === 'duplicate') state.questions.splice(index + 1, 0, {...question, key:uid(), options:[...question.options], similar_options:[...question.similar_options]});
