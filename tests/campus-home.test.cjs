@@ -7,13 +7,48 @@ const html=fs.readFileSync(path.join(__dirname,'../static/index.html'),'utf8');
 const script=fs.readFileSync(path.join(__dirname,'../static/campus-home.js'),'utf8');
 const rooms=[{id:1,title:'Garden room',campus:'University of Limpopo',is_available:true,monthly_rent:1800},{id:2,title:'Filled room',campus:'University of Limpopo',is_available:false},{id:3,title:'City room',campus:'Other College',is_available:true}];
 const ads=[{id:1,headline:'Campus shuttle',campus:'University of Limpopo',category:'Ride & transport',price:60},{id:2,headline:'Biology textbooks',campus:'University of Limpopo',category:'Sales & retail',price:250,description:'<img src=x onerror=alert(1)>',website_url:'javascript:alert(1)'},{id:3,headline:'Math tutoring',campus:'Other College',category:'Tutoring',is_featured:true}];
-async function setup(failed=[],options={}){const dom=new JSDOM(html,{url:options.url||'https://campus.test/',runScripts:'outside-only'});const w=dom.window;if(options.saved!==undefined)w.localStorage.setItem('arounusSavedListings',JSON.stringify(options.saved));w.AbortSignal=AbortSignal;w.HTMLDialogElement.prototype.showModal=function(){this.open=true};w.HTMLDialogElement.prototype.close=function(){this.open=false};w.fetch=async url=>({ok:!failed.includes(url),json:async()=>url.includes('adverts')?(options.ads || ads):(options.rooms || rooms)});w.eval(script);await new Promise(resolve=>setTimeout(resolve,20));return {w,d:w.document};}
+async function setup(failed=[],options={}){const dom=new JSDOM(html,{url:options.url||'https://campus.test/',runScripts:'outside-only'});const w=dom.window;if(options.saved!==undefined)w.localStorage.setItem('arounusSavedListings',JSON.stringify(options.saved));if(options.geolocation)Object.defineProperty(w.navigator,'geolocation',{value:options.geolocation});w.AbortSignal=AbortSignal;w.HTMLDialogElement.prototype.showModal=function(){this.open=true};w.HTMLDialogElement.prototype.close=function(){this.open=false};w.fetch=async url=>({ok:!failed.includes(url),json:async()=>url.includes('adverts')?(options.ads || ads):(options.rooms || rooms)});w.eval(script);await new Promise(resolve=>setTimeout(resolve,20));return {w,d:w.document};}
 test('public home shows available and filled rooms plus approved offers without a login gate',async()=>{const {d}=await setup();assert.equal(d.querySelectorAll('.campus-card').length,6);assert.ok(d.getElementById('campusListings').textContent.includes('Filled room'));assert.equal(d.querySelector('.academic-link').getAttribute('href'),'/learning');});
 test('search filters are shareable and listing detail links to its public page',async()=>{const {w,d}=await setup();d.getElementById('campus').value='University of Limpopo';d.getElementById('campusSearch').dispatchEvent(new w.Event('submit',{cancelable:true}));assert.match(w.location.search,/campus=University\+of\+Limpopo/);d.querySelector('[data-offer="room-1"]').click();assert.equal(d.querySelector('#offerDetails a[href="/listing/room/1"]')?.textContent,'Open and share this listing');});
 test('campus, search and category filters combine; clear restores all',async()=>{const {w,d}=await setup();d.getElementById('campus').value='University of Limpopo';d.getElementById('campusSearch').dispatchEvent(new w.Event('submit',{cancelable:true}));assert.equal(d.querySelectorAll('.campus-card').length,4);d.querySelector('[data-category="items"]').click();assert.equal(d.querySelectorAll('.campus-card').length,1);assert.match(d.getElementById('campusListings').textContent,/Biology textbooks/);assert.equal(w.localStorage.getItem('marketCampus'),'University of Limpopo');d.getElementById('search').value='missing';d.getElementById('campusSearch').dispatchEvent(new w.Event('submit',{cancelable:true}));assert.match(d.getElementById('campusListings').textContent,/No listings here yet/);d.getElementById('clearFilters').click();assert.equal(d.querySelectorAll('.campus-card').length,6);});
 test('details escape seller content and reject unsafe website links',async()=>{const {d}=await setup();d.querySelector('[data-offer="offer-2"]').click();assert.equal(d.getElementById('offerDialog').open,true);assert.equal(d.getElementById('offerDetails').querySelectorAll('img').length,0);assert.ok(!d.getElementById('offerDetails').innerHTML.includes('href="javascript:'));d.getElementById('closeOffer').click();assert.equal(d.getElementById('offerDialog').open,false);});
 test('partial failure keeps available data with a retry; total failure is not an empty market',async()=>{let {d}=await setup(['/marketing/adverts']);assert.equal(d.querySelectorAll('.campus-card').length,3);assert.equal(d.getElementById('retryListings').hidden,false);assert.match(d.getElementById('marketStatus').textContent,/Some listings/);({d}=await setup(['/marketing/adverts','/marketing/listings']));assert.match(d.getElementById('marketStatus').textContent,/could not be loaded/);assert.equal(d.querySelectorAll('.market-empty').length,0);});
 test('shows prices, labels only featured offers, and filters and sorts by price',async()=>{const {w,d}=await setup();assert.match(d.querySelector('[data-offer="offer-2"]').closest('.campus-card').textContent,/R250/);assert.doesNotMatch(d.querySelector('[data-offer="offer-2"]').closest('.campus-card').textContent,/Sponsored/);assert.match(d.querySelector('[data-offer="offer-3"]').closest('.campus-card').textContent,/Sponsored/);d.getElementById('maxPrice').value='100';d.getElementById('maxPrice').dispatchEvent(new w.Event('input'));assert.equal(d.querySelectorAll('.campus-card').length,1);assert.match(d.getElementById('campusListings').textContent,/Campus shuttle/);d.getElementById('clearFilters').click();d.getElementById('sortListings').value='price-low';d.getElementById('sortListings').dispatchEvent(new w.Event('change'));assert.match(d.querySelector('.campus-card h3').textContent,/Campus shuttle/);});
+
+test('nearest sort uses coordinates and the open listing shows metres away',async()=>{
+  let calls=0;
+  const {w,d}=await setup([],{rooms:[
+    {id:10,title:'Far room',latitude:0,longitude:0.01,is_available:true},
+    {id:11,title:'Near room',latitude:0,longitude:0.00009,is_available:true},
+    {id:12,title:'Unpinned room',is_available:true}
+  ],ads:[],geolocation:{getCurrentPosition(ok){calls++;ok({coords:{latitude:0,longitude:0}})}}});
+  try{
+    assert.equal(calls,0);
+    d.getElementById('sortListings').value='nearest';d.getElementById('sortListings').dispatchEvent(new w.Event('change'));
+    await new Promise(resolve=>setTimeout(resolve,10));
+    assert.equal(calls,1);
+    assert.deepEqual([...d.querySelectorAll('.campus-card')].map(card=>card.dataset.entryKey),['room-11','room-10','room-12']);
+    assert.match(w.location.search,/sort=nearest/);
+    d.querySelector('[data-offer="room-11"]').click();
+    assert.match(d.querySelector('.offer-distance').textContent,/About 10 m away/);
+    d.getElementById('closeOffer').click();d.querySelector('[data-offer="room-12"]').click();
+    assert.match(d.querySelector('.offer-distance').textContent,/no map pin/);
+  }finally{w.close()}
+});
+
+test('denied location leaves listings usable and explains how to retry',async()=>{
+  let calls=0;
+  const {w,d}=await setup([],{rooms:[{id:10,title:'Pinned room',latitude:-23.9,longitude:31.1,is_available:true}],ads:[],geolocation:{getCurrentPosition(_ok,fail){calls++;fail({code:1})}}});
+  try{
+    d.getElementById('sortListings').value='nearest';d.getElementById('sortListings').dispatchEvent(new w.Event('change'));
+    await new Promise(resolve=>setTimeout(resolve,10));
+    assert.equal(calls,1);assert.match(d.getElementById('nearestStatus').textContent,/Allow location access/);
+    assert.equal(d.getElementById('retryNearestLocation').hidden,false);
+    assert.equal(d.querySelectorAll('.campus-card').length,1);
+    d.querySelector('[data-offer="room-10"]').click();await new Promise(resolve=>setTimeout(resolve,10));
+    assert.match(d.querySelector('.offer-distance').textContent,/Distance unavailable/);
+  }finally{w.close()}
+});
 
 test('listings load immediately while search and filters stay inside the closed search dialog',async()=>{const {w,d}=await setup();try{const dialog=d.getElementById('marketSearchDialog'),toggle=d.getElementById('openMarketSearch');assert.equal(dialog.open,false);assert.equal(toggle.getAttribute('aria-expanded'),'false');assert.equal(d.querySelector('.campus-intro'),null);assert.equal(d.querySelector('.campus-brand small').textContent,'Around us');assert.equal(d.getElementById('campusSearch').closest('dialog'),dialog);assert.equal(d.querySelector('.market-refine').closest('dialog'),dialog);assert.equal(d.querySelector('.market-categories').closest('dialog'),dialog);assert.equal(d.querySelectorAll('.campus-card').length,6);toggle.click();assert.equal(dialog.open,true);assert.equal(toggle.getAttribute('aria-expanded'),'true');assert.equal(d.activeElement.id,'search');d.getElementById('closeMarketSearch').click();assert.equal(dialog.open,false);assert.equal(toggle.getAttribute('aria-expanded'),'false');}finally{w.close();}});
 

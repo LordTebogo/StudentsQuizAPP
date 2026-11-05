@@ -6,6 +6,44 @@
   const categories = {rooms:'Rooms', transport:'Transport', items:'Items for sale', services:'Other services'};
   const classify = ad => /transport|ride|shuttle|courier|delivery/i.test(ad.category) ? 'transport' : /sales|retail|technology|second.?hand|textbook/i.test(ad.category) ? 'items' : 'services';
   let entries = [], category = 'all', failures = 0, loading = false, openKey = '';
+  let visitorLocation = null, locationRequest = null;
+  const coordinates = entry => {
+    if (entry.latitude === null || entry.latitude === undefined || entry.longitude === null || entry.longitude === undefined || entry.latitude === '' || entry.longitude === '') return null;
+    const latitude = Number(entry.latitude), longitude = Number(entry.longitude);
+    return Number.isFinite(latitude) && Number.isFinite(longitude) && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180 ? {latitude, longitude} : null;
+  };
+  const distanceMeters = entry => {
+    const target = coordinates(entry);
+    if (!visitorLocation || !target) return null;
+    const toRadians = value => value * Math.PI / 180;
+    const latitudeDelta = toRadians(target.latitude - visitorLocation.latitude);
+    const longitudeDelta = toRadians(target.longitude - visitorLocation.longitude);
+    const a = Math.sin(latitudeDelta / 2) ** 2 + Math.cos(toRadians(visitorLocation.latitude)) * Math.cos(toRadians(target.latitude)) * Math.sin(longitudeDelta / 2) ** 2;
+    return 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  };
+  const distanceLabel = entry => {
+    const meters = distanceMeters(entry);
+    return meters === null ? '' : `About ${meters < 1000 ? `${Math.round(meters)} m` : `${(meters / 1000).toFixed(1)} km`} away · straight-line estimate`;
+  };
+  function getVisitorLocation() {
+    if (visitorLocation) return Promise.resolve(visitorLocation);
+    if (locationRequest) return locationRequest;
+    locationRequest = new Promise((resolve, reject) => {
+      if (!navigator.geolocation?.getCurrentPosition) { reject(new Error('Location is unavailable in this browser.')); return; }
+      navigator.geolocation.getCurrentPosition(position => {
+        const latitude = Number(position.coords?.latitude), longitude = Number(position.coords?.longitude);
+        if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) { reject(new Error('Your location could not be found.')); return; }
+        visitorLocation = {latitude, longitude};resolve(visitorLocation);
+      }, () => reject(new Error('Allow location access to sort by distance.')), {enableHighAccuracy:true, timeout:15000, maximumAge:60000});
+    }).finally(() => { locationRequest = null; });
+    return locationRequest;
+  }
+  function updateNearestStatus(message = '') {
+    const active = $('sortListings').value === 'nearest';
+    $('nearestStatus').hidden = !active;
+    $('nearestStatus').textContent = active ? (message || (visitorLocation ? 'Sorted by straight-line distance from your location. Listings without a map pin appear last.' : 'Use your location to sort nearby listings.')) : '';
+    $('retryNearestLocation').hidden = !active || Boolean(visitorLocation);
+  }
   let closingFromHistory = false;
   const bookmarkIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4Z"/></svg>';
   const pageTitle = document.title;
@@ -16,7 +54,7 @@
   if (params.has('campus')) $('campus').value = params.get('campus');
   if (params.has('q')) $('search').value = params.get('q');
   if (params.has('max')) $('maxPrice').value = params.get('max');
-  if (params.has('sort') && ['newest', 'price-low', 'price-high'].includes(params.get('sort'))) $('sortListings').value = params.get('sort');
+  if (params.has('sort') && ['newest', 'nearest', 'price-low', 'price-high'].includes(params.get('sort'))) $('sortListings').value = params.get('sort');
   if (params.has('category') && ['rooms', 'transport', 'items', 'services'].includes(params.get('category'))) {
     category = params.get('category');
     document.querySelectorAll('[data-category]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.category === category)));
@@ -166,7 +204,16 @@
     searchToggle.setAttribute('aria-label', filterCount ? `Search listings, ${filterCount} active filter${filterCount === 1 ? '' : 's'}` : 'Search listings');
     const filtered = entries.filter(entry => savedOnly ? saved.has(entry.key) : (!campus || normalized([entry.campus, entry.area].filter(Boolean).join(' ')).includes(campus)) && (category === 'all' || entry.kind === category) && (!search || normalized([entry.title, entry.headline, entry.description, entry.area, entry.business_name].join(' ')).includes(search)) && (maximum === null || (priceValue(entry) !== null && priceValue(entry) !== undefined && Number(priceValue(entry)) <= maximum)));
     const sort = $('sortListings').value;
-    if (sort !== 'newest') filtered.sort((a, b) => {
+    updateNearestStatus();
+    if (sort === 'nearest' && visitorLocation) filtered.sort((a, b) => {
+      if (isDemo(a) !== isDemo(b)) return isDemo(a) ? 1 : -1;
+      if (isFilledRoom(a) !== isFilledRoom(b)) return isFilledRoom(a) ? 1 : -1;
+      const left = distanceMeters(a), right = distanceMeters(b);
+      if (left === null) return right === null ? 0 : 1;
+      if (right === null) return -1;
+      return left - right || String(b.created_at || '').localeCompare(String(a.created_at || ''));
+    });
+    else if (sort === 'price-low' || sort === 'price-high') filtered.sort((a, b) => {
       if (isDemo(a) !== isDemo(b)) return isDemo(a) ? 1 : -1;
       if (isFilledRoom(a) !== isFilledRoom(b)) return isFilledRoom(a) ? 1 : -1;
       const left = priceValue(a), right = priceValue(b);
@@ -224,6 +271,18 @@
     const rating = card?.dataset.marketRating || entry.rating || '';
     const ratingCount = card?.dataset.marketRatingCount || entry.rating_count || 0;
     $('offerDetails').innerHTML = `<article class="offer-detail" data-demo="${isDemo(entry)}" data-market-kind="${entry.kind === 'rooms' ? 'rooms' : 'adverts'}" data-market-id="${entry.id}" data-market-rating="${esc(rating)}" data-market-rating-count="${esc(ratingCount)}" data-view-on-open="true"><div class="offer-detail-body"><span class="eyebrow">${categories[entry.kind]}${sponsored(entry) ? ' · Sponsored' : ''}${isDemo(entry) ? ' · Example only' : ''}</span><h2 id="offerTitle">${esc(entry.title || entry.headline)}</h2>${gallery.length ? '' : roomAvailability(entry)}${isFilledRoom(entry) ? '<p>This room is filled and is not currently available. Browse the green Available listings for rooms you can enquire about.</p>' : ''}${gallery.length ? `<div class="offer-gallery"><div class="room-photo"><button type="button" class="offer-photo-open" data-image-preview aria-label="Preview photo 1 of ${gallery.length}"><img class="offer-gallery-main" src="${esc(window.ArounusPhotos?.displayUrl(gallery[0]) || gallery[0])}" alt="Photo 1 of ${gallery.length}: ${esc(entry.title || entry.headline)}"><span>Expand photo ⤢</span></button>${roomAvailability(entry)}</div><div class="offer-gallery-controls">${gallery.length > 1 ? `<button type="button" data-gallery-step="-1" aria-label="Previous photo">‹</button><span data-gallery-count>1 of ${gallery.length}</span><button type="button" data-gallery-step="1" aria-label="Next photo">›</button>` : ''}</div><div class="offer-gallery-thumbs">${gallery.map((src, index) => `<button type="button" data-gallery-index="${index}" aria-label="Show photo ${index + 1}" aria-pressed="${index === 0}"><img src="${esc(window.arounusThumb?.(src, 160) || src)}" alt=""></button>`).join('')}</div></div>` : ''}${entry.video_url ? `<video controls preload="none" data-free-video="${esc(safeUrl(entry.video_url))}" data-video-kind="advert" data-video-id="${entry.id}" data-premium-available="${Boolean(entry.premium_available)}" style="width:100%;max-height:320px"></video>` : ''}<p>${esc(entry.campus || 'Location not specified')}${entry.area ? ' · ' + esc(entry.area) : ''}${posted ? ' · ' + esc(posted) : ''}</p><p class="offer-price">${esc(offerPrice(entry))}</p><div class="offer-actions"><button type="button" data-save="${esc(entry.key)}" aria-pressed="${saved.has(entry.key)}">${saved.has(entry.key) ? 'Saved' : 'Save listing'}</button><button type="button" data-share="${esc(entry.key)}">Share</button></div>${seller ? `<p>Listed by ${esc(seller)}</p>` : ''}${entry.service_detail ? `<p>Activity or service: ${esc(entry.service_detail)}</p>` : ''}<p>${esc(entry.description)}</p>${isFilledRoom(entry) && entry.booked_until ? `<p>Fully booked until: ${esc(entry.booked_until)}</p>` : ''}${entry.stock_quantity != null ? `<p>${entry.stock_quantity === 0 ? 'Out of stock' : `Stock available: ${esc(entry.stock_quantity)}`}</p>` : ''}${availabilityHtml}${!isDemo(entry) ? `<p>Provider contact: ${esc(entry.contact || 'No contact details supplied.')}</p><p class="market-contact-note">Use the provider’s listed contact details directly, or sign in to message them on Arounus. In-app messages are linked to your account, not anonymous. A phone, WhatsApp or website link takes contact outside Arounus. <a href="/trust#contact">How contact works</a>.</p><p class="market-verification-note">Provider identity, ownership and availability are not independently verified. ${entry.kind === 'rooms' ? 'Rooms are reviewed for publication; approval is not a property inspection.' : 'Other listings can publish automatically.'} <a href="/trust#verification">What we check</a>.</p><p><a href="/trust?listing=${entry.kind === 'rooms' ? 'room' : 'offer'}-${entry.id}#report" data-report-listing="${entry.kind === 'rooms' ? 'room' : 'offer'}-${entry.id}" data-report-title="${esc(entry.title || entry.headline)}">Report stale or suspicious listing</a></p>` : ''}${safeUrl(entry.directions_url) ? `<p><a href="${esc(entry.directions_url)}" target="_blank" rel="noopener noreferrer">Directions ↗</a></p>` : ''}${url ? `<p><a href="${esc(url)}" target="_blank" rel="noopener noreferrer">Visit seller website ↗</a></p>` : ''}${providerId && !isDemo(entry) ? `<p><button type="button" data-contact-provider="${Number(providerId)}" data-provider-name="${esc(entry.business_name || entry.landlord?.name || 'provider')}" data-provider-image="${esc(entry.landlord?.profile_image_url || entry.profile_image_url || '')}">Message provider</button></p>` : ''}<p><a href="${listingUrl(entry)}">Open and share this listing</a></p><p class="offer-safety">Never pay a deposit before you have seen the room or item. Read the <a href="/trust#safety">safety guidance</a>.</p></div></article>`;
+    const distance = document.createElement('p');
+    distance.className = 'offer-distance';
+    distance.setAttribute('role', 'status');
+    distance.setAttribute('aria-live', 'polite');
+    distance.textContent = !coordinates(entry) ? 'Distance unavailable: this listing has no map pin.' : distanceLabel(entry) || 'Finding your distance…';
+    $('offerDetails').querySelector('.offer-price').before(distance);
+    if (coordinates(entry) && !visitorLocation) getVisitorLocation().then(() => {
+      if (openKey === entry.key && distance.isConnected) distance.textContent = distanceLabel(entry);
+      if ($('sortListings').value === 'nearest') render();
+    }).catch(() => {
+      if (openKey === entry.key && distance.isConnected) distance.textContent = 'Distance unavailable. Allow location access to see how far away this is.';
+    });
     $('offerDetails').dataset.gallery = JSON.stringify(gallery);
     $('offerDetails').dataset.galleryIndex = '0';
     const opening = !$('offerDialog').open;
@@ -264,7 +323,13 @@
   let searchTimer;
   $('search').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(render, 180); });
   $('maxPrice').addEventListener('input', render);
-  $('sortListings').addEventListener('change', render);
+  async function sortNearest() {
+    updateNearestStatus('Finding your location…');
+    try { await getVisitorLocation();render(); }
+    catch (error) { render();updateNearestStatus(error.message); }
+  }
+  $('sortListings').addEventListener('change', () => { render();if ($('sortListings').value === 'nearest' && !visitorLocation)sortNearest(); });
+  $('retryNearestLocation').addEventListener('click', sortNearest);
   document.querySelectorAll('[data-category]').forEach(button => button.addEventListener('click', () => { category = button.dataset.category; document.querySelectorAll('[data-category]').forEach(item => item.setAttribute('aria-pressed', String(item === button))); render(); }));
   $('clearFilters').addEventListener('click', () => { $('campus').value = ''; $('search').value = ''; $('maxPrice').value = ''; $('sortListings').value = 'newest'; try { localStorage.removeItem('marketCampus'); } catch {} document.querySelector('[data-category="all"]').click(); });
   $('retryListings').addEventListener('click', load);
