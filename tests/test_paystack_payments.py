@@ -73,7 +73,7 @@ class PaystackPaymentsTest(unittest.TestCase):
             self.assertEqual(self.deliver().status_code,503)
             self.verify.assert_not_called()
 
-    def test_new_paystack_checkout_is_blocked_after_switch_to_ozow(self):
+    def test_new_paystack_checkout_is_blocked_when_disabled(self):
         with main.SessionLocal() as db:
             db.query(PremiumPayment).filter_by(merchant_reference=self.reference).one().checkout_url = "https://checkout.paystack.com/pending"
             db.commit()
@@ -81,7 +81,7 @@ class PaystackPaymentsTest(unittest.TestCase):
             response = self.client.post("/billing/premium/checkout",
                 headers={"X-Student-Token":main._issue_student_token(self.student_id)},
                 json={"plan":"monthly","provider":"paystack"})
-        self.assertEqual(response.status_code,400)
+        self.assertEqual(response.status_code,503)
 
     def test_legacy_enablement_switch_is_only_used_when_new_switch_is_absent(self):
         with patch.dict(os.environ,{"PAYSTACK_GOOGLE_PAY_ENABLED":"true"}):
@@ -159,8 +159,8 @@ class PaystackPaymentsTest(unittest.TestCase):
 
     def test_new_availability_field_keeps_installed_clients_compatible(self):
         result = self.client.get("/billing/premium/plans").json()
-        self.assertFalse(result["paystack_available"])
-        self.assertEqual(result["paystack_available"],result["google_pay_available"])
+        self.assertTrue(result["paystack_available"])
+        self.assertFalse(result["google_pay_available"])
 
 
 if __name__ == "__main__":

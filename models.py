@@ -152,6 +152,7 @@ class SupportPayment(Base):
     id = Column(Integer, primary_key=True)
     merchant_reference = Column(String, nullable=False, unique=True, index=True)
     ozow_payment_id = Column(String, unique=True)
+    provider = Column(String, nullable=False, default="ozow")
     email = Column(String, nullable=False)
     amount_cents = Column(Integer, nullable=False)
     checkout_url = Column(Text)

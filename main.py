@@ -483,6 +483,18 @@ def ensure_premium_billing_schema():
 ensure_premium_billing_schema()
 
 
+def ensure_support_billing_schema():
+    if "support_payments" not in inspect(engine).get_table_names():
+        return
+    columns = {column["name"] for column in inspect(engine).get_columns("support_payments")}
+    if "provider" not in columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE support_payments ADD COLUMN provider VARCHAR DEFAULT 'ozow' NOT NULL"))
+
+
+ensure_support_billing_schema()
+
+
 def ensure_premium_media_schema():
     for table in ("lessons", "market_adverts", "fun_posts"):
         if "premium_video_asset" not in {column["name"] for column in inspect(engine).get_columns(table)}:
@@ -3626,8 +3638,8 @@ def premium_plans(
         "currency": "ZAR",
         "plans": plans,
         "checkout_available": bool(payu_configured() and os.getenv("PUBLIC_BASE_URL", "").startswith("https://")),
-        "paystack_available": False,
-        "ozow_available": bool(ozow_configured() and os.getenv("PUBLIC_BASE_URL", "").startswith("https://")),
+        "paystack_available": bool(paystack_configured() and os.getenv("PUBLIC_BASE_URL", "").startswith("https://")),
+        "ozow_available": False,
         # Older installed clients still read this field.
         "google_pay_available": False,
     })
@@ -3660,37 +3672,36 @@ class SupportCheckoutRequest(BaseModel):
 
 @app.get("/billing/support/status")
 def support_checkout_status():
-    response = JSONResponse({"available": bool(ozow_configured() and os.getenv("PUBLIC_BASE_URL", "").startswith("https://"))})
+    response = JSONResponse({"available": bool(paystack_configured() and os.getenv("PUBLIC_BASE_URL", "").startswith("https://"))})
     response.headers["Cache-Control"] = "no-store"
     return response
 
 
 @app.post("/billing/support/checkout")
 def support_checkout(payload: SupportCheckoutRequest, db: Session = Depends(get_db)):
-    if not ozow_configured():
-        raise HTTPException(status_code=503, detail="Ozow payments are not available yet.")
+    if not paystack_configured():
+        raise HTTPException(status_code=503, detail="Payments are not available yet.")
     public_base = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
     if not public_base.startswith("https://"):
-        raise HTTPException(status_code=503, detail="Ozow payments are not available yet.")
+        raise HTTPException(status_code=503, detail="Payments are not available yet.")
     if not 20 <= payload.amount_rand <= 5000:
         raise HTTPException(status_code=400, detail="Choose an amount from R20 to R5,000.")
     email = payload.email.strip().lower()
     if len(email) > 254 or not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
         raise HTTPException(status_code=400, detail="Enter a valid email address.")
     reference = "AS" + secrets.token_hex(16).upper()
-    payment = SupportPayment(merchant_reference=reference, email=email,
+    payment = SupportPayment(merchant_reference=reference, provider="paystack", email=email,
                              amount_cents=payload.amount_rand * 100, status="pending",
                              created_at=datetime.now(timezone.utc).isoformat())
     db.add(payment)
     db.commit()
     try:
-        payment_id, checkout_url = ozow_start(reference, payment.amount_cents,
+        checkout_url = paystack_start(reference, email, payment.amount_cents,
             f"{public_base}/billing/support/return?reference={reference}")
-    except OzowError as exc:
+    except PaystackError as exc:
         payment.status = "setup_failed"
         db.commit()
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    payment.ozow_payment_id = payment_id
     payment.checkout_url = checkout_url
     db.commit()
     return JSONResponse({"checkout_url": checkout_url}, headers={"Cache-Control": "no-store"})
@@ -3702,12 +3713,29 @@ def _confirm_support_payment(reference: str, db: Session) -> str:
         return "unknown"
     if payment.status == "paid":
         return "success"
-    if not payment.ozow_payment_id:
-        return "pending"
-    try:
-        result = ozow_verify(payment.ozow_payment_id, reference, payment.amount_cents, payment.created_at)
-    except OzowError:
-        return "pending"
+    if payment.provider == "paystack":
+        if not payment.checkout_url:
+            return "pending"
+        try:
+            transaction = paystack_verify(reference)
+        except PaystackError:
+            return "pending"
+        if transaction["status"] not in ("success", "failed"):
+            return "pending"
+        if (transaction["reference"] != reference or transaction["amount_cents"] != payment.amount_cents
+                or transaction["currency"] != "ZAR" or transaction["domain"] != "live"
+                or (transaction["email"] or "").lower() != payment.email.lower()):
+            payment.status = "mismatch"
+            db.commit()
+            return "mismatch"
+        result = "paid" if transaction["status"] == "success" else "failed"
+    else:
+        if not payment.ozow_payment_id:
+            return "pending"
+        try:
+            result = ozow_verify(payment.ozow_payment_id, reference, payment.amount_cents, payment.created_at)
+        except OzowError:
+            return "pending"
     if result == "paid":
         payment.status = "paid"
         payment.confirmed_at = datetime.now(timezone.utc).isoformat()
@@ -3732,8 +3760,8 @@ def premium_checkout(payload: PremiumCheckoutRequest, student: Student = Depends
     plan = PREMIUM_PLANS.get(payload.plan)
     if not plan:
         raise HTTPException(status_code=400, detail="Choose a valid Premium HD plan")
-    if payload.provider not in ("payu", "ozow"):
-        raise HTTPException(status_code=400, detail="Choose PayU or Ozow")
+    if payload.provider not in ("payu", "paystack"):
+        raise HTTPException(status_code=400, detail="Choose PayU or Paystack")
     # Serialize checkouts per account and reserve the first-month offer once.
     student = db.query(Student).filter(Student.id == student.id).populate_existing().with_for_update().one()
     if student.premium_lifetime:
@@ -3741,7 +3769,7 @@ def premium_checkout(payload: PremiumCheckoutRequest, student: Student = Depends
     public_base = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
     if (not public_base.startswith("https://") or
             (payload.provider == "payu" and not payu_configured()) or
-            (payload.provider == "ozow" and not ozow_configured())):
+            (payload.provider == "paystack" and not paystack_configured())):
         raise HTTPException(status_code=503, detail="Premium checkout is being set up. Please try again later.")
     introductory = payload.plan == "monthly" and _premium_intro_available(db, student)
     pending_intro = db.query(PremiumPayment).filter(
@@ -3771,9 +3799,9 @@ def premium_checkout(payload: PremiumCheckoutRequest, student: Student = Depends
                 f"{public_base}/billing/premium/return?reference={reference}&cancelled=1", student.email)
             payment.payu_reference = payu_reference
         else:
-            payment.ozow_payment_id, checkout_url = ozow_start(reference, payment.amount_cents,
-                f"{public_base}/billing/premium/ozow/return?reference={reference}")
-    except (PayUError, OzowError) as exc:
+            checkout_url = paystack_start(reference, student.email, payment.amount_cents,
+                f"{public_base}/billing/premium/paystack/return?reference={reference}")
+    except (PayUError, PaystackError) as exc:
         payment.status = "setup_failed"
         db.commit()
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -3877,9 +3905,10 @@ async def _paystack_webhook_body(request: Request) -> bytes:
     return bytes(body)
 
 
+@app.post("/billing/paystack/webhook", include_in_schema=False)
 @app.post("/billing/premium/paystack/webhook", include_in_schema=False)
-def premium_paystack_webhook(request: Request, body: bytes = Depends(_paystack_webhook_body), db: Session = Depends(get_db)):
-    """Authenticate delivery and independently verify the transaction before credit."""
+def paystack_webhook(request: Request, body: bytes = Depends(_paystack_webhook_body), db: Session = Depends(get_db)):
+    """Authenticate Paystack events and verify purchases or support payments."""
     if not paystack_configured():
         raise HTTPException(status_code=503, detail="Payments are not enabled")
     if not paystack_verify_webhook_signature(body, request.headers.get("Paystack-Signature"), request.headers.get("x-paystack-signature")):
@@ -3894,14 +3923,17 @@ def premium_paystack_webhook(request: Request, body: bytes = Depends(_paystack_w
         return {"received": True}
     data = event.get("data") or {}
     reference = data.get("reference") if isinstance(data, dict) else None
-    if not isinstance(reference, str) or not re.fullmatch(r"AR[A-F0-9]{32}", reference):
+    if not isinstance(reference, str) or not re.fullmatch(r"A[RS][A-F0-9]{32}", reference):
         return {"received": True}
-    row = db.query(PremiumPayment.id).filter(PremiumPayment.merchant_reference == reference, PremiumPayment.provider == "paystack").first()
-    if not row:
-        return {"received": True}
-    status = _confirm_premium_payment(reference, db)
+    if reference.startswith("AR"):
+        row = db.query(PremiumPayment.id).filter(PremiumPayment.merchant_reference == reference,
+                                                  PremiumPayment.provider == "paystack").first()
+        status = _confirm_premium_payment(reference, db) if row else "unknown"
+    else:
+        row = db.query(SupportPayment.id).filter(SupportPayment.merchant_reference == reference,
+                                                  SupportPayment.provider == "paystack").first()
+        status = _confirm_support_payment(reference, db) if row else "unknown"
     if status == "pending":
-        # A temporary verification failure must be retried by Paystack.
         raise HTTPException(status_code=503, detail="Payment verification is pending", headers={"Retry-After": "30"})
     return {"received": True}
 

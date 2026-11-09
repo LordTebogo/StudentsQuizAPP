@@ -25,7 +25,7 @@ class PremiumPricingTest(unittest.TestCase):
             self.student_id = student.id
             self.email = student.email
         self.headers = {"X-Student-Token": main._issue_student_token(self.student_id)}
-        for item in [patch.dict(os.environ, {"PUBLIC_BASE_URL": "https://arounus.test"}), patch.object(main, "payu_configured", return_value=True), patch.object(main, "ozow_configured", return_value=True)]:
+        for item in [patch.dict(os.environ, {"PUBLIC_BASE_URL": "https://arounus.test"}), patch.object(main, "payu_configured", return_value=True), patch.object(main, "paystack_configured", return_value=True)]:
             item.start()
             self.addCleanup(item.stop)
 
@@ -71,7 +71,7 @@ class PremiumPricingTest(unittest.TestCase):
             self.assertEqual(repeat.json(), first.json())
             start.assert_called_once()
             self.assertEqual(start.call_args.args[1], 1500)
-            self.assertEqual(self.checkout(provider="ozow").status_code, 409)
+            self.assertEqual(self.checkout(provider="paystack").status_code, 409)
         payment = self.payment()
         self.assertEqual(payment.plan, "intro")
         self.assertEqual(payment.amount_cents, 1500)
@@ -88,18 +88,20 @@ class PremiumPricingTest(unittest.TestCase):
             after = datetime.fromisoformat(db.get(Student, self.student_id).premium_until)
             self.assertEqual(after, until + timedelta(days=30))
 
-    def test_ozow_also_uses_introductory_server_price(self):
-        payment_id = "497f6eca-6276-4993-bfeb-53cbbbba6f08"
-        with patch.object(main, "ozow_start", return_value=(payment_id, "https://pay.ozow.com/test")) as start:
-            self.assertEqual(self.checkout(provider="ozow").status_code, 200)
-            self.assertEqual(start.call_args.args[1], 1500)
-            self.assertEqual(self.checkout(provider="ozow").status_code, 200)
+    def test_paystack_uses_introductory_server_price_and_blocks_new_ozow_checkout(self):
+        self.assertEqual(self.checkout(provider="ozow").status_code, 400)
+        with patch.object(main, "paystack_start", return_value="https://checkout.paystack.com/test") as start:
+            self.assertEqual(self.checkout(provider="paystack").status_code, 200)
+            self.assertEqual(start.call_args.args[1:3], (self.email, 1500))
+            self.assertEqual(self.checkout(provider="paystack").status_code, 200)
             start.assert_called_once()
         payment = self.payment()
-        self.assertEqual(payment.ozow_payment_id, payment_id)
-        with patch.object(main, "ozow_verify", return_value="paid") as verify, main.SessionLocal() as db:
+        self.assertEqual(payment.provider, "paystack")
+        verified = {"reference": payment.merchant_reference, "status": "success", "amount_cents": 1500,
+                    "currency": "ZAR", "domain": "live", "email": self.email}
+        with patch.object(main, "paystack_verify", return_value=verified) as verify, main.SessionLocal() as db:
             self.assertEqual(main._confirm_premium_payment(payment.merchant_reference, db), "paid")
-            verify.assert_called_once_with(payment_id, payment.merchant_reference, 1500, payment.created_at)
+            verify.assert_called_once_with(payment.merchant_reference)
 
     def test_six_months_preserves_calendar_months_and_handles_leap_day(self):
         year = datetime.now(timezone.utc).year + 1
