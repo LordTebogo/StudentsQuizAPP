@@ -12,19 +12,33 @@
     const latitude = Number(entry.latitude), longitude = Number(entry.longitude);
     return Number.isFinite(latitude) && Number.isFinite(longitude) && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180 ? {latitude, longitude} : null;
   };
-  const distanceMeters = entry => {
+  const roomDistances = new Map();
+  const distanceMeters = entry => entry.kind === 'rooms' && entry.landlord?.provider_type === 'agent' ? (roomDistances.has(entry.id) ? roomDistances.get(entry.id) * 1000 : null) : (() => {
     const target = coordinates(entry);
     if (!visitorLocation || !target) return null;
-    const toRadians = value => value * Math.PI / 180;
-    const latitudeDelta = toRadians(target.latitude - visitorLocation.latitude);
-    const longitudeDelta = toRadians(target.longitude - visitorLocation.longitude);
-    const a = Math.sin(latitudeDelta / 2) ** 2 + Math.cos(toRadians(visitorLocation.latitude)) * Math.cos(toRadians(target.latitude)) * Math.sin(longitudeDelta / 2) ** 2;
-    return 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  };
+    const rad = value => value * Math.PI / 180;
+    const dLat = rad(target.latitude - visitorLocation.latitude), dLon = rad(target.longitude - visitorLocation.longitude);
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(visitorLocation.latitude)) * Math.cos(rad(target.latitude)) * Math.sin(dLon / 2) ** 2;
+    return 6371000 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+  })();
   const distanceLabel = entry => {
     const meters = distanceMeters(entry);
     return meters === null ? '' : `About ${meters < 1000 ? `${Math.round(meters)} m` : `${(meters / 1000).toFixed(1)} km`} away · straight-line estimate`;
   };
+  async function loadRoomDistances() {
+    if (!visitorLocation) return;
+    const roomIds = entries.filter(entry => entry.kind === 'rooms' && entry.landlord?.provider_type === 'agent' && !isDemo(entry)).map(entry => entry.id);
+    if (!roomIds.length) return;
+    const response = await fetch('/marketing/room-distances', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({latitude:visitorLocation.latitude, longitude:visitorLocation.longitude, room_ids:roomIds})});
+    if (!response.ok) return;
+    const data = await response.json();
+    roomDistances.clear();
+    Object.entries(data.distances_km || {}).forEach(([id, km]) => roomDistances.set(Number(id), Number(km)));
+    render();
+    const entry = entries.find(item => item.key === openKey);
+    const label = $('offerDetails')?.querySelector('.offer-distance');
+    if (entry && label) label.textContent = distanceLabel(entry) || 'Distance unavailable for this room.';
+  }
   function getVisitorLocation() {
     if (visitorLocation) return Promise.resolve(visitorLocation);
     if (locationRequest) return locationRequest;
@@ -270,14 +284,14 @@
     const card = [...$('campusListings').querySelectorAll('.campus-card')].find(item => item.dataset.entryKey === entry.key);
     const rating = card?.dataset.marketRating || entry.rating || '';
     const ratingCount = card?.dataset.marketRatingCount || entry.rating_count || 0;
-    $('offerDetails').innerHTML = `<article class="offer-detail" data-demo="${isDemo(entry)}" data-market-kind="${entry.kind === 'rooms' ? 'rooms' : 'adverts'}" data-market-id="${entry.id}" data-market-rating="${esc(rating)}" data-market-rating-count="${esc(ratingCount)}" data-view-on-open="true"><div class="offer-detail-body"><span class="eyebrow">${categories[entry.kind]}${sponsored(entry) ? ' · Sponsored' : ''}${isDemo(entry) ? ' · Example only' : ''}</span><h2 id="offerTitle">${esc(entry.title || entry.headline)}</h2>${gallery.length ? '' : roomAvailability(entry)}${isFilledRoom(entry) ? '<p>This room is filled and is not currently available. Browse the green Available listings for rooms you can enquire about.</p>' : ''}${gallery.length ? `<div class="offer-gallery"><div class="room-photo"><button type="button" class="offer-photo-open" data-image-preview aria-label="Preview photo 1 of ${gallery.length}"><img class="offer-gallery-main" src="${esc(window.ArounusPhotos?.displayUrl(gallery[0]) || gallery[0])}" alt="Photo 1 of ${gallery.length}: ${esc(entry.title || entry.headline)}"><span>Expand photo ⤢</span></button>${roomAvailability(entry)}</div><div class="offer-gallery-controls">${gallery.length > 1 ? `<button type="button" data-gallery-step="-1" aria-label="Previous photo">‹</button><span data-gallery-count>1 of ${gallery.length}</span><button type="button" data-gallery-step="1" aria-label="Next photo">›</button>` : ''}</div><div class="offer-gallery-thumbs">${gallery.map((src, index) => `<button type="button" data-gallery-index="${index}" aria-label="Show photo ${index + 1}" aria-pressed="${index === 0}"><img src="${esc(window.arounusThumb?.(src, 160) || src)}" alt=""></button>`).join('')}</div></div>` : ''}${entry.video_url ? `<video controls preload="none" data-free-video="${esc(safeUrl(entry.video_url))}" data-video-kind="advert" data-video-id="${entry.id}" data-premium-available="${Boolean(entry.premium_available)}" style="width:100%;max-height:320px"></video>` : ''}<p>${esc(entry.campus || 'Location not specified')}${entry.area ? ' · ' + esc(entry.area) : ''}${posted ? ' · ' + esc(posted) : ''}</p><p class="offer-price">${esc(offerPrice(entry))}</p><div class="offer-actions"><button type="button" data-save="${esc(entry.key)}" aria-pressed="${saved.has(entry.key)}">${saved.has(entry.key) ? 'Saved' : 'Save listing'}</button><button type="button" data-share="${esc(entry.key)}">Share</button></div>${seller ? `<p>Listed by ${esc(seller)}</p>` : ''}${entry.service_detail ? `<p>Activity or service: ${esc(entry.service_detail)}</p>` : ''}<p>${esc(entry.description)}</p>${isFilledRoom(entry) && entry.booked_until ? `<p>Fully booked until: ${esc(entry.booked_until)}</p>` : ''}${entry.stock_quantity != null ? `<p>${entry.stock_quantity === 0 ? 'Out of stock' : `Stock available: ${esc(entry.stock_quantity)}`}</p>` : ''}${availabilityHtml}${!isDemo(entry) ? `<p>Provider contact: ${esc(entry.contact || 'No contact details supplied.')}</p><p class="market-contact-note">Use the provider’s listed contact details directly, or sign in to message them on Arounus. In-app messages are linked to your account, not anonymous. A phone, WhatsApp or website link takes contact outside Arounus. <a href="/trust#contact">How contact works</a>.</p><p class="market-verification-note">Provider identity, ownership and availability are not independently verified. ${entry.kind === 'rooms' ? 'Rooms are reviewed for publication; approval is not a property inspection.' : 'Other listings can publish automatically.'} <a href="/trust#verification">What we check</a>.</p><p><a href="/trust?listing=${entry.kind === 'rooms' ? 'room' : 'offer'}-${entry.id}#report" data-report-listing="${entry.kind === 'rooms' ? 'room' : 'offer'}-${entry.id}" data-report-title="${esc(entry.title || entry.headline)}">Report stale or suspicious listing</a></p>` : ''}${safeUrl(entry.directions_url) ? `<p><a href="${esc(entry.directions_url)}" target="_blank" rel="noopener noreferrer">Directions ↗</a></p>` : ''}${url ? `<p><a href="${esc(url)}" target="_blank" rel="noopener noreferrer">Visit seller website ↗</a></p>` : ''}${providerId && !isDemo(entry) ? `<p><button type="button" data-contact-provider="${Number(providerId)}" data-provider-name="${esc(entry.business_name || entry.landlord?.name || 'provider')}" data-provider-image="${esc(entry.landlord?.profile_image_url || entry.profile_image_url || '')}">Message provider</button></p>` : ''}<p><a href="${listingUrl(entry)}">Open and share this listing</a></p><p class="offer-safety">Never pay a deposit before you have seen the room or item. Read the <a href="/trust#safety">safety guidance</a>.</p></div></article>`;
+    $('offerDetails').innerHTML = `<article class="offer-detail" data-demo="${isDemo(entry)}" data-market-kind="${entry.kind === 'rooms' ? 'rooms' : 'adverts'}" data-market-id="${entry.id}" data-market-rating="${esc(rating)}" data-market-rating-count="${esc(ratingCount)}" data-view-on-open="true"><div class="offer-detail-body"><span class="eyebrow">${categories[entry.kind]}${sponsored(entry) ? ' · Sponsored' : ''}${isDemo(entry) ? ' · Example only' : ''}</span><h2 id="offerTitle">${esc(entry.title || entry.headline)}</h2>${gallery.length ? '' : roomAvailability(entry)}${isFilledRoom(entry) ? '<p>This room is filled and is not currently available. Browse the green Available listings for rooms you can enquire about.</p>' : ''}${gallery.length ? `<div class="offer-gallery"><div class="room-photo"><button type="button" class="offer-photo-open" data-image-preview aria-label="Preview photo 1 of ${gallery.length}"><img class="offer-gallery-main" src="${esc(window.ArounusPhotos?.displayUrl(gallery[0]) || gallery[0])}" alt="Photo 1 of ${gallery.length}: ${esc(entry.title || entry.headline)}"><span>Expand photo ⤢</span></button>${roomAvailability(entry)}</div><div class="offer-gallery-controls">${gallery.length > 1 ? `<button type="button" data-gallery-step="-1" aria-label="Previous photo">‹</button><span data-gallery-count>1 of ${gallery.length}</span><button type="button" data-gallery-step="1" aria-label="Next photo">›</button>` : ''}</div><div class="offer-gallery-thumbs">${gallery.map((src, index) => `<button type="button" data-gallery-index="${index}" aria-label="Show photo ${index + 1}" aria-pressed="${index === 0}"><img src="${esc(window.arounusThumb?.(src, 160) || src)}" alt=""></button>`).join('')}</div></div>` : ''}${entry.video_url ? `<video controls preload="none" data-free-video="${esc(safeUrl(entry.video_url))}" data-video-kind="advert" data-video-id="${entry.id}" data-premium-available="${Boolean(entry.premium_available)}" style="width:100%;max-height:320px"></video>` : ''}<p>${esc(entry.campus || 'Location not specified')}${entry.area ? ' · ' + esc(entry.area) : ''}${posted ? ' · ' + esc(posted) : ''}</p><p class="offer-price">${esc(offerPrice(entry))}</p><div class="offer-actions"><button type="button" data-save="${esc(entry.key)}" aria-pressed="${saved.has(entry.key)}">${saved.has(entry.key) ? 'Saved' : 'Save listing'}</button><button type="button" data-share="${esc(entry.key)}">Share</button></div>${seller ? `<p>Listed by ${esc(seller)}</p>` : ''}${entry.service_detail ? `<p>Activity or service: ${esc(entry.service_detail)}</p>` : ''}<p>${esc(entry.description)}</p>${isFilledRoom(entry) && entry.booked_until ? `<p>Fully booked until: ${esc(entry.booked_until)}</p>` : ''}${entry.stock_quantity != null ? `<p>${entry.stock_quantity === 0 ? 'Out of stock' : `Stock available: ${esc(entry.stock_quantity)}`}</p>` : ''}${availabilityHtml}${!isDemo(entry) ? `<p>${entry.kind === 'rooms' && entry.landlord?.provider_type === 'agent' ? 'Agent' : 'Provider'} contact: ${esc(entry.contact || 'No contact details supplied.')}</p><p class="market-contact-note">Use the provider’s listed contact details directly, or sign in to message them on Arounus. In-app messages are linked to your account, not anonymous. A phone, WhatsApp or website link takes contact outside Arounus. <a href="/trust#contact">How contact works</a>.</p><p class="market-verification-note">Provider identity, ownership and availability are not independently verified. ${entry.kind === 'rooms' ? 'Rooms are reviewed for publication; approval is not a property inspection.' : 'Other listings can publish automatically.'} <a href="/trust#verification">What we check</a>.</p><p><a href="/trust?listing=${entry.kind === 'rooms' ? 'room' : 'offer'}-${entry.id}#report" data-report-listing="${entry.kind === 'rooms' ? 'room' : 'offer'}-${entry.id}" data-report-title="${esc(entry.title || entry.headline)}">Report stale or suspicious listing</a></p>` : ''}${safeUrl(entry.directions_url) ? `<p><a href="${esc(entry.directions_url)}" target="_blank" rel="noopener noreferrer">Directions ↗</a></p>` : ''}${url ? `<p><a href="${esc(url)}" target="_blank" rel="noopener noreferrer">Visit seller website ↗</a></p>` : ''}${providerId && !isDemo(entry) ? `<p><button type="button" data-contact-provider="${Number(providerId)}" data-provider-name="${esc(entry.business_name || entry.landlord?.name || 'provider')}" data-provider-image="${esc(entry.landlord?.profile_image_url || entry.profile_image_url || '')}">Message provider</button></p>` : ''}<p><a href="${listingUrl(entry)}">Open and share this listing</a></p><p class="offer-safety">Never pay a deposit before you have seen the room or item. Read the <a href="/trust#safety">safety guidance</a>.</p></div></article>`;
     const distance = document.createElement('p');
     distance.className = 'offer-distance';
     distance.setAttribute('role', 'status');
     distance.setAttribute('aria-live', 'polite');
-    distance.textContent = !coordinates(entry) ? 'Distance unavailable: this listing has no map pin.' : distanceLabel(entry) || 'Finding your distance…';
+    distance.textContent = distanceLabel(entry) || 'Allow location access to see the approximate distance.';
     $('offerDetails').querySelector('.offer-price').before(distance);
-    if (coordinates(entry) && !visitorLocation) getVisitorLocation().then(() => {
+    if (!visitorLocation) getVisitorLocation().then(async () => { await loadRoomDistances();
       if (openKey === entry.key && distance.isConnected) distance.textContent = distanceLabel(entry);
       if ($('sortListings').value === 'nearest') render();
     }).catch(() => {
@@ -313,6 +327,7 @@
     const campuses = [...new Set(entries.flatMap(entry => [entry.campus?.trim(), entry.area?.trim()]).filter(Boolean))].sort();
     $('campusOptions').replaceChildren(...campuses.map(campus => { const option = document.createElement('option'); option.value = campus; return option; }));
     loading = false; render();
+    if (visitorLocation) loadRoomDistances().catch(() => {});
     if (deepLinkKey) {
       const target = entries.find(entry => entry.key === deepLinkKey);
       if (target) openOffer(target, true);
@@ -325,7 +340,7 @@
   $('maxPrice').addEventListener('input', render);
   async function sortNearest() {
     updateNearestStatus('Finding your location…');
-    try { await getVisitorLocation();render(); }
+    try { await getVisitorLocation(); await loadRoomDistances(); render(); }
     catch (error) { render();updateNearestStatus(error.message); }
   }
   $('sortListings').addEventListener('change', () => { render();if ($('sortListings').value === 'nearest' && !visitorLocation)sortNearest(); });

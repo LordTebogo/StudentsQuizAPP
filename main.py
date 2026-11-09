@@ -185,6 +185,35 @@ FAVICON_PATH = os.path.join("static", "icons", "favicon-96x96.png")
 # migration tool (e.g. Alembic) over relying on this.
 Base.metadata.create_all(bind=engine)
 
+
+def ensure_password_reset_roles_schema():
+    """Expand older reset-code tables to cover provider and SRC accounts."""
+    if "password_reset_codes" not in inspect(engine).get_table_names():
+        return
+    if engine.dialect.name == "postgresql":
+        checks = {item["name"] for item in inspect(engine).get_check_constraints("password_reset_codes")}
+        if "ck_password_reset_account_type" in checks:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE password_reset_codes DROP CONSTRAINT ck_password_reset_account_type"))
+                conn.execute(text("ALTER TABLE password_reset_codes ADD CONSTRAINT ck_password_reset_account_type CHECK (account_type IN ('student','lecturer','landlord','src'))"))
+    elif engine.dialect.name == "sqlite":
+        with engine.connect() as conn:
+            original = conn.execute(text("SELECT sql FROM sqlite_master WHERE type='table' AND name='password_reset_codes'")).scalar() or ""
+        if "'landlord'" in original and "'src'" in original:
+            return
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE password_reset_codes RENAME TO password_reset_codes_old"))
+            for index in inspect(conn).get_indexes("password_reset_codes_old"):
+                conn.execute(text(f'DROP INDEX "{index["name"]}"'))
+            PasswordResetCode.__table__.create(bind=conn)
+            columns = [column.name for column in PasswordResetCode.__table__.columns]
+            names = ", ".join(columns)
+            conn.execute(text(f"INSERT INTO password_reset_codes ({names}) SELECT {names} FROM password_reset_codes_old"))
+            conn.execute(text("DROP TABLE password_reset_codes_old"))
+
+
+ensure_password_reset_roles_schema()
+
 # Lightweight backward-compatible migration for installations created before
 # quizzes had module codes. New databases get the column from models.py;
 # existing databases are upgraded in place without deleting quiz data.
@@ -313,6 +342,10 @@ def ensure_accommodation_location_schema():
             conn.execute(text("ALTER TABLE accommodations ADD COLUMN latitude FLOAT"))
         if "longitude" not in columns:
             conn.execute(text("ALTER TABLE accommodations ADD COLUMN longitude FLOAT"))
+        if "pending_latitude" not in columns:
+            conn.execute(text("ALTER TABLE accommodations ADD COLUMN pending_latitude FLOAT"))
+        if "pending_longitude" not in columns:
+            conn.execute(text("ALTER TABLE accommodations ADD COLUMN pending_longitude FLOAT"))
 
 
 ensure_accommodation_location_schema()
@@ -4572,7 +4605,7 @@ def admin_create_advertiser(payload: AdminAdvertiserCreate, _pin_ok: bool = Depe
     email = payload.email.strip().lower()
     if not payload.full_name.strip() or not payload.phone.strip() or "@" not in email or len(payload.password) < 8:
         raise HTTPException(status_code=400, detail="Provide a name, contact number, valid email, and password of at least 8 characters")
-    if payload.provider_type not in {"residence", "transport", "sales", "other"}:
+    if payload.provider_type not in {"residence", "agent", "transport", "sales", "other"}:
         raise HTTPException(status_code=400, detail="Choose accommodation, transport, sales, or other")
     if db.query(Landlord).filter(Landlord.email == email).first():
         raise HTTPException(status_code=409, detail="An advertiser already uses this email")
@@ -4638,7 +4671,7 @@ def admin_update_any_account(account_type: str, account_id: int, payload: AdminU
     elif account_type == "provider":
         if payload.business_name is not None: account.business_name = payload.business_name.strip()[:160]
         if payload.provider_type is not None:
-            if payload.provider_type not in {"residence", "transport", "sales", "other"}:
+            if payload.provider_type not in {"residence", "agent", "transport", "sales", "other"}:
                 raise HTTPException(status_code=400, detail="Choose accommodation, transport, sales, or other")
             account.provider_type = payload.provider_type
     elif account_type == "src":
@@ -5728,12 +5761,16 @@ def _provider_advert_ownership(provider: Landlord):
     return or_(*conditions)
 
 
-def _accommodation_payload(item: Accommodation, landlord: Landlord) -> dict:
+def _accommodation_payload(item: Accommodation, landlord: Landlord, private: bool = True) -> dict:
     directions_url = None
     if item.latitude is not None and item.longitude is not None:
         directions_url = f"https://www.google.com/maps/dir/?api=1&destination={item.latitude},{item.longitude}"
     image_urls = _market_image_urls(item)
-    return {"id": item.id, "title": item.title, "campus": item.campus, "area": item.area, "monthly_rent": item.monthly_rent, "bedrooms": item.bedrooms or "", "description": item.description, "contact": item.contact or "", "image_url": image_urls[0] if image_urls else None, "image_urls": image_urls, "latitude": item.latitude, "longitude": item.longitude, "directions_url": directions_url, "is_available": item.is_available, "booked_until": item.booked_until, "is_approved": item.is_approved, "created_at": item.created_at, "views": item.view_count or 0, "rating": round((item.rating_total or 0) / item.rating_count, 1) if item.rating_count else None, "rating_count": item.rating_count or 0, "landlord": {"id": landlord.id, "name": landlord.full_name, "business_name": landlord.business_name or "", "profile_image_url": landlord.profile_image_url}}
+    payload = {"id": item.id, "title": item.title, "campus": item.campus, "area": item.area, "monthly_rent": item.monthly_rent, "bedrooms": item.bedrooms or "", "description": item.description, "contact": item.contact or "", "image_url": image_urls[0] if image_urls else None, "image_urls": image_urls, "is_available": item.is_available, "booked_until": item.booked_until, "is_approved": item.is_approved, "created_at": item.created_at, "views": item.view_count or 0, "rating": round((item.rating_total or 0) / item.rating_count, 1) if item.rating_count else None, "rating_count": item.rating_count or 0, "landlord": {"id": landlord.id, "name": landlord.full_name, "business_name": landlord.business_name or "", "provider_type": landlord.provider_type or "residence", "profile_image_url": landlord.profile_image_url}}
+    if private or landlord.provider_type != "agent":
+        payload.update(latitude=item.latitude, longitude=item.longitude, directions_url=directions_url,
+                       **({"pending_latitude": item.pending_latitude, "pending_longitude": item.pending_longitude} if private else {}))
+    return payload
 
 
 def _market_image_urls(item) -> List[str]:
@@ -5819,7 +5856,7 @@ async def register_landlord(full_name: str = Form(...), business_name: str = For
         raise HTTPException(status_code=400, detail="Provide your name, contact number, valid email, and a password of at least 8 characters")
     if password != confirm_password:
         raise HTTPException(status_code=400, detail="The password confirmation does not match")
-    if provider_type not in {"residence", "transport", "sales", "other"}:
+    if provider_type not in {"residence", "agent", "transport", "sales", "other"}:
         raise HTTPException(status_code=400, detail="Choose accommodation, transport, sales, or other provider")
     if db.query(Landlord).filter(Landlord.email == email).first():
         raise HTTPException(status_code=409, detail="A provider profile already uses this email")
@@ -5936,13 +5973,39 @@ def list_accommodations(search: str = "", campus: str = "", db: Session = Depend
             | (func.lower(Accommodation.description).like(phrase))
         )
     rows = query.order_by(Accommodation.is_available.desc(), Accommodation.created_at.desc()).all()
-    return [_accommodation_payload(item, landlord) for item, landlord in rows]
+    return [_accommodation_payload(item, landlord, private=False) for item, landlord in rows]
 
 
 @app.get("/marketing/maps-config")
 def marketing_maps_config():
     """The browser Maps key is intentionally public, but should be domain-restricted in Google Cloud."""
     return {"api_key": GOOGLE_MAPS_API_KEY}
+
+
+class RoomDistanceRequest(BaseModel):
+    latitude: float
+    longitude: float
+    room_ids: List[int] = Field(default_factory=list, max_length=100)
+
+
+@app.post("/marketing/room-distances")
+def room_distances(payload: RoomDistanceRequest, db: Session = Depends(get_db)):
+    """Return rounded straight-line distance without disclosing room locations."""
+    import math
+    if not math.isfinite(payload.latitude) or not math.isfinite(payload.longitude) or not -90 <= payload.latitude <= 90 or not -180 <= payload.longitude <= 180:
+        raise HTTPException(status_code=400, detail="Invalid visitor location")
+    rows = db.query(Accommodation).join(Landlord, Landlord.id == Accommodation.landlord_id).filter(
+        Accommodation.id.in_(payload.room_ids), Accommodation.is_approved.is_(True), Landlord.active.is_(True),
+        Accommodation.latitude.isnot(None), Accommodation.longitude.isnot(None)).all()
+    distances = {}
+    for room in rows:
+        a, b = math.radians(payload.latitude), math.radians(room.latitude)
+        delta_lat = b - a
+        delta_lon = math.radians(room.longitude - payload.longitude)
+        h = math.sin(delta_lat / 2) ** 2 + math.cos(a) * math.cos(b) * math.sin(delta_lon / 2) ** 2
+        metres = 6371000 * 2 * math.atan2(math.sqrt(h), math.sqrt(max(0, 1 - h)))
+        distances[room.id] = round(metres / 1000, 1)
+    return {"distances_km": distances}
 
 
 @app.get("/marketing/landlord/listings")
@@ -5963,12 +6026,27 @@ def admin_approve_market_room(listing_id: int, approved: bool, background_tasks:
     if not item:
         raise HTTPException(status_code=404, detail="Room listing not found")
     item.is_approved = approved
+    if approved and item.pending_latitude is not None and item.pending_longitude is not None:
+        item.latitude, item.longitude = item.pending_latitude, item.pending_longitude
+        item.pending_latitude = item.pending_longitude = None
     if approved:
         queue_room_email(db, item, "live")
     db.commit()
     if approved:
         background_tasks.add_task(deliver_room_emails, SessionLocal)
     return {"ok": True, "is_approved": item.is_approved}
+
+
+@app.put("/admin/market-rooms/{listing_id}/coordinate-approval")
+def admin_review_room_coordinates(listing_id: int, approved: bool, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    item = db.query(Accommodation).filter(Accommodation.id == listing_id).with_for_update().first()
+    if not item or item.pending_latitude is None or item.pending_longitude is None:
+        raise HTTPException(status_code=404, detail="No coordinate change awaiting review")
+    if approved:
+        item.latitude, item.longitude = item.pending_latitude, item.pending_longitude
+    item.pending_latitude = item.pending_longitude = None
+    db.commit()
+    return {"ok": True}
 
 
 @app.delete("/admin/market-rooms/{listing_id}")
@@ -6024,7 +6102,7 @@ async def update_accommodation(listing_id: int, title: str = Form(...), campus: 
         raise HTTPException(status_code=400, detail="Monthly rent cannot be negative")
     # Availability updates do not include the picker fields, so retain a
     # previously selected point unless the landlord supplies a new one.
-    lat, lng = _accommodation_coordinates(latitude, longitude) if latitude.strip() or longitude.strip() else (item.latitude, item.longitude)
+    lat, lng = _accommodation_coordinates(latitude, longitude) if latitude.strip() or longitude.strip() else (item.pending_latitude, item.pending_longitude) if item.pending_latitude is not None else (item.latitude, item.longitude)
     if len(description.strip()) > 2500:
         raise HTTPException(status_code=400, detail="Accommodation descriptions can be up to 2,500 characters")
     if booked_until.strip():
@@ -6044,7 +6122,11 @@ async def update_accommodation(listing_id: int, title: str = Form(...), campus: 
     image_urls = [image_urls[index] for index in photo_order]
     item.title, item.campus, item.area = title.strip()[:180], campus.strip()[:120], area.strip()[:160]
     item.monthly_rent, item.bedrooms, item.description = rent, bedrooms.strip()[:80], description.strip()[:2500]
-    item.contact, item.latitude, item.longitude, item.is_available, item.booked_until = contact.strip()[:160], lat, lng, is_available, booked_until.strip() or None
+    item.contact, item.is_available, item.booked_until = contact.strip()[:160], is_available, booked_until.strip() or None
+    if (lat, lng) != (item.latitude, item.longitude):
+        item.pending_latitude, item.pending_longitude = lat, lng
+    else:
+        item.pending_latitude = item.pending_longitude = None
     if retained_image_urls or new_images or image_order:
         item.image_url, item.image_urls = image_urls[0] if image_urls else None, json.dumps(image_urls)
     db.commit()
@@ -8325,7 +8407,7 @@ def _send_reset_email(email: str, code: str, account_type: str) -> bool:
         user = os.getenv("SMTP_USER", "")
         password = os.getenv("SMTP_PASSWORD", "")
         sender = os.getenv("SMTP_FROM", user or "no-reply@arounus.com")
-        label = "learner" if account_type == "student" else "tutor"
+        label = {"student": "learner", "lecturer": "tutor", "landlord": "provider", "src": "SRC"}.get(account_type, "account")
         msg = EmailMessage()
         msg["Subject"] = "Your Arounus password reset code"
         msg["From"] = sender
@@ -8409,7 +8491,7 @@ def _reset_request(account_type: str, payload: PasswordResetRequest, request: Re
     }
     if "@" not in email:
         return generic
-    model = Student if account_type == "student" else Lecturer
+    model = {"student": Student, "lecturer": Lecturer, "landlord": Landlord, "src": SrcPresident}[account_type]
     account = db.query(model).filter(model.email == email).first()
     if not account:
         return generic
@@ -8426,7 +8508,7 @@ def _reset_confirm(account_type: str, payload: PasswordResetConfirm, db: Session
     if len(payload.new_password or "") < 8:
         raise HTTPException(status_code=400, detail="Choose a password of at least 8 characters")
 
-    model = Student if account_type == "student" else Lecturer
+    model = {"student": Student, "lecturer": Lecturer, "landlord": Landlord, "src": SrcPresident}[account_type]
     account = db.query(model).filter(model.email == email).first()
     if not account:
         raise HTTPException(status_code=400, detail="This reset code is invalid or has expired")
@@ -8500,6 +8582,26 @@ def lecturer_password_reset_request(payload: PasswordResetRequest, request: Requ
 @app.post("/lecturers/password-reset/confirm")
 def lecturer_password_reset_confirm(payload: PasswordResetConfirm, db: Session = Depends(get_db)):
     return _reset_confirm("lecturer", payload, db)
+
+
+@app.post("/marketing/landlords/password-reset/request")
+def landlord_password_reset_request(payload: PasswordResetRequest, request: Request, db: Session = Depends(get_db)):
+    return _reset_request("landlord", payload, request, db)
+
+
+@app.post("/marketing/landlords/password-reset/confirm")
+def landlord_password_reset_confirm(payload: PasswordResetConfirm, db: Session = Depends(get_db)):
+    return _reset_confirm("landlord", payload, db)
+
+
+@app.post("/src/password-reset/request")
+def src_password_reset_request(payload: PasswordResetRequest, request: Request, db: Session = Depends(get_db)):
+    return _reset_request("src", payload, request, db)
+
+
+@app.post("/src/password-reset/confirm")
+def src_password_reset_confirm(payload: PasswordResetConfirm, db: Session = Depends(get_db)):
+    return _reset_confirm("src", payload, db)
 
 
 FRONTEND_PAGES = {
@@ -8659,7 +8761,7 @@ def public_market_listing(kind: str, listing_id: str, db: Session = Depends(get_
         ).first()
         if not row:
             raise HTTPException(status_code=404, detail="Listing unavailable")
-        data = _accommodation_payload(*row)
+        data = _accommodation_payload(*row, private=False)
         title = data["title"]
         price = f"R{data['monthly_rent']:,} per month" if data.get("monthly_rent") is not None else "Price on request"
         seller = data["landlord"]["name"]

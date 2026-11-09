@@ -19,7 +19,7 @@
         ${room.image_url ? `<img class="advert-review-image" src="${esc(room.image_url)}" alt="Room preview for ${esc(room.title)}">` : '<div class="advert-review-image advert-placeholder">No media</div>'}
         <div class="advert-review-copy"><div class="advert-review-head"><div><span class="kicker">Room · ${esc(room.campus)}</span><h3>${esc(room.title)}</h3></div><span class="status-chip advert-status ${room.is_approved ? 'approved' : 'pending'}">${room.is_approved ? 'Approved' : 'Awaiting approval'}</span></div>
         <p>${esc(room.description)}</p><dl class="review-meta"><div><dt>Area</dt><dd>${esc(room.area)}</dd></div><div><dt>Submitted by</dt><dd>${esc(room.owner_name)}</dd></div><div><dt>Listing contact</dt><dd>${esc(room.contact || 'Missing')}</dd></div><div><dt>Registration contact</dt><dd>${esc(room.registration_contact || 'Missing')}</dd></div></dl>
-        <div class="actions review-actions"><button class="btn approve-room" type="button" ${room.is_approved ? 'disabled' : ''}>Approve room</button><button class="btn secondary unapprove-room" type="button" ${room.is_approved ? '' : 'disabled'}>Remove approval</button><button class="btn danger delete-room" type="button">Delete</button></div></div>
+        ${room.pending_latitude != null ? `<div class="coordinate-review"><strong>Location change awaiting approval</strong><p>Current: ${room.latitude == null ? 'No coordinates' : `${esc(room.latitude)}, ${esc(room.longitude)}`}<br>Proposed: ${esc(room.pending_latitude)}, ${esc(room.pending_longitude)}</p><button class="btn approve-coordinates" type="button">Approve coordinates</button><button class="btn secondary reject-coordinates" type="button">Reject coordinates</button></div>` : ''}<div class="actions review-actions"><button class="btn approve-room" type="button" ${room.is_approved ? 'disabled' : ''}>Approve room</button><button class="btn secondary unapprove-room" type="button" ${room.is_approved ? '' : 'disabled'}>Remove approval</button><button class="btn danger delete-room" type="button">Delete</button></div></div>
       </article>`).join('') : '<div class="empty-state"><strong>No room submissions yet</strong></div>';
       list.innerHTML = ads.length ? ads.map(ad => `<article class="moderation-item advert-review-card" data-admin-ad="${ad.id}">
         ${ad.video_url?`<video class="advert-review-image" src="${esc(ad.video_url)}" controls muted playsinline aria-label="Advert video for ${esc(ad.business_name)}"></video>`:ad.image_url?`<img class="advert-review-image" src="${esc(ad.image_url)}" alt="Advert preview for ${esc(ad.business_name)}">`:'<div class="advert-review-image advert-placeholder">No media</div>'}
@@ -61,6 +61,12 @@
         if (!confirm(`Permanently delete the room listing "${room.querySelector('h3')?.textContent || 'this room'}"?`)) return;
         await api(`/admin/market-rooms/${room.dataset.adminRoom}`, {method:'DELETE'});
         load();
+        return;
+      }
+      if (room && (event.target.closest('.approve-coordinates') || event.target.closest('.reject-coordinates'))) {
+        const approved = Boolean(event.target.closest('.approve-coordinates'));
+        await api(`/admin/market-rooms/${room.dataset.adminRoom}/coordinate-approval?approved=${approved}`, {method:'PUT'});
+        await load();
         return;
       }
       if (room && (event.target.closest('.approve-room') || event.target.closest('.unapprove-room'))) {

@@ -137,7 +137,7 @@
     <div class="admin-page-head"><strong id="allAccountSummary">Accounts</strong></div>
     <form id="newAdvertiserForm" class="account-directory-editor hidden">
       <h3>Add advertiser</h3>
-      <div class="account-directory-fields"><div><label>Full name<input name="full_name" required maxlength="160"></label></div><div><label>Business name<input name="business_name" maxlength="160"></label></div><div><label>Category<select name="provider_type"><option value="residence">Accommodation</option><option value="transport">Transport</option><option value="sales">Sales</option><option value="other" selected>Other service</option></select></label></div><div><label>Email<input name="email" type="email" required></label></div><div><label>Contact number<input name="phone" type="tel" required></label></div><div><label>Initial password<input name="password" type="password" minlength="8" autocomplete="new-password" required></label></div></div>
+      <div class="account-directory-fields"><div><label>Full name<input name="full_name" required maxlength="160"></label></div><div><label>Business name<input name="business_name" maxlength="160"></label></div><div><label>Category<select name="provider_type"><option value="residence">Accommodation</option><option value="agent">Room agent</option><option value="transport">Transport</option><option value="sales">Sales</option><option value="other" selected>Other service</option></select></label></div><div><label>Email<input name="email" type="email" required></label></div><div><label>Contact number<input name="phone" type="tel" required></label></div><div><label>Initial password<input name="password" type="password" minlength="8" autocomplete="new-password" required></label></div></div>
       <label class="check-label"><input name="active" type="checkbox" checked> Account active</label>
       <button class="btn" type="submit">Create advertiser</button> <button class="btn secondary" type="button" id="cancelNewAdvertiserBtn">Cancel</button><div id="newAdvertiserMsg" role="status"></div>
     </form>
@@ -150,7 +150,7 @@
         <div><label for="allAccountPhone">Phone</label><input id="allAccountPhone" type="text"></div>
         <div id="allAccountStudentNumberField" class="hidden"><label for="allAccountStudentNumber">Username</label><input id="allAccountStudentNumber" type="text"></div>
         <div id="allAccountBusinessField" class="hidden"><label for="allAccountBusiness">Business name</label><input id="allAccountBusiness" type="text"></div>
-        <div id="allAccountProviderTypeField" class="hidden"><label for="allAccountProviderType">Business category</label><select id="allAccountProviderType"><option value="residence">Student accommodation</option><option value="transport">Transport or delivery</option><option value="sales">Sales</option><option value="other">Other</option></select></div>
+        <div id="allAccountProviderTypeField" class="hidden"><label for="allAccountProviderType">Business category</label><select id="allAccountProviderType"><option value="residence">Student accommodation</option><option value="agent">Room agent</option><option value="transport">Transport or delivery</option><option value="sales">Sales</option><option value="other">Other</option></select></div>
         <div id="allAccountPartyField" class="hidden"><label for="allAccountParty">Party or organisation</label><input id="allAccountParty" type="text"></div>
         <div id="allAccountInstitutionField" class="hidden"><label for="allAccountInstitution">Institution</label><input id="allAccountInstitution" type="text"></div>
         <div id="allAccountModuleLimitField" class="hidden"><label for="allAccountModuleLimit">Module limit</label><input id="allAccountModuleLimit" type="number" min="0"></div>
@@ -430,7 +430,7 @@ function accountTypeLabel(item) {
   if (item.account_type === 'student') return 'Learner';
   if (item.account_type === 'lecturer') return 'Tutor';
   if (item.account_type === 'src') return 'SRC president';
-  return ({residence:'Accommodation', transport:'Transport', sales:'Sales', other:'Other business'})[item.provider_type] || 'Business';
+  return ({residence:'Accommodation', agent:'Room agent', transport:'Transport', sales:'Sales', other:'Other business'})[item.provider_type] || 'Business';
 }
 function accountIdentifier(item) {
   if (item.account_type === 'student') return item.username || item.student_number || '';

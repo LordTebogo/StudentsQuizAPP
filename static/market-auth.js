@@ -40,11 +40,11 @@
       const register=mode==='register';
       title.textContent=register?'Create an advertiser account':'Sign in to Arounus';
       content.innerHTML=`<button class="sell-back" type="button" data-account-back>← Back</button><p>${register?'Create one account to message providers, rate listings, and sell or list.':'Use your learner, tutor or advertiser account. We will recognise your account automatically.'}</p><form id="marketAuthForm" class="sell-form">
-        ${register?'<label>Full name<input name="full_name" autocomplete="name" required></label><label>Business or service name <span>(optional)</span><input name="business_name" autocomplete="organization"></label><label>Contact number<input name="phone" type="tel" autocomplete="tel" required></label>':''}
+        ${register?'<label>Full name<input name="full_name" autocomplete="name" required></label><label>Business or service name <span>(optional)</span><input name="business_name" autocomplete="organization"></label><label>Contact number<input name="phone" type="tel" autocomplete="tel" required></label><label>Profile type<select name="provider_type"><option value="residence">Landlord</option><option value="agent">Room agent</option><option value="other">Other provider</option></select></label>':''}
         <label>${register?'Email':'Email or learner username'}<input name="${register?'email':'identifier'}" type="${register?'email':'text'}" autocomplete="${register?'email':'username'}" required></label>
         <label>Password<input name="password" type="password" autocomplete="${register?'new-password':'current-password'}" ${register?'minlength="8"':''} required></label>
         ${register?'<label>Confirm password<input name="confirm_password" type="password" autocomplete="new-password" minlength="8" required></label>':''}
-        <button type="submit">${register?'Create advertiser account':'Sign in'}</button></form>`;
+        <button type="submit">${register?'Create advertiser account':'Sign in'}</button></form>${register ? '' : '<p><a href="/reset-password?role=landlord">Forgot password?</a></p>'}`;
     }
     (content.querySelector('input')||content.querySelector('button'))?.focus();
   }

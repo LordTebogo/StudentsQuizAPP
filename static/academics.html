@@ -333,7 +333,7 @@
           ${field({ id: 'entryFullName', name: 'full_name', label: 'Full name', autocomplete: 'name', required: true })}
           ${field({ id: 'entryEmail', name: 'email', label: 'Email', type: 'email', autocomplete: 'email', required: true })}
           ${field({ id: 'entryPhone', name: 'phone', label: 'Contact number', type: 'tel', autocomplete: 'tel', required: true })}
-          ${field({ id: 'entryBusiness', name: 'business_name', label: 'Business or service name', autocomplete: 'organization' })}
+          ${field({ id: 'entryBusiness', name: 'business_name', label: 'Business or service name', autocomplete: 'organization' })}<label>Profile type<select name="provider_type"><option value="residence">Landlord</option><option value="agent">Room agent</option><option value="other">Other provider</option></select></label>
           ${password}
           ${confirm}
           <button class="btn" type="submit">Create advertiser account</button>`;

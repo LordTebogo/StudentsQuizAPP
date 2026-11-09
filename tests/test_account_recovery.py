@@ -72,6 +72,18 @@ class AccountRecoveryTest(unittest.TestCase):
                 self.assertEqual(self.client.post(f"/{prefix}/login", json={**identifier, "password": "Old-password-123"}).status_code, 401)
                 self.assertEqual(self.client.post(f"/{prefix}/login", json={**identifier, "password": "New-password-456"}).status_code, 200)
 
+    def test_room_agent_can_reset_password(self):
+        created = self.client.post("/marketing/landlords/register", data={
+            "full_name":"Test Agent", "provider_type":"agent", "email":self.email,
+            "phone":"0712345678", "password":"Old-password-123", "confirm_password":"Old-password-123"})
+        self.assertEqual(created.status_code, 200, created.text)
+        self.assertEqual(created.json()["profile"]["provider_type"], "agent")
+        prefix = "marketing/landlords"
+        code = self.request_code(prefix)["dev_code"]
+        self.assertEqual(self.confirm(code, prefix).status_code, 200)
+        self.assertEqual(self.client.post("/marketing/landlords/login", json={"email":self.email, "password":"Old-password-123"}).status_code, 401)
+        self.assertEqual(self.client.post("/marketing/landlords/login", json={"email":self.email, "password":"New-password-456"}).status_code, 200)
+
     def test_expired_code_is_rejected(self):
         self.account()
         code = self.request_code()["dev_code"]

@@ -235,6 +235,8 @@ class Accommodation(Base):
     image_urls = Column(Text)
     latitude = Column(Float)
     longitude = Column(Float)
+    pending_latitude = Column(Float)
+    pending_longitude = Column(Float)
     is_available = Column(Boolean, nullable=False, default=True)
     booked_until = Column(String)
     is_approved = Column(Boolean, nullable=False, default=False)
@@ -710,7 +712,7 @@ class PasswordResetCode(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "account_type IN ('student','lecturer')",
+            "account_type IN ('student','lecturer','landlord','src')",
             name="ck_password_reset_account_type",
         ),
     )
