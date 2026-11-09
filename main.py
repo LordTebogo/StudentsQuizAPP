@@ -117,7 +117,7 @@ from models import (
     SupportPayment,
     PushSubscription, MarketPushSubscription,
     StudentModule,
-    Landlord, Accommodation, AccommodationComment, RoomListingEmail, MarketAdvert, MarketListingView, MarketListingRating, MediaFinanceEntry, MediaUploadEvent,
+    Landlord, Accommodation, AccommodationComment, RoomListingEmail, MarketAdvert, MarketListingView, MarketListingRating, MediaFinanceEntry, MediaUploadEvent, Vacancy,
     PasswordResetCode,
     MarketAccountRating,
     SrcPresident,
@@ -184,6 +184,21 @@ FAVICON_PATH = os.path.join("static", "icons", "favicon-96x96.png")
 # init_db()). For schema changes after the first deploy, prefer a proper
 # migration tool (e.g. Alembic) over relying on this.
 Base.metadata.create_all(bind=engine)
+
+
+def seed_vacancies():
+    with SessionLocal() as db:
+        if db.query(Vacancy.id).first():
+            return
+        now = datetime.now(timezone.utc).isoformat()
+        db.add_all([
+            Vacancy(title="Room agents", summary="Help people find suitable rooms and help accommodation providers bring their listings to Arounus.", details="Build local relationships, explain listings clearly, and help keep room information current. Strong communication and knowledge of your area are useful.", is_open=True, created_at=now, updated_at=now),
+            Vacancy(title="Growth marketing", summary="Help more people discover and use Arounus across rooms, transport, items, services, and learning.", details="Plan and run practical campaigns, measure what brings useful activity, and work with the team to improve sign-ups and engagement. Experience in digital or community marketing is useful.", is_open=True, created_at=now, updated_at=now),
+        ])
+        db.commit()
+
+
+seed_vacancies()
 
 
 def ensure_password_reset_roles_schema():
@@ -4605,7 +4620,7 @@ def admin_create_advertiser(payload: AdminAdvertiserCreate, _pin_ok: bool = Depe
     email = payload.email.strip().lower()
     if not payload.full_name.strip() or not payload.phone.strip() or "@" not in email or len(payload.password) < 8:
         raise HTTPException(status_code=400, detail="Provide a name, contact number, valid email, and password of at least 8 characters")
-    if payload.provider_type not in {"residence", "agent", "transport", "sales", "other"}:
+    if payload.provider_type not in {"residence", "agent", "customer", "transport", "sales", "other"}:
         raise HTTPException(status_code=400, detail="Choose accommodation, transport, sales, or other")
     if db.query(Landlord).filter(Landlord.email == email).first():
         raise HTTPException(status_code=409, detail="An advertiser already uses this email")
@@ -4671,8 +4686,10 @@ def admin_update_any_account(account_type: str, account_id: int, payload: AdminU
     elif account_type == "provider":
         if payload.business_name is not None: account.business_name = payload.business_name.strip()[:160]
         if payload.provider_type is not None:
-            if payload.provider_type not in {"residence", "agent", "transport", "sales", "other"}:
+            if payload.provider_type not in {"residence", "agent", "customer", "transport", "sales", "other"}:
                 raise HTTPException(status_code=400, detail="Choose accommodation, transport, sales, or other")
+            if account.provider_type == "agent" and payload.provider_type != "agent" and db.query(Accommodation.id).filter(Accommodation.landlord_id == account.id).first():
+                raise HTTPException(status_code=409, detail="Remove or transfer this agent's room listings before changing account type")
             account.provider_type = payload.provider_type
     elif account_type == "src":
         next_party = account.party_name if payload.party_name is None else payload.party_name.strip()
@@ -5374,6 +5391,7 @@ def provider_send_message(payload: DirectMessageCreate, landlord: Landlord = Dep
 
 @app.post("/marketing/provider/messages/broadcast")
 def provider_broadcast_message(payload: ProviderBroadcastMessage, landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
+    _assert_market_seller(landlord)
     content = payload.content.strip()
     if not content or len(content) > 2000:
         raise HTTPException(status_code=400, detail="Enter a message of up to 2,000 characters")
@@ -5663,9 +5681,69 @@ FUN_STICKERS = {
 # Local marketing / accommodation marketplace
 # ---------------------------------------------------------------------------
 
+class VacancyInput(BaseModel):
+    title: str = Field(..., min_length=1, max_length=160)
+    summary: str = Field(..., min_length=1, max_length=500)
+    details: str = Field(..., min_length=1, max_length=3000)
+    is_open: bool = True
+
+
+def _vacancy_payload(item: Vacancy) -> dict:
+    return {"id": item.id, "title": item.title, "summary": item.summary,
+            "details": item.details, "is_open": item.is_open,
+            "created_at": item.created_at, "updated_at": item.updated_at}
+
+
+@app.get("/vacancies/openings")
+def public_vacancies(db: Session = Depends(get_db)):
+    rows = db.query(Vacancy).filter(Vacancy.is_open.is_(True)).order_by(Vacancy.created_at.asc()).all()
+    return [_vacancy_payload(item) for item in rows]
+
+
+@app.get("/admin/vacancies")
+def admin_vacancies(_pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    return [_vacancy_payload(item) for item in db.query(Vacancy).order_by(Vacancy.created_at.asc()).all()]
+
+
+@app.post("/admin/vacancies")
+def create_vacancy(payload: VacancyInput, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    title, summary, details = payload.title.strip(), payload.summary.strip(), payload.details.strip()
+    if not all((title, summary, details)):
+        raise HTTPException(status_code=400, detail="Add a title, summary, and details")
+    now = datetime.now(timezone.utc).isoformat()
+    item = Vacancy(title=title, summary=summary, details=details, is_open=payload.is_open,
+                   created_at=now, updated_at=now)
+    db.add(item); db.commit(); db.refresh(item)
+    return _vacancy_payload(item)
+
+
+@app.put("/admin/vacancies/{vacancy_id}")
+def update_vacancy(vacancy_id: int, payload: VacancyInput, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    item = db.get(Vacancy, vacancy_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Vacancy not found")
+    title, summary, details = payload.title.strip(), payload.summary.strip(), payload.details.strip()
+    if not all((title, summary, details)):
+        raise HTTPException(status_code=400, detail="Add a title, summary, and details")
+    item.title, item.summary, item.details = title, summary, details
+    item.is_open = payload.is_open
+    item.updated_at = datetime.now(timezone.utc).isoformat()
+    db.commit()
+    return _vacancy_payload(item)
+
 def _landlord_profile(landlord: Landlord) -> dict:
     source = landlord.linked_student if landlord.linked_student_id else landlord.linked_lecturer if landlord.linked_lecturer_id else None
     return {"id": landlord.id, "full_name": landlord.full_name, "business_name": landlord.business_name or "", "provider_type": landlord.provider_type or "residence", "email": source.email if source else landlord.email, "phone": landlord.phone, "profile_image_url": landlord.profile_image_url}
+
+
+def _assert_market_seller(account: Landlord) -> Landlord:
+    if account.provider_type == "customer":
+        raise HTTPException(status_code=403, detail="Customer accounts can message providers but cannot publish listings")
+    return account
+
+
+def _require_market_seller(account: Landlord = Depends(require_landlord_account)) -> Landlord:
+    return _assert_market_seller(account)
 
 
 def _market_provider_for_account(db: Session, role: str, account) -> Landlord:
@@ -5850,13 +5928,13 @@ def _accommodation_coordinates(latitude: str, longitude: str) -> tuple[Optional[
 
 
 @app.post("/marketing/landlords/register")
-async def register_landlord(full_name: str = Form(...), business_name: str = Form(""), provider_type: str = Form("other"), email: str = Form(...), phone: str = Form(...), password: str = Form(...), confirm_password: str = Form(...), profile_image: Optional[UploadFile] = File(None), db: Session = Depends(get_db)):
+async def register_landlord(full_name: str = Form(...), business_name: str = Form(""), provider_type: str = Form("other"), email: str = Form(...), phone: str = Form(""), password: str = Form(...), confirm_password: str = Form(...), profile_image: Optional[UploadFile] = File(None), db: Session = Depends(get_db)):
     email = email.strip().lower()
-    if not full_name.strip() or not phone.strip() or "@" not in email or len(password) < 8:
+    if not full_name.strip() or (provider_type != "customer" and not phone.strip()) or "@" not in email or len(password) < 8:
         raise HTTPException(status_code=400, detail="Provide your name, contact number, valid email, and a password of at least 8 characters")
     if password != confirm_password:
         raise HTTPException(status_code=400, detail="The password confirmation does not match")
-    if provider_type not in {"residence", "agent", "transport", "sales", "other"}:
+    if provider_type not in {"residence", "agent", "customer", "transport", "sales", "other"}:
         raise HTTPException(status_code=400, detail="Choose accommodation, transport, sales, or other provider")
     if db.query(Landlord).filter(Landlord.email == email).first():
         raise HTTPException(status_code=409, detail="A provider profile already uses this email")
@@ -5866,7 +5944,10 @@ async def register_landlord(full_name: str = Form(...), business_name: str = For
     if profile_image and profile_image.filename:
         if not (profile_image.content_type or "").startswith("image/"):
             raise HTTPException(status_code=400, detail="Please choose a valid profile image")
-        image_url = upload_image_bytes(await profile_image.read(), folder="landlord_profiles")
+        image_bytes = await profile_image.read()
+        if len(image_bytes) > 10 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="Profile images must be 10 MB or smaller")
+        image_url = upload_image_bytes(image_bytes, folder="landlord_profiles")
     landlord = Landlord(full_name=full_name.strip()[:160], business_name=business_name.strip()[:160], provider_type=provider_type, email=email, phone=phone.strip()[:60], profile_image_url=image_url, password_hash=_password_hash(password), active=True, created_at=datetime.now(timezone.utc).isoformat())
     db.add(landlord); db.commit()
     return {"ok": True, "token": _issue_landlord_token(landlord.id), "profile": _landlord_profile(landlord)}
@@ -5888,6 +5969,24 @@ def landlord_login(payload: LandlordLogin, db: Session = Depends(get_db)):
 @app.get("/marketing/landlords/me")
 def landlord_me(landlord: Landlord = Depends(require_landlord_account)):
     return _landlord_profile(landlord)
+
+
+@app.put("/marketing/landlords/me")
+async def update_market_profile(full_name: str = Form(...), business_name: str = Form(""), phone: str = Form(""), profile_image: Optional[UploadFile] = File(None), landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
+    if not full_name.strip() or (landlord.provider_type != "customer" and not phone.strip()):
+        raise HTTPException(status_code=400, detail="Add your name and contact number")
+    landlord.full_name = full_name.strip()[:160]
+    landlord.business_name = business_name.strip()[:160] if landlord.provider_type != "customer" else ""
+    landlord.phone = phone.strip()[:60]
+    if profile_image and profile_image.filename:
+        if not (profile_image.content_type or "").startswith("image/"):
+            raise HTTPException(status_code=400, detail="Please choose an image file")
+        image_bytes = await profile_image.read()
+        if len(image_bytes) > 10 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="Profile images must be 10 MB or smaller")
+        landlord.profile_image_url = upload_image_bytes(image_bytes, folder="landlord_profiles")
+    db.commit()
+    return {"ok": True, "profile": _landlord_profile(landlord)}
 
 
 def _market_item(kind: str, listing_id: int, db: Session):
@@ -6059,7 +6158,7 @@ def admin_delete_market_room(listing_id: int, _pin_ok: bool = Depends(require_le
 
 
 @app.post("/marketing/listings")
-async def create_accommodation(background_tasks: BackgroundTasks, title: str = Form(...), campus: str = Form(...), area: str = Form(...), monthly_rent: str = Form(""), bedrooms: str = Form(""), description: str = Form(...), contact: str = Form(...), latitude: str = Form(""), longitude: str = Form(""), image_order: str = Form(""), images: Optional[List[UploadFile]] = File(None), image: Optional[UploadFile] = File(None), landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
+async def create_accommodation(background_tasks: BackgroundTasks, title: str = Form(...), campus: str = Form(...), area: str = Form(...), monthly_rent: str = Form(""), bedrooms: str = Form(""), description: str = Form(...), contact: str = Form(...), latitude: str = Form(""), longitude: str = Form(""), image_order: str = Form(""), images: Optional[List[UploadFile]] = File(None), image: Optional[UploadFile] = File(None), landlord: Landlord = Depends(_require_market_seller), db: Session = Depends(get_db)):
     if not title.strip() or not campus.strip() or not area.strip() or not description.strip():
         raise HTTPException(status_code=400, detail="Add a title, location, area, and description")
     if len(re.sub(r"\D", "", contact)) < 8:
@@ -6086,7 +6185,7 @@ async def create_accommodation(background_tasks: BackgroundTasks, title: str = F
 
 
 @app.put("/marketing/listings/{listing_id}")
-async def update_accommodation(listing_id: int, title: str = Form(...), campus: str = Form(...), area: str = Form(""), monthly_rent: str = Form(""), bedrooms: str = Form(""), description: str = Form(...), contact: str = Form(""), latitude: str = Form(""), longitude: str = Form(""), is_available: bool = Form(True), booked_until: str = Form(""), retained_image_urls: str = Form(""), image_order: str = Form(""), images: Optional[List[UploadFile]] = File(None), image: Optional[UploadFile] = File(None), landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
+async def update_accommodation(listing_id: int, title: str = Form(...), campus: str = Form(...), area: str = Form(""), monthly_rent: str = Form(""), bedrooms: str = Form(""), description: str = Form(...), contact: str = Form(""), latitude: str = Form(""), longitude: str = Form(""), is_available: bool = Form(True), booked_until: str = Form(""), retained_image_urls: str = Form(""), image_order: str = Form(""), images: Optional[List[UploadFile]] = File(None), image: Optional[UploadFile] = File(None), landlord: Landlord = Depends(_require_market_seller), db: Session = Depends(get_db)):
     item = db.query(Accommodation).filter(Accommodation.id == listing_id, Accommodation.landlord_id == landlord.id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Accommodation listing not found")
@@ -6134,7 +6233,7 @@ async def update_accommodation(listing_id: int, title: str = Form(...), campus: 
 
 
 @app.delete("/marketing/listings/{listing_id}")
-def delete_accommodation(listing_id: int, landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
+def delete_accommodation(listing_id: int, landlord: Landlord = Depends(_require_market_seller), db: Session = Depends(get_db)):
     item = db.query(Accommodation).filter(Accommodation.id == listing_id, Accommodation.landlord_id == landlord.id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Accommodation listing not found")
@@ -6215,7 +6314,7 @@ def _advert_payload(item: MarketAdvert, owner_name: str = "", registration_conta
 
 def _advert_owner(db: Session, student_token: Optional[str], landlord_token: Optional[str]):
     if landlord_token:
-        owner = require_landlord_account(landlord_token, db)
+        owner = _assert_market_seller(require_landlord_account(landlord_token, db))
         return None, owner
     if student_token:
         owner = db.query(Student).filter(Student.id == _student_id_from_token(student_token)).first()
@@ -6338,7 +6437,7 @@ async def update_market_advert(
     campus: str = Form(""), area: str = Form(""), latitude: str = Form(""), longitude: str = Form(""),
     contact: str = Form(...), website_url: str = Form(""), status: str = Form("approved"),
     retained_image_urls: str = Form(""), image_order: str = Form(""), images: Optional[List[UploadFile]] = File(None),
-    landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db),
+    landlord: Landlord = Depends(_require_market_seller), db: Session = Depends(get_db),
 ):
     item = db.query(MarketAdvert).filter(MarketAdvert.id == advert_id, _provider_advert_ownership(landlord)).first()
     if not item:
@@ -6386,7 +6485,7 @@ async def update_market_advert(
 
 
 @app.delete("/marketing/adverts/{advert_id}")
-def delete_market_advert(advert_id: int, landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
+def delete_market_advert(advert_id: int, landlord: Landlord = Depends(_require_market_seller), db: Session = Depends(get_db)):
     item = db.query(MarketAdvert).filter(MarketAdvert.id == advert_id, _provider_advert_ownership(landlord)).first()
     if not item:
         raise HTTPException(status_code=404, detail="Listing not found")
@@ -8623,6 +8722,7 @@ FRONTEND_PAGES = {
     "/tools/media": "media_compressor.html",
     "/trust": "trust.html",
     "/about": "about.html",
+    "/vacancies": "vacancies.html",
     "/premium": "premium.html",
     "/comrade": "comrade.html",
     "/reset-password": "reset-password.html",

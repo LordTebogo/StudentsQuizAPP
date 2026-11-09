@@ -200,6 +200,18 @@ class MarketPushSubscription(Base):
     created_at = Column(String, nullable=False)
 
 
+class Vacancy(Base):
+    """An opening managed by the admin and shown on the public careers page."""
+    __tablename__ = "vacancies"
+    id = Column(Integer, primary_key=True)
+    title = Column(String(160), nullable=False)
+    summary = Column(Text, nullable=False)
+    details = Column(Text, nullable=False)
+    is_open = Column(Boolean, nullable=False, default=True)
+    created_at = Column(String, nullable=False)
+    updated_at = Column(String, nullable=False)
+
+
 class Landlord(Base):
     __tablename__ = "landlords"
 

@@ -150,6 +150,42 @@ class MarketAccountsTest(unittest.TestCase):
             response=self.client.post('/marketing/listings',headers=self.market_headers(role),data={'title':'New room','campus':'Main','area':'Center','description':'Room','contact':'0791112233'})
             self.assertEqual(response.status_code,200,response.text)
 
+    def test_customer_can_message_agent_but_cannot_publish_and_agent_can_upload_photo(self):
+        from unittest.mock import patch
+        customer_email = self.prefix + "-customer@example.test"
+        registered = self.client.post('/marketing/landlords/register', data={
+            'full_name':'Market Customer', 'email':customer_email, 'provider_type':'customer',
+            'password':'Test-password-123', 'confirm_password':'Test-password-123'})
+        self.assertEqual(registered.status_code, 200, registered.text)
+        customer = registered.json()['profile']
+        self.assertEqual(customer['provider_type'], 'customer')
+        customer_headers = {'X-Landlord-Token':registered.json()['token']}
+        self.assertEqual(self.client.post('/marketing/listings', headers=customer_headers, data={
+            'title':'Not allowed', 'campus':'Main', 'area':'Center', 'description':'Room', 'contact':'0791112233'}).status_code, 403)
+        self.assertEqual(self.client.post('/marketing/adverts', headers=customer_headers, data={
+            'business_name':'Shop', 'headline':'Item', 'description':'Item', 'category':'Sales', 'contact':'0791112233'}).status_code, 403)
+        with patch.object(main, 'upload_image_bytes', return_value='https://example.test/agent.png'):
+            updated = self.client.put('/marketing/landlords/me', headers={'X-Landlord-Token':self.tokens['landlord']},
+                data={'full_name':'Market Agent', 'business_name':'Agent Office', 'phone':'0791112233'},
+                files={'profile_image':('avatar.png', b'photo', 'image/png')})
+        self.assertEqual(updated.status_code, 200, updated.text)
+        self.assertEqual(updated.json()['profile']['profile_image_url'], 'https://example.test/agent.png')
+        with main.SessionLocal() as db:
+            agent = db.get(Landlord, self.ids['landlord'])
+            agent.provider_type = 'agent'
+            db.commit()
+        sent = self.send(customer_headers, self.ids['landlord'], 'Is the room available?')
+        self.assertEqual(sent.status_code, 200, sent.text)
+        agent_headers = {'X-Landlord-Token':self.tokens['landlord']}
+        inbox = self.client.get('/marketing/provider/messages', headers=agent_headers).json()
+        self.assertTrue(any(row['peer_name'] == 'Market Customer' and row['content'] == 'Is the room available?' for row in inbox))
+        reply = self.send(agent_headers, customer['id'], 'Yes, please arrange a viewing.')
+        self.assertEqual(reply.status_code, 200, reply.text)
+        self.assertTrue(any(row['content'] == 'Yes, please arrange a viewing.' for row in self.client.get('/marketing/provider/messages', headers=customer_headers).json()))
+        login = self.client.post('/marketing/login', json={'identifier':customer_email, 'password':'Test-password-123'})
+        self.assertEqual(login.status_code, 200, login.text)
+        self.assertEqual(login.json()['profile']['provider_type'], 'customer')
+
     def test_signup_routes_existing_academic_accounts_back_to_universal_signin(self):
         response=self.client.post('/marketing/landlords/register',data={'full_name':'Same learner','email':self.emails['student'],'phone':'0791112233','password':'Test-password-123','confirm_password':'Test-password-123'})
         self.assertEqual(response.status_code,409,response.text)

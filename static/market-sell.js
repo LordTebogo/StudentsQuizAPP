@@ -171,9 +171,16 @@
   function renderChoice() {
     clearPreview();
     kind = '';
-    document.getElementById('sellTitle').textContent = 'Sell or list';
-    document.getElementById('sellIntro').textContent = `Signed in as ${profile.full_name}. Choose what you want to offer.`;
-    content.innerHTML = `<div class="sell-choice"><button type="button" data-sell-kind="room"><strong>A room or accommodation</strong><span>Monthly rent, location, and room details</span></button><button type="button" data-sell-kind="advert"><strong>An item, ride, or service</strong><span>Price, description, and how buyers can reach you</span></button></div><div class="sell-account-actions"><button type="button" data-my-listings>Manage my listings</button><button type="button" data-sell-messages>Messages</button><button type="button" data-sell-signout>Sign out</button></div>`;
+    const customer=profile.provider_type==='customer';
+    document.getElementById('sellTitle').textContent = customer ? 'My market account' : 'Sell or list';
+    document.getElementById('sellIntro').textContent = customer ? `Signed in as ${profile.full_name}. Browse the market and message providers.` : `Signed in as ${profile.full_name}. Choose what you want to offer.`;
+    content.innerHTML = `${customer ? '' : '<div class="sell-choice"><button type="button" data-sell-kind="room"><strong>A room or accommodation</strong><span>Monthly rent, location, and room details</span></button><button type="button" data-sell-kind="advert"><strong>An item, ride, or service</strong><span>Price, description, and how buyers can reach you</span></button></div>'}<div class="sell-account-actions">${customer ? '' : '<button type="button" data-my-listings>Manage my listings</button>'}<button type="button" data-sell-profile>My profile</button><button type="button" data-sell-messages>Messages</button><button type="button" data-sell-signout>Sign out</button></div>`;
+  }
+  function renderProfile() {
+    clearPreview();
+    document.getElementById('sellTitle').textContent='My profile';
+    document.getElementById('sellIntro').textContent='Your name and photo appear in marketplace conversations and listings.';
+    content.innerHTML=`<button class="sell-back" type="button" data-sell-back>← Back</button><form id="marketProfileForm" class="sell-form" enctype="multipart/form-data">${profile.profile_image_url ? `<img src="${escapeHtml(profile.profile_image_url)}" alt="Current profile picture" style="width:72px;height:72px;object-fit:cover;border-radius:50%">` : ''}<label>Full name<input name="full_name" value="${escapeHtml(profile.full_name)}" required></label>${profile.provider_type==='customer' ? '' : `<label>Business or service name<input name="business_name" value="${escapeHtml(profile.business_name || '')}"></label>`}<label>Contact number<input name="phone" type="tel" value="${escapeHtml(profile.phone || '')}" ${profile.provider_type==='customer' ? '' : 'required'}></label><label>Profile picture<input name="profile_image" type="file" accept="image/*"></label><button type="submit">Save profile</button></form>`;
   }
   function renderForm(selected) {
     clearPreview();
@@ -256,7 +263,7 @@
     if (saving) return;
     status('');
     try {
-      const session=await ArounusMarketAuth.ensureSignedIn();
+      const session=await ArounusMarketAuth.ensureSignedIn(showMessages ? 'browse' : 'sell');
       if(!session)return;
       profile=session.profile;
       document.getElementById('contactDialog')?.close();
@@ -298,6 +305,7 @@
     }
     const choice = event.target.closest('[data-sell-kind]');
     if (choice) { status(''); renderForm(choice.dataset.sellKind); return; }
+    if (event.target.closest('[data-sell-profile]')) { status(''); renderProfile(); return; }
     const locationButton = event.target.closest('[data-use-location]');
     if (locationButton) {
       const locationStatus = locationButton.parentElement.querySelector('.sell-location-status');
@@ -452,6 +460,17 @@
     event.preventDefault();
     if (saving || event.target.closest('.arounus-chat')) return;
     const form = event.target;
+    if (form.id === 'marketProfileForm') {
+      const button=form.querySelector('[type=submit]');button.disabled=true;
+      try {
+        const result=await request('/marketing/landlords/me',{method:'PUT',body:new FormData(form)});
+        profile=result.profile;
+        sessionStorage.setItem('marketProfile',JSON.stringify(profile));
+        document.dispatchEvent(new Event('market-session-changed'));
+        renderProfile();status('Profile saved.');
+      } catch(error) {status(error.message,true);} finally {if(button.isConnected)button.disabled=false;}
+      return;
+    }
     if (form.id === 'sellListingForm' || form.id === 'editListingForm') {
       try { showPreview(form); } catch (error) { status(error.message, true); }
       return;

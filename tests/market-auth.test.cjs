@@ -7,13 +7,25 @@ const html=fs.readFileSync(path.join(__dirname,'../static/index.html'),'utf8');
 const script=name=>fs.readFileSync(path.join(__dirname,'../static/'+name+'.js'),'utf8');
 const tick=()=>new Promise(resolve=>setTimeout(resolve,15));
 const response=(data,status=200)=>({ok:status<400,status,json:async()=>data});
-function setup(){
-  const dom=new JSDOM(html,{url:'https://arounus.test/',runScripts:'outside-only'}),w=dom.window;
+function setup(url='https://arounus.test/'){
+  const dom=new JSDOM(html,{url,runScripts:'outside-only'}),w=dom.window;
   w.HTMLDialogElement.prototype.showModal=function(){this.open=true};
   w.HTMLDialogElement.prototype.close=function(){this.open=false};
   w.eval(script('market-auth'));
   return {dom,w,auth:w.ArounusMarketAuth};
 }
+
+test('footer account links open market sign in and customer sign up',()=>{
+  for(const mode of ['login','register']){
+    const {dom,w}=setup('https://arounus.test/?account='+mode);
+    w.dispatchEvent(new w.Event('load'));
+    assert.equal(w.document.getElementById('marketAuthDialog').open,true);
+    assert.equal(Boolean(w.document.getElementById('marketAuthForm')),true);
+    if(mode==='register')assert.equal(w.document.querySelector('[name=provider_type]').value,'customer');
+    assert.equal(w.location.search,'');
+    w.close();
+  }
+});
 
 test('guest choice uses one role-free sign-in form and resumes the pending request',async()=>{
   const {dom,w,auth}=setup();const calls=[];
@@ -39,10 +51,26 @@ test('no-account choice opens advertiser signup and cancellation stops the actio
   const {dom,w,auth}=setup();let called=false;w.fetch=()=>{called=true};
   const result=auth.request('/marketing/test');
   w.document.querySelector('[data-account-answer="no"]').click();
-  assert.match(w.document.getElementById('marketAuthTitle').textContent,/advertiser/);
+  assert.match(w.document.getElementById('marketAuthTitle').textContent,/market account/);
   for(const name of ['full_name','phone','email','password','confirm_password'])assert.ok(w.document.querySelector(`[name=${name}]`));
   w.document.querySelector('[data-close-market-auth]').click();
   assert.equal(await result,null);assert.equal(called,false);dom.window.close();
+});
+
+test('contact flow offers a customer account with optional phone and agent photo upload',async()=>{
+  const {dom,w,auth}=setup();
+  const pending=auth.ensureSignedIn('browse');
+  w.document.querySelector('[data-account-answer="no"]').click();
+  const form=w.document.getElementById('marketAuthForm');
+  assert.equal(form.elements.provider_type.value,'customer');
+  assert.equal(form.elements.phone.required,false);
+  assert.ok(form.elements.profile_image);
+  form.elements.provider_type.value='agent';
+  form.elements.provider_type.dispatchEvent(new w.Event('change'));
+  assert.equal(form.elements.phone.required,true);
+  w.document.querySelector('[data-close-market-auth]').click();
+  assert.equal(await pending,null);
+  dom.window.close();
 });
 
 for(const role of ['student','lecturer','landlord'])test(`existing ${role} session connects without a question and keeps its original login`,async()=>{

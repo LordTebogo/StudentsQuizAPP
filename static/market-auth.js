@@ -5,7 +5,7 @@
   const title = document.getElementById('marketAuthTitle');
   const status = document.getElementById('marketAuthStatus');
   const roles = {student:{key:'studentToken',header:'X-Student-Token',active:'student'},lecturer:{key:'lecturerToken',header:'X-Lecturer-Token',active:'lecturer'},landlord:{key:'landlordToken',header:'X-Landlord-Token',active:'advertiser'}};
-  let pending = null, complete = null, mode = 'question';
+  let pending = null, complete = null, mode = 'question', intent = 'sell';
   const clearMarketSession = () => ['marketToken','marketSessionSource','marketProfile'].forEach(key=>sessionStorage.removeItem(key));
   function sources() {
     const active = sessionStorage.getItem('activeRole');
@@ -38,13 +38,14 @@
       content.innerHTML='<p>Do you already have an account in Arounus?</p><div class="sell-tabs market-account-choice"><button type="button" data-account-answer="yes">Yes, sign in</button><button type="button" data-account-answer="no">No, create an account</button></div>';
     } else {
       const register=mode==='register';
-      title.textContent=register?'Create an advertiser account':'Sign in to Arounus';
-      content.innerHTML=`<button class="sell-back" type="button" data-account-back>← Back</button><p>${register?'Create one account to message providers, rate listings, and sell or list.':'Use your learner, tutor or advertiser account. We will recognise your account automatically.'}</p><form id="marketAuthForm" class="sell-form">
-        ${register?'<label>Full name<input name="full_name" autocomplete="name" required></label><label>Business or service name <span>(optional)</span><input name="business_name" autocomplete="organization"></label><label>Contact number<input name="phone" type="tel" autocomplete="tel" required></label><label>Profile type<select name="provider_type"><option value="residence">Landlord</option><option value="agent">Room agent</option><option value="other">Other provider</option></select></label>':''}
+      title.textContent=register?'Create a market account':'Sign in to Arounus';
+      content.innerHTML=`<button class="sell-back" type="button" data-account-back>← Back</button><p>${register?'Choose Customer to browse and message providers, or choose a provider type to publish listings.':'Use your existing Arounus account, including a customer account.'}</p><form id="marketAuthForm" class="sell-form">
+        ${register?`<label>Account type<select name="provider_type"><option value="customer" ${intent==='browse'?'selected':''}>Customer — browse and contact providers</option><option value="residence" ${intent==='sell'?'selected':''}>Landlord</option><option value="agent">Room agent</option><option value="other">Other provider</option></select></label><label>Full name<input name="full_name" autocomplete="name" required></label><label data-provider-only>Business or service name <span>(optional)</span><input name="business_name" autocomplete="organization"></label><label>Contact number <span>(optional for customers)</span><input name="phone" type="tel" autocomplete="tel"></label><label>Profile picture <span>(optional)</span><input name="profile_image" type="file" accept="image/*"></label>`:''}
         <label>${register?'Email':'Email or learner username'}<input name="${register?'email':'identifier'}" type="${register?'email':'text'}" autocomplete="${register?'email':'username'}" required></label>
         <label>Password<input name="password" type="password" autocomplete="${register?'new-password':'current-password'}" ${register?'minlength="8"':''} required></label>
         ${register?'<label>Confirm password<input name="confirm_password" type="password" autocomplete="new-password" minlength="8" required></label>':''}
-        <button type="submit">${register?'Create advertiser account':'Sign in'}</button></form>${register ? '' : '<p><a href="/reset-password?role=landlord">Forgot password?</a></p>'}`;
+        <button type="submit">${register?'Create account':'Sign in'}</button></form>${register ? '' : '<p><a href="/reset-password?role=landlord">Forgot password?</a></p>'}`;
+      if(register){const select=content.querySelector('[name=provider_type]');const sync=()=>{const customer=select.value==='customer';content.querySelector('[data-provider-only]').hidden=customer;content.querySelector('[name=phone]').required=!customer;};select.addEventListener('change',sync);sync();}
     }
     (content.querySelector('input')||content.querySelector('button'))?.focus();
   }
@@ -75,7 +76,8 @@
       render();
     });
   }
-  function ensureSignedIn() {
+  function ensureSignedIn(nextIntent='sell') {
+    intent=nextIntent;
     if(!pending)pending=connect().finally(()=>{pending=null;});
     return pending;
   }
@@ -120,4 +122,14 @@
     document.dispatchEvent(new Event('market-session-changed'));
   }
   window.ArounusMarketAuth={ensureSignedIn,request,signOut};
+  const accountParams=new URLSearchParams(location.search);
+  if(['login','register'].includes(accountParams.get('account'))){
+    window.addEventListener('load',()=>{
+      intent='browse';
+      if(!dialog.open)dialog.showModal();
+      render(accountParams.get('account'));
+      const url=new URL(location.href);url.searchParams.delete('account');
+      history.replaceState(history.state,'',url.pathname+url.search+url.hash);
+    },{once:true});
+  }
 })();
