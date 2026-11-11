@@ -23,7 +23,7 @@ test('learner module cards show subject names and quiz counts without university
     () => {},
   );
   await loadModules();
-  assert.match(window.document.getElementById('moduleList').textContent, /Biochemistry.*3 quizzes/);
+  assert.match(window.document.getElementById('moduleList').textContent, /Biochemistry.*3 assessments/);
   assert.doesNotMatch(window.document.getElementById('moduleList').textContent, /SBIA022/);
   dom.window.close();
 });

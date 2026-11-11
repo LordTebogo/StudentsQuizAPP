@@ -2,6 +2,7 @@
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="theme-color" content="#f5f8f6"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><link rel="icon" type="image/png" href="/static/icons/favicon-96x96.png?v=5"><link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png?v=5"><link rel="manifest" href="/static/manifest.webmanifest"><title>Student — Arounus</title><link rel="stylesheet" href="/static/style.css"><link rel="stylesheet" href="/static/ui.css?v=2"><script defer src="/static/experience.js?v=18"></script><script defer src="/static/username-suggestion.js"></script>  <link rel="stylesheet" href="/static/mathlive-fonts.css?v=1">
 <script src="/static/app-traffic.js?v=1" defer></script>
 <link rel="stylesheet" href="/static/site-footer.css?v=1">
+<link rel="stylesheet" href="/static/learning-library.css?v=1">
 </head>
 <script>if(sessionStorage.getItem('studentToken'))document.documentElement.classList.add('student-session-loading')</script>
 <body>
@@ -119,9 +120,12 @@ async function recommendUnfinishedQuiz(modules){
   button.textContent='Continue quiz';
   button.onclick=()=>loadQuiz(next.id);
 }
-async function loadModules(){$('moduleList').innerHTML='<div class="loading-skeleton" aria-label="Loading modules"><span></span><span></span><span></span></div>';try{const modules=await api('/student/quiz-modules',{},true);updateLearnerOverview(modules);$('moduleList').innerHTML=modules.map(m=>`<button class="module-card" data-module="${escapeHtml(m.module_code)}"><strong>${escapeHtml(m.module_name||moduleLabel(m.module_code))}</strong><span>${m.quiz_count} quiz${m.quiz_count===1?'':'zes'}</span></button>`).join('')||'<div class="empty-state"><strong>No quizzes yet</strong><span>Your enrolled modules will appear here when a tutor publishes a quiz.</span></div>';document.querySelectorAll('[data-module]').forEach(b=>b.addEventListener('click',()=>loadModule(b.dataset.module)));recommendUnfinishedQuiz(modules).catch(()=>{})}catch(err){$('moduleList').innerHTML=`<div class="empty-state"><strong>Modules could not load</strong><span>${escapeHtml(err.message)}</span><br><button class="retry-button" type="button" id="retryModules">Try again</button></div>`;$('retryModules').addEventListener('click',loadModules)}}
+async function loadModules(){$('moduleCard')?.classList.add('learning-library');$('moduleList').classList.add('library-folder-grid');$('moduleList').innerHTML='<div class="loading-skeleton" aria-label="Loading modules"><span></span><span></span><span></span></div>';try{const modules=await api('/student/quiz-modules',{},true);updateLearnerOverview(modules);$('moduleList').innerHTML=modules.map(m=>`<button class="module-card library-folder" data-module="${escapeHtml(m.module_code)}"><span class="folder-mark" aria-hidden="true">▤</span><span><strong>${escapeHtml(m.module_name||moduleLabel(m.module_code))}</strong><small>${m.quiz_count} assessment${m.quiz_count===1?'':'s'} · Open module →</small></span></button>`).join('')||'<div class="empty-state"><strong>No quizzes yet</strong><span>Your enrolled modules will appear here when a tutor publishes a quiz.</span></div>';document.querySelectorAll('[data-module]').forEach(b=>b.addEventListener('click',()=>loadModule(b.dataset.module)));recommendUnfinishedQuiz(modules).catch(()=>{})}catch(err){$('moduleList').innerHTML=`<div class="empty-state"><strong>Modules could not load</strong><span>${escapeHtml(err.message)}</span><br><button class="retry-button" type="button" id="retryModules">Try again</button></div>`;$('retryModules').addEventListener('click',loadModules)}}
 async function loadModule(code){
   $('moduleCard').classList.add('hidden');$('quizListCard').classList.remove('hidden');
+  $('quizListCard').classList.add('learning-library');
+  let lessonLink=$('moduleLessonLink');if(!lessonLink){lessonLink=document.createElement('a');lessonLink.id='moduleLessonLink';lessonLink.className='module-cross-link';$('quizList').before(lessonLink)}
+  lessonLink.href=`/students/lessons?subject=${encodeURIComponent(moduleSlug(code))}`;lessonLink.textContent=`View ${moduleLabel(code)} video lessons →`;
   $('moduleLabel').textContent=moduleLabel(code);$('quizListMsg').innerHTML='';
   $('quizList').innerHTML='<p class="muted fetching-note">Fetching quizzes…</p>';
   try{
@@ -130,13 +134,15 @@ async function loadModule(code){
     for(const q of quizzes){const label=q.assessment_type==='test'?'Tests':(q.topic||'Other topics');if(!groups.has(label))groups.set(label,[]);groups.get(label).push(q)}
     const topics=[...groups.keys()].filter(label=>label!=='Tests').sort((a,b)=>a.localeCompare(b));
     if(groups.has('Tests'))topics.push('Tests');
-    $('quizList').innerHTML=topics.map(label=>`<button class="admin-list-item" data-topic="${escapeHtml(label)}"><strong>${escapeHtml(label)}</strong><span>${groups.get(label).length} ${label==='Tests'?'test':'quiz'}${groups.get(label).length===1?'':'s'} →</span></button>`).join('')||'<p class="muted">No quizzes are available in this module yet.</p>';
+    $('quizList').classList.remove('library-items');$('quizList').classList.add('library-folder-grid');
+    $('quizList').innerHTML=topics.map(label=>`<button class="library-folder ${label==='Tests'?'test-folder':''}" data-topic="${escapeHtml(label)}"><span class="folder-mark" aria-hidden="true">${label==='Tests'?'✓':'▤'}</span><span><strong>${escapeHtml(label)}</strong><small>${groups.get(label).length} ${label==='Tests'?'test':'quiz'}${groups.get(label).length===1?'':'s'} · Open folder →</small></span></button>`).join('')||'<p class="muted">No quizzes are available in this module yet.</p>';
     document.querySelectorAll('[data-topic]').forEach(button=>button.addEventListener('click',()=>{
       const label=button.dataset.topic;
-      $('quizList').innerHTML=`<button class="btn secondary" id="backToTopics" type="button">← All topics</button><h3>${escapeHtml(label)}</h3>`+groups.get(label).map(q=>{
+      $('quizList').classList.remove('library-folder-grid');$('quizList').classList.add('library-items');
+      $('quizList').innerHTML=`<div class="library-crumbs"><button id="backToTopics" type="button">← ${escapeHtml(moduleLabel(code))}</button><span>› ${escapeHtml(label)}</span></div>`+groups.get(label).map(q=>{
         const progress=q.completed?`<span class="badge done">Completed · ${q.total_score} / ${q.max_score}</span><small>${q.fully_marked?'Final result':'Awaiting final marking'}</small>`:'<span class="badge pending">Not started</span>';
         const fun=q.is_fun?`<span class="fun-level">Fun Quiz · ${escapeHtml(q.fun_level)}</span>`:'';
-        return `<button class="admin-list-item" data-quiz="${q.id}"><span><strong>${escapeHtml(moduleDisplayTitle(q.title,q.module_code))}</strong><small>${fun}</small></span><span>${progress}</span></button>`
+        return `<button class="library-item" data-quiz="${q.id}"><span><strong>${escapeHtml(moduleDisplayTitle(q.title,q.module_code))}</strong><small>${fun|| (q.assessment_type==='test'?'Module test':'Topic quiz')}</small></span><span>${progress}</span></button>`
       }).join('');
       $('backToTopics').addEventListener('click',()=>loadModule(code));
       document.querySelectorAll('[data-quiz]').forEach(item=>item.addEventListener('click',()=>loadQuiz(item.dataset.quiz)));

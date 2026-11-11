@@ -12,6 +12,7 @@
 <link rel="manifest" href="/static/manifest.webmanifest">
 <title>Video Lessons — Tutor</title>
 <link rel="stylesheet" href="/static/style.css"><link rel="stylesheet" href="/static/ui.css?v=2">
+<link rel="stylesheet" href="/static/learning-library.css?v=1">
 <style>
   video { width: 100%; border-radius: 4px; border: 1px solid var(--border); background: #000; display: block; margin-bottom: 14px; }
   .comment { padding: 10px 0; border-top: 1px dashed var(--paper-line); }
@@ -100,15 +101,15 @@
   </div>
 
   <!-- Choose lesson -->
-  <div class="card">
-    <h2>2. Your uploaded videos</h2>
-    <label for="moduleFilterSelect">Filter by module</label>
-    <select id="moduleFilterSelect"><option value="">All modules</option></select>
-    <label for="lessonSelect">Lesson</label>
-    <select id="lessonSelect"><option value="">Loading lessons…</option></select>
-    <button class="btn secondary" id="refreshLessonsBtn">Refresh list</button>
-    <div class="my-lesson-grid" id="myLessonList"></div>
-  </div>
+  <section class="card learning-library" id="tutorLessonLibrary">
+    <div class="library-heading"><div><span class="kicker">Your library</span><h2>Browse video lessons</h2><p>Open a module and topic to find a lesson.</p></div><button class="btn secondary" id="refreshLessonsBtn" type="button">Refresh</button></div>
+    <label for="lessonLibrarySearch" class="sr-only">Search lessons</label><input id="lessonLibrarySearch" type="search" placeholder="Search modules, topics or lessons" autocomplete="off">
+    <div class="library-crumbs" id="lessonLibraryCrumbs"></div>
+    <div class="library-folder-grid" id="lessonLibraryFolders"></div>
+    <div class="library-items" id="myLessonList"></div>
+    <select id="moduleFilterSelect" class="sr-only" aria-label="Module filter"><option value="">All modules</option></select>
+    <select id="lessonSelect" class="sr-only" aria-label="Selected lesson"><option value="">Loading lessons…</option></select>
+  </section>
 
   <!-- Selected lesson preview + comments -->
   <div class="card hidden" id="previewCard">
@@ -309,6 +310,7 @@ $('uploadLessonBtn').addEventListener('click', async () => {
     // Keep the module code filled in — the lecturer is likely to upload
     // another lesson for the same module next.
     await loadModules();
+    tutorLessonModule = moduleCode; tutorLessonTopic = topic;
     await loadLessons();
     $('lessonSelect').value = result.lesson_id;
     await selectLesson(result.lesson_id);
@@ -334,6 +336,7 @@ async function loadModules() {
     filterSelect.innerHTML = '<option value="">All modules</option>' +
       modules.map(code => `<option value="${escapeHtml(code)}">${escapeHtml(moduleLabel(code))}</option>`).join('');
     filterSelect.value = previousValue; // preserve selection across refreshes if still valid
+    renderTutorLessonLibrary();
   } catch (err) {
     // non-critical — just leave the datalist/filter empty
   }
@@ -341,26 +344,49 @@ async function loadModules() {
 $('moduleFilterSelect').addEventListener('change', loadLessons);
 
 // ---- Lesson list ---------------------------------------------------------
+let tutorLessonRows = [], tutorLessonModule = '', tutorLessonTopic = '';
+function renderTutorLessonLibrary() {
+  const search = $('lessonLibrarySearch').value.trim().toLocaleLowerCase();
+  const folders = $('lessonLibraryFolders'), list = $('myLessonList');
+  folders.replaceChildren(); list.replaceChildren();
+  $('lessonLibraryCrumbs').innerHTML = `<button type="button" data-lesson-back="modules">Modules</button>${tutorLessonModule ? `› <button type="button" data-lesson-back="topics">${escapeHtml(moduleLabel(tutorLessonModule))}</button>` : ''}${tutorLessonTopic ? `› <span>${escapeHtml(tutorLessonTopic)}</span>` : ''}`;
+  if (!tutorLessonModule) {
+    const modules = [...new Set([...$('moduleCodeInput').options].map(option => option.value).filter(Boolean).concat(tutorLessonRows.map(l => l.module_code)))].sort((a,b) => moduleLabel(a).localeCompare(moduleLabel(b)));
+    folders.innerHTML = modules.filter(code => !search || `${moduleLabel(code)} ${code}`.toLocaleLowerCase().includes(search)).map(code => {
+      const count = tutorLessonRows.filter(l => l.module_code === code).length;
+      return `<button class="library-folder" type="button" data-lesson-module="${escapeHtml(code)}"><span class="folder-mark" aria-hidden="true">▤</span><span><strong>${escapeHtml(moduleLabel(code))}</strong><small>${count} lesson${count === 1 ? '' : 's'} · Open module →</small></span></button>`;
+    }).join('');
+  } else if (!tutorLessonTopic) {
+    const moduleRows = tutorLessonRows.filter(l => l.module_code === tutorLessonModule);
+    const topics = [...new Set(moduleRows.map(l => l.topic || 'Other topics'))].sort((a,b) => a.localeCompare(b));
+    folders.innerHTML = topics.filter(topic => !search || topic.toLocaleLowerCase().includes(search)).map(topic => {
+      const count = moduleRows.filter(l => (l.topic || 'Other topics') === topic).length;
+      return `<button class="library-folder" type="button" data-lesson-topic="${escapeHtml(topic)}"><span class="folder-mark" aria-hidden="true">▤</span><span><strong>${escapeHtml(topic)}</strong><small>${count} lesson${count === 1 ? '' : 's'} · Open folder →</small></span></button>`;
+    }).join('');
+  } else {
+    list.innerHTML = tutorLessonRows.filter(l => l.module_code === tutorLessonModule && (l.topic || 'Other topics') === tutorLessonTopic && (!search || l.title.toLocaleLowerCase().includes(search))).map(l => `<button class="library-item" type="button" data-open-lesson="${l.id}"><span><strong>${escapeHtml(moduleDisplayTitle(l.title,l.module_code))}</strong><small>${l.question_count} question${l.question_count === 1 ? '' : 's'} · ${l.submission_count} submission${l.submission_count === 1 ? '' : 's'}</small></span><span>Open →</span></button>`).join('');
+  }
+  if (!folders.children.length && !list.children.length) list.innerHTML = `<p class="muted">${search ? 'No matches. Try another search.' : 'Nothing in this folder yet.'}</p>`;
+}
+$('lessonLibrarySearch').addEventListener('input', renderTutorLessonLibrary);
+$('lessonLibraryCrumbs').addEventListener('click', event => { const step = event.target.closest('[data-lesson-back]')?.dataset.lessonBack; if (!step) return; if (step === 'modules') { tutorLessonModule = ''; tutorLessonTopic = ''; } else tutorLessonTopic = ''; $('lessonLibrarySearch').value = ''; $('previewCard').classList.add('hidden'); renderTutorLessonLibrary(); });
+$('lessonLibraryFolders').addEventListener('click', event => { const module = event.target.closest('[data-lesson-module]')?.dataset.lessonModule, topic = event.target.closest('[data-lesson-topic]')?.dataset.lessonTopic; if (module) tutorLessonModule = module; if (topic) tutorLessonTopic = topic; if (!module && !topic) return; $('lessonLibrarySearch').value = ''; $('previewCard').classList.add('hidden'); renderTutorLessonLibrary(); });
 async function loadLessons() {
   const select = $('lessonSelect');
-  const moduleFilter = $('moduleFilterSelect').value;
   try {
     const lessons = await api('/lecturer/lessons', {}, true);
-    const filteredLessons = moduleFilter ? lessons.filter(lesson => lesson.module_code === moduleFilter) : lessons;
+    tutorLessonRows = lessons;
+    const filteredLessons = lessons;
     if (!filteredLessons.length) {
+      $('previewCard').classList.add('hidden');
       select.innerHTML = '<option value="">No lessons in this module yet</option>';
-      $('myLessonList').innerHTML = '<p class="muted">No uploaded videos in this module yet.</p>';
+      renderTutorLessonLibrary();
       return;
     }
     const previous = select.value || String(currentLessonId || '');
     select.innerHTML = filteredLessons.map(l => `<option value="${l.id}">${escapeHtml(moduleLabel(l.module_code))} — ${escapeHtml(moduleDisplayTitle(l.title, l.module_code))} · ${escapeHtml(l.topic || 'Topic needed')}</option>`).join('');
     if (filteredLessons.some(lesson => String(lesson.id) === previous)) select.value = previous;
-    $('myLessonList').innerHTML = filteredLessons.map(lesson => `
-      <div class="my-lesson">
-        <strong>${escapeHtml(moduleDisplayTitle(lesson.title, lesson.module_code))}</strong>
-        <span>${escapeHtml(moduleLabel(lesson.module_code))} · ${lesson.unique_viewers} unique viewer${lesson.unique_viewers === 1 ? '' : 's'} · ${lesson.video_starts} video start${lesson.video_starts === 1 ? '' : 's'}<br>${lesson.question_count} question${lesson.question_count === 1 ? '' : 's'} · ${lesson.submission_count} submission${lesson.submission_count === 1 ? '' : 's'}</span>
-        <button type="button" class="btn secondary" data-open-lesson="${lesson.id}">Open video</button>
-      </div>`).join('');
+    renderTutorLessonLibrary();
   } catch (err) {
     select.innerHTML = '<option value="">Could not load lessons</option>';
     $('myLessonList').textContent = `Could not load your videos: ${err.message}`;
@@ -412,6 +438,7 @@ $('saveExistingLessonTopicBtn').addEventListener('click', async () => {
   try {
     await api(`/lecturer/lessons/${encodeURIComponent(currentLessonId)}/topic`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({topic})}, true);
     editableLesson.topic = topic;
+    tutorLessonTopic = topic;
     await loadLessons();
     showMsg($('lessonManageMsg'), 'Lesson topic saved.', 'ok');
   } catch (err) { showMsg($('lessonManageMsg'), err.message, 'error'); }

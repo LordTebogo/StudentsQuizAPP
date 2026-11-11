@@ -12,6 +12,7 @@
 <link rel="manifest" href="/static/manifest.webmanifest">
 <title>Video Lessons — Student</title>
 <link rel="stylesheet" href="/static/style.css"><link rel="stylesheet" href="/static/ui.css?v=2">
+<link rel="stylesheet" href="/static/learning-library.css?v=1">
 <style>
   video { width: 100%; border-radius: 4px; border: 1px solid var(--border); background: #000; display: block; }
   .lesson-list-item {
@@ -73,13 +74,13 @@
   <p class="lede">Choose a module and continue learning. The AROUNUS module includes a guide to using the app. Answers are private; comments are public.</p>
 
   <!-- Module selection -->
-  <div class="card" id="moduleCard">
+  <div class="card learning-library" id="moduleCard">
     <h2>Choose a module</h2>
-    <div id="moduleList">Loading modules…</div>
+    <div id="moduleList" class="library-folder-grid">Loading modules…</div>
   </div>
 
   <!-- Lesson list (filtered to the chosen module) -->
-  <div class="card hidden" id="listCard">
+  <div class="card learning-library hidden" id="listCard">
     <button class="btn secondary" id="backToModulesBtn">&larr; Back to modules</button>
     <h2 id="listCardTitle">Choose a lesson</h2>
     <div id="lessonList">Loading lessons…</div>
@@ -211,12 +212,11 @@ async function loadModuleList() {
       return;
     }
     box.innerHTML = modules.map(m => `
-      <a class="lesson-list-item" data-code="${escapeHtml(m.module_code)}">
-        <div class="lesson-list-title">${m.is_app_guide ? 'How to Use Arounus' : escapeHtml(m.module_name || moduleLabel(m.module_code))}</div>
-        <p class="muted">${m.is_app_guide ? 'Written guide and printable document · ' : ''}${m.lesson_count} video${m.lesson_count === 1 ? '' : 's'}</p>
-      </a>
+      <button class="library-folder" type="button" data-code="${escapeHtml(m.module_code)}">
+        <span class="folder-mark" aria-hidden="true">▤</span><span><strong>${m.is_app_guide ? 'How to Use Arounus' : escapeHtml(m.module_name || moduleLabel(m.module_code))}</strong><small>${m.is_app_guide ? 'Guide and tutorials · ' : ''}${m.lesson_count} video${m.lesson_count === 1 ? '' : 's'} · Open module →</small></span>
+      </button>
     `).join('');
-    box.querySelectorAll('.lesson-list-item').forEach(el => {
+    box.querySelectorAll('[data-code]').forEach(el => {
       el.addEventListener('click', () => openModule(el.dataset.code));
     });
   } catch (err) {
@@ -258,18 +258,19 @@ async function loadLessonList(moduleCode) {
         ? `<span class="badge done">Completed · ${l.total_score} / ${l.max_score}</span><p class="muted">${l.fully_marked ? 'Final result' : 'Awaiting final marking'}</p>`
         : `<span class="badge pending">Not completed</span>`;
       return `
-        <a class="lesson-list-item" data-id="${l.id}">
-          <div class="lesson-list-title">${escapeHtml(moduleDisplayTitle(l.title, l.module_code))}</div>
-          <p class="muted">${escapeHtml(l.description || '')}</p>
-          ${progress}
-        </a>`;
+        <button class="library-item" type="button" data-id="${l.id}">
+          <span><strong>${escapeHtml(moduleDisplayTitle(l.title, l.module_code))}</strong><small>${escapeHtml(l.description || '')}</small></span>
+          <span>${progress}</span>
+        </button>`;
     }).join('');
     const groups = new Map();
     for (const lesson of lessons) { const topic = lesson.topic || 'Other topics'; if (!groups.has(topic)) groups.set(topic, []); groups.get(topic).push(lesson); }
-    box.innerHTML = guideLink + [...groups.keys()].sort((a, b) => a.localeCompare(b)).map(topic => `<button class="lesson-list-item" type="button" data-topic="${escapeHtml(topic)}"><strong>${escapeHtml(topic)}</strong><p class="muted">${groups.get(topic).length} lesson${groups.get(topic).length === 1 ? '' : 's'} →</p></button>`).join('');
+    box.classList.remove('library-items'); box.classList.add('library-folder-grid');
+    box.innerHTML = guideLink + [...groups.keys()].sort((a, b) => a.localeCompare(b)).map(topic => `<button class="library-folder" type="button" data-topic="${escapeHtml(topic)}"><span class="folder-mark" aria-hidden="true">▤</span><span><strong>${escapeHtml(topic)}</strong><small>${groups.get(topic).length} lesson${groups.get(topic).length === 1 ? '' : 's'} · Open folder →</small></span></button>`).join('');
     box.querySelectorAll('[data-topic]').forEach(button => button.addEventListener('click', () => {
       const topic = button.dataset.topic;
-      box.innerHTML = `<button class="btn secondary" type="button" id="backToLessonTopics">← All topics</button><h3>${escapeHtml(topic)}</h3>` + renderLessons(groups.get(topic));
+      box.classList.remove('library-folder-grid'); box.classList.add('library-items');
+      box.innerHTML = `<div class="library-crumbs"><button type="button" id="backToLessonTopics">← ${escapeHtml(moduleLabel(moduleCode))}</button><span>› ${escapeHtml(topic)}</span></div>` + renderLessons(groups.get(topic));
       $('backToLessonTopics').addEventListener('click', () => loadLessonList(moduleCode));
       box.querySelectorAll('[data-id]').forEach(el => el.addEventListener('click', () => openLesson(el.dataset.id)));
     }));

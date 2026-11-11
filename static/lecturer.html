@@ -14,9 +14,10 @@
 <link rel="stylesheet" href="/static/style.css">
 <link rel="stylesheet" href="/static/quiz-builder.css">
 <link rel="stylesheet" href="/static/quiz-math-tools.css"><link rel="stylesheet" href="/static/ui.css?v=2">
+<link rel="stylesheet" href="/static/learning-library.css?v=1">
 <script type="module">import{MathfieldElement}from"https://cdn.jsdelivr.net/npm/mathlive@0.110.0/+esm";MathfieldElement.fontsDirectory="https://cdn.jsdelivr.net/npm/mathlive@0.110.0/fonts";</script>
 <style>
-  .lecturer-workbench { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(280px, .75fr); gap: 22px; align-items: start; }
+  .lecturer-workbench { display: grid; grid-template-columns: 1fr; gap: 22px; align-items: start; }
   .lecturer-workbench .card { margin-bottom: 0; }
   .lecturer-roster .admin-editor-heading { align-items: center; }
   .lecturer-roster details, .message-history { margin-top: 18px; border: 1px solid var(--line); border-radius: 13px; background: rgba(3, 7, 18, .23); }
@@ -133,25 +134,21 @@
 
   <div class="lecturer-workbench">
   <!-- Existing quizzes -->
-  <div class="card">
-    <h2>2. Choose a quiz to review</h2>
-    <label for="quizSelect">Quiz</label>
-    <select id="quizSelect"><option value="">Loading quizzes…</option></select>
-    <label for="quizModuleCorrection">Assigned subject</label>
-    <select id="quizModuleCorrection" aria-describedby="quizModuleHelp"></select>
-    <p class="muted" id="quizModuleHelp">Correct a quiz's subject before learners submit answers.</p>
-    <label for="quizTopicCorrection">Topic</label><input id="quizTopicCorrection" type="text" maxlength="160" placeholder="e.g. DNA replication">
-    <label for="quizAssessmentCorrection">Assessment</label><select id="quizAssessmentCorrection"><option value="quiz">Topic quiz</option><option value="test">Module test</option></select>
-    <p class="muted">You can organize an existing quiz even after learners have submitted answers.</p>
-    <div class="account-actions">
-      <button class="btn secondary" id="refreshQuizzesBtn">Refresh quiz list</button>
-      <button class="btn secondary" id="duplicateQuizBtn" type="button">Duplicate in builder</button>
-      <button class="btn secondary" id="correctQuizModuleBtn" type="button">Save subject correction</button>
-      <button class="btn secondary" id="saveQuizOrganizationBtn" type="button">Save topic and type</button>
-      <button class="btn" id="loadStudentsBtn" disabled>See students who took this quiz</button>
+  <section class="card learning-library" id="tutorQuizLibrary" aria-label="Quiz library">
+    <div class="library-heading"><div><span class="kicker">Your library</span><h2>Browse quizzes and tests</h2><p>Open a module, choose a topic, then select a quiz to review or organize.</p></div><button class="btn secondary" id="refreshQuizzesBtn" type="button">Refresh</button></div>
+    <label for="tutorLibrarySearch" class="sr-only">Search this library</label><input id="tutorLibrarySearch" type="search" placeholder="Search modules, topics or quizzes" autocomplete="off">
+    <div class="library-crumbs" id="tutorQuizCrumbs" aria-label="Quiz location"></div>
+    <div id="tutorQuizFolders" class="library-folder-grid" aria-live="polite"></div>
+    <div id="tutorQuizItems" class="library-items"></div>
+    <div class="library-detail hidden" id="tutorQuizDetail">
+      <h3 id="tutorQuizDetailTitle">Selected quiz</h3><p class="detail-subtitle" id="tutorQuizDetailMeta"></p>
+      <div class="detail-grid"><div><label for="quizTopicCorrection">Topic</label><input id="quizTopicCorrection" type="text" maxlength="160" placeholder="e.g. DNA replication"></div><div><label for="quizAssessmentCorrection">Assessment</label><select id="quizAssessmentCorrection"><option value="quiz">Topic quiz</option><option value="test">Module test</option></select></div></div>
+      <div class="detail-actions"><button class="btn secondary" id="saveQuizOrganizationBtn" type="button">Save topic and type</button><button class="btn" id="loadStudentsBtn" disabled>View submissions</button><button class="btn secondary" id="duplicateQuizBtn" type="button">Duplicate in builder</button></div>
+      <details class="library-advanced"><summary>Move to another module</summary><label for="quizModuleCorrection">Assigned module</label><select id="quizModuleCorrection"></select><p class="muted" id="quizModuleHelp">A module can only change before a learner starts this quiz.</p><button class="btn secondary" id="correctQuizModuleBtn" type="button">Save module</button></details>
+      <p class="muted" id="quizReviewStatus" aria-live="polite">Choose a quiz to see its options.</p>
     </div>
-    <p class="muted" id="quizReviewStatus" aria-live="polite">Choose a quiz, then load its student submissions.</p>
-  </div>
+    <select id="quizSelect" class="sr-only" aria-label="Selected quiz"><option value="">Loading quizzes…</option></select>
+  </section>
 
   <div class="card"><span class="kicker">Quick guide</span><h2>Quiz-building checklist</h2><ol class="builder-checklist"><li>Add a clear title and choose your assigned module.</li><li>Add questions, answers, marks, and optional images.</li><li>Save a draft or preview the student view.</li><li>Publish when the quiz is ready.</li></ol><a class="btn secondary" href="/lecturers/guide">Open complete Tutor Guide</a></div>
 
@@ -442,15 +439,48 @@ $('uploadBtn').addEventListener('click', async () => {
 });
 
 // ---- Load quiz list ----------------------------------------------------
+let tutorQuizRows = [], tutorLibraryModule = '', tutorLibraryTopic = '';
+function renderTutorQuizLibrary() {
+  const rows = tutorQuizRows, search = $('tutorLibrarySearch').value.trim().toLocaleLowerCase();
+  const crumbs = $('tutorQuizCrumbs'), folders = $('tutorQuizFolders'), items = $('tutorQuizItems');
+  crumbs.innerHTML = `<button type="button" data-library-back="modules">Modules</button>${tutorLibraryModule ? `› <button type="button" data-library-back="topics">${escapeHtml(moduleLabel(tutorLibraryModule))}</button>` : ''}${tutorLibraryTopic ? `› <span>${escapeHtml(tutorLibraryTopic)}</span>` : ''}`;
+  folders.replaceChildren(); items.replaceChildren();
+  if (!tutorLibraryModule) {
+    const modules = [...new Set([...(window.LECTURER_PROFILE?.module_codes || []), ...rows.map(q => q.module_code)])].sort((a,b) => moduleLabel(a).localeCompare(moduleLabel(b)));
+    folders.innerHTML = modules.filter(code => !search || `${moduleLabel(code)} ${code}`.toLocaleLowerCase().includes(search)).map(code => {
+      const count = rows.filter(q => q.module_code === code).length;
+      return `<button class="library-folder" type="button" data-library-module="${escapeHtml(code)}"><span class="folder-mark" aria-hidden="true">▤</span><span><strong>${escapeHtml(moduleLabel(code))}</strong><small>${count} assessment${count === 1 ? '' : 's'} · Open module →</small></span></button>`;
+    }).join('');
+  } else if (!tutorLibraryTopic) {
+    const moduleRows = rows.filter(q => q.module_code === tutorLibraryModule);
+    const topics = [...new Set(moduleRows.filter(q => q.assessment_type !== 'test').map(q => q.topic || 'Other topics'))].sort((a,b) => a.localeCompare(b));
+    if (moduleRows.some(q => q.assessment_type === 'test')) topics.push('Tests');
+    folders.innerHTML = topics.filter(topic => !search || topic.toLocaleLowerCase().includes(search)).map(topic => {
+      const count = moduleRows.filter(q => topic === 'Tests' ? q.assessment_type === 'test' : q.assessment_type !== 'test' && (q.topic || 'Other topics') === topic).length;
+      return `<button class="library-folder ${topic === 'Tests' ? 'test-folder' : ''}" type="button" data-library-topic="${escapeHtml(topic)}"><span class="folder-mark" aria-hidden="true">${topic === 'Tests' ? '✓' : '▤'}</span><span><strong>${escapeHtml(topic)}</strong><small>${count} ${topic === 'Tests' ? 'test' : 'quiz'}${count === 1 ? '' : 's'} · Open folder →</small></span></button>`;
+    }).join('');
+  } else {
+    const matching = rows.filter(q => q.module_code === tutorLibraryModule && (tutorLibraryTopic === 'Tests' ? q.assessment_type === 'test' : q.assessment_type !== 'test' && (q.topic || 'Other topics') === tutorLibraryTopic));
+    items.innerHTML = matching.filter(q => !search || q.title.toLocaleLowerCase().includes(search)).map(q => `<button class="library-item" type="button" data-library-quiz="${q.id}" aria-current="${$('quizSelect').value === String(q.id) && !$('tutorQuizDetail').classList.contains('hidden')}"><span><strong>${escapeHtml(moduleDisplayTitle(q.title,q.module_code))}</strong><small>${q.is_fun ? `Fun Quiz · ${escapeHtml(q.fun_level)}` : q.assessment_type === 'test' ? 'Module test' : 'Topic quiz'}</small></span><span>Open →</span></button>`).join('');
+  }
+  if (!folders.children.length && !items.children.length) items.innerHTML = `<p class="muted">${search ? 'No matches. Try another search.' : 'Nothing in this folder yet.'}</p>`;
+}
+$('tutorLibrarySearch').addEventListener('input', renderTutorQuizLibrary);
+$('tutorQuizCrumbs').addEventListener('click', event => { const step = event.target.closest('[data-library-back]')?.dataset.libraryBack; if (!step) return; if (step === 'modules') { tutorLibraryModule = ''; tutorLibraryTopic = ''; } else tutorLibraryTopic = ''; $('tutorQuizDetail').classList.add('hidden'); $('tutorLibrarySearch').value = ''; renderTutorQuizLibrary(); });
+$('tutorQuizFolders').addEventListener('click', event => { const module = event.target.closest('[data-library-module]')?.dataset.libraryModule, topic = event.target.closest('[data-library-topic]')?.dataset.libraryTopic; if (module) tutorLibraryModule = module; if (topic) tutorLibraryTopic = topic; if (!module && !topic) return; $('tutorQuizDetail').classList.add('hidden'); $('tutorLibrarySearch').value = ''; renderTutorQuizLibrary(); });
+$('tutorQuizItems').addEventListener('click', event => { const quizId = event.target.closest('[data-library-quiz]')?.dataset.libraryQuiz; if (!quizId) return; $('quizSelect').value = quizId; $('quizSelect').dispatchEvent(new Event('change')); const quiz = tutorQuizRows.find(q => String(q.id) === quizId); $('tutorQuizDetailTitle').textContent = moduleDisplayTitle(quiz.title, quiz.module_code); $('tutorQuizDetailMeta').textContent = `${moduleLabel(quiz.module_code)} · ${quiz.assessment_type === 'test' ? 'Test' : quiz.topic || 'Other topics'}`; $('tutorQuizDetail').classList.remove('hidden'); renderTutorQuizLibrary(); $('tutorQuizDetail').scrollIntoView({behavior:'smooth', block:'nearest'}); });
 async function loadQuizzes() {
   const select = $('quizSelect');
   const selectedId = select.value || String(currentQuizId || '');
   try {
     const quizzes = await api('/quizzes', {}, true);
+    tutorQuizRows = quizzes;
     if (!quizzes.length) {
+      $('tutorQuizDetail').classList.add('hidden');
       select.innerHTML = '<option value="">No quizzes uploaded yet</option>';
       $('loadStudentsBtn').disabled = true;
       $('quizReviewStatus').textContent = 'Upload a quiz before viewing student submissions.';
+      renderTutorQuizLibrary();
       return;
     }
     select.innerHTML = quizzes.map(q => `<option value="${q.id}">${escapeHtml(moduleLabel(q.module_code))} — ${escapeHtml(moduleDisplayTitle(q.title, q.module_code))} · ${escapeHtml(q.assessment_type === 'test' ? 'Test' : q.topic || 'Topic needed')}${q.is_fun ? ` · Fun Quiz (${escapeHtml(q.fun_level)})` : ''}</option>`).join('');
@@ -463,6 +493,7 @@ async function loadQuizzes() {
     $('quizAssessmentCorrection').value = select._quizTypes[select.value] || 'quiz';
     $('loadStudentsBtn').disabled = !select.value;
     $('quizReviewStatus').textContent = select.value ? 'Ready to load students who took the selected quiz.' : 'Choose a quiz, then load its student submissions.';
+    renderTutorQuizLibrary();
   } catch (err) {
     select.innerHTML = '<option value="">Could not load quizzes</option>';
     $('loadStudentsBtn').disabled = true;
@@ -476,6 +507,7 @@ $('saveQuizOrganizationBtn').addEventListener('click', async () => {
   const button = $('saveQuizOrganizationBtn'); button.disabled = true;
   try {
     await api(`/lecturer/quizzes/${encodeURIComponent(quizId)}/organization`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({topic, assessment_type:$('quizAssessmentCorrection').value})}, true);
+    tutorLibraryTopic = $('quizAssessmentCorrection').value === 'test' ? 'Tests' : topic;
     await loadQuizzes(); $('quizReviewStatus').textContent = 'Quiz organization saved. Students will see it under the selected topic or Tests.';
   } catch (err) { $('quizReviewStatus').textContent = err.message; }
   finally { button.disabled = false; }
@@ -486,6 +518,7 @@ $('correctQuizModuleBtn').addEventListener('click', async () => {
   const button = $('correctQuizModuleBtn'); button.disabled = true;
   try {
     await api(`/lecturer/quizzes/${encodeURIComponent(quizId)}/module`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({module_code:moduleCode})}, true);
+    tutorLibraryModule = moduleCode; tutorLibraryTopic = '';
     await loadQuizzes(); $('quizReviewStatus').textContent = 'Subject updated. Learners will find this quiz under the corrected subject.';
   } catch (err) { $('quizReviewStatus').textContent = err.message; }
   finally { button.disabled = false; }
@@ -515,7 +548,6 @@ $('quizSelect').addEventListener('change', (e) => {
     $('gradingCard').classList.add('hidden');
     $('studentSearchInput').value = '';
     $('statusFilterSelect').value = 'all';
-    loadSubmissions(e.target.value);
   }
 });
 
