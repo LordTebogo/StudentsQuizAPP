@@ -967,6 +967,14 @@ class QuizModuleChange(BaseModel):
     module_code: str = Field(min_length=1, max_length=64)
 
 
+class LearningTopicChange(BaseModel):
+    topic: str = Field(min_length=1, max_length=160)
+
+
+class QuizOrganizationChange(LearningTopicChange):
+    assessment_type: str = "quiz"
+
+
 class QuizGenerationInput(BaseModel):
     topic: str = Field(min_length=3, max_length=500)
     module_code: str = Field(min_length=1, max_length=64)
@@ -2671,6 +2679,18 @@ def lecturer_change_quiz_module(
     return {"id": quiz.id, "module_code": quiz.module_code}
 
 
+@app.patch("/lecturer/quizzes/{quiz_id}/organization")
+def lecturer_change_quiz_organization(
+    quiz_id: int, payload: QuizOrganizationChange,
+    lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db),
+):
+    quiz = _require_owned_quiz(db, quiz_id, lecturer)
+    quiz.topic = _learning_topic(payload.topic, True)
+    quiz.assessment_type = _assessment_type(payload.assessment_type)
+    db.commit()
+    return {"id": quiz.id, "topic": quiz.topic, "assessment_type": quiz.assessment_type}
+
+
 @app.get("/quiz-modules")
 def list_quiz_modules(db: Session = Depends(get_db)):
     rows = (
@@ -3535,6 +3555,17 @@ def get_owned_lesson_for_edit(lesson_id: int, lecturer: Lecturer = Depends(requi
     return {"id": lesson.id, "title": lesson.title, "description": lesson.description or "", "topic": lesson.topic or "",
             "questions": [_admin_question_dict(q) for q in lesson.questions],
             "submission_count": len(lesson.submissions)}
+
+
+@app.patch("/lecturer/lessons/{lesson_id}/topic")
+def lecturer_change_lesson_topic(
+    lesson_id: int, payload: LearningTopicChange,
+    lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db),
+):
+    lesson = _require_owned_lesson(db, lesson_id, lecturer)
+    lesson.topic = _learning_topic(payload.topic, True)
+    db.commit()
+    return {"id": lesson.id, "topic": lesson.topic}
 
 
 @app.put("/lecturer/lesson/{lesson_id}/edit")
@@ -4551,6 +4582,17 @@ def admin_get_quiz(quiz_id: int, _pin_ok: bool = Depends(require_lecturer_pin), 
     return {"id": quiz.id, "title": quiz.title, "module_code": quiz.module_code, "topic": quiz.topic or "", "assessment_type": quiz.assessment_type or "quiz", "is_fun": bool(quiz.is_fun), "fun_level": quiz.fun_level or "starter", "created_at": quiz.created_at, "questions": [_admin_question_dict(q) for q in quiz.questions], "submission_count": len(quiz.submissions)}
 
 
+@app.patch("/admin/quizzes/{quiz_id}/organization")
+def admin_change_quiz_organization(quiz_id: int, payload: QuizOrganizationChange, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    quiz = db.query(Quiz).filter(Quiz.id == quiz_id).first()
+    if not quiz:
+        raise HTTPException(status_code=404, detail="Quiz not found")
+    quiz.topic = _learning_topic(payload.topic, True)
+    quiz.assessment_type = _assessment_type(payload.assessment_type)
+    db.commit()
+    return {"id": quiz.id, "topic": quiz.topic, "assessment_type": quiz.assessment_type}
+
+
 @app.post("/admin/quizzes")
 def admin_create_quiz(payload: AdminQuizInput, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
     _validate_admin_questions(payload.questions, payload.is_fun)
@@ -4610,6 +4652,16 @@ def admin_get_lesson(lesson_id: int, _pin_ok: bool = Depends(require_lecturer_pi
     if not lesson:
         raise HTTPException(status_code=404, detail="Lesson not found")
     return {"id": lesson.id, "title": lesson.title, "description": lesson.description or "", "module_code": lesson.module_code, "topic": lesson.topic or "", "video_url": lesson.video_url, "questions": [_admin_question_dict(q) for q in lesson.questions], "submission_count": len(lesson.submissions)}
+
+
+@app.patch("/admin/lessons/{lesson_id}/topic")
+def admin_change_lesson_topic(lesson_id: int, payload: LearningTopicChange, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    lesson = db.query(Lesson).filter(Lesson.id == lesson_id).first()
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    lesson.topic = _learning_topic(payload.topic, True)
+    db.commit()
+    return {"id": lesson.id, "topic": lesson.topic}
 
 
 @app.post("/admin/lessons")

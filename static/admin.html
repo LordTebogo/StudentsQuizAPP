@@ -211,7 +211,7 @@
     <label for="questionsJson">Questions</label>
     <textarea id="questionsJson" class="json-editor" spellcheck="false"></textarea>
     <p class="muted">Each question needs <code>type</code>, <code>question</code>, and <code>marks</code>. MCQs also need <code>options</code> and <code>correct_answer</code>; short answers need <code>correct_answer</code>. Optional: <code>image_url</code>.</p>
-    <button class="btn" id="saveBtn">Save</button><button class="btn secondary hidden" id="deleteBtn">Delete permanently</button><div id="editorMsg"></div>
+    <button class="btn" id="saveBtn">Save</button><button class="btn secondary hidden" id="saveOrganizationBtn" type="button">Save topic only</button><button class="btn secondary hidden" id="deleteBtn">Delete permanently</button><div id="editorMsg"></div>
   </section>
   <section class="card admin-panel" id="vacancyAdminCard" data-admin-area="market" hidden>
     <div class="admin-editor-heading"><div><span class="kicker">Opportunities</span><h2>Vacancies</h2></div><a href="/vacancies" target="_blank" rel="noopener noreferrer">View public page ↗</a></div>
@@ -301,6 +301,7 @@ function openEditor(kind, item = null) {
   $('editorKicker').textContent = item ? `Editing ${kind}` : `New ${kind}`;
   $('editorTitle').textContent = item ? moduleDisplayTitle(item.title, item.module_code) : `Create ${kind === 'quiz' ? 'a quiz' : 'a video lesson'}`;
   $('deleteBtn').classList.toggle('hidden', !item);
+  $('saveOrganizationBtn').classList.toggle('hidden', !item);
   $('contentTitle').value = item ? moduleDisplayTitle(item.title, item.module_code) : '';
   $('quizModuleCode').value = item ? moduleLabel(item.module_code) : '';
   $('adminQuizTopic').value = item ? item.topic || '' : '';
@@ -565,6 +566,18 @@ async function save() {
   try { const result = await api(url, {method: editor.id ? 'PUT' : 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)}); showMsg($('editorMsg'), `Saved “${result.title}”.`, 'ok'); editor.id = result.id; $('deleteBtn').classList.remove('hidden'); await loadLists(); }
   catch (err) { showMsg($('editorMsg'), err.message, 'error'); } finally { $('saveBtn').disabled = false; }
 }
+async function saveOrganization() {
+  if (!editor.id) return;
+  const quiz = editor.kind === 'quiz';
+  const topic = $(quiz ? 'adminQuizTopic' : 'adminLessonTopic').value.trim();
+  if (!topic) { showMsg($('editorMsg'), 'Enter a topic first.', 'error'); return; }
+  const path = quiz ? `/admin/quizzes/${editor.id}/organization` : `/admin/lessons/${editor.id}/topic`;
+  const body = quiz ? {topic, assessment_type:$('adminAssessmentType').value} : {topic};
+  $('saveOrganizationBtn').disabled = true;
+  try { await api(path, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)}); showMsg($('editorMsg'), 'Topic saved. Student results are unchanged.', 'ok'); await loadLists(); }
+  catch (err) { showMsg($('editorMsg'), err.message, 'error'); }
+  finally { $('saveOrganizationBtn').disabled = false; }
+}
 async function remove() {
   if (!editor.id || !confirm('Delete this item and all of its student submissions/comments permanently? This cannot be undone.')) return;
   const plural = editor.kind === 'quiz' ? 'quizzes' : 'lessons';
@@ -577,6 +590,7 @@ $('newQuizBtn').addEventListener('click', () => openEditor('quiz'));
 $('newLessonBtn').addEventListener('click', () => openEditor('lesson'));
 $('newLecturerBtn').addEventListener('click', clearLecturerForm);
 $('saveLecturerBtn').addEventListener('click', saveLecturer);
+$('saveOrganizationBtn').addEventListener('click', saveOrganization);
 $('resetPasswordBtn').addEventListener('click', resetLecturerPassword);
 $('refreshStudentsBtn').addEventListener('click', loadStudents);
 $('studentAdminSearch').addEventListener('input',()=>{studentAdminPage=1;renderStudentPage()});

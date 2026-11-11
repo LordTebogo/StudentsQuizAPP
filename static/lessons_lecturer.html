@@ -114,6 +114,9 @@
   <div class="card hidden" id="previewCard">
     <h2 id="previewTitle"></h2>
     <p class="muted" id="previewDescription"></p>
+    <label for="existingLessonTopic">Topic</label><input id="existingLessonTopic" type="text" maxlength="160" placeholder="e.g. DNA replication">
+    <button class="btn secondary" id="saveExistingLessonTopicBtn" type="button">Save topic</button>
+    <p class="muted">You can assign a topic even if learners have completed this lesson.</p>
     <video id="previewVideo" controls controlslist="nodownload noplaybackrate" disableremoteplayback></video>
     <div class="lesson-manage-actions">
       <button class="btn secondary" id="editLessonBtn" type="button">Edit questions</button>
@@ -350,7 +353,7 @@ async function loadLessons() {
       return;
     }
     const previous = select.value || String(currentLessonId || '');
-    select.innerHTML = filteredLessons.map(l => `<option value="${l.id}">${escapeHtml(moduleLabel(l.module_code))} — ${escapeHtml(moduleDisplayTitle(l.title, l.module_code))}</option>`).join('');
+    select.innerHTML = filteredLessons.map(l => `<option value="${l.id}">${escapeHtml(moduleLabel(l.module_code))} — ${escapeHtml(moduleDisplayTitle(l.title, l.module_code))} · ${escapeHtml(l.topic || 'Topic needed')}</option>`).join('');
     if (filteredLessons.some(lesson => String(lesson.id) === previous)) select.value = previous;
     $('myLessonList').innerHTML = filteredLessons.map(lesson => `
       <div class="my-lesson">
@@ -385,6 +388,7 @@ async function selectLesson(lessonId) {
       api(`/lesson/${lessonId}`), api(`/lecturer/lesson/${lessonId}/edit`, {}, true),
     ]);
     editableLesson = owned;
+    $('existingLessonTopic').value = owned.topic || '';
     $('previewCard').classList.remove('hidden');
     $('previewTitle').textContent = moduleDisplayTitle(lesson.title, lesson.module_code);
     $('previewDescription').textContent = lesson.description || '';
@@ -400,6 +404,19 @@ async function selectLesson(lessonId) {
     showMsg($('uploadMsg'), `Could not load lesson: ${err.message}`, 'error');
   }
 }
+
+$('saveExistingLessonTopicBtn').addEventListener('click', async () => {
+  const topic = $('existingLessonTopic').value.trim();
+  if (!currentLessonId || !topic) { showMsg($('lessonManageMsg'), 'Enter a topic for this lesson.', 'error'); return; }
+  const button = $('saveExistingLessonTopicBtn'); button.disabled = true;
+  try {
+    await api(`/lecturer/lessons/${encodeURIComponent(currentLessonId)}/topic`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({topic})}, true);
+    editableLesson.topic = topic;
+    await loadLessons();
+    showMsg($('lessonManageMsg'), 'Lesson topic saved.', 'ok');
+  } catch (err) { showMsg($('lessonManageMsg'), err.message, 'error'); }
+  finally { button.disabled = false; }
+});
 
 function lessonQuestionEditor(question = {}) {
   const type = question.type || 'mcq';

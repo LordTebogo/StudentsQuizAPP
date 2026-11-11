@@ -140,10 +140,14 @@
     <label for="quizModuleCorrection">Assigned subject</label>
     <select id="quizModuleCorrection" aria-describedby="quizModuleHelp"></select>
     <p class="muted" id="quizModuleHelp">Correct a quiz's subject before learners submit answers.</p>
+    <label for="quizTopicCorrection">Topic</label><input id="quizTopicCorrection" type="text" maxlength="160" placeholder="e.g. DNA replication">
+    <label for="quizAssessmentCorrection">Assessment</label><select id="quizAssessmentCorrection"><option value="quiz">Topic quiz</option><option value="test">Module test</option></select>
+    <p class="muted">You can organize an existing quiz even after learners have submitted answers.</p>
     <div class="account-actions">
       <button class="btn secondary" id="refreshQuizzesBtn">Refresh quiz list</button>
       <button class="btn secondary" id="duplicateQuizBtn" type="button">Duplicate in builder</button>
       <button class="btn secondary" id="correctQuizModuleBtn" type="button">Save subject correction</button>
+      <button class="btn secondary" id="saveQuizOrganizationBtn" type="button">Save topic and type</button>
       <button class="btn" id="loadStudentsBtn" disabled>See students who took this quiz</button>
     </div>
     <p class="muted" id="quizReviewStatus" aria-live="polite">Choose a quiz, then load its student submissions.</p>
@@ -449,10 +453,14 @@ async function loadQuizzes() {
       $('quizReviewStatus').textContent = 'Upload a quiz before viewing student submissions.';
       return;
     }
-    select.innerHTML = quizzes.map(q => `<option value="${q.id}">${escapeHtml(moduleLabel(q.module_code))} — ${escapeHtml(moduleDisplayTitle(q.title, q.module_code))}${q.is_fun ? ` · Fun Quiz (${escapeHtml(q.fun_level)})` : ''}</option>`).join('');
+    select.innerHTML = quizzes.map(q => `<option value="${q.id}">${escapeHtml(moduleLabel(q.module_code))} — ${escapeHtml(moduleDisplayTitle(q.title, q.module_code))} · ${escapeHtml(q.assessment_type === 'test' ? 'Test' : q.topic || 'Topic needed')}${q.is_fun ? ` · Fun Quiz (${escapeHtml(q.fun_level)})` : ''}</option>`).join('');
     select._quizModules = Object.fromEntries(quizzes.map(q => [String(q.id), q.module_code]));
+    select._quizTopics = Object.fromEntries(quizzes.map(q => [String(q.id), q.topic || '']));
+    select._quizTypes = Object.fromEntries(quizzes.map(q => [String(q.id), q.assessment_type || 'quiz']));
     if ([...select.options].some(option => option.value === selectedId)) select.value = selectedId;
     $('quizModuleCorrection').value = select._quizModules[select.value] || '';
+    $('quizTopicCorrection').value = select._quizTopics[select.value] || '';
+    $('quizAssessmentCorrection').value = select._quizTypes[select.value] || 'quiz';
     $('loadStudentsBtn').disabled = !select.value;
     $('quizReviewStatus').textContent = select.value ? 'Ready to load students who took the selected quiz.' : 'Choose a quiz, then load its student submissions.';
   } catch (err) {
@@ -462,6 +470,16 @@ async function loadQuizzes() {
   }
 }
 $('refreshQuizzesBtn').addEventListener('click', loadQuizzes);
+$('saveQuizOrganizationBtn').addEventListener('click', async () => {
+  const quizId = $('quizSelect').value, topic = $('quizTopicCorrection').value.trim();
+  if (!quizId || !topic) { $('quizReviewStatus').textContent = 'Choose a quiz and enter its topic.'; return; }
+  const button = $('saveQuizOrganizationBtn'); button.disabled = true;
+  try {
+    await api(`/lecturer/quizzes/${encodeURIComponent(quizId)}/organization`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({topic, assessment_type:$('quizAssessmentCorrection').value})}, true);
+    await loadQuizzes(); $('quizReviewStatus').textContent = 'Quiz organization saved. Students will see it under the selected topic or Tests.';
+  } catch (err) { $('quizReviewStatus').textContent = err.message; }
+  finally { button.disabled = false; }
+});
 $('correctQuizModuleBtn').addEventListener('click', async () => {
   const quizId = $('quizSelect').value, moduleCode = $('quizModuleCorrection').value;
   if (!quizId || !moduleCode) { $('quizReviewStatus').textContent = 'Choose a quiz and an assigned subject.'; return; }
@@ -490,6 +508,8 @@ $('downloadAllPdfBtn').addEventListener('click', () => {
 $('quizSelect').addEventListener('change', (e) => {
   $('loadStudentsBtn').disabled = !e.target.value;
   $('quizModuleCorrection').value = e.target._quizModules?.[e.target.value] || '';
+  $('quizTopicCorrection').value = e.target._quizTopics?.[e.target.value] || '';
+  $('quizAssessmentCorrection').value = e.target._quizTypes?.[e.target.value] || 'quiz';
   $('quizReviewStatus').textContent = e.target.value ? 'Ready to load students who took the selected quiz.' : 'Choose a quiz, then load its student submissions.';
   if (e.target.value) {
     $('gradingCard').classList.add('hidden');
