@@ -124,12 +124,14 @@
   window.ArounusMarketAuth={ensureSignedIn,request,signOut};
   const accountParams=new URLSearchParams(location.search);
   if(['login','register'].includes(accountParams.get('account'))){
-    window.addEventListener('load',()=>{
+    const openAccountForm=()=>{
       intent='browse';
       if(!dialog.open)dialog.showModal();
       render(accountParams.get('account'));
       const url=new URL(location.href);url.searchParams.delete('account');
       history.replaceState(history.state,'',url.pathname+url.search+url.hash);
-    },{once:true});
+    };
+    if(document.readyState==='complete')openAccountForm();
+    else window.addEventListener('load',openAccountForm,{once:true});
   }
 })();
