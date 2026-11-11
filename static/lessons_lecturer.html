@@ -77,6 +77,7 @@
     <h2>1. Upload a video lesson</h2>
     <label for="moduleCodeInput">Subject</label>
     <select id="moduleCodeInput"><option value="">Choose a subject</option></select>
+    <label for="newLessonTopic">Topic</label><input id="newLessonTopic" type="text" maxlength="160" placeholder="e.g. DNA replication" required>
     <p class="muted">Choose the subject your students will see on the lessons page.</p>
     <label for="newLessonTitle">Lesson title</label>
     <input id="newLessonTitle" type="text" maxlength="200" placeholder="e.g. Gluconeogenesis explained">
@@ -124,6 +125,7 @@
       <h2>Edit this lesson</h2>
       <p class="muted">You can edit questions until a learner submits answers. Saved marks stay linked to the original questions.</p>
       <label for="editLessonTitle">Title</label><input id="editLessonTitle" type="text">
+      <label for="editLessonTopic">Topic</label><input id="editLessonTopic" type="text" maxlength="160">
       <label for="editLessonDescription">Description</label><textarea id="editLessonDescription"></textarea>
       <div id="editLessonQuestions"></div>
       <div class="lesson-manage-actions">
@@ -274,6 +276,8 @@ $('uploadLessonBtn').addEventListener('click', async () => {
   const msgBox = $('uploadMsg');
   const moduleCode = moduleInput.value.trim();
   if (!moduleCode) { showMsg(msgBox, 'Choose a subject first.', 'error'); return; }
+  const topic = $('newLessonTopic').value.trim();
+  if (!topic) { showMsg(msgBox, 'Enter a topic first.', 'error'); return; }
   let lessonFile;
   try { lessonFile = fileInput.files[0] || lessonFromForm(); }
   catch (err) { showMsg(msgBox, err.message, 'error'); return; }
@@ -283,6 +287,7 @@ $('uploadLessonBtn').addEventListener('click', async () => {
   formData.append('file', lessonFile);
   formData.append('video', videoInput.files[0]);
   formData.append('module_code', moduleCode);
+  formData.append('topic', topic);
   for (const img of imagesInput.files) formData.append('images', img);
 
   const uploadButton = $('uploadLessonBtn');
@@ -296,7 +301,7 @@ $('uploadLessonBtn').addEventListener('click', async () => {
     $('shareLink').textContent = link;
     $('shareBox').classList.remove('hidden');
     fileInput.value = ''; videoInput.value = ''; imagesInput.value = '';
-    $('newLessonTitle').value = ''; $('newLessonDescription').value = '';
+    $('newLessonTitle').value = ''; $('newLessonDescription').value = ''; $('newLessonTopic').value = '';
     $('newLessonQuestions').replaceChildren(); addNewLessonQuestion();
     // Keep the module code filled in — the lecturer is likely to upload
     // another lesson for the same module next.
@@ -424,6 +429,7 @@ function updateQuestionFields(card) {
 $('editLessonBtn').addEventListener('click', () => {
   if (!editableLesson || editableLesson.submission_count) return;
   $('editLessonTitle').value = editableLesson.title;
+  $('editLessonTopic').value = editableLesson.topic || '';
   $('editLessonDescription').value = editableLesson.description || '';
   $('editLessonQuestions').innerHTML = editableLesson.questions.map(lessonQuestionEditor).join('');
   $('editLessonQuestions').querySelectorAll('.lesson-question-editor').forEach(updateQuestionFields);
@@ -458,7 +464,7 @@ $('saveLessonQuestionsBtn').addEventListener('click', async () => {
   try {
     await api(`/lecturer/lesson/${currentLessonId}/edit`, {
       method:'PUT', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({title:$('editLessonTitle').value.trim(), description:$('editLessonDescription').value.trim(), questions}),
+      body:JSON.stringify({title:$('editLessonTitle').value.trim(), topic:$('editLessonTopic').value.trim(), description:$('editLessonDescription').value.trim(), questions}),
     }, true);
     $('lessonEditor').classList.add('hidden');
     await loadLessons();

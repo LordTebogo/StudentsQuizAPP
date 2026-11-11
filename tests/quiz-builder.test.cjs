@@ -58,6 +58,7 @@ test('workspace layout preserves the functioning quiz builder', async () => {
     click('previewQuizBtn');
     assert.match(byId('builderMsg').textContent, /title/i);
     byId('builderQuizTitle').value = 'Test quiz';
+    byId('builderTopic').value = 'Atomic structure';
     byId('aiQuizTopic').value = 'Basic atomic structure';
     byId('aiQuestionCount').value = '1';
     click('generateQuizBtn');

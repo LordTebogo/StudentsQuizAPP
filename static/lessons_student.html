@@ -253,7 +253,7 @@ async function loadLessonList(moduleCode) {
       box.innerHTML = guideLink + (moduleCode === 'AROUNUS' ? '<p class="muted">Video tutorials will appear here when the Arounus team publishes them.</p>' : '<p class="muted">No lessons in this module yet — check back soon.</p>');
       return;
     }
-    box.innerHTML = guideLink + lessons.map(l => {
+    const renderLessons = items => items.map(l => {
       const progress = l.completed
         ? `<span class="badge done">Completed · ${l.total_score} / ${l.max_score}</span><p class="muted">${l.fully_marked ? 'Final result' : 'Awaiting final marking'}</p>`
         : `<span class="badge pending">Not completed</span>`;
@@ -264,7 +264,16 @@ async function loadLessonList(moduleCode) {
           ${progress}
         </a>`;
     }).join('');
-    box.querySelectorAll('.lesson-list-item').forEach(el => {
+    const groups = new Map();
+    for (const lesson of lessons) { const topic = lesson.topic || 'Other topics'; if (!groups.has(topic)) groups.set(topic, []); groups.get(topic).push(lesson); }
+    box.innerHTML = guideLink + [...groups.keys()].sort((a, b) => a.localeCompare(b)).map(topic => `<button class="lesson-list-item" type="button" data-topic="${escapeHtml(topic)}"><strong>${escapeHtml(topic)}</strong><p class="muted">${groups.get(topic).length} lesson${groups.get(topic).length === 1 ? '' : 's'} →</p></button>`).join('');
+    box.querySelectorAll('[data-topic]').forEach(button => button.addEventListener('click', () => {
+      const topic = button.dataset.topic;
+      box.innerHTML = `<button class="btn secondary" type="button" id="backToLessonTopics">← All topics</button><h3>${escapeHtml(topic)}</h3>` + renderLessons(groups.get(topic));
+      $('backToLessonTopics').addEventListener('click', () => loadLessonList(moduleCode));
+      box.querySelectorAll('[data-id]').forEach(el => el.addEventListener('click', () => openLesson(el.dataset.id)));
+    }));
+    box.querySelectorAll('[data-id]').forEach(el => {
       el.addEventListener('click', () => openLesson(el.dataset.id));
     });
   } catch (err) {

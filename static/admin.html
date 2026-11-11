@@ -198,10 +198,13 @@
     <div id="quizFields">
       <label for="contentTitle">Quiz title</label><input id="contentTitle" type="text" placeholder="e.g. Cell Biology: Week 1">
       <label for="quizModuleCode">Subject</label><input id="quizModuleCode" type="text" placeholder="e.g. Biochemistry">
+      <label for="adminQuizTopic">Topic</label><input id="adminQuizTopic" type="text" maxlength="160" placeholder="e.g. DNA replication">
+      <label for="adminAssessmentType">Assessment</label><select id="adminAssessmentType"><option value="quiz">Topic quiz</option><option value="test">Module test</option></select>
     </div>
     <div id="lessonFields" class="hidden">
       <label for="lessonDescription">Lesson description</label><textarea id="lessonDescription" placeholder="A short introduction for students"></textarea>
       <label for="moduleCode">Subject</label><input id="moduleCode" type="text" placeholder="e.g. Biochemistry or How to Use Arounus">
+      <label for="adminLessonTopic">Topic</label><input id="adminLessonTopic" type="text" maxlength="160" placeholder="e.g. DNA replication">
       <p class="muted">Choose <strong>How to Use Arounus</strong> for an app tutorial video. Every learner can see it. Tutorial videos can have an empty questions list (<code>[]</code>).</p>
       <label for="videoUrl">Video URL</label><input id="videoUrl" type="text" placeholder="https://...">
     </div>
@@ -300,6 +303,9 @@ function openEditor(kind, item = null) {
   $('deleteBtn').classList.toggle('hidden', !item);
   $('contentTitle').value = item ? moduleDisplayTitle(item.title, item.module_code) : '';
   $('quizModuleCode').value = item ? moduleLabel(item.module_code) : '';
+  $('adminQuizTopic').value = item ? item.topic || '' : '';
+  $('adminAssessmentType').value = item ? item.assessment_type || 'quiz' : 'quiz';
+  $('adminLessonTopic').value = item ? item.topic || '' : '';
   $('lessonDescription').value = item ? item.description || '' : '';
   $('moduleCode').value = item ? moduleLabel(item.module_code) : '';
   $('videoUrl').value = item ? item.video_url || '' : '';
@@ -548,8 +554,8 @@ function buildPayload() {
   try { questions = JSON.parse($('questionsJson').value); } catch (_) { throw new Error('Questions must be valid JSON.'); }
   if (!Array.isArray(questions)) throw new Error('Questions must be a JSON array.');
   const payload = { title: $('contentTitle').value.trim(), questions };
-  if (editor.kind === 'quiz') Object.assign(payload, { module_code: parseModuleList($('quizModuleCode').value)[0] || '' });
-  if (editor.kind === 'lesson') Object.assign(payload, { description: $('lessonDescription').value.trim(), module_code: parseModuleList($('moduleCode').value)[0] || '', video_url: $('videoUrl').value.trim() });
+  if (editor.kind === 'quiz') Object.assign(payload, { module_code: parseModuleList($('quizModuleCode').value)[0] || '', topic: $('adminQuizTopic').value.trim(), assessment_type: $('adminAssessmentType').value });
+  if (editor.kind === 'lesson') Object.assign(payload, { description: $('lessonDescription').value.trim(), module_code: parseModuleList($('moduleCode').value)[0] || '', topic: $('adminLessonTopic').value.trim(), video_url: $('videoUrl').value.trim() });
   return payload;
 }
 async function save() {

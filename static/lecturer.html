@@ -96,6 +96,8 @@
     <div class="quiz-builder-meta">
       <div><label for="builderQuizTitle">Quiz title</label><input id="builderQuizTitle" type="text" maxlength="200" placeholder="e.g. Cell Biology: Week 1"></div>
       <div><label for="builderModuleCode">Assigned module</label><select id="builderModuleCode" disabled><option value="">Loading assigned modules…</option></select><button class="btn secondary hidden" id="retryBuilderModulesBtn" type="button">Retry loading modules</button></div>
+      <div><label for="builderTopic">Topic</label><input id="builderTopic" type="text" maxlength="160" placeholder="e.g. DNA replication" required></div>
+      <div><label for="builderAssessmentType">Assessment</label><select id="builderAssessmentType"><option value="quiz">Topic quiz</option><option value="test">Module test (all topics)</option></select></div>
       <label class="fun-quiz-switch" for="builderIsFun"><input id="builderIsFun" type="checkbox"><span><strong>Make this a Fun Quiz</strong><small>One question at a time, spoken feedback, explanations and similar questions.</small></span></label>
       <div id="funQuizLevelField" class="hidden"><label for="builderFunLevel">Fun Quiz level</label><select id="builderFunLevel"><option value="starter">1 · Starter</option><option value="explorer">2 · Explorer</option><option value="challenger">3 · Challenger</option><option value="expert">4 · Expert</option><option value="genius">5 · Genius</option></select></div>
     </div>
@@ -117,6 +119,8 @@
       <p class="muted">This remains available for technical users and existing quiz files.</p>
       <label for="moduleCode">Subject</label>
       <select id="moduleCode"><option value="">Choose a module</option></select>
+      <label for="uploadQuizTopic">Topic</label><input id="uploadQuizTopic" type="text" maxlength="160" placeholder="e.g. Algebra" required>
+      <label for="uploadAssessmentType">Assessment</label><select id="uploadAssessmentType"><option value="quiz">Topic quiz</option><option value="test">Module test (all topics)</option></select>
       <label for="quizFile">Quiz JSON file</label>
       <input type="file" id="quizFile" accept="application/json,.json">
       <label for="quizImages">Question images referenced by the JSON (optional)</label>
@@ -405,6 +409,10 @@ $('uploadBtn').addEventListener('click', async () => {
   const formData = new FormData();
   formData.append('file', fileInput.files[0]);
   formData.append('module_code', moduleCode);
+  const topic = $('uploadQuizTopic').value.trim();
+  if (!topic) { showMsg(msgBox, 'Enter a topic first.', 'error'); return; }
+  formData.append('topic', topic);
+  formData.append('assessment_type', $('uploadAssessmentType').value);
   for (const img of imagesInput.files) {
     formData.append('images', img);
   }

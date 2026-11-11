@@ -252,6 +252,8 @@
     return {
       title: byId('builderQuizTitle').value.trim() || 'Untitled quiz',
       module_code: byId('builderModuleCode').value,
+      topic: byId('builderTopic').value.trim(),
+      assessment_type: byId('builderAssessmentType').value,
       is_fun: byId('builderIsFun').checked,
       fun_level: byId('builderFunLevel').value,
       questions: state.questions.map(questionPayload),
@@ -299,6 +301,8 @@
       const draft = await api(`/lecturer/quiz-drafts/${id}`, {}, true);
       state.draftId = draft.id;
       byId('builderQuizTitle').value = draft.title;
+      byId('builderTopic').value = draft.topic || '';
+      byId('builderAssessmentType').value = draft.assessment_type || 'quiz';
       populateModuleSelect(byId('builderModuleCode'), draft.module_code);
       byId('builderIsFun').checked = Boolean(draft.is_fun);
       syncAiQuestionTypes();
@@ -328,6 +332,8 @@
     state.draftId = null;
     state.dirty = false;
     byId('builderQuizTitle').value = '';
+    byId('builderTopic').value = '';
+    byId('builderAssessmentType').value = 'quiz';
     byId('builderIsFun').checked = false;
     syncAiQuestionTypes();
     byId('builderFunLevel').value = 'starter';
@@ -349,6 +355,8 @@
       const quiz = await api(`/lecturer/quizzes/${quizId}`, {}, true);
       state.draftId = null;
       byId('builderQuizTitle').value = `${moduleDisplayTitle(quiz.title, quiz.module_code)} — copy`;
+      byId('builderTopic').value = quiz.topic || '';
+      byId('builderAssessmentType').value = quiz.assessment_type || 'quiz';
       populateModuleSelect(byId('builderModuleCode'), quiz.module_code);
       byId('builderIsFun').checked = Boolean(quiz.is_fun);
       syncAiQuestionTypes();
@@ -425,6 +433,7 @@
     const errors = [];
     const isFun = byId('builderIsFun').checked;
     if (!byId('builderQuizTitle').value.trim()) errors.push('Enter a quiz title');
+    if (!byId('builderTopic').value.trim()) errors.push('Enter a topic');
     if (!byId('builderModuleCode').value) errors.push('Choose an assigned module');
     if (!state.questions.length) errors.push('Add at least one question');
     state.questions.forEach((question, index) => {
@@ -508,6 +517,8 @@
       const documentBody = {title: byId('builderQuizTitle').value.trim(), is_fun: byId('builderIsFun').checked, fun_level: byId('builderFunLevel').value, questions: legacyQuestions};
       form.append('file', new Blob([JSON.stringify(documentBody)], {type:'application/json'}), 'quiz.json');
       form.append('module_code', byId('builderModuleCode').value);
+      form.append('topic', byId('builderTopic').value.trim());
+      form.append('assessment_type', byId('builderAssessmentType').value);
       state.questions.forEach((question, index) => {
         if (!question.file) return;
         const extension = question.file.name.includes('.') ? question.file.name.slice(question.file.name.lastIndexOf('.')) : '';
@@ -640,6 +651,8 @@
   });
 
   byId('builderQuizTitle').addEventListener('input', () => setDirty(true));
+  byId('builderTopic').addEventListener('input', () => setDirty(true));
+  byId('builderAssessmentType').addEventListener('change', () => setDirty(true));
   byId('builderModuleCode').addEventListener('change', event => { byId('moduleCode').value = event.target.value; setDirty(true); });
   byId('builderIsFun').addEventListener('change', event => {
     byId('funQuizLevelField').classList.toggle('hidden', !event.target.checked);

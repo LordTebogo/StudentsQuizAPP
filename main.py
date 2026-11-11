@@ -243,6 +243,31 @@ def ensure_quiz_module_code():
 
 ensure_quiz_module_code()
 
+def ensure_learning_topics_schema():
+    for table, fields in {
+        "quizzes": {"topic": "VARCHAR(160) DEFAULT ''", "assessment_type": "VARCHAR(8) DEFAULT 'quiz'"},
+        "lessons": {"topic": "VARCHAR(160) DEFAULT ''"},
+        "lecturer_quiz_drafts": {"topic": "VARCHAR(160) DEFAULT ''", "assessment_type": "VARCHAR(8) DEFAULT 'quiz'"},
+    }.items():
+        existing = {column["name"] for column in inspect(engine).get_columns(table)}
+        with engine.begin() as conn:
+            for name, definition in fields.items():
+                if name not in existing:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {definition}"))
+
+ensure_learning_topics_schema()
+
+def _learning_topic(value: str, required: bool = False) -> str:
+    topic = " ".join((value or "").split())
+    if len(topic) > 160 or (required and not topic):
+        raise HTTPException(status_code=400, detail="Enter a topic of up to 160 characters")
+    return topic
+
+def _assessment_type(value: str) -> str:
+    if value not in ("quiz", "test"):
+        raise HTTPException(status_code=400, detail="Choose Quiz or Test")
+    return value
+
 
 def ensure_fun_quiz_schema():
     """Add fun-quiz fields without disturbing quizzes created before this feature."""
@@ -931,6 +956,8 @@ class AdminQuestionInput(BaseModel):
 class AdminQuizInput(BaseModel):
     title: str
     module_code: str = "GENERAL"
+    topic: str = ""
+    assessment_type: str = "quiz"
     is_fun: bool = False
     fun_level: str = "starter"
     questions: List[AdminQuestionInput]
@@ -965,6 +992,7 @@ class AdminLessonInput(BaseModel):
     title: str
     description: str = ""
     module_code: str
+    topic: str = ""
     video_url: str
     questions: List[AdminQuestionInput]
 
@@ -1984,6 +2012,8 @@ def _lecturer_draft_payload(draft: LecturerQuizDraft) -> dict:
         "id": draft.id,
         "title": draft.title,
         "module_code": draft.module_code,
+        "topic": draft.topic or "",
+        "assessment_type": draft.assessment_type or "quiz",
         "is_fun": bool(draft.is_fun),
         "fun_level": draft.fun_level or "starter",
         "questions": questions,
@@ -2049,6 +2079,8 @@ def lecturer_create_quiz_draft(
         lecturer_id=lecturer.id,
         title=payload.title.strip() or "Untitled quiz",
         module_code=module_code,
+        topic=_learning_topic(payload.topic),
+        assessment_type=_assessment_type(payload.assessment_type),
         is_fun=payload.is_fun,
         fun_level=payload.fun_level if payload.fun_level in ("starter", "explorer", "challenger", "expert", "genius") else "starter",
         questions_json=_draft_questions_json(payload.questions),
@@ -2076,6 +2108,8 @@ def lecturer_update_quiz_draft(
         raise HTTPException(status_code=404, detail="Quiz draft not found")
     draft.title = payload.title.strip() or "Untitled quiz"
     draft.module_code = _require_module_access(db, lecturer, payload.module_code) if payload.module_code.strip() else ""
+    draft.topic = _learning_topic(payload.topic)
+    draft.assessment_type = _assessment_type(payload.assessment_type)
     draft.is_fun = payload.is_fun
     draft.fun_level = payload.fun_level if payload.fun_level in ("starter", "explorer", "challenger", "expert", "genius") else "starter"
     draft.questions_json = _draft_questions_json(payload.questions)
@@ -2461,6 +2495,8 @@ def lecturer_get_quiz_for_builder(
         "id": quiz.id,
         "title": quiz.title,
         "module_code": quiz.module_code,
+        "topic": quiz.topic or "",
+        "assessment_type": quiz.assessment_type or "quiz",
         "is_fun": bool(quiz.is_fun),
         "fun_level": quiz.fun_level or "starter",
         "questions": [_admin_question_dict(question) for question in quiz.questions],
@@ -2492,6 +2528,8 @@ def lecturer_get_quiz_for_builder(
 async def upload_quiz(
     file: UploadFile = File(...),
     module_code: str = Form("GENERAL"),
+    topic: str = Form(""),
+    assessment_type: str = Form("quiz"),
     images: List[UploadFile] = File(default=[]),
     lecturer: Lecturer = Depends(require_lecturer_account),
     db: Session = Depends(get_db),
@@ -2512,7 +2550,7 @@ async def upload_quiz(
     fun_level = str(data.get("fun_level", "starter")).lower()
     if fun_level not in ("starter", "explorer", "challenger", "expert", "genius"):
         fun_level = "starter"
-    quiz = Quiz(title=title, module_code=module_code, lecturer_id=lecturer.id, is_fun=is_fun, fun_level=fun_level, created_at=datetime.utcnow().isoformat() + "Z")
+    quiz = Quiz(title=title, module_code=module_code, topic=_learning_topic(topic or data.get("topic", ""), True), assessment_type=_assessment_type(assessment_type or data.get("assessment_type", "quiz")), lecturer_id=lecturer.id, is_fun=is_fun, fun_level=fun_level, created_at=datetime.utcnow().isoformat() + "Z")
     db.add(quiz)
     db.flush()  # assigns quiz.id without committing yet
 
@@ -2615,7 +2653,7 @@ async def upload_quiz(
 @app.get("/quizzes")
 def list_quizzes(lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db)):
     rows = db.query(Quiz).filter(Quiz.lecturer_id == lecturer.id).order_by(Quiz.id.desc()).all()
-    return [{"id": r.id, "title": r.title, "module_code": r.module_code, "is_fun": bool(r.is_fun), "fun_level": r.fun_level or "starter", "created_at": r.created_at} for r in rows]
+    return [{"id": r.id, "title": r.title, "module_code": r.module_code, "topic": r.topic or "", "assessment_type": r.assessment_type or "quiz", "is_fun": bool(r.is_fun), "fun_level": r.fun_level or "starter", "created_at": r.created_at} for r in rows]
 
 
 @app.patch("/lecturer/quizzes/{quiz_id}/module")
@@ -2703,7 +2741,7 @@ def list_student_lesson_modules(student: Student = Depends(require_student_accou
 @app.get("/quizzes/by-module/{module_code}")
 def list_quizzes_by_module(module_code: str, db: Session = Depends(get_db)):
     rows = (db.query(Quiz).filter(Quiz.module_code == module_code.strip().upper()).order_by(Quiz.id.desc()).all())
-    return [{"id": q.id, "title": q.title, "module_code": q.module_code, "is_fun": bool(q.is_fun), "fun_level": q.fun_level or "starter", "created_at": q.created_at} for q in rows]
+    return [{"id": q.id, "title": q.title, "module_code": q.module_code, "topic": q.topic or "", "assessment_type": q.assessment_type or "quiz", "is_fun": bool(q.is_fun), "fun_level": q.fun_level or "starter", "created_at": q.created_at} for q in rows]
 
 
 @app.get("/student/quizzes/by-module/{module_code}")
@@ -2736,6 +2774,8 @@ def list_student_quizzes_by_module(
             "id": quiz.id,
             "title": quiz.title,
             "module_code": quiz.module_code,
+            "topic": quiz.topic or "",
+            "assessment_type": quiz.assessment_type or "quiz",
             "is_fun": bool(quiz.is_fun),
             "fun_level": quiz.fun_level or "starter",
             "created_at": quiz.created_at,
@@ -2790,6 +2830,8 @@ def get_quiz(quiz_id: int, db: Session = Depends(get_db)):
         "quiz_id": quiz.id,
         "title": quiz.title,
         "module_code": quiz.module_code,
+        "topic": quiz.topic or "",
+        "assessment_type": quiz.assessment_type or "quiz",
         "is_fun": bool(quiz.is_fun),
         "fun_level": quiz.fun_level or "starter",
         "questions": out_questions,
@@ -3279,6 +3321,7 @@ async def upload_lesson(
     file: UploadFile = File(...),
     video: UploadFile = File(...),
     module_code: str = Form(...),
+    topic: str = Form(""),
     images: List[UploadFile] = File(default=[]),
     lecturer: Lecturer = Depends(require_lecturer_account),
     db: Session = Depends(get_db),
@@ -3299,6 +3342,7 @@ async def upload_lesson(
         raise HTTPException(status_code=400, detail="A video file is required")
 
     module_code = _require_module_access(db, lecturer, module_code)
+    topic = _learning_topic(topic or data.get("topic", ""), True)
 
     # Validate question structure up front (type, options, answer, and that
     # any referenced image can actually be found) before uploading the
@@ -3352,6 +3396,7 @@ async def upload_lesson(
         title=title,
         description=description,
         module_code=module_code,
+        topic=topic,
         lecturer_id=lecturer.id,
         video_url=video_url, premium_video_asset=premium_asset,
         created_at=datetime.utcnow().isoformat() + "Z",
@@ -3413,7 +3458,7 @@ def list_lessons(module_code: Optional[str] = None, db: Session = Depends(get_db
     rows = query.order_by(Lesson.id.desc()).all()
     return [
         {"id": l.id, "title": l.title, "description": l.description,
-         "module_code": l.module_code, "created_at": l.created_at}
+         "module_code": l.module_code, "topic": l.topic or "", "created_at": l.created_at}
         for l in rows
     ]
 
@@ -3449,6 +3494,7 @@ def list_student_lessons(
             "title": lesson.title,
             "description": lesson.description,
             "module_code": lesson.module_code,
+            "topic": lesson.topic or "",
             "created_at": lesson.created_at,
             "completed": submission is not None,
             "submission_id": submission.id if submission else None,
@@ -3471,7 +3517,7 @@ def list_my_lessons(lecturer: Lecturer = Depends(require_lecturer_account), db: 
             func.coalesce(func.sum(LessonView.view_count), 0),
         ).filter(LessonView.lesson_id.in_(lesson_ids)).group_by(LessonView.lesson_id).all()
         analytics = {lesson_id: {"unique_viewers": viewers, "video_starts": starts} for lesson_id, viewers, starts in counts}
-    return [{"id": l.id, "title": l.title, "description": l.description, "module_code": l.module_code,
+    return [{"id": l.id, "title": l.title, "description": l.description, "module_code": l.module_code, "topic": l.topic or "",
              "created_at": l.created_at, "question_count": len(l.questions), "submission_count": len(l.submissions),
              **analytics.get(l.id, {"unique_viewers": 0, "video_starts": 0})} for l in rows]
 
@@ -3479,13 +3525,14 @@ def list_my_lessons(lecturer: Lecturer = Depends(require_lecturer_account), db: 
 class LecturerLessonEdit(BaseModel):
     title: str
     description: str = ""
+    topic: str = ""
     questions: List[AdminQuestionInput]
 
 
 @app.get("/lecturer/lesson/{lesson_id}/edit")
 def get_owned_lesson_for_edit(lesson_id: int, lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db)):
     lesson = _require_owned_lesson(db, lesson_id, lecturer)
-    return {"id": lesson.id, "title": lesson.title, "description": lesson.description or "",
+    return {"id": lesson.id, "title": lesson.title, "description": lesson.description or "", "topic": lesson.topic or "",
             "questions": [_admin_question_dict(q) for q in lesson.questions],
             "submission_count": len(lesson.submissions)}
 
@@ -3500,6 +3547,7 @@ def edit_owned_lesson(lesson_id: int, payload: LecturerLessonEdit, lecturer: Lec
     _validate_admin_questions(payload.questions)
     lesson.title = payload.title.strip()
     lesson.description = payload.description.strip()
+    lesson.topic = _learning_topic(payload.topic, True)
     for question in list(lesson.questions):
         db.delete(question)
     db.flush()
@@ -4500,7 +4548,7 @@ def admin_get_quiz(quiz_id: int, _pin_ok: bool = Depends(require_lecturer_pin), 
     quiz = db.query(Quiz).filter(Quiz.id == quiz_id).first()
     if not quiz:
         raise HTTPException(status_code=404, detail="Quiz not found")
-    return {"id": quiz.id, "title": quiz.title, "module_code": quiz.module_code, "is_fun": bool(quiz.is_fun), "fun_level": quiz.fun_level or "starter", "created_at": quiz.created_at, "questions": [_admin_question_dict(q) for q in quiz.questions], "submission_count": len(quiz.submissions)}
+    return {"id": quiz.id, "title": quiz.title, "module_code": quiz.module_code, "topic": quiz.topic or "", "assessment_type": quiz.assessment_type or "quiz", "is_fun": bool(quiz.is_fun), "fun_level": quiz.fun_level or "starter", "created_at": quiz.created_at, "questions": [_admin_question_dict(q) for q in quiz.questions], "submission_count": len(quiz.submissions)}
 
 
 @app.post("/admin/quizzes")
@@ -4508,7 +4556,7 @@ def admin_create_quiz(payload: AdminQuizInput, _pin_ok: bool = Depends(require_l
     _validate_admin_questions(payload.questions, payload.is_fun)
     if not payload.title.strip():
         raise HTTPException(status_code=400, detail="Quiz title is required")
-    quiz = Quiz(title=payload.title.strip(), module_code=payload.module_code.strip().upper() or "GENERAL", is_fun=payload.is_fun, fun_level=payload.fun_level, created_at=datetime.utcnow().isoformat() + "Z")
+    quiz = Quiz(title=payload.title.strip(), module_code=payload.module_code.strip().upper() or "GENERAL", topic=_learning_topic(payload.topic, True), assessment_type=_assessment_type(payload.assessment_type), is_fun=payload.is_fun, fun_level=payload.fun_level, created_at=datetime.utcnow().isoformat() + "Z")
     db.add(quiz)
     db.flush()
     _add_quiz_questions(db, quiz.id, payload.questions)
@@ -4528,6 +4576,8 @@ def admin_update_quiz(quiz_id: int, payload: AdminQuizInput, _pin_ok: bool = Dep
         raise HTTPException(status_code=400, detail="Quiz title is required")
     quiz.title = payload.title.strip()
     quiz.module_code = payload.module_code.strip().upper() or "GENERAL"
+    quiz.topic = _learning_topic(payload.topic, True)
+    quiz.assessment_type = _assessment_type(payload.assessment_type)
     quiz.is_fun = payload.is_fun
     quiz.fun_level = payload.fun_level
     for question in list(quiz.questions):
@@ -4551,7 +4601,7 @@ def admin_delete_quiz(quiz_id: int, _pin_ok: bool = Depends(require_lecturer_pin
 @app.get("/admin/lessons")
 def admin_list_lessons(_pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
     rows = db.query(Lesson).order_by(Lesson.id.desc()).all()
-    return [{"id": l.id, "title": l.title, "module_code": l.module_code, "created_at": l.created_at, "question_count": len(l.questions), "submission_count": len(l.submissions), "comment_count": len(l.comments)} for l in rows]
+    return [{"id": l.id, "title": l.title, "module_code": l.module_code, "topic": l.topic or "", "created_at": l.created_at, "question_count": len(l.questions), "submission_count": len(l.submissions), "comment_count": len(l.comments)} for l in rows]
 
 
 @app.get("/admin/lessons/{lesson_id}")
@@ -4559,7 +4609,7 @@ def admin_get_lesson(lesson_id: int, _pin_ok: bool = Depends(require_lecturer_pi
     lesson = db.query(Lesson).filter(Lesson.id == lesson_id).first()
     if not lesson:
         raise HTTPException(status_code=404, detail="Lesson not found")
-    return {"id": lesson.id, "title": lesson.title, "description": lesson.description or "", "module_code": lesson.module_code, "video_url": lesson.video_url, "questions": [_admin_question_dict(q) for q in lesson.questions], "submission_count": len(lesson.submissions)}
+    return {"id": lesson.id, "title": lesson.title, "description": lesson.description or "", "module_code": lesson.module_code, "topic": lesson.topic or "", "video_url": lesson.video_url, "questions": [_admin_question_dict(q) for q in lesson.questions], "submission_count": len(lesson.submissions)}
 
 
 @app.post("/admin/lessons")
@@ -4568,7 +4618,7 @@ def admin_create_lesson(payload: AdminLessonInput, _pin_ok: bool = Depends(requi
         _validate_admin_questions(payload.questions)
     if not payload.title.strip() or not payload.module_code.strip() or not payload.video_url.strip():
         raise HTTPException(status_code=400, detail="Title, module code, and video URL are required")
-    lesson = Lesson(title=payload.title.strip(), description=payload.description.strip(), module_code=payload.module_code.strip().upper(), video_url=payload.video_url.strip(), created_at=datetime.utcnow().isoformat() + "Z")
+    lesson = Lesson(title=payload.title.strip(), description=payload.description.strip(), module_code=payload.module_code.strip().upper(), topic=_learning_topic(payload.topic, True), video_url=payload.video_url.strip(), created_at=datetime.utcnow().isoformat() + "Z")
     db.add(lesson)
     db.flush()
     _add_lesson_questions(db, lesson.id, payload.questions)
@@ -4588,6 +4638,7 @@ def admin_update_lesson(lesson_id: int, payload: AdminLessonInput, _pin_ok: bool
     if not payload.title.strip() or not payload.module_code.strip() or not payload.video_url.strip():
         raise HTTPException(status_code=400, detail="Title, module code, and video URL are required")
     lesson.title, lesson.description = payload.title.strip(), payload.description.strip()
+    lesson.topic = _learning_topic(payload.topic, True)
     lesson.module_code, lesson.video_url = payload.module_code.strip().upper(), payload.video_url.strip()
     for question in list(lesson.questions):
         db.delete(question)
