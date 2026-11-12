@@ -103,7 +103,10 @@
   };
   loadModule = async code => show(code);
   document.addEventListener('DOMContentLoaded', () => {
+    if (location.hash === '#studentBottomMessages') {location.replace('/students/messages');return;}
     const app = byId('appWrap'); if (!app) return;
+    if (app.dataset.studentLibraryReady) return;
+    app.dataset.studentLibraryReady = 'true';
     app.querySelector('.learner-command-center')?.remove();
     app.querySelector('.workflow-nav')?.remove();
     app.querySelector('.learner-tools-grid')?.remove();
@@ -116,11 +119,11 @@
     const nav = app.querySelector('header.top nav'), lock = byId('lockBtn');
     nav.replaceChildren();
     const market = document.createElement('a'); market.href = '/'; market.className = 'student-icon-link'; market.textContent = '⌂'; market.setAttribute('aria-label', 'Market'); market.title = 'Market'; nav.append(market);
-    const messages = document.createElement('button'); messages.type = 'button'; messages.className = 'student-icon-link'; messages.innerHTML = '✉ <span id="studentUnreadBadge" class="student-unread hidden">0</span>'; messages.setAttribute('aria-label', 'Messages'); nav.append(messages);
-    messages.onclick = () => {const card = byId('studentBottomMessages'); if (!card) return; card.classList.toggle('hidden'); if (!card.classList.contains('hidden')) card.scrollIntoView({behavior:'smooth'});};
-    const profile = document.createElement('button'); profile.type = 'button'; profile.className = 'student-icon-link'; profile.textContent = 'Profile'; profile.onclick = () => {byId('studentProfileCard').classList.toggle('hidden'); byId('studentProfileCard').scrollIntoView({behavior:'smooth'});}; nav.append(profile);
-    lock.textContent = 'Sign out'; nav.append(lock);
-    const messagesCard = byId('studentBottomMessages'); if (messagesCard) messagesCard.classList.add('hidden');
+    const messages = document.createElement('a'); messages.href = '/students/messages'; messages.className = 'student-icon-link'; messages.innerHTML = '✉ <span id="studentUnreadBadge" class="student-unread hidden">0</span>'; messages.setAttribute('aria-label', 'Messages'); nav.append(messages);
+    const editProfile = () => {byId('studentProfileCard').classList.remove('hidden'); byId('studentProfileCard').scrollIntoView({behavior:'smooth'});};
+    window.ArounusProfileMenu?.mount({role:'student',nav,onEdit:editProfile,onSignOut:()=>lock.click()});
+    lock.remove();
+    if (new URLSearchParams(location.search).get('profile') === '1') editProfile();
     const moduleCard = byId('moduleCard'); moduleCard.querySelector('h2').textContent = 'My modules';
     const trail = document.createElement('nav'); trail.id='libraryTrail'; trail.className='library-crumbs'; trail.setAttribute('aria-label','Learning path'); byId('quizList').before(trail);
     const prompt = document.createElement('p'); prompt.className = 'muted'; prompt.textContent = 'Choose a module or search for a lesson, quiz, test, or exam.';

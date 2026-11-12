@@ -12,6 +12,7 @@ test('student library starts with modules, keeps PDF last, and links lessons by 
   window.loadModules = async () => {};
   window.loadModule = async () => {};
   window.loadQuiz = () => {};
+  window.HTMLElement.prototype.scrollIntoView = () => {};
   window.api = async route => {
     if (route === '/student/quiz-modules') return [{module_code:'PHY',module_name:'Physics',quiz_count:1}];
     if (route.includes('/student/quizzes/by-module/')) return [{id:7,title:'Forces quiz',topic:'Forces',assessment_type:'quiz',is_fun:true}];
@@ -19,6 +20,7 @@ test('student library starts with modules, keeps PDF last, and links lessons by 
     if (route === '/student/messages/unread') return {count:2};
     return [];
   };
+  window.eval(fs.readFileSync(path.join(__dirname,'../static/profile-menu.js'),'utf8'));
   window.eval(fs.readFileSync(path.join(__dirname,'../static/student-library.js'),'utf8'));
   window.document.dispatchEvent(new window.Event('DOMContentLoaded'));
   await window.loadModules();
@@ -31,5 +33,10 @@ test('student library starts with modules, keeps PDF last, and links lessons by 
   window.document.querySelector('#quizList button').click();
   assert.equal(window.document.querySelector('#quizList a').getAttribute('href'), '/students/lessons?lesson=9');
   assert.equal(window.document.getElementById('studentUnreadBadge').textContent, '2');
+  assert.equal(window.document.querySelector('a[aria-label="Messages"]').getAttribute('href'),'/students/messages');
+  window.document.querySelector('.profile-photo-button').click();
+  assert.equal(window.document.querySelector('.profile-photo-menu').classList.contains('hidden'),false);
+  window.document.querySelector('[data-profile-edit]').click();
+  assert.equal(window.document.getElementById('studentProfileCard').classList.contains('hidden'),false);
   window.close();
 });

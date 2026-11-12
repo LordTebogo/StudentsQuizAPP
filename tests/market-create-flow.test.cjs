@@ -27,7 +27,9 @@ test('sell or list opens one advertiser registration and uses its login for room
   assert.equal(w.document.getElementById('marketAuthDialog').open, true);
   w.document.querySelector('[data-account-answer="no"]').click();
   assert.equal(w.document.querySelectorAll('#marketAuthForm').length, 1);
-  assert.equal(w.document.querySelector('[name="provider_type"]'), null);
+  const accountType = w.document.querySelector('[name="provider_type"]');
+  assert.ok(accountType);
+  assert.equal(accountType.value, 'residence');
   const auth = w.document.getElementById('marketAuthForm');
   for (const [name,value] of Object.entries({full_name:'One seller',phone:'0712345678',email:'one@example.com',password:'password123',confirm_password:'password123'})) auth.elements[name].value = value;
   auth.dispatchEvent(new w.Event('submit', {bubbles:true,cancelable:true}));

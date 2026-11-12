@@ -1,4 +1,4 @@
-const OFFLINE_VERSION = "v95";
+const OFFLINE_VERSION = "v96";
 const SHELL_CACHE = `nucleocampus-shell-${OFFLINE_VERSION}`;
 const DATA_CACHE = `nucleocampus-data-${OFFLINE_VERSION}`;
 const EXTERNAL_CACHE = `nucleocampus-external-${OFFLINE_VERSION}`;
@@ -13,7 +13,7 @@ const APP_SHELL = [
   "/static/room-availability.css?v=2",
   "/static/market-safety.css?v=1", "/static/market-safety.js?v=1",
   "/static/app-traffic.js?v=1", "/static/admin-traffic.js?v=1", "/static/admin-traffic.css?v=1",
-  "/", "/learning", "/learning/guide", "/students", "/lecturers",
+  "/", "/learning", "/learning/guide", "/students", "/students/messages", "/lecturers", "/lecturers/messages",
   "/students/lessons", "/lecturers/lessons", "/lecturers/guide", "/live",
   "/posts", "/community", "/src", "/market", "/admin", "/comrade",
   "/tools/pdf", "/tools/media", "/trust", "/premium", "/reset-password",
@@ -29,7 +29,7 @@ const APP_SHELL = [
   "/static/market-sell.css?v=7",
   "/static/lesson-insights.css", "/static/quiz-builder.css",
   "/static/quiz-math-tools.css", "/static/mathlive-fonts.css?v=1",
-  "/static/experience.js?v=18", "/static/experience.js?v=19", "/static/student-library.css?v=1", "/static/student-library.js?v=1", "/static/tutor-library.css?v=1", "/static/tutor-library.js?v=1", "/static/loading.js", "/static/pwa.js?v=18",
+  "/static/experience.js?v=18", "/static/experience.js?v=19", "/static/student-library.css?v=1", "/static/student-library.js?v=2", "/static/tutor-library.css?v=1", "/static/tutor-library.js?v=2", "/static/profile-menu.css?v=1", "/static/profile-menu.js?v=1", "/static/messages-page.css?v=1", "/static/messages-page.js?v=1", "/static/loading.js", "/static/pwa.js?v=18",
   "/static/module-names.js", "/static/student-module-enrollment.js", "/static/username-suggestion.js", "/static/student-messaging.js?v=2",
   "/static/lecturer-messaging.js?v=2", "/static/admin-messaging.js?v=2",
   "/static/admin-market-ads.js?v=3", "/static/market-auth.js?v=1", "/static/market-sell.js?v=12", "/static/market-contact.js?v=4",

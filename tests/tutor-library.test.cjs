@@ -13,6 +13,8 @@ test('tutor library starts with modules and opens assessment and lesson folders'
   w.moduleLabel=code=>code==='PHY'?'Physics':code;
   w.LECTURER_PROFILE={module_codes:['PHY']};
   w.api=async route=>route==='/lecturer/lessons'?[{id:9,title:'Forces lesson',module_code:'PHY',topic:'Forces'}]:{count:0};
+  w.HTMLElement.prototype.scrollIntoView=()=>{};
+  w.eval(fs.readFileSync(path.join(__dirname,'../static/profile-menu.js'),'utf8'));
   w.eval('let tutorQuizRows = [{id:7,title:"Forces quiz",module_code:"PHY",topic:"Forces",assessment_type:"quiz",is_fun:true}]; function renderTutorQuizLibrary(){};' + fs.readFileSync(path.join(__dirname,'../static/tutor-library.js'),'utf8'));
   w.document.dispatchEvent(new w.Event('DOMContentLoaded'));
   await new Promise(resolve=>setImmediate(resolve));
@@ -24,5 +26,8 @@ test('tutor library starts with modules and opens assessment and lesson folders'
   [...w.document.querySelectorAll('#tutorQuizFolders button')].find(button=>button.textContent.includes('Lessons')).click();
   w.document.querySelector('#tutorQuizFolders button').click();
   assert.equal(w.document.querySelector('#tutorQuizItems a').getAttribute('href'),'/lecturers/lessons?lesson=9');
+  assert.equal(w.document.querySelector('a[aria-label="Messages"]').getAttribute('href'),'/lecturers/messages');
+  w.document.querySelector('.profile-photo-button').click();
+  assert.equal(w.document.querySelector('.profile-photo-menu').classList.contains('hidden'),false);
   } finally { w.close(); }
 });

@@ -3,9 +3,10 @@ const assert=require('node:assert/strict');
 const {JSDOM}=require('jsdom');
 const fs=require('node:fs');
 const tick=()=>new Promise(resolve=>setTimeout(resolve,30));
+async function waitFor(check){for(let i=0;i<100;i++){if(check())return;await tick()}assert.fail('Timed out waiting for browser history to settle')}
 async function setup(url='https://arounus.test/'){
   const dom=new JSDOM(fs.readFileSync('static/index.html','utf8'),{url,runScripts:'outside-only'});
-  const w=dom.window,d=w.document;let views=0,ratings=0;
+  const w=dom.window,d=w.document;let views=0,ratings=0,closed=false;const close=w.close.bind(w);w.close=()=>{closed=true;close()};w.queueMicrotask=callback=>queueMicrotask(()=>{if(!closed)callback()});
   w.AbortSignal=AbortSignal;
   w.HTMLDialogElement.prototype.showModal=function(){this.open=true};
   w.HTMLDialogElement.prototype.close=function(){this.open=false;w.setTimeout(()=>this.dispatchEvent(new w.Event('close')),0)};
@@ -50,15 +51,15 @@ test('browser Back restores browsing and Forward reopens the listing with detail
     assert.equal(w.history.length,2);
     d.querySelector('#offerDetails [data-share]').click();
     assert.equal(d.getElementById('listingShareDialog').open,true);
-    w.history.back();await tick();
+    w.history.back();await waitFor(()=>!w.location.search.includes('listing=')&&!d.getElementById('offerDialog').open&&!d.getElementById('listingShareDialog').open);
     assert.equal(d.getElementById('offerDialog').open,false);
     assert.equal(d.getElementById('listingShareDialog').open,false);
     assert.doesNotMatch(w.location.search,/listing=/);
     assert.equal(d.documentElement.classList.contains('listing-open'),false);
-    w.history.forward();await tick();
+    w.history.forward();await waitFor(()=>w.location.search.includes('listing=room-7')&&d.getElementById('offerDialog').open);
     assert.equal(d.getElementById('offerDialog').open,true);
     assert.match(d.getElementById('offerTitle').textContent,/Garden room/);
-    d.getElementById('closeOffer').click();await tick();
+    d.getElementById('closeOffer').click();await waitFor(()=>!w.location.search.includes('listing='));
     assert.doesNotMatch(w.location.search,/listing=/);
     assert.equal(w.history.length,2);
   }finally{w.close()}
