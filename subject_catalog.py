@@ -1,6 +1,7 @@
 """Arounus-owned subject codes. These are not university course identifiers."""
 
 SUBJECT_CATALOG = []
+LEGACY_SUBJECT_NAMES = {}
 
 for short, title, grades in (
     ("NS", "Natural Sciences", (8, 9)),
@@ -34,7 +35,22 @@ for group, subjects in (
 ):
     prefix = {"University · Molecular and Life Sciences": "ML", "University · Physical and Mineral Sciences": "PM", "University · Mathematical and Computer Sciences": "MC"}[group]
     for short, title in subjects:
-        code = f"ARU-{prefix}-{short}"
-        SUBJECT_CATALOG.append({"module_code": code, "module_name": f"{title} ({code})", "group": group})
+        old_code = f"ARU-{prefix}-{short}"
+        LEGACY_SUBJECT_NAMES[old_code] = f"{title} ({old_code})"
+        for level_code, level_label, name in (
+            ("Y1", "1st year", f"Fundamentals of {title}"),
+            ("Y2", "2nd year", f"Introduction to {title}"),
+            ("Y3", "3rd year", f"Applications of {title}"),
+            ("FY", "Final year", f"Advanced {title}"),
+            ("H1", "Honours", f"{title} Research"),
+        ):
+            code = f"ARU-{prefix}-{short}-{level_code}"
+            SUBJECT_CATALOG.append({
+                "module_code": code,
+                "module_name": f"{name} — {level_label} ({code})",
+                "group": f"{group} · {level_label}",
+                "subject": title,
+                "level": level_label,
+            })
 
 SUBJECT_NAMES = {item["module_code"]: item["module_name"] for item in SUBJECT_CATALOG}

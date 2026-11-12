@@ -1230,7 +1230,7 @@ def _active_src_party_exists(db: Session, party_name: str, exclude_id: Optional[
 
 
 AROUNUS_MODULE_CODE = "AROUNUS"
-from subject_catalog import SUBJECT_CATALOG, SUBJECT_NAMES
+from subject_catalog import LEGACY_SUBJECT_NAMES, SUBJECT_CATALOG, SUBJECT_NAMES
 
 # Codes remain stable so existing quizzes, lessons, and enrollments keep working.
 MODULE_NAMES = {
@@ -1252,6 +1252,7 @@ MODULE_NAMES = {
     "ENVIRONMENTAL_BIOTECHNOLOGY": "Environmental Biotechnology",
     "BIOLOGICAL_PRODUCTS_AND_PROCESSES": "Biological Products and Processes",
 }
+MODULE_NAMES.update(LEGACY_SUBJECT_NAMES)
 MODULE_NAMES.update(SUBJECT_NAMES)
 
 
@@ -2726,7 +2727,7 @@ def get_student_module_enrollment(student: Student = Depends(require_student_acc
     return {
         "completed": bool(student.module_selection_completed),
         "module_codes": sorted(_student_module_codes(student)),
-        "available_modules": [] if student.module_selection_completed else _available_module_catalog(db),
+        "available_modules": _available_module_catalog(db),
     }
 
 
@@ -2750,6 +2751,18 @@ def update_student_modules(payload: ModuleSelection, student: Student = Depends(
 @app.put("/student/module-enrollment")
 def complete_student_module_enrollment(payload: ModuleSelection, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
     return update_student_modules(payload, student, db)
+
+
+@app.post("/student/modules/add")
+def add_student_modules(payload: ModuleSelection, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+    available = {item["module_code"] for item in _available_module_catalog(db)}
+    additions = {code.strip().upper() for code in payload.module_codes if code and code.strip()}
+    if not additions or additions - available:
+        raise HTTPException(status_code=400, detail="Choose a level from the available subject list")
+    _set_student_modules(db, student, list((_student_module_codes(student) - {AROUNUS_MODULE_CODE}) | additions))
+    student.module_selection_completed = True
+    db.commit()
+    return {"module_codes": sorted(_student_module_codes(student)), "completed": True}
 
 
 @app.get("/student/quiz-modules")

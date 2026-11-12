@@ -136,8 +136,10 @@
     const moduleCard = byId('moduleCard'); moduleCard.querySelector('h2').textContent = 'My modules';
     const trail = document.createElement('nav'); trail.id='libraryTrail'; trail.className='library-crumbs'; trail.setAttribute('aria-label','Learning path'); byId('quizList').before(trail);
     const prompt = document.createElement('p'); prompt.className = 'muted'; prompt.textContent = 'Choose a module or search for a lesson, quiz, test, or exam.';
+    const addLevel = document.createElement('button'); addLevel.type='button'; addLevel.className='btn secondary'; addLevel.textContent='Add a subject or next level';
+    addLevel.onclick = async () => {const result = await window.addStudentModule?.(sessionStorage.getItem('studentToken')); if(result) loadModules();};
     const searchBox = document.createElement('div'); searchBox.className = 'learning-search'; searchBox.innerHTML = '<label for="learningSearch">Find something quickly</label><input id="learningSearch" type="search" placeholder="Search modules, topics, lessons and quizzes" autocomplete="off"><div id="learningSearchResults" class="library-items hidden" aria-live="polite"></div>';
-    moduleCard.querySelector('h2').after(prompt, searchBox);
+    moduleCard.querySelector('h2').after(prompt, searchBox, addLevel);
     byId('learningSearch').addEventListener('input', search);
     byId('backBtn').onclick = home;
     const refreshBadge = async () => {try {const result = await api('/student/messages/unread', {}, true); const badge = byId('studentUnreadBadge'); badge.textContent = result.count || 0; badge.classList.toggle('hidden', !result.count);} catch (_) {}};

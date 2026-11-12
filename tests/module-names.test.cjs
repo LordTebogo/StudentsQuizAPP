@@ -35,6 +35,6 @@ test('browser and server have the same module names', () => {
   const python = fs.readFileSync(path.join(root, 'main.py'), 'utf8');
   const catalog = python.match(/MODULE_NAMES = \{([\s\S]*?)\n\}/)[1];
   const serverNames = Object.fromEntries([...catalog.matchAll(/"([A-Z0-9_]+)": "([^"]+)"/g)].map(([, code, name]) => [code, name]));
-  const newNames = JSON.parse(execFileSync('python', ['-c', 'import json; from subject_catalog import SUBJECT_NAMES; print(json.dumps(SUBJECT_NAMES))'], {cwd:root,encoding:'utf8'}));
+  const newNames = JSON.parse(execFileSync('python', ['-c', 'import json; from subject_catalog import LEGACY_SUBJECT_NAMES, SUBJECT_NAMES; print(json.dumps({**LEGACY_SUBJECT_NAMES, **SUBJECT_NAMES}))'], {cwd:root,encoding:'utf8'}));
   assert.deepEqual(JSON.parse(JSON.stringify(context.window.moduleNames)), {...serverNames,...newNames});
 });

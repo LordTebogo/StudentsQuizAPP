@@ -32,8 +32,18 @@
     ['PM','University · Physical and Mineral Sciences', [['CHE','Chemistry'],['PHY','Physics'],['GEM','Geology and Mining']]],
     ['MC','University · Mathematical and Computer Sciences', [['COS','Computer Science'],['MAT','Mathematics'],['AMA','Applied Mathematics'],['STA','Statistics'],['OPR','Operations Research']]],
   ]) for (const [short,title] of subjects) {
-    const code = `ARU-${prefix}-${short}`;
-    catalog.push({module_code:code,module_name:`${title} (${code})`,group});
+    const oldCode = `ARU-${prefix}-${short}`;
+    names[oldCode] = `${title} (${oldCode})`;
+    for (const [levelCode,levelLabel,name] of [
+      ['Y1','1st year',`Fundamentals of ${title}`],
+      ['Y2','2nd year',`Introduction to ${title}`],
+      ['Y3','3rd year',`Applications of ${title}`],
+      ['FY','Final year',`Advanced ${title}`],
+      ['H1','Honours',`${title} Research`],
+    ]) {
+      const code = `ARU-${prefix}-${short}-${levelCode}`;
+      catalog.push({module_code:code,module_name:`${name} — ${levelLabel} (${code})`,group:`${group} · ${levelLabel}`,subject:title,level:levelLabel});
+    }
   }
   catalog.forEach(item => { names[item.module_code] = item.module_name; });
   Object.freeze(names);

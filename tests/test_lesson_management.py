@@ -96,6 +96,18 @@ class LessonManagementTest(unittest.TestCase):
         self.assertGreaterEqual(owner['viewing_my_lessons'], 1)
         self.assertEqual(other['viewing_my_lessons'], 0)
 
+    def test_learner_adds_a_new_level_without_losing_enrolled_modules(self):
+        response = self.client.post('/student/modules/add', headers=self.student_headers,
+                                    json={'module_codes': ['ARU-ML-BCH-Y1']})
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('BIO101', response.json()['module_codes'])
+        self.assertIn('ARU-ML-BCH-Y1', response.json()['module_codes'])
+        next_level = self.client.post('/student/modules/add', headers=self.student_headers,
+                                      json={'module_codes': ['ARU-ML-BCH-Y2']})
+        self.assertEqual(next_level.status_code, 200)
+        self.assertIn('ARU-ML-BCH-Y1', next_level.json()['module_codes'])
+        self.assertIn('ARU-ML-BCH-Y2', next_level.json()['module_codes'])
+
     def test_edit_questions_then_protect_submitted_answers(self):
         path = f"/lecturer/lesson/{self.lesson_id}/edit"
         current = self.client.get(path, headers=self.owner_headers)

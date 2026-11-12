@@ -247,7 +247,7 @@
   </div></div>
 </main>
 
-<script src="/static/module-names.js?v=2"></script>
+<script src="/static/module-names.js?v=3"></script>
 <script>
 const displayModuleList = codes => (codes || []).map(moduleLabel).join(', ');
 const parseModuleList = value => value.split(',').map(name => name.trim()).filter(Boolean).map(name => Object.keys(moduleNames).find(code => moduleNames[code].toLowerCase() === name.toLowerCase()) || name);

@@ -36,8 +36,8 @@
     document.head.appendChild(style);
   }
 
-  async function requestEnrollment(token, options) {
-    const response = await fetch('/student/module-enrollment', {
+  async function requestEnrollment(token, options, path = '/student/module-enrollment') {
+    const response = await fetch(path, {
       ...options,
       headers: { ...(options && options.headers), 'X-Student-Token': token },
     });
@@ -47,19 +47,20 @@
     return data;
   }
 
-  function showDialog(token, enrollment) {
+  function showDialog(token, enrollment, adding = false) {
     addStyles();
     document.body.classList.add('module-enrollment-open');
     const overlay = document.createElement('div');
     overlay.className = 'module-enrollment-overlay';
     overlay.innerHTML = `
       <section class="module-enrollment-dialog" role="dialog" aria-modal="true" aria-labelledby="moduleEnrollmentTitle">
-        <span class="module-enrollment-kicker">First-time setup</span>
-        <h1 id="moduleEnrollmentTitle">Choose your modules</h1>
-        <p class="module-enrollment-intro">Select every subject you are currently studying. Your quiz and video lesson pages will then show only content for these modules.</p>
+        <span class="module-enrollment-kicker">${adding ? 'Continue learning' : 'First-time setup'}</span>
+        <h1 id="moduleEnrollmentTitle">${adding ? 'Add another level' : 'Choose your modules'}</h1>
+        <p class="module-enrollment-intro">${adding ? 'Choose the next subject or university level you want to study. Your current modules stay available.' : 'Select every subject you are currently studying. Your quiz and video lesson pages will then show content for these modules.'}</p>
+        ${adding ? '<button class="module-enrollment-close" type="button" aria-label="Close module selection">Close</button>' : ''}
         <label for="moduleEnrollmentSearch">Find your subject or grade</label><input id="moduleEnrollmentSearch" class="module-enrollment-search" type="search" placeholder="Search name, grade or code">
         <div class="module-enrollment-list" id="moduleEnrollmentList"></div>
-        <div class="module-enrollment-note"><span aria-hidden="true">🔒</span><span>This is a one-time selection. To add another module later, contact your lecturer or administrator. The <a href="/learning/guide">AROUNUS app guide</a> is already included for you.</span></div>
+        <div class="module-enrollment-note"><span aria-hidden="true">▤</span><span>You can add another level whenever you are ready. The <a href="/learning/guide">AROUNUS app guide</a> is already included for you.</span></div>
         <div class="module-enrollment-actions"><button class="module-enrollment-save" type="button" disabled>Save my modules</button><span class="module-enrollment-count">Choose at least one module</span></div>
         <div class="module-enrollment-message" role="alert" aria-live="polite"></div>
       </section>`;
@@ -69,7 +70,9 @@
     const save = overlay.querySelector('.module-enrollment-save');
     const count = overlay.querySelector('.module-enrollment-count');
     const message = overlay.querySelector('.module-enrollment-message');
-    const modules = enrollment.available_modules || [];
+    const modules = (enrollment.available_modules || []).filter(module => !adding || !(enrollment.module_codes || []).includes(module.module_code));
+    let finishDialog;
+    if (adding) overlay.querySelector('.module-enrollment-close').onclick = () => {overlay.remove();document.body.classList.remove('module-enrollment-open');finishDialog?.(null)};
 
     if (!modules.length) {
       list.className = 'module-enrollment-empty';
@@ -113,6 +116,7 @@
     list.addEventListener('change', updateCount);
 
     return new Promise((resolve, reject) => {
+      finishDialog = resolve;
       save.addEventListener('click', async () => {
         const module_codes = [...list.querySelectorAll('input:checked')].map(input => input.value);
         if (!module_codes.length) return;
@@ -121,10 +125,10 @@
         message.textContent = '';
         try {
           const result = await requestEnrollment(token, {
-            method: 'PUT',
+            method: adding ? 'POST' : 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ module_codes }),
-          });
+          }, adding ? '/student/modules/add' : '/student/module-enrollment');
           overlay.remove();
           document.body.classList.remove('module-enrollment-open');
           resolve(result);
@@ -142,5 +146,9 @@
     const enrollment = await requestEnrollment(token);
     if (enrollment.completed) return enrollment;
     return showDialog(token, enrollment);
+  };
+  window.addStudentModule = async function (token) {
+    if (!token) throw new Error('Sign in to add a module.');
+    return showDialog(token, await requestEnrollment(token), true);
   };
 })();
