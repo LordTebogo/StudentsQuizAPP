@@ -10,9 +10,12 @@
   const lessonRows = () => state.lessons.filter(row => row.module_code === state.module);
   const sectionFor = row => row.assessment_type === 'exam' ? 'exams' : row.assessment_type === 'test' ? 'tests' : 'quizzes';
   const folder = (title, detail, action, icon='▤') => `<button class="library-folder" type="button" data-tutor-step="${esc(action)}"><span class="folder-mark" aria-hidden="true">${icon}</span><span><strong>${esc(title)}</strong><small>${esc(detail)}</small></span></button>`;
+  const pdfCard = () => '<a class="library-folder" href="/tools/pdf"><span class="folder-mark" aria-hidden="true">▤</span><span><strong>PDF tools</strong><small>Open PDF tools</small></span></a>';
   const quizItem = row => `<button class="library-item" type="button" data-library-quiz="${row.id}"><span><strong>${esc(row.title)}</strong><small>${esc(row.topic || name(row.module_code))} · ${row.is_fun ? 'Fun MCQ quiz' : row.assessment_type === 'exam' ? 'Examination' : row.assessment_type === 'test' ? 'Test' : 'Challenging quiz'}</small></span><span>Open →</span></button>`;
   const lessonItem = row => `<a class="library-item" href="/lecturers/lessons?lesson=${encodeURIComponent(row.id)}"><span><strong>${esc(row.title)}</strong><small>${esc(row.topic || 'Other topics')} · Lesson</small></span><span>Open →</span></a>`;
-  const go = (module='', section='', sub='') => {state.module=module;state.section=section;state.sub=sub;renderTutorQuizLibrary();};
+  const syncPath = () => {const url=new URL(location.href);for(const key of ['module','section','folder'])url.searchParams.delete(key);if(state.module)url.searchParams.set('module',state.module);if(state.section)url.searchParams.set('section',state.section);if(state.sub)url.searchParams.set('folder',state.sub);if(url.href!==location.href)history.pushState(null,'',url)};
+  const go = (module='', section='', sub='', push=true) => {state.module=module;state.section=section;state.sub=sub;if(push)syncPath();renderTutorQuizLibrary();};
+  const restorePath = () => {const params=new URLSearchParams(location.search),module=params.get('module')||'',section=['quizzes','tests','exams','lessons'].includes(params.get('section'))?params.get('section'):'';go(module,section,section?params.get('folder')||'':'',false)};
   const renderCrumbs = () => {
     const crumbs = $('tutorQuizCrumbs'); crumbs.replaceChildren();
     const steps = [{title:'My modules', action:() => go()}];
@@ -31,7 +34,7 @@
       items.innerHTML = tutorQuizRows.filter(row => norm(`${row.title} ${row.topic} ${name(row.module_code)}`).includes(query)).map(quizItem).join('') + state.lessons.filter(row => norm(`${row.title} ${row.topic} ${name(row.module_code)}`).includes(query)).map(lessonItem).join('');
     } else if (!state.module) {
       const modules = [...new Set([...(window.LECTURER_PROFILE?.module_codes || []), ...tutorQuizRows.map(row=>row.module_code), ...state.lessons.map(row=>row.module_code)])].sort((a,b)=>name(a).localeCompare(name(b)));
-      folders.innerHTML = modules.map(code => folder(name(code),`${tutorQuizRows.filter(row=>row.module_code===code).length} assessment(s) · ${state.lessons.filter(row=>row.module_code===code).length} lesson(s)`,`module:${code}`)).join('') + folder('PDF tools','Open PDF tools','pdf');
+      folders.innerHTML = modules.map(code => folder(name(code),`${tutorQuizRows.filter(row=>row.module_code===code).length} assessment(s) · ${state.lessons.filter(row=>row.module_code===code).length} lesson(s)`,`module:${code}`)).join('') + pdfCard();
     } else if (!state.section) {
       const rows=moduleRows(), lessons=lessonRows();
       folders.innerHTML = folder('Quizzes',`${rows.filter(row=>sectionFor(row)==='quizzes').length} available · MCQ and challenging`,'section:quizzes','✦') + folder('Tests',`${rows.filter(row=>sectionFor(row)==='tests').length} available`,'section:tests','✓') + folder('Examinations',`${rows.filter(row=>sectionFor(row)==='exams').length} available`,'section:exams','▣') + folder('Lessons',`${lessons.length} available · by topic`,'section:lessons','▶');
@@ -69,11 +72,13 @@
     const market=document.createElement('a');market.href='/';market.className='tutor-icon-link';market.textContent='⌂';market.title='Market';market.setAttribute('aria-label','Market');nav.append(market);
     const messages=document.createElement('a');messages.href='/lecturers/messages';messages.className='tutor-icon-link';messages.innerHTML='✉ <span id="tutorUnreadBadge" class="tutor-unread hidden">0</span>';messages.setAttribute('aria-label','Messages');nav.append(messages);
     const editProfile=()=>{$('profileCard').classList.remove('hidden');$('profileCard').scrollIntoView({behavior:'smooth'});};
-    window.ArounusProfileMenu?.mount({role:'lecturer',nav,onEdit:editProfile,onSignOut:()=>lock.click()});lock.remove();
+    window.ArounusProfileMenu?.mount({role:'lecturer',nav,onEdit:editProfile,onSignOut:()=>window.ArounusProfileMenu.signOut('lecturer')});lock.remove();
     if(new URLSearchParams(location.search).get('profile')==='1')editProfile();
     const refreshBadge=async()=>{try{const value=await api('/lecturer/messages/unread',{},true);const badge=$('tutorUnreadBadge');badge.textContent=value.count||0;badge.classList.toggle('hidden',!value.count);}catch(_){}};refreshBadge();setInterval(refreshBadge,60000);
-    $('tutorQuizFolders').addEventListener('click',event=>{const action=event.target.closest('[data-tutor-step]')?.dataset.tutorStep;if(!action)return;const [kind,...rest]=action.split(':');const value=rest.join(':');if(kind==='pdf')location.assign('/tools/pdf');else if(kind==='module')go(value);else if(kind==='section')go(state.module,value);else if(kind==='sub'||kind==='topic')go(state.module,state.section,value);});
+    $('tutorQuizFolders').addEventListener('click',event=>{const action=event.target.closest('[data-tutor-step]')?.dataset.tutorStep;if(!action)return;const [kind,...rest]=action.split(':');const value=rest.join(':');if(kind==='module')go(value);else if(kind==='section')go(state.module,value);else if(kind==='sub'||kind==='topic')go(state.module,state.section,value);});
     $('tutorLibrarySearch').addEventListener('input',renderTutorQuizLibrary);
+    window.addEventListener('popstate',restorePath);
+    restorePath();
     api('/lecturer/lessons',{},true).then(rows=>{state.lessons=rows;renderTutorQuizLibrary();}).catch(()=>{});
     renderTutorQuizLibrary();
   };

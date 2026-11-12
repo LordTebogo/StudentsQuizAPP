@@ -1,18 +1,30 @@
 /* The learner library keeps subjects, assessment types and lessons together. */
 (() => {
   const byId = id => document.getElementById(id);
-  const state = {modules: [], quizzes: new Map(), lessons: new Map(), tutors: new Map(), code: null, tutorId: null, section: null};
+  const state = {modules: [], quizzes: new Map(), lessons: new Map(), tutors: new Map(), code: null, tutorId: null, section: null, sub: null};
   const label = code => window.moduleLabel?.(code) || code;
   const clean = value => String(value || '').trim();
   const norm = value => clean(value).toLocaleLowerCase();
   const escape = value => escapeHtml(value);
   const folder = (title, detail, action, icon = '▤') => `<button class="library-folder" type="button" data-action="${action}"><span class="folder-mark" aria-hidden="true">${icon}</span><span><strong>${escape(title)}</strong><small>${escape(detail)}</small></span></button>`;
+  const pdfCard = () => '<a class="library-folder" href="/tools/pdf"><span class="folder-mark" aria-hidden="true">▤</span><span><strong>PDF tools</strong><small>Open your PDF tools</small></span></a>';
+  const syncPath = () => {
+    const url = new URL(location.href);
+    for (const key of ['module','tutor','section','folder']) url.searchParams.delete(key);
+    if (state.code) url.searchParams.set('module',state.code);
+    if (state.tutorId) url.searchParams.set('tutor',String(state.tutorId));
+    if (state.section) url.searchParams.set('section',state.section);
+    if (state.sub) url.searchParams.set('folder',state.sub);
+    if (url.href !== location.href) history.pushState(null,'',url);
+  };
   const quizSection = q => q.assessment_type === 'exam' ? 'exams' : q.assessment_type === 'test' ? 'tests' : 'quizzes';
   const queryLessons = code => (state.lessons.get(code) || []).filter(item => !state.tutorId || Number(item.lecturer_id) === state.tutorId);
   const queryQuizzes = code => (state.quizzes.get(code) || []).filter(item => !state.tutorId || Number(item.lecturer_id) === state.tutorId);
-  const home = () => {byId('quizListCard').classList.add('hidden'); byId('moduleCard').classList.remove('hidden'); state.code = null; state.tutorId = null; state.section = null;};
-  const show = (code, section = null, sub = null) => {
-    state.code = code; state.section = section;
+  const home = (push = true) => {byId('quizListCard').classList.add('hidden'); byId('moduleCard').classList.remove('hidden'); state.code = null; state.tutorId = null; state.section = null; state.sub = null; if(push)syncPath();};
+  const show = (code, section = null, sub = null, push = true) => {
+    if (state.code && state.code !== code) state.tutorId = null;
+    state.code = code; state.section = section; state.sub = sub;
+    if (push) syncPath();
     byId('moduleCard').classList.add('hidden');
     byId('quizListCard').classList.remove('hidden');
     const tutors = state.tutors.get(code) || [];
@@ -74,8 +86,8 @@
   const renderHome = () => {
     const list = byId('moduleList');
     list.classList.add('library-folder-grid');
-    list.innerHTML = state.modules.map(module => folder(module.module_name || label(module.module_code), `${module.quiz_count || 0} assessment(s) · ${queryLessons(module.module_code).length} lesson(s)`, module.module_code)).join('') + folder('PDF tools', 'Open your PDF tools', 'pdf', '▤');
-    list.querySelectorAll('[data-action]').forEach(button => button.onclick = () => button.dataset.action === 'pdf' ? location.assign('/tools/pdf') : show(button.dataset.action));
+    list.innerHTML = state.modules.map(module => folder(module.module_name || label(module.module_code), `${module.quiz_count || 0} assessment(s) · ${queryLessons(module.module_code).length} lesson(s)`, module.module_code)).join('') + pdfCard();
+    list.querySelectorAll('[data-action]').forEach(button => button.onclick = () => show(button.dataset.action));
     byId('moduleMsg').textContent = state.modules.length ? '' : 'Choose your subjects in your profile to see them here.';
   };
   const search = () => {
@@ -108,8 +120,16 @@
         return {code, quizzes, lessons, tutors};
       }));
       data.forEach(({code, quizzes, lessons, tutors}) => {state.quizzes.set(code, quizzes); state.lessons.set(code, lessons); state.tutors.set(code, tutors)});
-      renderHome(); search();
+      renderHome(); restorePath(); search();
     } catch (error) {byId('moduleList').innerHTML = `<p class="muted">Could not load modules: ${escape(error.message)}</p>`;}
+  };
+  const restorePath = () => {
+    const params = new URLSearchParams(location.search), code = params.get('module');
+    if (!code || !state.modules.some(item => item.module_code === code)) {home(false);return;}
+    const tutors = state.tutors.get(code) || [], tutorId = Number(params.get('tutor'));
+    state.tutorId = tutors.some(item => item.id === tutorId) ? tutorId : null;
+    const section = ['quizzes','tests','exams','lessons'].includes(params.get('section')) ? params.get('section') : null;
+    show(code, section, section ? params.get('folder') : null, false);
   };
   loadModule = async code => {state.tutorId = null; show(code);};
   document.addEventListener('DOMContentLoaded', () => {
@@ -131,7 +151,7 @@
     const market = document.createElement('a'); market.href = '/'; market.className = 'student-icon-link'; market.textContent = '⌂'; market.setAttribute('aria-label', 'Market'); market.title = 'Market'; nav.append(market);
     const messages = document.createElement('a'); messages.href = '/students/messages'; messages.className = 'student-icon-link'; messages.innerHTML = '✉ <span id="studentUnreadBadge" class="student-unread hidden">0</span>'; messages.setAttribute('aria-label', 'Messages'); nav.append(messages);
     const editProfile = () => {byId('studentProfileCard').classList.remove('hidden'); byId('studentProfileCard').scrollIntoView({behavior:'smooth'});};
-    window.ArounusProfileMenu?.mount({role:'student',nav,onEdit:editProfile,onSignOut:()=>lock.click()});
+    window.ArounusProfileMenu?.mount({role:'student',nav,onEdit:editProfile,onSignOut:()=>window.ArounusProfileMenu.signOut('student')});
     lock.remove();
     if (new URLSearchParams(location.search).get('profile') === '1') editProfile();
     const moduleCard = byId('moduleCard'); moduleCard.querySelector('h2').textContent = 'My modules';
@@ -142,6 +162,7 @@
     const searchBox = document.createElement('div'); searchBox.className = 'learning-search'; searchBox.innerHTML = '<label for="learningSearch">Find something quickly</label><input id="learningSearch" type="search" placeholder="Search modules, topics, lessons and quizzes" autocomplete="off"><div id="learningSearchResults" class="library-items hidden" aria-live="polite"></div>';
     moduleCard.querySelector('h2').after(prompt, searchBox, addLevel);
     byId('learningSearch').addEventListener('input', search);
+    window.addEventListener('popstate', restorePath);
     byId('backBtn').onclick = home;
     const refreshBadge = async () => {try {const result = await api('/student/messages/unread', {}, true); const badge = byId('studentUnreadBadge'); badge.textContent = result.count || 0; badge.classList.toggle('hidden', !result.count);} catch (_) {}};
     refreshBadge(); setInterval(refreshBadge, 60000);

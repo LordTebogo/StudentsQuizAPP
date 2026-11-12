@@ -1,4 +1,8 @@
 window.ArounusProfileMenu = {
+  signOut(role) {
+    for (const key of ['studentToken','lecturerToken','landlordToken','srcToken','activeRole']) sessionStorage.removeItem(key);
+    location.replace(role === 'lecturer' ? '/?role=lecturer' : '/?role=learner');
+  },
   mount({role, nav, onEdit, onSignOut}) {
     const wrapper = document.createElement('div');
     wrapper.className = 'profile-menu-wrap';

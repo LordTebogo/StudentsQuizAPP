@@ -245,7 +245,7 @@ $('lockBtn').addEventListener('click', (e) => {
   location.href = '/?role=lecturer';
 });
 if (LECTURER_TOKEN) {
-  api('/lecturer/me', {}, true).then(async () => { $('gateWrap').classList.add('hidden'); $('appWrap').classList.remove('hidden'); await loadModules(); await loadLessons(); const params = new URLSearchParams(location.search); const moduleCode = params.get('module'); if (moduleCode && [...$('moduleCodeInput').options].some(option => option.value === moduleCode)) $('moduleCodeInput').value = moduleCode; const lessonId = params.get('lesson'); if (lessonId && /^\d+$/.test(lessonId)) selectLesson(lessonId); }).catch(() => { sessionStorage.removeItem('lecturerToken'); LECTURER_TOKEN = null; location.replace('/?role=lecturer'); });
+  api('/lecturer/me', {}, true).then(async () => { $('gateWrap').classList.add('hidden'); $('appWrap').classList.remove('hidden'); await loadModules(); await loadLessons(); const params = new URLSearchParams(location.search); const moduleCode = params.get('module'); if (moduleCode && [...$('moduleCodeInput').options].some(option => option.value === moduleCode)) $('moduleCodeInput').value = moduleCode; tutorLessonModule = moduleCode || ''; tutorLessonTopic = params.get('topic') || ''; renderTutorLessonLibrary(); const lessonId = params.get('lesson'); if (lessonId && /^\d+$/.test(lessonId)) selectLesson(lessonId,false); }).catch(() => { sessionStorage.removeItem('lecturerToken'); LECTURER_TOKEN = null; location.replace('/?role=lecturer'); });
 }
 
 // ---- Upload lesson -----------------------------------------------------
@@ -345,6 +345,14 @@ $('moduleFilterSelect').addEventListener('change', loadLessons);
 
 // ---- Lesson list ---------------------------------------------------------
 let tutorLessonRows = [], tutorLessonModule = '', tutorLessonTopic = '';
+function syncTutorLessonPath(lessonId = '') {
+  const url = new URL(location.href);
+  for (const key of ['module','topic','lesson']) url.searchParams.delete(key);
+  if (tutorLessonModule) url.searchParams.set('module',tutorLessonModule);
+  if (tutorLessonTopic) url.searchParams.set('topic',tutorLessonTopic);
+  if (lessonId) url.searchParams.set('lesson',String(lessonId));
+  if (url.href !== location.href) history.pushState(null,'',url);
+}
 function renderTutorLessonLibrary() {
   const search = $('lessonLibrarySearch').value.trim().toLocaleLowerCase();
   const folders = $('lessonLibraryFolders'), list = $('myLessonList');
@@ -369,8 +377,9 @@ function renderTutorLessonLibrary() {
   if (!folders.children.length && !list.children.length) list.innerHTML = `<p class="muted">${search ? 'No matches. Try another search.' : 'Nothing in this folder yet.'}</p>`;
 }
 $('lessonLibrarySearch').addEventListener('input', renderTutorLessonLibrary);
-$('lessonLibraryCrumbs').addEventListener('click', event => { const step = event.target.closest('[data-lesson-back]')?.dataset.lessonBack; if (!step) return; if (step === 'modules') { tutorLessonModule = ''; tutorLessonTopic = ''; } else tutorLessonTopic = ''; $('lessonLibrarySearch').value = ''; $('previewCard').classList.add('hidden'); renderTutorLessonLibrary(); });
-$('lessonLibraryFolders').addEventListener('click', event => { const module = event.target.closest('[data-lesson-module]')?.dataset.lessonModule, topic = event.target.closest('[data-lesson-topic]')?.dataset.lessonTopic; if (module) tutorLessonModule = module; if (topic) tutorLessonTopic = topic; if (!module && !topic) return; $('lessonLibrarySearch').value = ''; $('previewCard').classList.add('hidden'); renderTutorLessonLibrary(); });
+$('lessonLibraryCrumbs').addEventListener('click', event => { const step = event.target.closest('[data-lesson-back]')?.dataset.lessonBack; if (!step) return; if (step === 'modules') { tutorLessonModule = ''; tutorLessonTopic = ''; } else tutorLessonTopic = ''; $('lessonLibrarySearch').value = ''; $('previewCard').classList.add('hidden'); syncTutorLessonPath(); renderTutorLessonLibrary(); });
+$('lessonLibraryFolders').addEventListener('click', event => { const module = event.target.closest('[data-lesson-module]')?.dataset.lessonModule, topic = event.target.closest('[data-lesson-topic]')?.dataset.lessonTopic; if (module) tutorLessonModule = module; if (topic) tutorLessonTopic = topic; if (!module && !topic) return; $('lessonLibrarySearch').value = ''; $('previewCard').classList.add('hidden'); syncTutorLessonPath(); renderTutorLessonLibrary(); });
+window.addEventListener('popstate', () => {const params=new URLSearchParams(location.search);tutorLessonModule=params.get('module')||'';tutorLessonTopic=params.get('topic')||'';$('previewVideo').pause();$('previewCard').classList.add('hidden');renderTutorLessonLibrary();const lessonId=params.get('lesson');if(lessonId&&/^\d+$/.test(lessonId))selectLesson(lessonId,false)});
 async function loadLessons() {
   const select = $('lessonSelect');
   try {
@@ -404,7 +413,7 @@ $('lessonSelect').addEventListener('change', (e) => {
   if (e.target.value) selectLesson(e.target.value);
 });
 
-async function selectLesson(lessonId) {
+async function selectLesson(lessonId, push = true) {
   currentLessonId = lessonId;
   $('gradingCard').classList.add('hidden');
   $('lessonEditor').classList.add('hidden');
@@ -414,6 +423,7 @@ async function selectLesson(lessonId) {
       api(`/lesson/${lessonId}`), api(`/lecturer/lesson/${lessonId}/edit`, {}, true),
     ]);
     editableLesson = owned;
+    if (push) syncTutorLessonPath(lessonId);
     $('existingLessonTopic').value = owned.topic || '';
     $('previewCard').classList.remove('hidden');
     $('previewTitle').textContent = moduleDisplayTitle(lesson.title, lesson.module_code);

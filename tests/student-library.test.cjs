@@ -24,13 +24,17 @@ test('student library starts with modules, keeps PDF last, and links lessons by 
   window.eval(fs.readFileSync(path.join(__dirname,'../static/student-library.js'),'utf8'));
   window.document.dispatchEvent(new window.Event('DOMContentLoaded'));
   await window.loadModules();
-  const modules = [...window.document.querySelectorAll('#moduleList button')];
+  const modules = [...window.document.querySelectorAll('#moduleList .library-folder')];
   assert.deepEqual(modules.map(button => button.querySelector('strong').textContent), ['Physics','PDF tools']);
+  assert.equal(modules[1].getAttribute('href'),'/tools/pdf');
   modules[0].click();
+  assert.equal(new URL(window.location.href).searchParams.get('module'),'PHY');
   assert.match(window.document.getElementById('quizList').textContent, /Quizzes.*Tests.*Examinations.*Lessons/);
   [...window.document.querySelectorAll('#quizList button')].find(button => button.textContent.includes('Lessons')).click();
+  assert.equal(new URL(window.location.href).searchParams.get('section'),'lessons');
   assert.match(window.document.getElementById('quizList').textContent, /Forces/);
   window.document.querySelector('#quizList button').click();
+  assert.equal(new URL(window.location.href).searchParams.get('folder'),'Forces');
   assert.equal(window.document.querySelector('#quizList a').getAttribute('href'), '/students/lessons?lesson=9');
   assert.equal(window.document.getElementById('studentUnreadBadge').textContent, '2');
   assert.equal(window.document.querySelector('a[aria-label="Messages"]').getAttribute('href'),'/students/messages');
@@ -63,9 +67,14 @@ test('student chooses a tutor before seeing that tutor’s subject content', asy
   w.document.querySelector('#moduleList button').click();
   assert.match(w.document.querySelector('#quizList').textContent,/Tutor A.*Tutor B/);
   w.document.querySelector('#quizList [data-action="tutor-1"]').click();
+  assert.equal(new URL(w.location.href).searchParams.get('tutor'),'1');
   [...w.document.querySelectorAll('#quizList button')].find(button=>button.textContent.includes('Lessons')).click();
   assert.match(w.document.querySelector('#quizList').textContent,/One/);
   assert.doesNotMatch(w.document.querySelector('#quizList').textContent,/Two/);
+  const back=new Promise(resolve=>w.addEventListener('popstate',resolve,{once:true}));
+  w.history.back();
+  await back;
+  assert.match(w.document.querySelector('#quizList').textContent,/Quizzes.*Tests.*Examinations.*Lessons/);
   w.close();
 });
 

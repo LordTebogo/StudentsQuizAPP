@@ -226,20 +226,26 @@ async function loadModuleList() {
   }
 }
 
-function openModule(moduleCode) {
+function lessonPath(query = '') {
+  const url = new URL(window.location.href);
+  url.search = query;
+  if (url.href !== location.href) history.pushState(null, '', url);
+}
+
+function openModule(moduleCode, push = true) {
   currentModule = moduleCode;
   $('moduleCard').classList.add('hidden');
   $('listCard').classList.remove('hidden');
   $('listCardTitle').textContent = moduleCode === 'AROUNUS' ? 'Arounus guide and tutorials' : `${moduleLabel(moduleCode)} — lessons`;
   loadLessonList(moduleCode);
-  history.replaceState(null, '', `?subject=${encodeURIComponent(moduleSlug(moduleCode))}`);
+  if (push) lessonPath(`?subject=${encodeURIComponent(moduleSlug(moduleCode))}`);
 }
 
 $('backToModulesBtn').addEventListener('click', () => {
   currentModule = null;
   $('listCard').classList.add('hidden');
   $('moduleCard').classList.remove('hidden');
-  history.replaceState(null, '', window.location.pathname);
+  lessonPath();
 });
 
 // ---- Lesson list (scoped to the selected module) ------------------------
@@ -294,7 +300,7 @@ async function loadLessonList(moduleCode) {
 }
 
 // ---- Open a lesson -----------------------------------------------------
-async function openLesson(lessonId) {
+async function openLesson(lessonId, push = true) {
   try {
     const lesson = await api(`/student/lesson/${lessonId}`);
     currentLesson = lesson;
@@ -323,14 +329,14 @@ async function openLesson(lessonId) {
     $('submitMsg').innerHTML = '';
 
     await loadComments(lessonId);
-    // Auto re-check window title so back-button behaviour makes sense
-    history.replaceState(null, '', `?lesson=${lessonId}`);
+    if (push) lessonPath(`?lesson=${encodeURIComponent(lessonId)}`);
   } catch (err) {
     showMsg($('lessonList'), `Could not load lesson: ${err.message}`, 'error');
   }
 }
 
 $('backToListBtn').addEventListener('click', () => {
+  $('lessonVideo').pause();
   currentLesson = null;
   $('lessonCard').classList.add('hidden');
   $('questionsCard').classList.add('hidden');
@@ -340,10 +346,10 @@ $('backToListBtn').addEventListener('click', () => {
     $('listCard').classList.remove('hidden');
     $('listCardTitle').textContent = `${moduleLabel(currentModule)} — lessons`;
     loadLessonList(currentModule);
-    history.replaceState(null, '', `?subject=${encodeURIComponent(moduleSlug(currentModule))}`);
+    lessonPath(`?subject=${encodeURIComponent(moduleSlug(currentModule))}`);
   } else {
     $('moduleCard').classList.remove('hidden');
-    history.replaceState(null, '', window.location.pathname);
+    lessonPath();
   }
 });
 
@@ -677,6 +683,15 @@ $('addCommentTagBtn').addEventListener('click', () => addLessonTag('commentTagPi
 
 // ---- Init: auto-open a module or lesson if present in the URL -----------
 const params = new URLSearchParams(window.location.search);
+window.addEventListener('popstate', () => {
+  const route = new URLSearchParams(location.search);
+  if (route.get('lesson')) {openLesson(route.get('lesson'), false);return;}
+  $('lessonVideo').pause();
+  currentLesson = null;
+  for (const id of ['lessonCard','questionsCard','commentsCard','myResultCard']) $(id).classList.add('hidden');
+  if (route.get('subject') || route.get('module')) openModule(moduleCodeFromSlug(route.get('subject') || route.get('module')), false);
+  else {currentModule = null;$('listCard').classList.add('hidden');$('moduleCard').classList.remove('hidden');}
+});
 restoreStudentSession().then(async ready => {
   if (!ready) return;
   const enrollment = window.ensureStudentModuleEnrollment(STUDENT_TOKEN);
@@ -684,8 +699,8 @@ restoreStudentSession().then(async ready => {
   await enrollment;
   loadLessonMembers();
   if (!ready.module_selection_completed) loadModuleList();
-  if (params.get('lesson')) openLesson(params.get('lesson'));
-  else if (params.get('subject') || params.get('module')) openModule(moduleCodeFromSlug(params.get('subject') || params.get('module')));
+  if (params.get('lesson')) openLesson(params.get('lesson'), false);
+  else if (params.get('subject') || params.get('module')) openModule(moduleCodeFromSlug(params.get('subject') || params.get('module')), false);
 });
 </script>
 <script src="/static/loading.js"></script>
