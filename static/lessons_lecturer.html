@@ -245,7 +245,7 @@ $('lockBtn').addEventListener('click', (e) => {
   location.href = '/?role=lecturer';
 });
 if (LECTURER_TOKEN) {
-  api('/lecturer/me', {}, true).then(() => { $('gateWrap').classList.add('hidden'); $('appWrap').classList.remove('hidden'); loadModules(); loadLessons(); }).catch(() => { sessionStorage.removeItem('lecturerToken'); LECTURER_TOKEN = null; location.replace('/?role=lecturer'); });
+  api('/lecturer/me', {}, true).then(async () => { $('gateWrap').classList.add('hidden'); $('appWrap').classList.remove('hidden'); await loadModules(); await loadLessons(); const params = new URLSearchParams(location.search); const moduleCode = params.get('module'); if (moduleCode && [...$('moduleCodeInput').options].some(option => option.value === moduleCode)) $('moduleCodeInput').value = moduleCode; const lessonId = params.get('lesson'); if (lessonId && /^\d+$/.test(lessonId)) selectLesson(lessonId); }).catch(() => { sessionStorage.removeItem('lecturerToken'); LECTURER_TOKEN = null; location.replace('/?role=lecturer'); });
 }
 
 // ---- Upload lesson -----------------------------------------------------

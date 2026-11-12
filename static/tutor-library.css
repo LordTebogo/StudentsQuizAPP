@@ -1,0 +1,12 @@
+#tutorQuizLibrary .library-item[href] { text-decoration:none; }
+#tutorQuizLibrary .library-heading h2 { font-size:clamp(1.6rem,3vw,2.2rem); }
+#tutorLibrarySearch { width:100%;max-width:650px;min-height:48px; }
+.tutor-module-actions { display:flex;flex-wrap:wrap;gap:9px;margin:16px 0; }
+.tutor-module-actions.hidden { display:none; }
+.tutor-module-actions .btn { margin:0; }
+#appWrap header.top nav { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
+.tutor-icon-link { display:inline-flex;align-items:center;justify-content:center;gap:4px;min-width:44px;min-height:44px;padding:8px 12px;border:1px solid #b7d6c8;border-radius:12px;background:#fff;color:#164e42;font:inherit;font-weight:700;text-decoration:none;cursor:pointer; }
+.tutor-icon-link:hover,.tutor-icon-link:focus-visible { background:#e9f5ee;outline:2px solid #087f70; }
+.tutor-unread { display:inline-grid;place-items:center;min-width:21px;height:21px;padding:0 4px;border-radius:20px;background:#b32934;color:#fff;font-size:.76rem; }
+.tutor-task-nav a { display:inline-flex;align-items:center;padding:10px 14px;color:inherit;text-decoration:none;font-weight:700; }
+.tutor-task-nav a:hover { text-decoration:underline; }
