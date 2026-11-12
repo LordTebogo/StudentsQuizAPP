@@ -32,29 +32,18 @@ test('tutor dashboard counts actual records and keeps tools inside main', async 
   } finally { w.close(); }
 });
 
-test('learner summary refreshes after modules and messages arrive', async () => {
+test('learner workspace no longer inserts the extra overview and navigation', async () => {
   const dom = new JSDOM(read('student.html'), { url: 'https://arounus.test/students', runScripts: 'outside-only', virtualConsole: new VirtualConsole() });
   const w = dom.window;
   try {
     w.sessionStorage.setItem('studentToken', 'test-only');
     w.fetch = async () => ({ ok: true, json: async () => ({}) });
     w.scrollTo = () => {};
-    const messages = w.document.createElement('div');
-    messages.id = 'studentMessagesList';
-    w.document.getElementById('appWrap').append(messages);
     w.eval(read('experience.js'));
-    w.document.getElementById('moduleList').innerHTML = '<a class="module-card"><strong>Maths</strong><span>2 quizzes</span></a><a class="module-card"><strong>Biology</strong><span>3 quizzes</span></a>';
-    // The conversation component exposes its total through this public handle.
-    messages._arounusChat = {count: 1};
-    messages.innerHTML = '<article class="chat-thread">One conversation</article>';
     await tick();
-    assert.equal(w.document.getElementById('learnerStatModules').textContent, '2');
-    assert.equal(w.document.getElementById('learnerStatQuizzes').textContent, '5');
-    assert.equal(w.document.getElementById('learnerStatMessages').textContent, '1');
-    assert.equal(w.document.getElementById('learnerStatMessages').nextElementSibling.textContent, 'Message');
-    const nav = w.document.querySelector('.workflow-nav');
-    assert.equal(nav.nextElementSibling.id, 'moduleCard');
-    assert.equal(w.document.querySelectorAll('.learner-tools-grid > section').length, 2);
+    assert.equal(w.document.querySelector('.learner-command-center'), null);
+    assert.equal(w.document.querySelector('.workflow-nav'), null);
+    assert.equal(w.document.querySelector('.learner-tools-grid'), null);
   } finally { w.close(); }
 });
 

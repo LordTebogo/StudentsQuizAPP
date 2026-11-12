@@ -264,8 +264,8 @@ def _learning_topic(value: str, required: bool = False) -> str:
     return topic
 
 def _assessment_type(value: str) -> str:
-    if value not in ("quiz", "test"):
-        raise HTTPException(status_code=400, detail="Choose Quiz or Test")
+    if value not in ("quiz", "test", "exam"):
+        raise HTTPException(status_code=400, detail="Choose Quiz, Test or Examination")
     return value
 
 
@@ -2743,7 +2743,8 @@ def list_student_quiz_modules(student: Student = Depends(require_student_account
         return []
     rows = (db.query(Quiz.module_code, func.count(Quiz.id).label("quiz_count"))
             .filter(Quiz.module_code.in_(assigned)).group_by(Quiz.module_code).order_by(Quiz.module_code.asc()).all())
-    return [{"module_code": code, "module_name": _module_name(code), "quiz_count": count} for code, count in rows]
+    counts = dict(rows)
+    return [{"module_code": code, "module_name": _module_name(code), "quiz_count": counts.get(code, 0)} for code in sorted(assigned) if code != AROUNUS_MODULE_CODE]
 
 
 @app.get("/student/lesson-modules")

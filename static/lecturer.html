@@ -98,7 +98,7 @@
       <div><label for="builderQuizTitle">Quiz title</label><input id="builderQuizTitle" type="text" maxlength="200" placeholder="e.g. Cell Biology: Week 1"></div>
       <div><label for="builderModuleCode">Assigned module</label><select id="builderModuleCode" disabled><option value="">Loading assigned modules…</option></select><button class="btn secondary hidden" id="retryBuilderModulesBtn" type="button">Retry loading modules</button></div>
       <div><label for="builderTopic">Topic</label><input id="builderTopic" type="text" maxlength="160" placeholder="e.g. DNA replication" required></div>
-      <div><label for="builderAssessmentType">Assessment</label><select id="builderAssessmentType"><option value="quiz">Topic quiz</option><option value="test">Module test (all topics)</option></select></div>
+      <div><label for="builderAssessmentType">Assessment</label><select id="builderAssessmentType"><option value="quiz">Topic quiz</option><option value="test">Module test (all topics)</option><option value="exam">Examination</option></select></div>
       <label class="fun-quiz-switch" for="builderIsFun"><input id="builderIsFun" type="checkbox"><span><strong>Make this a Fun Quiz</strong><small>One question at a time, spoken feedback, explanations and similar questions.</small></span></label>
       <div id="funQuizLevelField" class="hidden"><label for="builderFunLevel">Fun Quiz level</label><select id="builderFunLevel"><option value="starter">1 · Starter</option><option value="explorer">2 · Explorer</option><option value="challenger">3 · Challenger</option><option value="expert">4 · Expert</option><option value="genius">5 · Genius</option></select></div>
     </div>
@@ -121,7 +121,7 @@
       <label for="moduleCode">Subject</label>
       <select id="moduleCode"><option value="">Choose a module</option></select>
       <label for="uploadQuizTopic">Topic</label><input id="uploadQuizTopic" type="text" maxlength="160" placeholder="e.g. Algebra" required>
-      <label for="uploadAssessmentType">Assessment</label><select id="uploadAssessmentType"><option value="quiz">Topic quiz</option><option value="test">Module test (all topics)</option></select>
+      <label for="uploadAssessmentType">Assessment</label><select id="uploadAssessmentType"><option value="quiz">Topic quiz</option><option value="test">Module test (all topics)</option><option value="exam">Examination</option></select>
       <label for="quizFile">Quiz JSON file</label>
       <input type="file" id="quizFile" accept="application/json,.json">
       <label for="quizImages">Question images referenced by the JSON (optional)</label>
@@ -142,7 +142,7 @@
     <div id="tutorQuizItems" class="library-items"></div>
     <div class="library-detail hidden" id="tutorQuizDetail">
       <h3 id="tutorQuizDetailTitle">Selected quiz</h3><p class="detail-subtitle" id="tutorQuizDetailMeta"></p>
-      <div class="detail-grid"><div><label for="quizTopicCorrection">Topic</label><input id="quizTopicCorrection" type="text" maxlength="160" placeholder="e.g. DNA replication"></div><div><label for="quizAssessmentCorrection">Assessment</label><select id="quizAssessmentCorrection"><option value="quiz">Topic quiz</option><option value="test">Module test</option></select></div></div>
+      <div class="detail-grid"><div><label for="quizTopicCorrection">Topic</label><input id="quizTopicCorrection" type="text" maxlength="160" placeholder="e.g. DNA replication"></div><div><label for="quizAssessmentCorrection">Assessment</label><select id="quizAssessmentCorrection"><option value="quiz">Topic quiz</option><option value="test">Module test</option><option value="exam">Examination</option></select></div></div>
       <div class="detail-actions"><button class="btn secondary" id="saveQuizOrganizationBtn" type="button">Save topic and type</button><button class="btn" id="loadStudentsBtn" disabled>View submissions</button><button class="btn secondary" id="duplicateQuizBtn" type="button">Duplicate in builder</button></div>
       <details class="library-advanced"><summary>Move to another module</summary><label for="quizModuleCorrection">Assigned module</label><select id="quizModuleCorrection"></select><p class="muted" id="quizModuleHelp">A module can only change before a learner starts this quiz.</p><button class="btn secondary" id="correctQuizModuleBtn" type="button">Save module</button></details>
       <p class="muted" id="quizReviewStatus" aria-live="polite">Choose a quiz to see its options.</p>
@@ -461,7 +461,7 @@ function renderTutorQuizLibrary() {
     }).join('');
   } else {
     const matching = rows.filter(q => q.module_code === tutorLibraryModule && (tutorLibraryTopic === 'Tests' ? q.assessment_type === 'test' : q.assessment_type !== 'test' && (q.topic || 'Other topics') === tutorLibraryTopic));
-    items.innerHTML = matching.filter(q => !search || q.title.toLocaleLowerCase().includes(search)).map(q => `<button class="library-item" type="button" data-library-quiz="${q.id}" aria-current="${$('quizSelect').value === String(q.id) && !$('tutorQuizDetail').classList.contains('hidden')}"><span><strong>${escapeHtml(moduleDisplayTitle(q.title,q.module_code))}</strong><small>${q.is_fun ? `Fun Quiz · ${escapeHtml(q.fun_level)}` : q.assessment_type === 'test' ? 'Module test' : 'Topic quiz'}</small></span><span>Open →</span></button>`).join('');
+    items.innerHTML = matching.filter(q => !search || q.title.toLocaleLowerCase().includes(search)).map(q => `<button class="library-item" type="button" data-library-quiz="${q.id}" aria-current="${$('quizSelect').value === String(q.id) && !$('tutorQuizDetail').classList.contains('hidden')}"><span><strong>${escapeHtml(moduleDisplayTitle(q.title,q.module_code))}</strong><small>${q.is_fun ? `Fun Quiz · ${escapeHtml(q.fun_level)}` : q.assessment_type === 'exam' ? 'Examination' : q.assessment_type === 'test' ? 'Module test' : 'Topic quiz'}</small></span><span>Open →</span></button>`).join('');
   }
   if (!folders.children.length && !items.children.length) items.innerHTML = `<p class="muted">${search ? 'No matches. Try another search.' : 'Nothing in this folder yet.'}</p>`;
 }
