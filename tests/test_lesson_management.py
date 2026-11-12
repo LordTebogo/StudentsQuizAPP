@@ -82,6 +82,20 @@ class LessonManagementTest(unittest.TestCase):
         self.assertEqual(self.client.put(edit_path, headers=self.other_headers, json={"title":"Taken", "questions":[]}).status_code, 404)
         self.assertEqual(self.client.delete(f"/lecturer/lesson/{self.lesson_id}", headers=self.other_headers).status_code, 404)
 
+    def test_shared_subject_lists_tutors_and_counts_only_own_lesson_activity(self):
+        response = self.client.get('/student/module-tutors/BIO101', headers=self.student_headers)
+        self.assertEqual(response.status_code, 200)
+        tutors = {item['id']: item for item in response.json()}
+        self.assertIn(self.owner_id, tutors)
+        self.assertIn(self.other_id, tutors)
+        self.assertGreaterEqual(tutors[self.owner_id]['lesson_count'], 1)
+        self.assertEqual(self.client.post(f'/student/lessons/{self.lesson_id}/view', headers=self.student_headers).status_code, 200)
+        owner = self.client.get('/lecturer/learning-activity', headers=self.owner_headers).json()
+        other = self.client.get('/lecturer/learning-activity', headers=self.other_headers).json()
+        self.assertGreaterEqual(owner['enrolled_students'], 2)
+        self.assertGreaterEqual(owner['viewing_my_lessons'], 1)
+        self.assertEqual(other['viewing_my_lessons'], 0)
+
     def test_edit_questions_then_protect_submitted_answers(self):
         path = f"/lecturer/lesson/{self.lesson_id}/edit"
         current = self.client.get(path, headers=self.owner_headers)

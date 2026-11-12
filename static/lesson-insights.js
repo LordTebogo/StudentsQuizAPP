@@ -1,7 +1,7 @@
 (() => {
   const path = location.pathname;
-  const studentPage = path.endsWith('/lessons_student.html');
-  const lecturerPage = path.endsWith('/lessons_lecturer.html');
+  const studentPage = path.endsWith('/lessons_student.html') || path === '/students/lessons';
+  const lecturerPage = path.endsWith('/lessons_lecturer.html') || path === '/lecturers/lessons';
   if (!studentPage && !lecturerPage) return;
   const stylesheet = document.createElement('link'); stylesheet.rel='stylesheet'; stylesheet.href='/static/lesson-insights.css'; document.head.appendChild(stylesheet);
   const escapeText = value => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
@@ -18,6 +18,10 @@
       video.dataset.reportedLesson=String(currentLesson.lesson_id);
       try{await api(`/student/lessons/${currentLesson.lesson_id}/view`,{method:'POST'});}catch(_){video.dataset.reportedLesson='';}
     });
+    if(video) setInterval(() => {
+      if (video.paused || video.ended || document.hidden || !currentLesson?.lesson_id) return;
+      api(`/student/lessons/${currentLesson.lesson_id}/view?heartbeat=true`, {method:'POST'}).catch(() => {});
+    }, 60000);
     async function addStudentDownload(){
       if(!resultBox||resultBox.querySelector('[data-lesson-result-download]')||typeof currentLesson==='undefined'||!currentLesson)return;
       const studentId=document.getElementById('studentId')?.value.trim();if(!studentId)return;

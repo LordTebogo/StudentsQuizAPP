@@ -2763,6 +2763,19 @@ def list_student_quiz_modules(student: Student = Depends(require_student_account
     return [{"module_code": code, "module_name": _module_name(code), "quiz_count": counts.get(code, 0)} for code in sorted(assigned) if code != AROUNUS_MODULE_CODE]
 
 
+@app.get("/student/module-tutors/{module_code}")
+def student_module_tutors(module_code: str, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+    code = _require_student_module(student, module_code)
+    tutors = (db.query(Lecturer).join(LecturerModule)
+              .filter(LecturerModule.module_code == code, Lecturer.active.is_(True), Lecturer.approved.is_(True))
+              .order_by(Lecturer.full_name, Lecturer.id).all())
+    return [{"id": tutor.id, "full_name": tutor.full_name, "institution": tutor.institution or "",
+             "profile_image_url": tutor.profile_image_url,
+             "lesson_count": db.query(Lesson).filter(Lesson.module_code == code, Lesson.lecturer_id == tutor.id).count(),
+             "quiz_count": db.query(Quiz).filter(Quiz.module_code == code, Quiz.lecturer_id == tutor.id).count()}
+            for tutor in tutors]
+
+
 @app.get("/student/lesson-modules")
 def list_student_lesson_modules(student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
     assigned = _student_module_codes(student)
@@ -2811,6 +2824,7 @@ def list_student_quizzes_by_module(
             "id": quiz.id,
             "title": quiz.title,
             "module_code": quiz.module_code,
+            "lecturer_id": quiz.lecturer_id,
             "topic": quiz.topic or "",
             "assessment_type": quiz.assessment_type or "quiz",
             "is_fun": bool(quiz.is_fun),
@@ -3531,6 +3545,7 @@ def list_student_lessons(
             "title": lesson.title,
             "description": lesson.description,
             "module_code": lesson.module_code,
+            "lecturer_id": lesson.lecturer_id,
             "topic": lesson.topic or "",
             "created_at": lesson.created_at,
             "completed": submission is not None,
@@ -3619,7 +3634,7 @@ def delete_owned_lesson(lesson_id: int, lecturer: Lecturer = Depends(require_lec
 
 
 @app.post("/student/lessons/{lesson_id}/view")
-def record_lesson_view(lesson_id: int, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
+def record_lesson_view(lesson_id: int, heartbeat: bool = False, student: Student = Depends(require_student_account), db: Session = Depends(get_db)):
     lesson = db.query(Lesson).filter(Lesson.id == lesson_id).first()
     if not lesson:
         raise HTTPException(status_code=404, detail="Lesson not found")
@@ -3628,8 +3643,11 @@ def record_lesson_view(lesson_id: int, student: Student = Depends(require_studen
     view = db.query(LessonView).filter(LessonView.lesson_id == lesson_id, LessonView.student_account_id == student.id).first()
     if view:
         view.last_viewed_at = now
-        view.view_count = (view.view_count or 0) + 1
+        if not heartbeat:
+            view.view_count = (view.view_count or 0) + 1
     else:
+        if heartbeat:
+            return {"ok": True}
         view = LessonView(lesson_id=lesson_id, student_account_id=student.id, first_viewed_at=now, last_viewed_at=now, view_count=1)
         db.add(view)
     db.commit()
@@ -5365,6 +5383,22 @@ def lecturer_students(lecturer: Lecturer = Depends(require_lecturer_account), db
     rows = db.query(Student).join(StudentModule).filter(Student.approved.is_(True), Student.active.is_(True), StudentModule.module_code.in_(assigned)).distinct().order_by(Student.full_name).all()
     return [{"id": item.id, "full_name": item.full_name, "username": item.student_number, "student_number": item.student_number,
              "module_codes": [module.module_code for module in item.modules if module.module_code in assigned]} for item in rows]
+
+
+@app.get("/lecturer/learning-activity")
+def lecturer_learning_activity(lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db)):
+    assigned = {item.module_code for item in lecturer.modules}
+    enrolled = (db.query(func.count(func.distinct(Student.id))).join(StudentModule)
+                .filter(Student.active.is_(True), Student.approved.is_(True), StudentModule.module_code.in_(assigned))
+                .scalar() or 0) if assigned else 0
+    recent = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
+    viewing = (db.query(func.count(func.distinct(LessonView.student_account_id)))
+               .join(Lesson, Lesson.id == LessonView.lesson_id)
+               .join(Student, Student.id == LessonView.student_account_id)
+               .filter(Lesson.lecturer_id == lecturer.id, Lesson.module_code.in_(assigned),
+                       Student.active.is_(True), Student.approved.is_(True), LessonView.last_viewed_at >= recent)
+               .scalar() or 0) if assigned else 0
+    return {"enrolled_students": enrolled, "viewing_my_lessons": viewing, "viewing_window_minutes": 5}
 
 
 @app.get("/student/messages")

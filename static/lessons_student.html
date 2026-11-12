@@ -83,6 +83,7 @@
   <div class="card learning-library hidden" id="listCard">
     <button class="btn secondary" id="backToModulesBtn">&larr; Back to modules</button>
     <h2 id="listCardTitle">Choose a lesson</h2>
+    <label for="lessonTutorChoice">Tutor</label><select id="lessonTutorChoice"><option value="">All tutors</option></select>
     <div id="lessonList">Loading lessons…</div>
   </div>
 
@@ -248,6 +249,12 @@ async function loadLessonList(moduleCode) {
   try {
     const path = moduleCode ? `/student/lessons?module_code=${encodeURIComponent(moduleCode)}` : '/student/lessons';
     const lessons = await api(path);
+    const tutorChoice = $('lessonTutorChoice');
+    const tutors = moduleCode === 'AROUNUS' ? [] : await api(`/student/module-tutors/${encodeURIComponent(moduleCode)}`);
+    tutorChoice.parentElement.querySelector('label[for="lessonTutorChoice"]').classList.toggle('hidden', !tutors.length);
+    tutorChoice.classList.toggle('hidden', !tutors.length);
+    tutorChoice.innerHTML = '<option value="">All tutors</option>' + tutors.map(tutor => `<option value="${tutor.id}">${escapeHtml(tutor.full_name)} · ${tutor.lesson_count} lesson(s)</option>`).join('');
+    tutorChoice.onchange = () => renderByTutor();
     const guideLink = moduleCode === 'AROUNUS' ? '<a class="lesson-list-item" href="/learning/guide"><div class="lesson-list-title">How to use Arounus</div><p class="muted">Read the guide or print and save it as a document</p></a>' : '';
     if (!lessons.length) {
       box.innerHTML = guideLink + (moduleCode === 'AROUNUS' ? '<p class="muted">Video tutorials will appear here when the Arounus team publishes them.</p>' : '<p class="muted">No lessons in this module yet — check back soon.</p>');
@@ -263,8 +270,10 @@ async function loadLessonList(moduleCode) {
           <span>${progress}</span>
         </button>`;
     }).join('');
+    const renderByTutor = () => {
+    const visible = tutorChoice.value ? lessons.filter(lesson => String(lesson.lecturer_id) === tutorChoice.value) : lessons;
     const groups = new Map();
-    for (const lesson of lessons) { const topic = lesson.topic || 'Other topics'; if (!groups.has(topic)) groups.set(topic, []); groups.get(topic).push(lesson); }
+    for (const lesson of visible) { const topic = lesson.topic || 'Other topics'; if (!groups.has(topic)) groups.set(topic, []); groups.get(topic).push(lesson); }
     box.classList.remove('library-items'); box.classList.add('library-folder-grid');
     box.innerHTML = guideLink + [...groups.keys()].sort((a, b) => a.localeCompare(b)).map(topic => `<button class="library-folder" type="button" data-topic="${escapeHtml(topic)}"><span class="folder-mark" aria-hidden="true">▤</span><span><strong>${escapeHtml(topic)}</strong><small>${groups.get(topic).length} lesson${groups.get(topic).length === 1 ? '' : 's'} · Open folder →</small></span></button>`).join('');
     box.querySelectorAll('[data-topic]').forEach(button => button.addEventListener('click', () => {
@@ -277,6 +286,8 @@ async function loadLessonList(moduleCode) {
     box.querySelectorAll('[data-id]').forEach(el => {
       el.addEventListener('click', () => openLesson(el.dataset.id));
     });
+    };
+    renderByTutor();
   } catch (err) {
     box.innerHTML = `<div class="msg error">Could not load lessons: ${err.message}</div>`;
   }

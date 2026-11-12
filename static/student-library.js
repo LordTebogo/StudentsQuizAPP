@@ -1,21 +1,23 @@
 /* The learner library keeps subjects, assessment types and lessons together. */
 (() => {
   const byId = id => document.getElementById(id);
-  const state = {modules: [], quizzes: new Map(), lessons: new Map(), code: null, section: null};
+  const state = {modules: [], quizzes: new Map(), lessons: new Map(), tutors: new Map(), code: null, tutorId: null, section: null};
   const label = code => window.moduleLabel?.(code) || code;
   const clean = value => String(value || '').trim();
   const norm = value => clean(value).toLocaleLowerCase();
   const escape = value => escapeHtml(value);
   const folder = (title, detail, action, icon = '▤') => `<button class="library-folder" type="button" data-action="${action}"><span class="folder-mark" aria-hidden="true">${icon}</span><span><strong>${escape(title)}</strong><small>${escape(detail)}</small></span></button>`;
   const quizSection = q => q.assessment_type === 'exam' ? 'exams' : q.assessment_type === 'test' ? 'tests' : 'quizzes';
-  const queryLessons = code => (state.lessons.get(code) || []);
-  const queryQuizzes = code => (state.quizzes.get(code) || []);
-  const home = () => {byId('quizListCard').classList.add('hidden'); byId('moduleCard').classList.remove('hidden'); state.code = null; state.section = null;};
+  const queryLessons = code => (state.lessons.get(code) || []).filter(item => !state.tutorId || Number(item.lecturer_id) === state.tutorId);
+  const queryQuizzes = code => (state.quizzes.get(code) || []).filter(item => !state.tutorId || Number(item.lecturer_id) === state.tutorId);
+  const home = () => {byId('quizListCard').classList.add('hidden'); byId('moduleCard').classList.remove('hidden'); state.code = null; state.tutorId = null; state.section = null;};
   const show = (code, section = null, sub = null) => {
     state.code = code; state.section = section;
     byId('moduleCard').classList.add('hidden');
     byId('quizListCard').classList.remove('hidden');
-    byId('moduleLabel').textContent = label(code);
+    const tutors = state.tutors.get(code) || [];
+    const tutor = tutors.find(item => item.id === state.tutorId);
+    byId('moduleLabel').textContent = tutor ? `${label(code)} · ${tutor.full_name}` : label(code);
     byId('quizListMsg').textContent = '';
     byId('quizListCard').querySelector('h2').textContent = section ? ({quizzes:'Quizzes', tests:'Tests', exams:'Examinations', lessons:'Lessons'})[section] : label(code);
     const list = byId('quizList');
@@ -23,13 +25,19 @@
     const trail = byId('libraryTrail');
     if (trail) {
       trail.replaceChildren();
-      const steps = [{name:'My modules', open:home}, {name:label(code), open:() => show(code)}];
+      const steps = [{name:'My modules', open:home}, {name:label(code), open:() => {state.tutorId = null; show(code);}}];
+      if (tutor) steps.push({name:tutor.full_name, open:() => show(code)});
       if (section) steps.push({name:({quizzes:'Quizzes',tests:'Tests',exams:'Examinations',lessons:'Lessons'})[section], open:() => show(code,section)});
       if (sub) steps.push({name:section === 'quizzes' ? (sub === 'fun' ? 'MCQ fun quizzes' : 'Challenging quizzes') : sub});
       steps.forEach((step,index) => {if (index) trail.append(document.createTextNode(' › ')); if (step.open && index < steps.length-1) {const button = document.createElement('button'); button.type='button'; button.textContent=step.name; button.onclick=step.open; trail.append(button);} else {const current=document.createElement('strong'); current.textContent=step.name; trail.append(current);}});
     }
     byId('moduleLessonLink')?.remove();
     const quizzes = queryQuizzes(code), lessons = queryLessons(code);
+    if (!section && !state.tutorId && tutors.length && code !== 'AROUNUS') {
+      list.innerHTML = tutors.map(item => folder(item.full_name, `${item.lesson_count} lesson(s) · ${item.quiz_count} assessment(s)${item.institution ? ' · ' + item.institution : ''}`, `tutor-${item.id}`, '◉')).join('');
+      list.querySelectorAll('[data-action]').forEach(button => button.onclick = () => {state.tutorId = Number(button.dataset.action.slice(6)); show(code);});
+      return;
+    }
     if (!section) {
       const sections = [
         ['quizzes', 'Quizzes', `${quizzes.filter(q => quizSection(q) === 'quizzes').length} available · MCQ and challenging`, '✦'],
@@ -78,8 +86,8 @@
     for (const module of state.modules) {
       const code = module.module_code, name = module.module_name || label(code);
       if (norm(name + ' ' + code).includes(term)) hits.push({title:name, detail:'Module', open:() => show(code)});
-      for (const lesson of queryLessons(code)) if (norm(`${lesson.title} ${lesson.topic} ${name}`).includes(term)) hits.push({title:lesson.title, detail:`${name} · Lesson · ${lesson.topic || 'Other topics'}`, href:`/students/lessons?lesson=${encodeURIComponent(lesson.id)}`});
-      for (const quiz of queryQuizzes(code)) if (norm(`${quiz.title} ${quiz.topic} ${name}`).includes(term)) hits.push({title:quiz.title, detail:`${name} · ${quizSection(quiz)}`, open:() => loadQuiz(quiz.id)});
+      for (const lesson of state.lessons.get(code) || []) if (norm(`${lesson.title} ${lesson.topic} ${name}`).includes(term)) hits.push({title:lesson.title, detail:`${name} · Lesson · ${lesson.topic || 'Other topics'}`, href:`/students/lessons?lesson=${encodeURIComponent(lesson.id)}`});
+      for (const quiz of state.quizzes.get(code) || []) if (norm(`${quiz.title} ${quiz.topic} ${name}`).includes(term)) hits.push({title:quiz.title, detail:`${name} · ${quizSection(quiz)}`, open:() => loadQuiz(quiz.id)});
     }
     results.classList.remove('hidden');
     results.innerHTML = hits.slice(0, 30).map((hit,index) => `<${hit.href ? 'a' : 'button'} class="library-item" ${hit.href ? `href="${hit.href}"` : `type="button" data-hit="${index}"`}><span><strong>${escape(hit.title)}</strong><small>${escape(hit.detail)}</small></span><span>Open →</span></${hit.href ? 'a' : 'button'}>`).join('') || '<p class="muted">No match yet. Try a module, topic, or title.</p>';
@@ -91,17 +99,18 @@
       state.modules = await api('/student/quiz-modules', {}, true);
       const data = await Promise.all(state.modules.map(async module => {
         const code = module.module_code;
-        const [quizzes, lessons] = await Promise.all([
+        const [quizzes, lessons, tutors] = await Promise.all([
           api(`/student/quizzes/by-module/${encodeURIComponent(code)}`, {}, true).catch(() => []),
-          api(`/student/lessons?module_code=${encodeURIComponent(code)}`, {}, true).catch(() => [])
+          api(`/student/lessons?module_code=${encodeURIComponent(code)}`, {}, true).catch(() => []),
+          api(`/student/module-tutors/${encodeURIComponent(code)}`, {}, true).catch(() => [])
         ]);
-        return {code, quizzes, lessons};
+        return {code, quizzes, lessons, tutors};
       }));
-      data.forEach(({code, quizzes, lessons}) => {state.quizzes.set(code, quizzes); state.lessons.set(code, lessons)});
+      data.forEach(({code, quizzes, lessons, tutors}) => {state.quizzes.set(code, quizzes); state.lessons.set(code, lessons); state.tutors.set(code, tutors)});
       renderHome(); search();
     } catch (error) {byId('moduleList').innerHTML = `<p class="muted">Could not load modules: ${escape(error.message)}</p>`;}
   };
-  loadModule = async code => show(code);
+  loadModule = async code => {state.tutorId = null; show(code);};
   document.addEventListener('DOMContentLoaded', () => {
     if (location.hash === '#studentBottomMessages') {location.replace('/students/messages');return;}
     const app = byId('appWrap'); if (!app) return;

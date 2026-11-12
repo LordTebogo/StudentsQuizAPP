@@ -1,4 +1,4 @@
-const OFFLINE_VERSION = "v97";
+const OFFLINE_VERSION = "v98";
 const SHELL_CACHE = `nucleocampus-shell-${OFFLINE_VERSION}`;
 const DATA_CACHE = `nucleocampus-data-${OFFLINE_VERSION}`;
 const EXTERNAL_CACHE = `nucleocampus-external-${OFFLINE_VERSION}`;
@@ -29,7 +29,7 @@ const APP_SHELL = [
   "/static/market-sell.css?v=7",
   "/static/lesson-insights.css", "/static/quiz-builder.css",
   "/static/quiz-math-tools.css", "/static/mathlive-fonts.css?v=1",
-  "/static/experience.js?v=18", "/static/experience.js?v=19", "/static/student-library.css?v=1", "/static/student-library.js?v=2", "/static/tutor-library.css?v=1", "/static/tutor-library.js?v=2", "/static/profile-menu.css?v=1", "/static/profile-menu.js?v=1", "/static/messages-page.css?v=1", "/static/messages-page.js?v=1", "/static/loading.js", "/static/pwa.js?v=18",
+  "/static/experience.js?v=18", "/static/experience.js?v=19", "/static/student-library.css?v=1", "/static/student-library.js?v=3", "/static/tutor-library.css?v=1", "/static/tutor-library.js?v=2", "/static/profile-menu.css?v=1", "/static/profile-menu.js?v=1", "/static/messages-page.css?v=1", "/static/messages-page.js?v=1", "/static/loading.js", "/static/pwa.js?v=18",
   "/static/module-names.js?v=2", "/static/student-module-enrollment.js?v=2", "/static/module-picker.css?v=1", "/static/module-picker.js?v=1", "/static/username-suggestion.js", "/static/student-messaging.js?v=2",
   "/static/lecturer-messaging.js?v=2", "/static/admin-messaging.js?v=2",
   "/static/admin-market-ads.js?v=3", "/static/market-auth.js?v=1", "/static/market-sell.js?v=12", "/static/market-contact.js?v=4",
