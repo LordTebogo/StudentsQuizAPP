@@ -1,5 +1,5 @@
 (function () {
-  const names = Object.freeze({
+  const names = {
     SBIA011: 'Biochemistry Foundations',
     SBIA021: 'Introduction to Biochemistry',
     SBIA022: 'Biochemistry',
@@ -17,7 +17,27 @@
     ADVANCED_INDUSTRIAL_BIOTECHNOLOGY: 'Advanced Industrial Biotechnology',
     ENVIRONMENTAL_BIOTECHNOLOGY: 'Environmental Biotechnology',
     BIOLOGICAL_PRODUCTS_AND_PROCESSES: 'Biological Products and Processes',
-  });
+  };
+  const catalog = [];
+  for (const [short, title, grades] of [
+    ['NS','Natural Sciences',[8,9]], ['PS','Physical Sciences',[10,11,12]],
+    ['LS','Life Sciences',[10,11,12]], ['AS','Agricultural Sciences',[10,11,12]],
+    ['TS','Technical Sciences',[10,11,12]], ['GE','Geography',[8,9,10,11,12]],
+  ]) for (const grade of grades) {
+    const code = `ARU-HS-${short}${String(grade).padStart(2,'0')}`;
+    catalog.push({module_code:code,module_name:`${title} — Grade ${grade} (${code})`,group:grade<10?'High school · Grades 8–9':'High school · Grades 10–12'});
+  }
+  for (const [prefix, group, subjects] of [
+    ['ML','University · Molecular and Life Sciences', [['BCH','Biochemistry'],['BTN','Biotechnology'],['BOT','Botany'],['MIC','Microbiology'],['PHL','Physiology'],['ZOO','Zoology'],['GEN','Genetics'],['MOL','Molecular Biology']]],
+    ['PM','University · Physical and Mineral Sciences', [['CHE','Chemistry'],['PHY','Physics'],['GEM','Geology and Mining']]],
+    ['MC','University · Mathematical and Computer Sciences', [['COS','Computer Science'],['MAT','Mathematics'],['AMA','Applied Mathematics'],['STA','Statistics'],['OPR','Operations Research']]],
+  ]) for (const [short,title] of subjects) {
+    const code = `ARU-${prefix}-${short}`;
+    catalog.push({module_code:code,module_name:`${title} (${code})`,group});
+  }
+  catalog.forEach(item => { names[item.module_code] = item.module_name; });
+  Object.freeze(names);
+  window.moduleCatalog = Object.freeze(catalog);
 
   window.moduleNames = names;
   window.moduleName = code => names[code] || code || '';

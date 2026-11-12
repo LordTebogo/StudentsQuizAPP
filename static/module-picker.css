@@ -1,0 +1,13 @@
+[data-module-picker] { margin:14px 0; }
+.module-picker-title { display:block;margin-bottom:7px;font-weight:700; }
+.module-picker-title small { font-weight:400; }
+.module-picker-search { width:100%;min-height:44px;margin-bottom:8px; }
+.module-picker-list { max-height:310px;overflow:auto;padding:9px;border:1px solid #cde2d7;border-radius:12px;background:#fff;color:#173d35; }
+.module-picker-group { margin:7px 0 13px; }
+.module-picker-group h3 { margin:6px 7px;font-size:.92rem;color:#496b60; }
+.module-picker-option { display:flex;align-items:center;gap:9px;margin:0;padding:8px 7px;border-radius:8px;cursor:pointer; }
+.module-picker-option:hover { background:#eaf5ee; }
+.module-picker-option input { flex:0 0 auto;width:18px;height:18px;margin:0; }
+.module-picker-option span { font-size:.91rem; }
+.module-picker-option[hidden],.module-picker-group[hidden] { display:none; }
+.module-picker-count { display:block;margin-top:6px; }

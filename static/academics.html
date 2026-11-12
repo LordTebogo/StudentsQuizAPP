@@ -329,6 +329,7 @@
           ${field({ id: 'entryEmail', name: 'email', label: 'Email', type: 'email', autocomplete: 'email', required: true })}
           ${password}
           ${confirm}
+          <div data-module-picker></div>
           ${optionalDetails('Optional professional details', 'Professional bio')}
           <button class="btn" type="submit">Create tutor account</button>`;
       } else {
@@ -490,7 +491,7 @@
         const data = new FormData(form);
         let result;
         if (role === 'learner') result = await request('/students/register', { method: 'POST', body: data });
-        else if (role === 'lecturer') result = await request('/lecturers/register', { method: 'POST', body: data });
+        else if (role === 'lecturer') { data.set('module_codes', (window.ArounusModulePicker?.selected(form) || []).join(',')); result = await request('/lecturers/register', { method: 'POST', body: data }); }
         else result = await request('/marketing/landlords/register', { method: 'POST', body: data });
 
         if (result && result.token) {
@@ -678,6 +679,6 @@
     } catch (_) { belt.classList.add('hidden'); }
   })();
 </script>
-<link rel="stylesheet" href="/static/chat-ui.css?v=2"><script src="/static/chat-ui.js?v=2"></script><script src="/static/home-messaging.js?v=2"></script>
+<link rel="stylesheet" href="/static/module-picker.css?v=1"><script src="/static/module-picker.js?v=1"></script><link rel="stylesheet" href="/static/chat-ui.css?v=2"><script src="/static/chat-ui.js?v=2"></script><script src="/static/home-messaging.js?v=2"></script>
 </body>
 </html>

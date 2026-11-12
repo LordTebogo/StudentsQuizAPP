@@ -17,6 +17,7 @@
 <link rel="stylesheet" href="/static/learning-library.css?v=1">
 <link rel="stylesheet" href="/static/tutor-library.css?v=1">
 <link rel="stylesheet" href="/static/profile-menu.css?v=1"><script src="/static/profile-menu.js?v=1"></script>
+<link rel="stylesheet" href="/static/module-picker.css?v=1">
 <script type="module">import{MathfieldElement}from"https://cdn.jsdelivr.net/npm/mathlive@0.110.0/+esm";MathfieldElement.fontsDirectory="https://cdn.jsdelivr.net/npm/mathlive@0.110.0/fonts";</script>
 <style>
   .lecturer-workbench { display: grid; grid-template-columns: 1fr; gap: 22px; align-items: start; }
@@ -70,12 +71,13 @@
   </section>
   <section class="card hidden" id="lecturerRegisterCard">
     <h2>Create tutor profile</h2>
-    <p class="required-note">Create your account with the essentials. An administrator assigns the modules you may manage.</p>
+    <p class="required-note">Choose the subjects you teach now. You can add more than one.</p>
     <label for="registerName">Full name</label><input id="registerName" type="text" placeholder="Full name">
     <label for="registerEmail">Email</label><input id="registerEmail" type="email" autocomplete="email" placeholder="you@example.com">
     <label for="registerPassword">Password</label><input id="registerPassword" type="password" placeholder="At least 8 characters">
+    <div data-module-picker></div>
     <details><summary>Optional professional details</summary><label for="registerPhone">Phone (optional)</label><input id="registerPhone" type="tel" autocomplete="tel" placeholder="Phone number"><label for="registerInstitution">Institution (optional)</label><input id="registerInstitution" type="text" placeholder="School or university"><label for="registerBio">Professional bio (optional)</label><textarea id="registerBio" placeholder="Your tutoring background and subjects"></textarea><label for="registerImage">Profile image (optional)</label><input id="registerImage" type="file" accept="image/*"></details>
-    <button class="btn" id="registerBtn">Create tutor account</button><p class="auth-help">Your account opens immediately. Contact an administrator if your module assignment is not yet visible.</p><div id="registerMsg"></div>
+    <button class="btn" id="registerBtn">Create tutor account</button><p class="auth-help">Your account opens immediately with the subjects you choose.</p><div id="registerMsg"></div>
   </section>
 </div>
 
@@ -199,7 +201,7 @@
 
 <dialog class="quiz-preview-dialog" id="quizPreviewDialog"><div class="quiz-preview-head"><div><span class="kicker">Student view</span><h2 id="quizPreviewTitle">Quiz preview</h2><p class="muted" id="quizPreviewMeta"></p></div><button class="btn secondary" id="closeQuizPreviewBtn" type="button">Close</button></div><div id="quizPreviewQuestions"></div></dialog>
 
-<script src="/static/module-names.js"></script>
+<script src="/static/module-names.js?v=2"></script>
 <script>
 const $ = (id) => document.getElementById(id);
 let currentQuizId = null;
@@ -381,6 +383,7 @@ $('registerBtn').addEventListener('click', async () => {
   const data = new FormData();
   data.append('full_name', fullName); data.append('email', email); data.append('password', password);
   data.append('phone', $('registerPhone').value.trim()); data.append('institution', $('registerInstitution').value.trim()); data.append('bio', $('registerBio').value.trim());
+  data.append('module_codes', (window.ArounusModulePicker?.selected($('lecturerRegisterCard')) || []).join(','));
   if ($('registerImage').files.length) data.append('profile_image', $('registerImage').files[0]);
   $('registerBtn').disabled = true;
   try { const result = await api('/lecturers/register', { method: 'POST', body: data }); if (result.token) { LECTURER_TOKEN = result.token; sessionStorage.removeItem('studentToken'); sessionStorage.removeItem('landlordToken'); sessionStorage.setItem('activeRole', 'lecturer'); sessionStorage.setItem('lecturerToken', result.token); window.location.href = '/lecturers'; } else showMsg($('registerMsg'), result.message, 'ok'); }
@@ -787,6 +790,7 @@ $('downloadOnePdfBtn').addEventListener('click', () => {
 <script src="/static/experience.js?v=18"></script>
 <script src="/static/quiz-builder.js?v=17"></script>
 <script src="/static/tutor-library.js?v=2"></script>
+<script src="/static/module-picker.js?v=1"></script>
 <script src="/static/loading.js"></script>
 <script src="/static/pwa.js?v=18"></script>
 <footer class="site-footer arounus-footer" aria-label="Arounus footer">

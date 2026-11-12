@@ -1230,6 +1230,7 @@ def _active_src_party_exists(db: Session, party_name: str, exclude_id: Optional[
 
 
 AROUNUS_MODULE_CODE = "AROUNUS"
+from subject_catalog import SUBJECT_CATALOG, SUBJECT_NAMES
 
 # Codes remain stable so existing quizzes, lessons, and enrollments keep working.
 MODULE_NAMES = {
@@ -1251,6 +1252,7 @@ MODULE_NAMES = {
     "ENVIRONMENTAL_BIOTECHNOLOGY": "Environmental Biotechnology",
     "BIOLOGICAL_PRODUCTS_AND_PROCESSES": "Biological Products and Processes",
 }
+MODULE_NAMES.update(SUBJECT_NAMES)
 
 
 def _module_name(code: str) -> str:
@@ -1275,13 +1277,21 @@ def _available_module_catalog(db: Session) -> list[dict]:
     """Return all subjects known through teaching assignments or published content."""
     quiz_counts = dict(db.query(Quiz.module_code, func.count(Quiz.id)).group_by(Quiz.module_code).all())
     lesson_counts = dict(db.query(Lesson.module_code, func.count(Lesson.id)).group_by(Lesson.module_code).all())
-    codes = set(MODULE_NAMES) | set(quiz_counts) | set(lesson_counts) | {
+    codes = set(SUBJECT_NAMES) | set(quiz_counts) | set(lesson_counts) | {
         code for (code,) in db.query(LecturerModule.module_code).distinct().all()
     }
+    groups = {item["module_code"]: item["group"] for item in SUBJECT_CATALOG}
+    ordered_codes = [item["module_code"] for item in SUBJECT_CATALOG]
+    ordered_codes.extend(sorted(codes - set(SUBJECT_NAMES) - {AROUNUS_MODULE_CODE}))
     return [
-        {"module_code": code, "module_name": _module_name(code), "quiz_count": quiz_counts.get(code, 0), "lesson_count": lesson_counts.get(code, 0)}
-        for code in sorted(code for code in codes if code and code != AROUNUS_MODULE_CODE)
+        {"module_code": code, "module_name": _module_name(code), "group": groups.get(code, "Other assigned modules"), "quiz_count": quiz_counts.get(code, 0), "lesson_count": lesson_counts.get(code, 0)}
+        for code in ordered_codes if code
     ]
+
+
+@app.get("/module-catalog")
+def public_module_catalog():
+    return SUBJECT_CATALOG
 
 
 def _student_module_codes(student: Student) -> set[str]:
@@ -1385,6 +1395,7 @@ async def register_lecturer(
     phone: str = Form(""),
     institution: str = Form(""),
     bio: str = Form(""),
+    module_codes: str = Form(""),
     profile_image: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
@@ -1396,20 +1407,25 @@ async def register_lecturer(
     image_url = None
     if profile_image and profile_image.filename:
         image_url = upload_image_bytes(await profile_image.read(), folder="lecturer_profiles")
+    selected = sorted({code.strip().upper() for code in module_codes.split(",") if code.strip()})
+    if set(selected) - set(SUBJECT_NAMES):
+        raise HTTPException(status_code=400, detail="Choose modules from the Arounus subject list")
     lecturer = Lecturer(
         full_name=full_name.strip(), email=email, password_hash=_password_hash(password),
         phone=phone.strip(), institution=institution.strip(), bio=bio.strip(),
-        profile_image_url=image_url, approved=True, active=True, module_limit=1,
+        profile_image_url=image_url, approved=True, active=True, module_limit=max(1, len(selected)),
         created_at=datetime.utcnow().isoformat() + "Z",
     )
     db.add(lecturer)
+    db.flush()
+    _set_lecturer_modules(db, lecturer, selected, lecturer.module_limit)
     db.commit()
     db.refresh(lecturer)
     return {
         "ok": True,
         "token": _issue_lecturer_token(lecturer.id),
         "lecturer": _lecturer_profile(lecturer),
-        "message": "Profile created and activated. You are now signed in; module access appears once modules are assigned.",
+        "message": "Profile created and activated. Your chosen modules are ready in the tutor workspace.",
     }
 
 

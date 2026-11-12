@@ -14,6 +14,9 @@
 <link rel="stylesheet" href="/static/style.css">
 <style>
   .card { position: relative; }
+  .admin-subject-group { margin:12px 0; }
+  .admin-subject-group h3 { margin:0 0 7px;font-size:.9rem; }
+  .admin-subject-group button { margin:3px;min-height:38px;padding:6px 9px;font-size:.8rem; }
   .student-selected-banner { margin:14px 0; padding:13px 15px; border:1px solid rgba(103,232,249,.5); border-radius:13px; background:rgba(103,232,249,.1); }.student-selected-banner strong{display:block;color:#67e8f9}.student-selected-banner small{color:var(--muted)}.admin-list-item.student-selected{border-color:#67e8f9;box-shadow:0 0 0 1px rgba(103,232,249,.28)}
   .card-toggle { position:absolute; top:14px; right:14px; z-index:3; width:32px; height:32px; padding:0; border:1px solid rgba(103,232,249,.45); border-radius:50%; background:rgba(8,18,40,.88); color:#67e8f9; font:700 1.1rem/1 var(--font-mono, monospace); cursor:pointer; transition:transform .2s ease, background .2s ease; }
   .card-toggle:hover { transform:scale(1.08); background:rgba(103,232,249,.18); }
@@ -244,11 +247,28 @@
   </div></div>
 </main>
 
-<script src="/static/module-names.js"></script>
+<script src="/static/module-names.js?v=2"></script>
 <script>
 const displayModuleList = codes => (codes || []).map(moduleLabel).join(', ');
 const parseModuleList = value => value.split(',').map(name => name.trim()).filter(Boolean).map(name => Object.keys(moduleNames).find(code => moduleNames[code].toLowerCase() === name.toLowerCase()) || name);
-document.getElementById('moduleCatalogList').textContent = Object.values(moduleNames).join(' · ');
+const catalogList = document.getElementById('moduleCatalogList');
+let adminModuleTarget = 'lecturerModules';
+document.addEventListener('focusin', event => { if (['lecturerModules','studentModules','allAccountModules'].includes(event.target.id)) adminModuleTarget = event.target.id; });
+for (const groupName of [...new Set((window.moduleCatalog || []).map(item => item.group))]) {
+  const section = document.createElement('section'); section.className = 'admin-subject-group';
+  const heading = document.createElement('h3'); heading.textContent = groupName; section.append(heading);
+  for (const item of window.moduleCatalog.filter(row => row.group === groupName)) {
+    const button = document.createElement('button'); button.type = 'button'; button.className = 'btn secondary'; button.textContent = item.module_name; button.dataset.moduleCode = item.module_code; section.append(button);
+  }
+  catalogList.append(section);
+}
+catalogList.addEventListener('click', event => {
+  const code = event.target.closest('[data-module-code]')?.dataset.moduleCode, target = document.getElementById(adminModuleTarget);
+  if (!code || !target) return;
+  const existing = parseModuleList(target.value);
+  if (!existing.includes(code)) target.value = displayModuleList([...existing, code]);
+  target.focus();
+});
 const $ = id => document.getElementById(id);
 const studentModulesLabel = document.createElement('label'); studentModulesLabel.htmlFor = 'studentModules'; studentModulesLabel.textContent = 'Assigned modules / subjects';
 const studentModulesInput = document.createElement('input'); studentModulesInput.id = 'studentModules'; studentModulesInput.type = 'text'; studentModulesInput.placeholder = 'e.g. Biochemistry, Molecular Biology';

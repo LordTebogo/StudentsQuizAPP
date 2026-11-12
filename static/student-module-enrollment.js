@@ -14,6 +14,10 @@
       .module-enrollment-dialog h1 { margin: 13px 0 10px; color: #fff; font-size: clamp(1.8rem, 5vw, 3rem); line-height: 1.05; }
       .module-enrollment-intro { margin: 0 0 24px; color: #b9c6dd; font-size: 1rem; line-height: 1.65; }
       .module-enrollment-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 20px 0; }
+      .module-enrollment-search { width: 100%; min-height: 48px; margin: 0 0 8px; }
+      .module-enrollment-group { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+      .module-enrollment-group h2 { grid-column: 1 / -1; margin: 8px 0 0; color: #b9f2df; font-size: 1rem; }
+      .module-enrollment-group[hidden], .module-enrollment-option[hidden] { display: none; }
       .module-enrollment-option { position: relative; display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; min-height: 76px; margin: 0; padding: 14px 16px; border: 1px solid rgba(153, 174, 211, .24); border-radius: 18px; background: rgba(255, 255, 255, .045); cursor: pointer; transition: border-color .2s, background .2s, transform .2s; }
       .module-enrollment-option:hover { transform: translateY(-1px); border-color: rgba(99, 230, 212, .58); }
       .module-enrollment-option:has(input:checked) { border-color: #63e6d4; background: rgba(99, 230, 212, .11); box-shadow: inset 0 0 0 1px rgba(99, 230, 212, .16); }
@@ -27,7 +31,7 @@
       .module-enrollment-count { color: #9eacc4; font-size: .88rem; }
       .module-enrollment-message { min-height: 22px; margin-top: 12px; color: #ff9db1; font-size: .9rem; }
       .module-enrollment-empty { padding: 22px; border: 1px dashed rgba(153, 174, 211, .3); border-radius: 16px; color: #b9c6dd; text-align: center; }
-      @media (max-width: 620px) { .module-enrollment-overlay { padding: 0; align-items: end; } .module-enrollment-dialog { max-height: 92vh; border-radius: 26px 26px 0 0; padding: 26px 20px max(26px, env(safe-area-inset-bottom)); } .module-enrollment-list { grid-template-columns: 1fr; } .module-enrollment-actions { align-items: stretch; flex-direction: column; } .module-enrollment-save { width: 100%; } }
+      @media (max-width: 620px) { .module-enrollment-overlay { padding: 0; align-items: end; } .module-enrollment-dialog { max-height: 92vh; border-radius: 26px 26px 0 0; padding: 26px 20px max(26px, env(safe-area-inset-bottom)); } .module-enrollment-list,.module-enrollment-group { grid-template-columns: 1fr; } .module-enrollment-actions { align-items: stretch; flex-direction: column; } .module-enrollment-save { width: 100%; } }
     `;
     document.head.appendChild(style);
   }
@@ -53,6 +57,7 @@
         <span class="module-enrollment-kicker">First-time setup</span>
         <h1 id="moduleEnrollmentTitle">Choose your modules</h1>
         <p class="module-enrollment-intro">Select every subject you are currently studying. Your quiz and video lesson pages will then show only content for these modules.</p>
+        <label for="moduleEnrollmentSearch">Find your subject or grade</label><input id="moduleEnrollmentSearch" class="module-enrollment-search" type="search" placeholder="Search name, grade or code">
         <div class="module-enrollment-list" id="moduleEnrollmentList"></div>
         <div class="module-enrollment-note"><span aria-hidden="true">🔒</span><span>This is a one-time selection. To add another module later, contact your lecturer or administrator. The <a href="/learning/guide">AROUNUS app guide</a> is already included for you.</span></div>
         <div class="module-enrollment-actions"><button class="module-enrollment-save" type="button" disabled>Save my modules</button><span class="module-enrollment-count">Choose at least one module</span></div>
@@ -70,7 +75,12 @@
       list.className = 'module-enrollment-empty';
       list.textContent = 'No modules are available yet. Ask your lecturer or administrator to create your subjects.';
     } else {
-      modules.forEach(module => {
+      const groups = [...new Set(modules.map(module => module.group || 'Other assigned modules'))];
+      groups.forEach(groupName => {
+        const group = document.createElement('section');
+        group.className = 'module-enrollment-group';
+        const heading = document.createElement('h2'); heading.textContent = groupName; group.append(heading);
+        modules.filter(module => (module.group || 'Other assigned modules') === groupName).forEach(module => {
         const label = document.createElement('label');
         label.className = 'module-enrollment-option';
         const input = document.createElement('input');
@@ -83,7 +93,15 @@
         detail.textContent = `${module.quiz_count || 0} quizzes · ${module.lesson_count || 0} video lessons`;
         copy.append(title, detail);
         label.append(input, copy);
-        list.appendChild(label);
+        group.appendChild(label);
+        });
+        list.appendChild(group);
+      });
+      const search = overlay.querySelector('#moduleEnrollmentSearch');
+      search.addEventListener('input', () => {
+        const term = search.value.trim().toLocaleLowerCase();
+        list.querySelectorAll('.module-enrollment-option').forEach(option => option.hidden = !!term && !option.textContent.toLocaleLowerCase().includes(term));
+        list.querySelectorAll('.module-enrollment-group').forEach(group => group.hidden = ![...group.querySelectorAll('.module-enrollment-option')].some(option => !option.hidden));
       });
     }
 
