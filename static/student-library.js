@@ -79,8 +79,9 @@
     byId('moduleMsg').textContent = state.modules.length ? '' : 'Choose your subjects in your profile to see them here.';
   };
   const search = () => {
-    const term = norm(byId('learningSearch').value);
-    const results = byId('learningSearchResults');
+    const input = byId('learningSearch'), results = byId('learningSearchResults');
+    if (!input || !results) return;
+    const term = norm(input.value);
     if (!term) {results.classList.add('hidden'); results.innerHTML = ''; return;}
     const hits = [];
     for (const module of state.modules) {

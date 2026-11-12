@@ -68,3 +68,18 @@ test('student chooses a tutor before seeing that tutor’s subject content', asy
   assert.doesNotMatch(w.document.querySelector('#quizList').textContent,/Two/);
   w.close();
 });
+
+test('modules load when the account request finishes before search is mounted', async () => {
+  const dom = new JSDOM('<!doctype html><main id="appWrap"><header class="top"><nav><a id="lockBtn">Lock</a></nav></header><section id="studentProfileCard"></section><section id="moduleCard"><h2>Choose a module</h2><div id="moduleList"></div><div id="moduleMsg"></div></section><section id="quizListCard" class="hidden"><h2></h2><span id="moduleLabel"></span><div id="quizList"></div><div id="quizListMsg"></div><button id="backBtn"></button></section><section id="resultCard" class="hidden"></section></main>',{url:'https://arounus.com/students',runScripts:'outside-only'});
+  const w=dom.window;
+  w.escapeHtml=value=>String(value);
+  w.moduleLabel=code=>code;
+  w.api=async route=>route==='/student/quiz-modules'?[{module_code:'PHY',module_name:'Physics',quiz_count:0}]:[];
+  w.HTMLElement.prototype.scrollIntoView=()=>{};
+  w.eval(fs.readFileSync(path.join(__dirname,'../static/profile-menu.js'),'utf8'));
+  w.eval(fs.readFileSync(path.join(__dirname,'../static/student-library.js'),'utf8'));
+  await w.loadModules();
+  assert.match(w.document.querySelector('#moduleList').textContent,/Physics/);
+  assert.doesNotMatch(w.document.querySelector('#moduleList').textContent,/Could not load modules/);
+  w.close();
+});
