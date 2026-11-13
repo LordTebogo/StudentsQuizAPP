@@ -20,13 +20,14 @@
   const quizSection = q => q.assessment_type === 'exam' ? 'exams' : q.assessment_type === 'test' ? 'tests' : 'quizzes';
   const queryLessons = code => (state.lessons.get(code) || []).filter(item => !state.tutorId || Number(item.lecturer_id) === state.tutorId);
   const queryQuizzes = code => (state.quizzes.get(code) || []).filter(item => !state.tutorId || Number(item.lecturer_id) === state.tutorId);
-  const home = (push = true) => {byId('quizListCard').classList.add('hidden'); byId('moduleCard').classList.remove('hidden'); byId('learningSearchCard')?.classList.remove('hidden'); state.code = null; state.tutorId = null; state.section = null; state.sub = null; if(push)syncPath();};
+  const home = (push = true) => {byId('quizListCard').classList.add('hidden'); byId('moduleCard').classList.remove('hidden'); byId('learningSearchCard')?.classList.remove('hidden'); byId('androidAppCard')?.classList.remove('hidden'); state.code = null; state.tutorId = null; state.section = null; state.sub = null; if(push)syncPath();};
   const show = (code, section = null, sub = null, push = true) => {
     if (state.code && state.code !== code) state.tutorId = null;
     state.code = code; state.section = section; state.sub = sub;
     if (push) syncPath();
     byId('moduleCard').classList.add('hidden');
     byId('learningSearchCard')?.classList.add('hidden');
+    byId('androidAppCard')?.classList.add('hidden');
     byId('quizListCard').classList.remove('hidden');
     const tutors = state.tutors.get(code) || [];
     const tutor = tutors.find(item => item.id === state.tutorId);
@@ -184,7 +185,9 @@
     moduleCard.querySelector('h2').after(addLevel);
     const searchCard = document.createElement('section'); searchCard.id = 'learningSearchCard'; searchCard.className = 'card';
     searchCard.innerHTML = '<h2>Find a module or topic</h2><p class="muted">Search what is available in your modules, then choose a tutor for a topic.</p><div class="learning-search"><label for="learningSearch">Search modules and topics</label><input id="learningSearch" type="search" placeholder="Enter a module or topic" autocomplete="off"><label for="learningSearchType">Filter results</label><select id="learningSearchType"><option value="all">Modules and topics</option><option value="module">Modules</option><option value="topic">Topics and tutors</option></select><div id="learningSearchSuggestions" class="learning-suggestions hidden" aria-label="Search suggestions"></div><div id="learningSearchResults" class="library-items hidden" aria-live="polite"></div></div>';
-    app.append(searchCard);
+    app.querySelector('header.top').after(searchCard);
+    const androidCard = byId('androidAppCard');
+    if (androidCard) app.append(androidCard);
     byId('learningSearch').addEventListener('input', search);
     byId('learningSearch').addEventListener('focus', search);
     byId('learningSearchType').addEventListener('change', search);
