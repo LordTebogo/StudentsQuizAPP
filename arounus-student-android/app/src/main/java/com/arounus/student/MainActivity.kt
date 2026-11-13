@@ -64,7 +64,7 @@ class MainActivity : Activity() {
         topBar.addView(text("AROUNUS  /  STUDENT", 11f, cyan, true))
         pageTitle = text("", 25f, ink, true)
         topBar.addView(pageTitle, margin(6, 0)); root.addView(topBar)
-        val scroll = ScrollView(this).apply { fillViewport = true; isVerticalScrollBarEnabled = false }
+        val scroll = ScrollView(this).apply { isFillViewport = true; isVerticalScrollBarEnabled = false }
         body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), dp(30)) }
         scroll.addView(body); root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         status = text("", 13f, cyan).apply { setPadding(dp(22), 0, dp(22), dp(4)) }
