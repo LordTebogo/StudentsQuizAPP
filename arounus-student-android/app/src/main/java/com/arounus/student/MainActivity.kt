@@ -175,7 +175,9 @@ class MainActivity : Activity() {
         drawerLayer.addView(View(this).apply { setBackgroundColor(Color.argb(180, 1, 5, 15)); setOnClickListener { closeDrawer() } }, FrameLayout.LayoutParams(-1, -1))
         val width = minOf(dp(350), (resources.displayMetrics.widthPixels * 0.82f).toInt())
         val drawer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(22), dp(34), dp(22), dp(20)); background = shape(panel, 0) }
-        drawerLayer.addView(drawer, FrameLayout.LayoutParams(width, -1, Gravity.START))
+        val drawerScroll = ScrollView(this).apply { isVerticalScrollBarEnabled = false; background = shape(panel, 0) }
+        drawerScroll.addView(draw)
+        drawerLayer.addView(drawerScroll, FrameLayout.LayoutParams(width, -1, Gravity.START))
         drawer.addView(text("AROUNUS", 13f, cyan, true))
         drawer.addView(text(getSharedPreferences("student", MODE_PRIVATE).getString("full_name", "Student") ?: "Student", 24f, ink, true), margin(14, 4))
         drawer.addView(text("Your account", 14f, muted), margin(0, 20))
