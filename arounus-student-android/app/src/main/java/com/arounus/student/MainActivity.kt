@@ -1,14 +1,17 @@
 package com.arounus.student
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.content.Intent
 import android.net.Uri
 import android.graphics.Color
+import android.graphics.BitmapFactory
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.speech.tts.TextToSpeech
 import android.view.Gravity
 import android.view.View
 import android.widget.*
@@ -17,6 +20,7 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import java.util.Locale
 import kotlin.concurrent.thread
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -29,6 +33,13 @@ class MainActivity : Activity() {
     private lateinit var pageTitle: TextView
     private var token: String = ""
     private var screenVersion = 0
+    private var speech: TextToSpeech? = null
+    private var funMuted = false
+    private var funQuiz: JSONObject? = null
+    private val funAnswers = mutableMapOf<Int, String>()
+    private val funWrongAttempts = mutableMapOf<String, Int>()
+    private var funIndex = 0
+    private var funFeedback: LinearLayout? = null
     private val ink = Color.rgb(237, 244, 255)
     private val muted = Color.rgb(157, 174, 199)
     private val baseBlue = Color.rgb(8, 14, 31)
@@ -53,9 +64,12 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         token = getSharedPreferences("student", MODE_PRIVATE).getString("token", "") ?: ""
+        speech = TextToSpeech(this) { status -> if (status == TextToSpeech.SUCCESS) speech?.language = Locale.ENGLISH }
         showShell()
         if (token.isEmpty()) showLogin() else showHome()
     }
+
+    override fun onDestroy() { speech?.stop(); speech?.shutdown(); super.onDestroy() }
 
     private fun showShell() {
         window.statusBarColor = baseBlue; window.navigationBarColor = baseBlue
@@ -304,7 +318,9 @@ class MainActivity : Activity() {
             if (items.length() == 0) emptyState("◇", "Nothing published yet", "Your tutor's quizzes will appear here automatically once uploaded.")
             for (i in 0 until items.length()) {
                 val item = items.optJSONObject(i) ?: continue
-                featureCard("◇", item.optString("title", "Quiz"), "Tap to start") { showQuiz(item.optInt("id")) }
+                val isFun = item.optBoolean("is_fun")
+                val detail = if (isFun) "✦ Fun Quiz · ${item.optString("fun_level", "starter").replaceFirstChar { it.uppercase() }} level" else item.optString("topic", "Tap to start")
+                featureCard(if (isFun) "✦" else "◇", item.optString("title", "Quiz"), detail) { showQuiz(item.optInt("id")) }
             }
         }
     }
@@ -312,6 +328,19 @@ class MainActivity : Activity() {
     private fun showQuiz(id: Int) {
         heading("Quiz")
         request("/student/quiz/$id") { quiz ->
+            if (quiz.optBoolean("is_fun")) {
+                funQuiz = quiz; funAnswers.clear(); funWrongAttempts.clear()
+                request("/student/quiz/$id/draft") { draft ->
+                    val saved = draft.optJSONArray("answers") ?: JSONArray()
+                    for (i in 0 until saved.length()) {
+                        val item = saved.optJSONObject(i) ?: continue
+                        funAnswers[item.optInt("question_id")] = item.optString("answer")
+                    }
+                    val count = quiz.optJSONArray("questions")?.length() ?: 0
+                    renderFunQuestion(draft.optInt("current_question").coerceIn(0, (count - 1).coerceAtLeast(0)))
+                }
+                return@request
+            }
             heading(quiz.optString("title", "Quiz"))
             val answers = showQuestions(quiz.optJSONArray("questions") ?: JSONArray())
             button("Submit answers") {
@@ -321,6 +350,174 @@ class MainActivity : Activity() {
                 }
             }
         }
+    }
+
+    private fun speakFun(value: String) {
+        if (funMuted) return
+        speech?.apply { language = Locale.ENGLISH; speak(value, TextToSpeech.QUEUE_FLUSH, null, "fun_feedback") }
+    }
+
+    private fun funAction(container: LinearLayout, label: String, primary: Boolean = false, action: () -> Unit) {
+        container.addView(Button(this).apply {
+            text = label; textSize = 14f; isAllCaps = false; setTextColor(if (primary) baseBlue else ink)
+            background = shape(if (primary) cyan else panel, 15, if (primary) null else stroke)
+            backgroundTintList = null; setOnClickListener { action() }
+        }, margin(8, 0))
+    }
+
+    private fun remoteImage(raw: String, container: LinearLayout) {
+        if (raw.isBlank() || raw == "null") return
+        val address = if (raw.startsWith("/")) base + raw else raw
+        if (!address.startsWith("https://")) return
+        val version = screenVersion
+        val image = ImageView(this).apply { adjustViewBounds = true; maxHeight = dp(360); scaleType = ImageView.ScaleType.FIT_CENTER; contentDescription = "Question illustration" }
+        container.addView(image, margin(14, 4))
+        thread {
+            runCatching {
+                val connection = URL(address).openConnection().apply { connectTimeout = 12000; readTimeout = 12000 }
+                connection.getInputStream().use { BitmapFactory.decodeStream(it) }
+            }.getOrNull()?.let { bitmap -> runOnUiThread { if (screenVersion == version) image.setImageBitmap(bitmap) } }
+        }
+    }
+
+    private fun saveFunDraft(index: Int) {
+        val quiz = funQuiz ?: return
+        val id = quiz.optInt("quiz_id")
+        val answers = JSONArray()
+        funAnswers.forEach { (qid, answer) -> answers.put(JSONObject().put("question_id", qid).put("answer", answer)) }
+        val payload = JSONObject().put("answers", answers).put("current_question", index)
+        val currentToken = token
+        thread {
+            runCatching {
+                val connection = (URL("$base/student/quiz/$id/draft").openConnection() as HttpURLConnection).apply {
+                    requestMethod = "PUT"; connectTimeout = 12000; readTimeout = 12000; doOutput = true
+                    setRequestProperty("X-Student-Token", currentToken); setRequestProperty("Content-Type", "application/json")
+                }
+                connection.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
+                connection.inputStream.close(); connection.disconnect()
+            }
+        }
+    }
+
+    private fun renderFunQuestion(index: Int, similar: Boolean = false, similarData: JSONObject? = null) {
+        val quiz = funQuiz ?: return
+        val questions = quiz.optJSONArray("questions") ?: JSONArray()
+        if (index >= questions.length()) { showFunFinish(); return }
+        val question = questions.optJSONObject(index) ?: return
+        funIndex = index
+        heading(quiz.optString("title", "Fun Quiz"))
+        val level = quiz.optString("fun_level", "starter").replaceFirstChar { it.uppercase() }
+        val intro = card().apply { background = gradient() }
+        intro.addView(text("✦  FUN QUIZ  /  $level", 12f, cyan, true))
+        intro.addView(text(if (similar) "Try a similar question" else "Question ${index + 1} of ${questions.length()}", 22f, ink, true), margin(8, 4))
+        val progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            max = questions.length(); this.progress = index; progressTintList = android.content.res.ColorStateList.valueOf(cyan)
+            progressBackgroundTintList = android.content.res.ColorStateList.valueOf(stroke)
+        }
+        intro.addView(progress, margin(12, 0))
+        val readingTitle = question.optString("reading_title")
+        val readingText = question.optString("reading_text")
+        if (!similar && (readingTitle.isNotBlank() || readingText.isNotBlank() || question.optString("reading_image_url").isNotBlank())) {
+            val reading = card()
+            reading.addView(text(readingTitle.ifBlank { "Read before you answer" }, 17f, violet, true))
+            if (readingText.isNotBlank()) reading.addView(text(readingText, 15f, ink), margin(10, 0))
+            remoteImage(question.optString("reading_image_url"), reading)
+        }
+        val stage = card()
+        stage.addView(text(if (similar) similarData?.optString("similar_question") ?: "" else question.optString("question"), 21f, ink, true))
+        if (!similar) remoteImage(question.optString("image_url"), stage)
+        val options = if (similar) similarData?.optJSONArray("similar_options") ?: JSONArray() else question.optJSONArray("options") ?: JSONArray()
+        val answer: () -> String
+        if (question.optString("type") == "mcq") {
+            val group = RadioGroup(this)
+            for (j in 0 until options.length()) {
+                val value = options.optString(j)
+                group.addView(RadioButton(this).apply {
+                    text = value; id = View.generateViewId(); setTextColor(ink); textSize = 16f
+                    buttonTintList = android.content.res.ColorStateList.valueOf(cyan)
+                    setPadding(dp(12), dp(12), dp(12), dp(12)); background = shape(panel, 12, stroke)
+                    val saved = funAnswers[question.optInt("question_id")]
+                    if (!similar && saved == value) isChecked = true
+                }, margin(8, 0))
+            }
+            stage.addView(group, margin(14, 0))
+            answer = { group.findViewById<RadioButton>(group.checkedRadioButtonId)?.text?.toString() ?: "" }
+        } else {
+            val input = EditText(this).apply {
+                hint = "Type your answer"; setHintTextColor(muted); setTextColor(ink); textSize = 16f
+                setSingleLine(true); setPadding(dp(16), dp(14), dp(16), dp(14)); background = shape(panel, 15, stroke)
+                if (!similar) setText(funAnswers[question.optInt("question_id")] ?: "")
+            }
+            stage.addView(input, margin(14, 0))
+            answer = { input.text.toString().trim() }
+        }
+        funFeedback = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        button("Check my answer") {
+            val value = answer()
+            if (value.isBlank()) { message("Choose or enter an answer first."); return@button }
+            val qid = question.optInt("question_id")
+            request("/student/fun-quiz/${quiz.optInt("quiz_id")}/question/$qid/check", "POST", JSONObject().put("answer", value).put("similar", similar)) { result ->
+                if (!similar) { funAnswers[qid] = value; saveFunDraft(index) }
+                val key = "$qid:$similar"
+                if (result.optBoolean("correct")) {
+                    funWrongAttempts.remove(key); speakFun(listOf("Good!", "Excellent!", "Brilliant!", "Well done!")[index % 4])
+                    funFeedback?.removeAllViews()
+                    funFeedback?.addView(text("✦  Correct!", 19f, cyan, true), margin(14, 2))
+                    funFeedback?.let { funAction(it, if (index == questions.length() - 1) "Finish Fun Quiz" else "Next question", true) { renderFunQuestion(index + 1) } }
+                } else {
+                    val attempts = (funWrongAttempts[key] ?: 0) + 1; funWrongAttempts[key] = attempts
+                    speakFun("Try again")
+                    funFeedback?.removeAllViews()
+                    funFeedback?.addView(text("Not quite yet. Try again or view the explanation.", 16f, Color.rgb(255, 197, 112)), margin(14, 4))
+                    funFeedback?.let { area ->
+                        funAction(area, "Try again") { renderFunQuestion(index, similar, similarData) }
+                        funAction(area, "View correct answer") { revealFunAnswer(quiz, question, index, similar) }
+                        if (attempts >= 2) funAction(area, "Continue") { renderFunQuestion(index + 1) }
+                    }
+                }
+            }
+        }
+        body.addView(funFeedback)
+        secondaryButton(if (funMuted) "Turn sound on" else "Turn sound off") {
+            funMuted = !funMuted; renderFunQuestion(index, similar, similarData)
+        }
+        secondaryButton("Pause and continue later") { saveFunDraft(index); showQuizModules() }
+        if (!similar) saveFunDraft(index)
+    }
+
+    private fun revealFunAnswer(quiz: JSONObject, question: JSONObject, index: Int, similar: Boolean) {
+        val qid = question.optInt("question_id")
+        val suffix = if (similar) "?similar=true" else ""
+        request("/student/fun-quiz/${quiz.optInt("quiz_id")}/question/$qid/answer$suffix") { detail ->
+            funFeedback?.removeAllViews()
+            val area = funFeedback ?: return@request
+            area.addView(text("Correct answer: ${detail.optString("correct_answer")}", 17f, cyan, true), margin(16, 4))
+            area.addView(text(detail.optString("explanation"), 15f, ink), margin(4, 8))
+            if (detail.optBoolean("has_similar")) funAction(area, "Try a similar question", true) { renderFunQuestion(index, true, detail) }
+            funAction(area, "Continue") { renderFunQuestion(index + 1) }
+        }
+    }
+
+    private fun showFunFinish() {
+        val quiz = funQuiz ?: return
+        heading("Fun Quiz complete")
+        emptyState("✦", "Great work!", "You have reached the end of this level. Submit to save your result.")
+        button("Submit my result") {
+            AlertDialog.Builder(this).setTitle("Submit Fun Quiz?").setMessage("Your answers will be sent for marking.")
+                .setNegativeButton("Keep reviewing", null).setPositiveButton("Submit") { _, _ ->
+                    request("/quiz/${quiz.optInt("quiz_id")}/submit", "POST", submission((0 until (quiz.optJSONArray("questions")?.length() ?: 0)).mapNotNull { i ->
+                        val qid = quiz.optJSONArray("questions")?.optJSONObject(i)?.optInt("question_id") ?: return@mapNotNull null
+                        qid to { funAnswers[qid] ?: "" }
+                    })) { result ->
+                        heading("Result saved")
+                        emptyState("✦", "${result.optString("auto_marked_score")} / ${result.optString("max_score")}", "Well done for completing this Fun Quiz level!")
+                        button("Back to quizzes") { showQuizModules() }
+                        val id = quiz.optInt("quiz_id")
+                        thread { runCatching { (URL("$base/student/quiz/$id/draft").openConnection() as HttpURLConnection).apply { requestMethod = "DELETE"; setRequestProperty("X-Student-Token", token) }.inputStream.close() } }
+                    }
+                }.show()
+        }
+        secondaryButton("Back to quizzes") { saveFunDraft(funIndex); showQuizModules() }
     }
 
     private fun showLessons() {
