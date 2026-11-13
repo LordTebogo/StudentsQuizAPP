@@ -129,6 +129,12 @@ class MainActivity : Activity() {
         }, margin(8, 2))
     }
     private fun line(value: String) { body.addView(text(value, 16f, muted).apply { setPadding(dp(2), dp(10), dp(2), dp(10)) }) }
+    private fun emptyState(symbol: String, title: String, detail: String) {
+        val view = card().apply { gravity = Gravity.CENTER; setPadding(dp(26), dp(34), dp(26), dp(34)) }
+        view.addView(text(symbol, 34f, cyan, true).apply { gravity = Gravity.CENTER })
+        view.addView(text(title, 20f, ink, true).apply { gravity = Gravity.CENTER }, margin(12, 4))
+        view.addView(text(detail, 15f, muted).apply { gravity = Gravity.CENTER })
+    }
     private fun featureCard(symbol: String, title: String, detail: String, action: () -> Unit) {
         val view = card().apply { setOnClickListener { action() }; isClickable = true }
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
@@ -282,7 +288,7 @@ class MainActivity : Activity() {
         heading("Quizzes")
         request("/student/quiz-modules") { data ->
             val items = data.optJSONArray("items") ?: JSONArray()
-            if (items.length() == 0) line("No quizzes yet. Quizzes for your modules will appear here when a tutor uploads them.")
+            if (items.length() == 0) emptyState("◇", "No quizzes yet", "Quizzes for your modules will appear here when a tutor publishes them.")
             for (i in 0 until items.length()) {
                 val item = items.optJSONObject(i) ?: continue
                 val code = item.optString("module_code")
@@ -295,7 +301,7 @@ class MainActivity : Activity() {
         heading("Quizzes · $code")
         request("/student/quizzes/by-module/${Uri.encode(code)}") { data ->
             val items = data.optJSONArray("items") ?: JSONArray()
-            if (items.length() == 0) line("No quizzes here yet. Check back when your tutor publishes one.")
+            if (items.length() == 0) emptyState("◇", "Nothing published yet", "Your tutor's quizzes will appear here automatically once uploaded.")
             for (i in 0 until items.length()) {
                 val item = items.optJSONObject(i) ?: continue
                 featureCard("◇", item.optString("title", "Quiz"), "Tap to start") { showQuiz(item.optInt("id")) }
@@ -321,7 +327,7 @@ class MainActivity : Activity() {
         heading("Lessons")
         request("/student/lessons") { data ->
             val items = data.optJSONArray("items") ?: JSONArray()
-            if (items.length() == 0) line("No lessons available for your modules.")
+            if (items.length() == 0) emptyState("▶", "No lessons yet", "Lessons for your modules will appear here when they are available.")
             for (i in 0 until items.length()) {
                 val item = items.optJSONObject(i) ?: continue
                 featureCard("▶", item.optString("title"), item.optString("module_code")) { showLesson(item.optInt("id")) }
@@ -388,7 +394,7 @@ class MainActivity : Activity() {
         heading("Messages")
         request("/student/messages") { data ->
             val items = data.optJSONArray("items") ?: JSONArray()
-            if (items.length() == 0) line("No messages yet.")
+            if (items.length() == 0) emptyState("✉", "No messages yet", "Start a conversation with a tutor or administrator below.")
             for (i in 0 until items.length()) {
                 val item = items.optJSONObject(i) ?: continue
                 line("${item.optString("peer_name", "Conversation")}: ${item.optString("content")}\n${item.optString("created_at")}")
@@ -462,7 +468,7 @@ class MainActivity : Activity() {
         heading("My results")
         request("/results/${Uri.encode(studentNumber)}") { data ->
             val items = data.optJSONArray("items") ?: JSONArray()
-            if (items.length() == 0) line("No results yet.")
+            if (items.length() == 0) emptyState("◎", "No results yet", "Your scores will appear here after you complete a quiz or lesson.")
             for (i in 0 until items.length()) {
                 val item = items.optJSONObject(i) ?: continue
                 line("${item.optString("quiz_title")} · ${item.optString("total_score")} / ${item.optString("max_score")}")
