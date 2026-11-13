@@ -151,6 +151,7 @@ class MainActivity : Activity() {
             button("Choose modules") { showModules() }
             button("Take a quiz") { showQuizModules() }
             button("Community posts") { showPosts() }
+            button("Request account deletion") { showDeletionRequest() }
             body.addView(Button(this).apply { text = "Sign out"; setOnClickListener {
                 token = ""; getSharedPreferences("student", MODE_PRIVATE).edit().clear().apply(); showLogin()
             } })
@@ -329,6 +330,24 @@ class MainActivity : Activity() {
             }
         }
         button("Back to messages") { showMessages() }
+    }
+
+    private fun showDeletionRequest() {
+        heading("Request account deletion")
+        line("You can ask Arounus to delete your student account and associated data. Some academic records may need to be retained for legal or operational reasons.")
+        button("Write deletion request to administrator") {
+            heading("Request account deletion")
+            val content = field("Your request").apply { setText("Please delete my Arounus Student account and associated data. Please confirm what will be deleted and whether any records must be retained.") }
+            button("Send deletion request") {
+                request("/student/messages", "POST", JSONObject().put("recipient_type", "admin").put("recipient_id", 0).put("content", content.text.toString())) {
+                    heading("Request sent")
+                    line("Your request was sent to the Arounus administrator.")
+                    button("Back to home") { showHome() }
+                }
+            }
+            button("Cancel") { showHome() }
+        }
+        button("Back to home") { showHome() }
     }
 
     private fun showPosts() {
