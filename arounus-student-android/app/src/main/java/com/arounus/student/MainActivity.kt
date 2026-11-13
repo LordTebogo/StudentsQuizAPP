@@ -3,6 +3,7 @@ package com.arounus.student
 import android.app.Activity
 import android.app.AlertDialog
 import android.os.Bundle
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.content.Intent
@@ -14,13 +15,18 @@ import android.graphics.drawable.GradientDrawable
 import android.speech.tts.TextToSpeech
 import android.view.Gravity
 import android.view.View
+import android.window.OnBackInvokedCallback
+import android.window.OnBackInvokedDispatcher
 import android.widget.*
+import android.text.Editable
+import android.text.TextWatcher
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 import java.util.Locale
+import java.util.ArrayDeque
 import java.util.concurrent.Executors
 import kotlin.concurrent.thread
 import java.util.concurrent.atomic.AtomicBoolean
@@ -32,6 +38,14 @@ class MainActivity : Activity() {
     private lateinit var topBar: LinearLayout
     private lateinit var bottomBar: LinearLayout
     private lateinit var pageTitle: TextView
+    private lateinit var drawerLayer: FrameLayout
+    private lateinit var pageScroll: ScrollView
+    private data class Route(val key: String, val render: () -> Unit)
+    private val routeHistory = ArrayDeque<Route>()
+    private var currentRoute: Route? = null
+    private var restoringRoute = false
+    private var similarQuestionOpen = false
+    private var backCallback: OnBackInvokedCallback? = null
     private var token: String = ""
     private var screenVersion = 0
     private var speech: TextToSpeech? = null
@@ -68,21 +82,62 @@ class MainActivity : Activity() {
         token = getSharedPreferences("student", MODE_PRIVATE).getString("token", "") ?: ""
         speech = TextToSpeech(this) { status -> if (status == TextToSpeech.SUCCESS) speech?.language = Locale.ENGLISH }
         showShell()
+        if (Build.VERSION.SDK_INT >= 33) {
+            backCallback = OnBackInvokedCallback { handleBack() }
+            onBackInvokedDispatcher.registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT, backCallback!!)
+        }
         if (token.isEmpty()) showLogin() else showHome()
     }
 
-    override fun onDestroy() { speech?.stop(); speech?.shutdown(); draftExecutor.shutdown(); super.onDestroy() }
+    override fun onDestroy() {
+        if (Build.VERSION.SDK_INT >= 33) backCallback?.let { onBackInvokedDispatcher.unregisterOnBackInvokedCallback(it) }
+        speech?.stop(); speech?.shutdown(); draftExecutor.shutdown(); super.onDestroy()
+    }
+
+    @Deprecated("Handled for older Android versions")
+    override fun onBackPressed() { handleBack() }
+
+    private fun enterRoute(key: String, render: () -> Unit) {
+        if (key == "home" || key == "login") routeHistory.clear()
+        else if (!restoringRoute && currentRoute?.key != key) currentRoute?.let {
+            routeHistory.addLast(it); if (routeHistory.size > 40) routeHistory.removeFirst()
+        }
+        currentRoute = Route(key, render)
+        pageScroll.scrollTo(0, 0)
+    }
+
+    private fun handleBack() {
+        if (drawerLayer.visibility == View.VISIBLE) { closeDrawer(); return }
+        if (similarQuestionOpen && currentRoute?.key?.startsWith("quiz:") == true) {
+            similarQuestionOpen = false; renderFunQuestion(funIndex); return
+        }
+        if (currentRoute?.key == "home" || currentRoute?.key == "login") {
+            AlertDialog.Builder(this).setTitle("Exit Arounus Student?")
+                .setMessage("Are you sure you want to leave the app?")
+                .setNegativeButton("Stay", null).setPositiveButton("Exit") { _, _ -> finish() }.show()
+            return
+        }
+        val previous = if (routeHistory.isEmpty()) null else routeHistory.removeLast()
+        if (previous == null) { showHome(); return }
+        restoringRoute = true
+        try { currentRoute = previous; previous.render() } finally { restoringRoute = false }
+    }
 
     private fun showShell() {
         window.statusBarColor = baseBlue; window.navigationBarColor = baseBlue
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(baseBlue) }
-        topBar = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(22), dp(18), dp(22), dp(10)) }
-        topBar.addView(text("AROUNUS  /  STUDENT", 11f, cyan, true))
-        pageTitle = text("", 25f, ink, true)
-        topBar.addView(pageTitle, margin(6, 0)); root.addView(topBar)
-        val scroll = ScrollView(this).apply { isFillViewport = true; isVerticalScrollBarEnabled = false }
+        val frame = FrameLayout(this).apply { setBackgroundColor(baseBlue) }
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        topBar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(12), dp(14), dp(12), dp(8)) }
+        val menu = text("☰", 26f, cyan).apply { gravity = Gravity.CENTER; contentDescription = "Open account menu"; setOnClickListener { openDrawer() } }
+        topBar.addView(menu, LinearLayout.LayoutParams(dp(48), dp(48)))
+        pageTitle = text("", 24f, ink, true)
+        topBar.addView(pageTitle, LinearLayout.LayoutParams(0, -2, 1f))
+        val search = text("⌕", 32f, cyan).apply { gravity = Gravity.CENTER; contentDescription = "Search modules and topics"; setOnClickListener { showSearch() } }
+        topBar.addView(search, LinearLayout.LayoutParams(dp(48), dp(48)))
+        root.addView(topBar)
+        pageScroll = ScrollView(this).apply { isFillViewport = true; isVerticalScrollBarEnabled = false }
         body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), dp(30)) }
-        scroll.addView(body); root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        pageScroll.addView(body); root.addView(pageScroll, LinearLayout.LayoutParams(-1, 0, 1f))
         status = text("", 13f, cyan).apply { setPadding(dp(22), 0, dp(22), dp(4)) }
         root.addView(status)
         bottomBar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(dp(8), dp(8), dp(8), dp(10)); background = shape(panel, 20, stroke) }
@@ -94,7 +149,7 @@ class MainActivity : Activity() {
             tab.setOnClickListener {
                 when (label) {
                     "Home" -> showHome()
-                    "Modules" -> showModules()
+                    "Modules" -> showQuizModules()
                     "Lessons" -> showLessons()
                     "Messages" -> showMessages()
                     "Market" -> startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(base)))
@@ -102,7 +157,35 @@ class MainActivity : Activity() {
             }
             bottomBar.addView(tab, LinearLayout.LayoutParams(0, dp(55), 1f))
         }
-        root.addView(bottomBar); setContentView(root)
+        root.addView(bottomBar)
+        frame.addView(root, FrameLayout.LayoutParams(-1, -1))
+        drawerLayer = FrameLayout(this).apply { visibility = View.GONE }
+        frame.addView(drawerLayer, FrameLayout.LayoutParams(-1, -1))
+        setContentView(frame)
+    }
+
+    private fun closeDrawer() { drawerLayer.visibility = View.GONE; drawerLayer.removeAllViews() }
+    private fun openDrawer() {
+        if (token.isEmpty()) return
+        drawerLayer.removeAllViews()
+        drawerLayer.addView(View(this).apply { setBackgroundColor(Color.argb(180, 1, 5, 15)); setOnClickListener { closeDrawer() } }, FrameLayout.LayoutParams(-1, -1))
+        val width = minOf(dp(350), (resources.displayMetrics.widthPixels * 0.82f).toInt())
+        val drawer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(22), dp(34), dp(22), dp(20)); background = shape(panel, 0) }
+        drawerLayer.addView(drawer, FrameLayout.LayoutParams(width, -1, Gravity.START))
+        drawer.addView(text("AROUNUS", 13f, cyan, true))
+        drawer.addView(text(getSharedPreferences("student", MODE_PRIVATE).getString("full_name", "Student") ?: "Student", 24f, ink, true), margin(14, 4))
+        drawer.addView(text("Your account", 14f, muted), margin(0, 20))
+        fun entry(symbol: String, label: String, action: () -> Unit) {
+            drawer.addView(text("$symbol    $label", 17f, ink).apply { setPadding(dp(10), dp(17), dp(10), dp(17)); setOnClickListener { closeDrawer(); action() } }, margin(4, 0))
+        }
+        entry("◎", "My profile") { showAccount() }
+        entry("▦", "Manage modules") { showModules() }
+        entry("✦", "My results") { showResults(getSharedPreferences("student", MODE_PRIVATE).getString("student_number", "") ?: "") }
+        entry("◉", "Community posts") { showPosts() }
+        entry("✉", "Messages") { showMessages() }
+        entry("◇", "Request account deletion") { showDeletionRequest() }
+        entry("↪", "Sign out") { token = ""; getSharedPreferences("student", MODE_PRIVATE).edit().clear().apply(); showLogin() }
+        drawerLayer.visibility = View.VISIBLE
     }
 
     private fun heading(value: String) {
@@ -116,8 +199,6 @@ class MainActivity : Activity() {
             body.addView(text("AROUNUS", 13f, cyan, true), margin(0, 4))
             body.addView(text(value, 32f, ink, true), margin(0, 8))
             body.addView(text("Your learning universe starts here.", 16f, muted), margin(0, 24))
-        } else {
-            body.addView(text("LEARN  •  GROW  •  GO BEYOND", 11f, violet, true), margin(4, 8))
         }
     }
     private fun field(hintText: String, password: Boolean = false): EditText = EditText(this).also {
@@ -160,7 +241,66 @@ class MainActivity : Activity() {
         row.addView(copy, LinearLayout.LayoutParams(0, -2, 1f)); row.addView(text("›", 28f, cyan))
         view.addView(row)
     }
+    private fun showSearch() {
+        if (token.isEmpty()) return
+        enterRoute("search") { showSearch() }
+        heading("Search learning")
+        val input = field("Search module, topic, or title")
+        val results = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        body.addView(results, margin(12, 0))
+        results.addView(text("Loading your learning library…", 15f, muted))
+        request("/student/quiz-modules") { moduleData ->
+            val modules = moduleData.optJSONArray("items") ?: JSONArray()
+            val assigned = (0 until modules.length()).map { modules.optJSONObject(it)?.optString("module_code") ?: "" }.toSet()
+            request("/quizzes") { quizData ->
+                val quizzes = quizData.optJSONArray("items") ?: JSONArray()
+                request("/student/lessons") { lessonData ->
+                    val lessons = lessonData.optJSONArray("items") ?: JSONArray()
+                    fun render(term: String) {
+                        results.removeAllViews()
+                        if (term.isBlank()) { results.addView(text("Type a module, topic, or quiz title.", 15f, muted)); return }
+                        var matches = 0
+                        fun hit(title: String, detail: String, action: () -> Unit) {
+                            if (matches >= 30) return
+                            val row = LinearLayout(this).apply {
+                                orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(14), dp(16), dp(14))
+                                background = shape(panel, 16, stroke); setOnClickListener { action() }
+                            }
+                            row.addView(text(title, 16f, ink, true)); row.addView(text(detail, 13f, muted), margin(4, 0))
+                            results.addView(row, margin(8, 0)); matches++
+                        }
+                        for (i in 0 until modules.length()) {
+                            val item = modules.optJSONObject(i) ?: continue
+                            val code = item.optString("module_code")
+                            val name = item.optString("module_name", code)
+                            if ("$code $name".contains(term, true)) hit(name, "Module · $code") { showQuizzes(code) }
+                        }
+                        for (i in 0 until quizzes.length()) {
+                            val item = quizzes.optJSONObject(i) ?: continue
+                            val code = item.optString("module_code")
+                            if (code !in assigned) continue
+                            val title = item.optString("title")
+                            if ("$title ${item.optString("topic")} $code".contains(term, true)) hit(title, "Quiz · $code · ${item.optString("topic")}") { showQuiz(item.optInt("id")) }
+                        }
+                        for (i in 0 until lessons.length()) {
+                            val item = lessons.optJSONObject(i) ?: continue
+                            val title = item.optString("title")
+                            if ("$title ${item.optString("topic")} ${item.optString("module_code")}".contains(term, true)) hit(title, "Lesson · ${item.optString("module_code")} · ${item.optString("topic")}") { showLesson(item.optInt("id")) }
+                        }
+                        if (matches == 0) results.addView(text("No match. Try another module, topic, or title.", 15f, muted))
+                    }
+                    input.addTextChangedListener(object : TextWatcher {
+                        override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                        override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { render(s?.toString()?.trim() ?: "") }
+                        override fun afterTextChanged(s: Editable?) {}
+                    })
+                    render(input.text.toString().trim())
+                }
+            }
+        }
+    }
     private fun showLogin() {
+        enterRoute("login") { showLogin() }
         heading("Student sign in")
         val identifier = field("Student number or email")
         val password = field("Password", true)
@@ -177,6 +317,7 @@ class MainActivity : Activity() {
     }
 
     private fun showRegister() {
+        enterRoute("register") { showRegister() }
         heading("Create student account")
         val username = field("Student number or username")
         val name = field("Full name")
@@ -208,6 +349,7 @@ class MainActivity : Activity() {
     }
 
     private fun showReset() {
+        enterRoute("reset") { showReset() }
         heading("Reset password")
         val email = field("Account email")
         button("Email me a code") {
@@ -230,34 +372,35 @@ class MainActivity : Activity() {
 
     private fun showHome() {
         if (token.isEmpty()) { showLogin(); return }
+        enterRoute("home") { showHome() }
         heading("Dashboard")
         request("/student/me") { data ->
             getSharedPreferences("student", MODE_PRIVATE).edit()
                 .putString("student_number", data.optString("student_number"))
                 .putString("full_name", data.optString("full_name")).apply()
-            val hero = card().apply { background = gradient(); setPadding(dp(22), dp(25), dp(22), dp(25)) }
-            hero.addView(text("WELCOME BACK", 11f, cyan, true))
-            hero.addView(text(data.optString("full_name").ifBlank { "Student" }, 27f, ink, true), margin(6, 6))
-            hero.addView(text("Your next discovery is waiting.", 15f, ink))
-            val institution = data.optString("institution")
-            if (institution.isNotBlank()) hero.addView(text(institution, 13f, muted), margin(12, 0))
-            body.addView(text("EXPLORE YOUR SPACE", 12f, violet, true), margin(24, 2))
-            featureCard("▦", "My modules", "Your chosen subjects and courses") { showModules() }
+            body.addView(text("Choose where to continue", 16f, muted), margin(4, 16))
+            featureCard("▦", "My modules", "Browse tutors, quizzes, and lessons") { showQuizModules() }
             featureCard("◇", "Quizzes", "New quizzes appear when tutors publish them") { showQuizModules() }
             featureCard("▶", "Lessons", "Videos and learning materials") { showLessons() }
             featureCard("✉", "Messages", "Connect with tutors and admin") { showMessages() }
             featureCard("◎", "My results", "Track your progress") { showResults(data.optString("student_number")) }
-            body.addView(text("YOUR ACCOUNT", 12f, violet, true), margin(24, 2))
-            secondaryButton("Edit profile") { showProfile(data) }
-            secondaryButton("Community posts") { showPosts() }
+        }
+    }
+
+    private fun showAccount() {
+        enterRoute("account") { showAccount() }
+        heading("My account")
+        request("/student/me") { profile ->
+            val panel = card()
+            panel.addView(text(profile.optString("full_name", "Student"), 23f, ink, true))
+            panel.addView(text(profile.optString("student_number"), 14f, muted), margin(5, 0))
+            secondaryButton("Edit profile") { showProfile(profile) }
             secondaryButton("Request account deletion") { showDeletionRequest() }
-            secondaryButton("Sign out") {
-                token = ""; getSharedPreferences("student", MODE_PRIVATE).edit().clear().apply(); showLogin()
-            }
         }
     }
 
     private fun showProfile(profile: JSONObject) {
+        enterRoute("profile") { showProfile(profile) }
         heading("My profile")
         val name = field("Full name").apply { setText(profile.optString("full_name")) }
         val phone = field("Phone").apply { setText(profile.optString("phone")) }
@@ -271,6 +414,7 @@ class MainActivity : Activity() {
 
     private fun showModules() {
         if (token.isEmpty()) { showLogin(); return }
+        enterRoute("modules") { showModules() }
         heading("My modules")
         request("/student/module-enrollment") { data ->
             val selected = data.optJSONArray("module_codes") ?: JSONArray()
@@ -301,6 +445,7 @@ class MainActivity : Activity() {
     }
 
     private fun showQuizModules() {
+        enterRoute("quiz-modules") { showQuizModules() }
         heading("Quizzes")
         request("/student/quiz-modules") { data ->
             val items = data.optJSONArray("items") ?: JSONArray()
@@ -314,20 +459,59 @@ class MainActivity : Activity() {
     }
 
     private fun showQuizzes(code: String) {
-        heading("Quizzes · $code")
-        request("/student/quizzes/by-module/${Uri.encode(code)}") { data ->
-            val items = data.optJSONArray("items") ?: JSONArray()
-            if (items.length() == 0) emptyState("◇", "Nothing published yet", "Your tutor's quizzes will appear here automatically once uploaded.")
-            for (i in 0 until items.length()) {
-                val item = items.optJSONObject(i) ?: continue
-                val isFun = item.optBoolean("is_fun")
-                val detail = if (isFun) "✦ Fun Quiz · ${item.optString("fun_level", "starter").replaceFirstChar { it.uppercase() }} level" else item.optString("topic", "Tap to start")
-                featureCard(if (isFun) "✦" else "◇", item.optString("title", "Quiz"), detail) { showQuiz(item.optInt("id")) }
+        showModuleContent(code)
+    }
+
+    private fun showModuleContent(code: String, tutorId: Int? = null, tutorName: String = "") {
+        val key = if (tutorId == null) "module:$code" else "tutor:$code:$tutorId"
+        enterRoute(key) { showModuleContent(code, tutorId, tutorName) }
+        heading(if (tutorId == null) code else tutorName)
+        if (tutorId == null) {
+            request("/student/module-tutors/${Uri.encode(code)}") { data ->
+                val tutors = data.optJSONArray("items") ?: JSONArray()
+                if (tutors.length() == 0) { showTutorContent(code, null); return@request }
+                body.addView(text("CHOOSE A TUTOR", 12f, violet, true), margin(8, 4))
+                for (i in 0 until tutors.length()) {
+                    val tutor = tutors.optJSONObject(i) ?: continue
+                    val name = tutor.optString("full_name", "Tutor")
+                    val id = tutor.optInt("id")
+                    val detail = "${tutor.optInt("quiz_count")} quizzes · ${tutor.optInt("lesson_count")} lessons" +
+                        tutor.optString("institution").let { if (it.isBlank()) "" else " · $it" }
+                    featureCard("◉", name, detail) { showModuleContent(code, id, name) }
+                }
+            }
+        } else showTutorContent(code, tutorId)
+    }
+
+    private fun showTutorContent(code: String, tutorId: Int?) {
+        request("/student/quizzes/by-module/${Uri.encode(code)}") { quizData ->
+            val quizzes = quizData.optJSONArray("items") ?: JSONArray()
+            request("/student/lessons?module_code=${Uri.encode(code)}") { lessonData ->
+                val lessons = lessonData.optJSONArray("items") ?: JSONArray()
+                var shown = 0
+                body.addView(text("QUIZZES & TESTS", 12f, violet, true), margin(8, 4))
+                for (i in 0 until quizzes.length()) {
+                    val item = quizzes.optJSONObject(i) ?: continue
+                    if (tutorId != null && item.optInt("lecturer_id") != tutorId) continue
+                    val isFun = item.optBoolean("is_fun")
+                    val detail = if (isFun) "✦ Fun Quiz · ${item.optString("fun_level", "starter").replaceFirstChar { it.uppercase() }} level" else item.optString("topic", "Quiz")
+                    featureCard(if (isFun) "✦" else "◇", item.optString("title", "Quiz"), detail) { showQuiz(item.optInt("id")) }
+                    shown++
+                }
+                body.addView(text("LESSONS", 12f, violet, true), margin(22, 4))
+                for (i in 0 until lessons.length()) {
+                    val item = lessons.optJSONObject(i) ?: continue
+                    if (tutorId != null && item.optInt("lecturer_id") != tutorId) continue
+                    featureCard("▶", item.optString("title", "Lesson"), item.optString("topic", "Lesson")) { showLesson(item.optInt("id")) }
+                    shown++
+                }
+                if (shown == 0) emptyState("◇", "Nothing published yet", "This tutor's content will appear here when it is published.")
             }
         }
     }
 
     private fun showQuiz(id: Int) {
+        enterRoute("quiz:$id") { showQuiz(id) }
         heading("Quiz")
         request("/student/quiz/$id") { quiz ->
             if (quiz.optBoolean("is_fun")) {
@@ -403,6 +587,7 @@ class MainActivity : Activity() {
 
     private fun renderFunQuestion(index: Int, similar: Boolean = false, similarData: JSONObject? = null) {
         val quiz = funQuiz ?: return
+        similarQuestionOpen = similar
         val questions = quiz.optJSONArray("questions") ?: JSONArray()
         if (index >= questions.length()) { showFunFinish(); return }
         val question = questions.optJSONObject(index) ?: return
@@ -523,6 +708,7 @@ class MainActivity : Activity() {
     }
 
     private fun showLessons() {
+        enterRoute("lessons") { showLessons() }
         heading("Lessons")
         request("/student/lessons") { data ->
             val items = data.optJSONArray("items") ?: JSONArray()
@@ -535,6 +721,7 @@ class MainActivity : Activity() {
     }
 
     private fun showLesson(id: Int) {
+        enterRoute("lesson:$id") { showLesson(id) }
         heading("Lesson")
         request("/student/lesson/$id") { lesson ->
             heading(lesson.optString("title", "Lesson"))
@@ -590,38 +777,91 @@ class MainActivity : Activity() {
     }
 
     private fun showMessages() {
-        heading("Messages")
-        request("/student/messages") { data ->
+        enterRoute("messages") { showMessages() }
+        heading("Inbox")
+        secondaryButton("＋  New message") { showContacts() }
+        request("/student/messages?summary=true") { data ->
             val items = data.optJSONArray("items") ?: JSONArray()
-            if (items.length() == 0) emptyState("✉", "No messages yet", "Start a conversation with a tutor or administrator below.")
+            if (items.length() == 0) emptyState("✉", "No conversations yet", "Start a conversation with a tutor or administrator.")
             for (i in 0 until items.length()) {
                 val item = items.optJSONObject(i) ?: continue
-                line("${item.optString("peer_name", "Conversation")}: ${item.optString("content")}\n${item.optString("created_at")}")
+                val name = item.optString("peer_name", "Conversation")
+                val type = item.optString("peer_type")
+                val id = item.optInt("peer_id")
+                val unread = item.optInt("unread_count")
+                val preview = (if (item.optBoolean("is_outgoing")) "You: " else "") + item.optString("content")
+                val row = card().apply { setOnClickListener { showConversation(type, id, name) } }
+                val head = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+                head.addView(text(name, 17f, ink, true), LinearLayout.LayoutParams(0, -2, 1f))
+                if (unread > 0) head.addView(text("$unread new", 12f, baseBlue, true).apply { setPadding(dp(8), dp(4), dp(8), dp(4)); background = shape(cyan, 12) })
+                row.addView(head)
+                row.addView(text(preview, 14f, muted).apply { maxLines = 2 }, margin(8, 4))
+                row.addView(text(item.optString("created_at").take(16).replace('T', ' '), 11f, muted), margin(4, 0))
             }
-            button("Message administrator") { composeMessage("admin", 0, "Administrator") }
-            request("/student/message-lecturers") { tutors ->
-                val list = tutors.optJSONArray("items") ?: JSONArray()
-                for (i in 0 until list.length()) {
-                    val tutor = list.optJSONObject(i) ?: continue
-                    button("Message ${tutor.optString("full_name")}") { composeMessage("lecturer", tutor.optInt("id"), tutor.optString("full_name")) }
+        }
+    }
+
+    private fun showContacts() {
+        enterRoute("contacts") { showContacts() }
+        heading("New message")
+        featureCard("✦", "Administrator", "Arounus support") { showConversation("admin", 0, "Administrator") }
+        request("/student/message-lecturers") { data ->
+            val tutors = data.optJSONArray("items") ?: JSONArray()
+            body.addView(text("YOUR TUTORS", 12f, violet, true), margin(20, 4))
+            if (tutors.length() == 0) line("No tutors are assigned to your modules yet.")
+            for (i in 0 until tutors.length()) {
+                val tutor = tutors.optJSONObject(i) ?: continue
+                val name = tutor.optString("full_name", "Tutor")
+                val modules = tutor.optJSONArray("module_codes") ?: JSONArray()
+                val subjects = (0 until modules.length()).joinToString(" · ") { modules.optString(it) }
+                featureCard("◉", name, subjects) { showConversation("lecturer", tutor.optInt("id"), name) }
+            }
+        }
+    }
+
+    private fun showConversation(type: String, id: Int, name: String) {
+        enterRoute("conversation:$type:$id") { showConversation(type, id, name) }
+        heading(name)
+        val threadView = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        body.addView(threadView)
+        request("/student/messages") { data ->
+            val all = data.optJSONArray("items") ?: JSONArray()
+            val messages = (0 until all.length()).mapNotNull { all.optJSONObject(it) }
+                .filter { it.optString("peer_type") == type && it.optInt("peer_id") == id }.reversed()
+            if (messages.isEmpty()) emptyState("✉", "Start the conversation", "Your messages with $name will appear here.")
+            val readIds = JSONArray()
+            for (item in messages) {
+                val outgoing = item.optBoolean("is_outgoing")
+                if (item.optBoolean("unread")) readIds.put(item.optInt("id"))
+                val bubble = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL; setPadding(dp(15), dp(12), dp(15), dp(10))
+                    background = shape(if (outgoing) Color.rgb(30, 81, 94) else panel, 16, if (outgoing) null else stroke)
+                }
+                bubble.addView(text(item.optString("content"), 16f, ink))
+                val time = item.optString("created_at").take(16).replace('T', ' ')
+                bubble.addView(text(time + if (outgoing && item.optString("read_at").isNotBlank()) "  ·  Read" else "", 11f, muted), margin(8, 0))
+                threadView.addView(bubble, LinearLayout.LayoutParams(minOf(dp(520), (resources.displayMetrics.widthPixels * 0.82f).toInt()), -2).apply {
+                    gravity = if (outgoing) Gravity.END else Gravity.START; topMargin = dp(10)
+                })
+            }
+            if (readIds.length() > 0) thread { runCatching {
+                (URL("$base/student/messages/read").openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"; doOutput = true; setRequestProperty("X-Student-Token", token); setRequestProperty("Content-Type", "application/json")
+                    outputStream.use { it.write(JSONObject().put("message_ids", readIds).toString().toByteArray(Charsets.UTF_8)) }
+                }.inputStream.close()
+            } }
+            val content = field("Write a message to $name").apply { setSingleLine(false); minLines = 2; maxLines = 5 }
+            button("Send message") {
+                if (content.text.isBlank()) { message("Write a message first."); return@button }
+                request("/student/messages", "POST", JSONObject().put("recipient_type", type).put("recipient_id", id).put("content", content.text.toString().trim())) {
+                    showConversation(type, id, name)
                 }
             }
         }
     }
 
-    private fun composeMessage(type: String, id: Int, name: String) {
-        heading("Message $name")
-        val content = field("Write your message")
-        button("Send message") {
-            if (content.text.isBlank()) { message("Write a message first."); return@button }
-            request("/student/messages", "POST", JSONObject().put("recipient_type", type).put("recipient_id", id).put("content", content.text.toString())) {
-                showMessages(); message("Message sent.")
-            }
-        }
-        button("Back to messages") { showMessages() }
-    }
-
     private fun showDeletionRequest() {
+        enterRoute("deletion") { showDeletionRequest() }
         heading("Request account deletion")
         line("You can ask Arounus to delete your student account and associated data. Some academic records may need to be retained for legal or operational reasons.")
         button("Write deletion request to administrator") {
@@ -640,6 +880,7 @@ class MainActivity : Activity() {
     }
 
     private fun showPosts() {
+        enterRoute("posts") { showPosts() }
         heading("Community posts")
         request("/fun/posts") { data ->
             val content = field("Share an update")
@@ -664,6 +905,7 @@ class MainActivity : Activity() {
     }
 
     private fun showResults(studentNumber: String) {
+        enterRoute("results") { showResults(studentNumber) }
         heading("My results")
         request("/results/${Uri.encode(studentNumber)}") { data ->
             val items = data.optJSONArray("items") ?: JSONArray()
