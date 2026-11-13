@@ -1173,6 +1173,12 @@ def require_student_account(
     return student
 
 
+@app.post("/students/session/refresh")
+def refresh_student_session(student: Student = Depends(require_student_account)):
+    """Renew an active student session without retaining the student's password."""
+    return {"token": _issue_student_token(student.id)}
+
+
 def require_landlord_account(
     x_landlord_token: Optional[str] = Header(None, alias="X-Landlord-Token"),
     db: Session = Depends(get_db),
