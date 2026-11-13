@@ -58,6 +58,10 @@ class MainActivity : Activity() {
         body.addView(it)
     }
     private fun message(value: String) { status.text = value }
+    private fun showError(value: String) {
+        message(value)
+        Toast.makeText(this, value, Toast.LENGTH_LONG).show()
+    }
     private fun button(label: String, action: () -> Unit) {
         body.addView(Button(this).apply { text = label; setOnClickListener { action() } })
     }
@@ -122,6 +126,7 @@ class MainActivity : Activity() {
         val password = field("New password", true)
         body.addView(Button(this).apply { text = "Set new password"; setOnClickListener {
             if (code.text.isBlank() || password.text.length < 8) { message("Enter your code and a password of at least 8 characters."); return@setOnClickListener }
+            if (email.text.isBlank()) { message("Enter your account email."); return@setOnClickListener }
             request("/students/password-reset/confirm", "POST", JSONObject().put("email", email.text.toString().trim()).put("code", code.text.toString().trim()).put("new_password", password.text.toString())) {
                 showLogin(); message("Password updated. Sign in with your new password.")
             }
@@ -246,7 +251,7 @@ class MainActivity : Activity() {
             line(lesson.optString("description"))
             val url = lesson.optString("video_url")
             if (url.isNotBlank() && url != "null") {
-                val video = VideoView(this).apply { layoutParams = LinearLayout.LayoutParams(-1, 600); setVideoURI(Uri.parse(url)); setMediaController(MediaController(this@MainActivity)); setOnPreparedListener { start() } }
+                val video = VideoView(this).apply { layoutParams = LinearLayout.LayoutParams(-1, 600); setVideoURI(Uri.parse(if (url.startsWith("/")) base + url else url)); setMediaController(MediaController(this@MainActivity)); setOnPreparedListener { start() } }
                 body.addView(video)
             } else line("No video available for this lesson.")
             val questions = lesson.optJSONArray("questions") ?: JSONArray()
@@ -382,16 +387,18 @@ class MainActivity : Activity() {
                     if (requestedOnScreen != screenVersion) return@runOnUiThread
                     if (code !in 200..299) {
                         val detail = runCatching { JSONObject(response).optString("detail") }.getOrDefault(response)
-                        if (code == 401 && path != "/students/login") {
+                        if (code == 404 && path.startsWith("/results/")) {
+                            message(""); line("No results yet.")
+                        } else if (code == 401 && path != "/students/login") {
                             token = ""
                             getSharedPreferences("student", MODE_PRIVATE).edit().clear().apply()
                             showLogin()
-                            message("Session expired. Sign in again.")
-                        } else message(detail.ifBlank { "Request failed ($code)." })
+                            showError("Session expired. Sign in again.")
+                        } else showError(detail.ifBlank { "Request failed ($code)." })
                     }
                     else { message(""); done(if (response.trimStart().startsWith("{")) JSONObject(response) else JSONObject().put("items", JSONArray(response))) }
                 }
-            } catch (e: Exception) { runOnUiThread { if (requestedOnScreen == screenVersion) message(e.message ?: "Connection failed") } }
+            } catch (e: Exception) { runOnUiThread { if (requestedOnScreen == screenVersion) showError(e.message ?: "Connection failed") } }
         }
     }
 }
