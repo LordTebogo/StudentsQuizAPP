@@ -21,6 +21,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 import java.util.Locale
+import java.util.concurrent.Executors
 import kotlin.concurrent.thread
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -40,6 +41,7 @@ class MainActivity : Activity() {
     private val funWrongAttempts = mutableMapOf<String, Int>()
     private var funIndex = 0
     private var funFeedback: LinearLayout? = null
+    private val draftExecutor = Executors.newSingleThreadExecutor()
     private val ink = Color.rgb(237, 244, 255)
     private val muted = Color.rgb(157, 174, 199)
     private val baseBlue = Color.rgb(8, 14, 31)
@@ -69,7 +71,7 @@ class MainActivity : Activity() {
         if (token.isEmpty()) showLogin() else showHome()
     }
 
-    override fun onDestroy() { speech?.stop(); speech?.shutdown(); super.onDestroy() }
+    override fun onDestroy() { speech?.stop(); speech?.shutdown(); draftExecutor.shutdown(); super.onDestroy() }
 
     private fun showShell() {
         window.statusBarColor = baseBlue; window.navigationBarColor = baseBlue
@@ -387,7 +389,7 @@ class MainActivity : Activity() {
         funAnswers.forEach { (qid, answer) -> answers.put(JSONObject().put("question_id", qid).put("answer", answer)) }
         val payload = JSONObject().put("answers", answers).put("current_question", index)
         val currentToken = token
-        thread {
+        draftExecutor.execute {
             runCatching {
                 val connection = (URL("$base/student/quiz/$id/draft").openConnection() as HttpURLConnection).apply {
                     requestMethod = "PUT"; connectTimeout = 12000; readTimeout = 12000; doOutput = true
@@ -411,7 +413,7 @@ class MainActivity : Activity() {
         intro.addView(text("✦  FUN QUIZ  /  $level", 12f, cyan, true))
         intro.addView(text(if (similar) "Try a similar question" else "Question ${index + 1} of ${questions.length()}", 22f, ink, true), margin(8, 4))
         val progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
-            max = questions.length(); this.progress = index; progressTintList = android.content.res.ColorStateList.valueOf(cyan)
+            max = questions.length(); this.progress = index + 1; progressTintList = android.content.res.ColorStateList.valueOf(cyan)
             progressBackgroundTintList = android.content.res.ColorStateList.valueOf(stroke)
         }
         intro.addView(progress, margin(12, 0))
@@ -513,7 +515,7 @@ class MainActivity : Activity() {
                         emptyState("✦", "${result.optString("auto_marked_score")} / ${result.optString("max_score")}", "Well done for completing this Fun Quiz level!")
                         button("Back to quizzes") { showQuizModules() }
                         val id = quiz.optInt("quiz_id")
-                        thread { runCatching { (URL("$base/student/quiz/$id/draft").openConnection() as HttpURLConnection).apply { requestMethod = "DELETE"; setRequestProperty("X-Student-Token", token) }.inputStream.close() } }
+                        draftExecutor.execute { runCatching { (URL("$base/student/quiz/$id/draft").openConnection() as HttpURLConnection).apply { requestMethod = "DELETE"; setRequestProperty("X-Student-Token", token) }.inputStream.close() } }
                     }
                 }.show()
         }
