@@ -176,7 +176,7 @@ class MainActivity : Activity() {
         val width = minOf(dp(350), (resources.displayMetrics.widthPixels * 0.82f).toInt())
         val drawer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(22), dp(34), dp(22), dp(20)); background = shape(panel, 0) }
         val drawerScroll = ScrollView(this).apply { isVerticalScrollBarEnabled = false; background = shape(panel, 0) }
-        drawerScroll.addView(draw)
+        drawerScroll.addView(drawer)
         drawerLayer.addView(drawerScroll, FrameLayout.LayoutParams(width, -1, Gravity.START))
         drawer.addView(text("AROUNUS", 13f, cyan, true))
         drawer.addView(text(getSharedPreferences("student", MODE_PRIVATE).getString("full_name", "Student") ?: "Student", 24f, ink, true), margin(14, 4))
