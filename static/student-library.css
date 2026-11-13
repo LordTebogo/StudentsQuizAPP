@@ -8,6 +8,12 @@
 .learning-search { margin:18px 0 24px; }
 .learning-search label { display:block; margin-bottom:6px; font-weight:700; }
 .learning-search input { width:100%; max-width:620px; min-height:48px; }
+.learning-search select { display:block; width:100%; max-width:300px; min-height:44px; margin:8px 0 12px; }
+.learning-search label[for="learningSearchType"] { margin-top:12px; }
+.learning-suggestions { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0; }
+.learning-suggestions.hidden { display:none; }
+.learning-suggestions button { border:1px solid #b7d6c8; border-radius:20px; background:#eef7f1; color:#164e42; padding:7px 12px; font:inherit; cursor:pointer; }
+.learning-suggestions button:hover,.learning-suggestions button:focus-visible { outline:2px solid #087f70; }
 #learningSearchResults { margin-top:12px; max-height:420px; overflow:auto; }
 #learningSearchResults .library-item { text-decoration:none; }
 #quizList .library-item[href] { text-decoration:none; }
