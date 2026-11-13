@@ -7,6 +7,9 @@ import android.os.Looper
 import android.content.Intent
 import android.net.Uri
 import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.view.Gravity
 import android.view.View
 import android.widget.*
 import org.json.JSONArray
@@ -21,8 +24,31 @@ class MainActivity : Activity() {
     private val base = "https://arounus.com"
     private lateinit var body: LinearLayout
     private lateinit var status: TextView
+    private lateinit var topBar: LinearLayout
+    private lateinit var bottomBar: LinearLayout
+    private lateinit var pageTitle: TextView
     private var token: String = ""
     private var screenVersion = 0
+    private val ink = Color.rgb(237, 244, 255)
+    private val muted = Color.rgb(157, 174, 199)
+    private val baseBlue = Color.rgb(8, 14, 31)
+    private val panel = Color.rgb(18, 28, 51)
+    private val stroke = Color.rgb(42, 58, 86)
+    private val cyan = Color.rgb(93, 239, 225)
+    private val violet = Color.rgb(161, 135, 255)
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+    private fun shape(color: Int, radius: Int = 18, outline: Int? = null): GradientDrawable = GradientDrawable().apply {
+        setColor(color); cornerRadius = dp(radius).toFloat(); if (outline != null) setStroke(dp(1), outline)
+    }
+    private fun gradient(): GradientDrawable = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(Color.rgb(37, 88, 118), Color.rgb(45, 44, 105))).apply { cornerRadius = dp(24).toFloat() }
+    private fun text(value: String, size: Float, color: Int = ink, bold: Boolean = false): TextView = TextView(this).apply {
+        this.text = value; textSize = size; setTextColor(color); if (bold) setTypeface(null, Typeface.BOLD)
+    }
+    private fun margin(top: Int = 0, bottom: Int = 0): LinearLayout.LayoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(top); bottomMargin = dp(bottom) }
+    private fun card(): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(18), dp(18), dp(18)); background = shape(panel, 20, stroke)
+        body.addView(this, margin(12, 0))
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -32,10 +58,24 @@ class MainActivity : Activity() {
     }
 
     private fun showShell() {
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Color.rgb(247, 249, 247)) }
-        val bar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(12, 12, 12, 12) }
-        listOf("Home", "Modules", "Lessons", "Messages", "Market").forEach { label ->
-            val button = Button(this).apply { text = label; textSize = 11f; setOnClickListener {
+        window.statusBarColor = baseBlue; window.navigationBarColor = baseBlue
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(baseBlue) }
+        topBar = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(22), dp(18), dp(22), dp(10)) }
+        topBar.addView(text("AROUNUS  /  STUDENT", 11f, cyan, true))
+        pageTitle = text("", 25f, ink, true)
+        topBar.addView(pageTitle, margin(6, 0)); root.addView(topBar)
+        val scroll = ScrollView(this).apply { fillViewport = true; isVerticalScrollBarEnabled = false }
+        body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), dp(30)) }
+        scroll.addView(body); root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        status = text("", 13f, cyan).apply { setPadding(dp(22), 0, dp(22), dp(4)) }
+        root.addView(status)
+        bottomBar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(dp(8), dp(8), dp(8), dp(10)); background = shape(panel, 20, stroke) }
+        val destinations = listOf("Home" to "⌂", "Modules" to "▦", "Lessons" to "▶", "Messages" to "✉", "Market" to "↗")
+        destinations.forEach { (label, symbol) ->
+            val tab = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; setPadding(0, dp(4), 0, dp(4)) }
+            tab.addView(text(symbol, 22f, cyan, true).apply { gravity = Gravity.CENTER })
+            tab.addView(text(label, 10f, muted).apply { gravity = Gravity.CENTER })
+            tab.setOnClickListener {
                 when (label) {
                     "Home" -> showHome()
                     "Modules" -> showModules()
@@ -43,22 +83,32 @@ class MainActivity : Activity() {
                     "Messages" -> showMessages()
                     "Market" -> startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(base)))
                 }
-            } }
-            bar.addView(button, LinearLayout.LayoutParams(0, -2, 1f))
+            }
+            bottomBar.addView(tab, LinearLayout.LayoutParams(0, dp(55), 1f))
         }
-        root.addView(bar)
-        val scroll = ScrollView(this)
-        body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 16, 24, 24) }
-        scroll.addView(body); root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
-        status = TextView(this).apply { setPadding(24, 8, 24, 16) }
-        root.addView(status); setContentView(root)
+        root.addView(bottomBar); setContentView(root)
     }
 
-    private fun heading(value: String) { screenVersion++; body.removeAllViews(); body.addView(TextView(this).apply { text = value; textSize = 28f; setTextColor(Color.rgb(25, 70, 51)) }) }
+    private fun heading(value: String) {
+        screenVersion++; body.removeAllViews(); message("")
+        val auth = token.isEmpty()
+        topBar.visibility = if (auth) View.GONE else View.VISIBLE
+        bottomBar.visibility = if (auth) View.GONE else View.VISIBLE
+        pageTitle.text = value
+        if (auth) {
+            body.addView(text("A", 38f, baseBlue, true).apply { gravity = Gravity.CENTER; background = shape(cyan, 22); layoutParams = margin(36, 18).apply { width = dp(64); height = dp(64) } })
+            body.addView(text("AROUNUS", 13f, cyan, true), margin(0, 4))
+            body.addView(text(value, 32f, ink, true), margin(0, 8))
+            body.addView(text("Your learning universe starts here.", 16f, muted), margin(0, 24))
+        } else {
+            body.addView(text("LEARN  •  GROW  •  GO BEYOND", 11f, violet, true), margin(4, 8))
+        }
+    }
     private fun field(hintText: String, password: Boolean = false): EditText = EditText(this).also {
-        it.hint = hintText
+        it.hint = hintText; it.setHintTextColor(muted); it.setTextColor(ink); it.textSize = 16f
+        it.setSingleLine(true); it.setPadding(dp(16), dp(14), dp(16), dp(14)); it.background = shape(panel, 15, stroke)
         if (password) it.inputType = 129
-        body.addView(it)
+        body.addView(it, margin(8, 3))
     }
     private fun message(value: String) { status.text = value }
     private fun showError(value: String) {
@@ -66,23 +116,42 @@ class MainActivity : Activity() {
         Toast.makeText(this, value, Toast.LENGTH_LONG).show()
     }
     private fun button(label: String, action: () -> Unit) {
-        body.addView(Button(this).apply { text = label; setOnClickListener { action() } })
+        body.addView(Button(this).apply {
+            text = label; textSize = 14f; isAllCaps = false; setTypeface(null, Typeface.BOLD)
+            setTextColor(baseBlue); background = shape(cyan, 15); backgroundTintList = null
+            elevation = dp(2).toFloat(); setOnClickListener { action() }
+        }, margin(10, 2))
     }
-    private fun line(value: String) { body.addView(TextView(this).apply { text = value; textSize = 17f; setPadding(0, 10, 0, 10) }) }
+    private fun secondaryButton(label: String, action: () -> Unit) {
+        body.addView(Button(this).apply {
+            text = label; textSize = 14f; isAllCaps = false; setTextColor(ink)
+            background = shape(panel, 15, stroke); backgroundTintList = null; setOnClickListener { action() }
+        }, margin(8, 2))
+    }
+    private fun line(value: String) { body.addView(text(value, 16f, muted).apply { setPadding(dp(2), dp(10), dp(2), dp(10)) }) }
+    private fun featureCard(symbol: String, title: String, detail: String, action: () -> Unit) {
+        val view = card().apply { setOnClickListener { action() }; isClickable = true }
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        row.addView(text(symbol, 23f, cyan, true).apply { gravity = Gravity.CENTER; background = shape(Color.rgb(27, 63, 79), 14) }, LinearLayout.LayoutParams(dp(48), dp(48)))
+        val copy = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), 0, 0, 0) }
+        copy.addView(text(title, 17f, ink, true)); copy.addView(text(detail, 13f, muted), margin(3, 0))
+        row.addView(copy, LinearLayout.LayoutParams(0, -2, 1f)); row.addView(text("›", 28f, cyan))
+        view.addView(row)
+    }
     private fun showLogin() {
         heading("Student sign in")
         val identifier = field("Student number or email")
         val password = field("Password", true)
-        body.addView(Button(this).apply { text = "Sign in"; setOnClickListener {
-            if (identifier.text.isBlank() || password.text.isBlank()) { message("Enter your username or email and password."); return@setOnClickListener }
+        button("Sign in") {
+            if (identifier.text.isBlank() || password.text.isBlank()) { message("Enter your username or email and password."); return@button }
             request("/students/login", "POST", JSONObject().put("identifier", identifier.text.toString().trim()).put("password", password.text.toString())) { data ->
                 token = data.getString("token")
                 saveSession(data)
                 showHome()
             }
-        } })
-        body.addView(Button(this).apply { text = "Create student account"; setOnClickListener { showRegister() } })
-        body.addView(Button(this).apply { text = "Forgot password?"; setOnClickListener { showReset() } })
+        }
+        secondaryButton("Create student account") { showRegister() }
+        secondaryButton("Forgot password?") { showReset() }
     }
 
     private fun showRegister() {
@@ -92,10 +161,10 @@ class MainActivity : Activity() {
         val email = field("Email")
         val password = field("Password (at least 8 characters)", true)
         val confirm = field("Confirm password", true)
-        body.addView(Button(this).apply { text = "Create account"; setOnClickListener {
+        button("Create account") {
             val values = listOf(username, name, email, password, confirm).map { it.text.toString().trim() }
             if (values.any { it.isEmpty() } || values[3].length < 8 || values[3] != values[4]) {
-                message("Complete every field. Passwords must match and be at least 8 characters."); return@setOnClickListener
+                message("Complete every field. Passwords must match and be at least 8 characters."); return@button
             }
             val form = mapOf("username" to values[0], "full_name" to values[1], "email" to values[2], "password" to values[3], "confirm_password" to values[4])
             request("/students/register", "POST", form = form) { data ->
@@ -103,8 +172,8 @@ class MainActivity : Activity() {
                 saveSession(data)
                 showHome()
             }
-        } })
-        body.addView(Button(this).apply { text = "Back to sign in"; setOnClickListener { showLogin() } })
+        }
+        secondaryButton("Back to sign in") { showLogin() }
     }
 
     private fun saveSession(data: JSONObject) {
@@ -119,42 +188,50 @@ class MainActivity : Activity() {
     private fun showReset() {
         heading("Reset password")
         val email = field("Account email")
-        body.addView(Button(this).apply { text = "Email me a code"; setOnClickListener {
-            if (email.text.isBlank()) { message("Enter your account email."); return@setOnClickListener }
+        button("Email me a code") {
+            if (email.text.isBlank()) { message("Enter your account email."); return@button }
             request("/students/password-reset/request", "POST", JSONObject().put("email", email.text.toString().trim())) {
                 message(it.optString("message", "Check your email for a reset code."))
             }
-        } })
+        }
         val code = field("Reset code")
         val password = field("New password", true)
-        body.addView(Button(this).apply { text = "Set new password"; setOnClickListener {
-            if (code.text.isBlank() || password.text.length < 8) { message("Enter your code and a password of at least 8 characters."); return@setOnClickListener }
-            if (email.text.isBlank()) { message("Enter your account email."); return@setOnClickListener }
+        button("Set new password") {
+            if (code.text.isBlank() || password.text.length < 8) { message("Enter your code and a password of at least 8 characters."); return@button }
+            if (email.text.isBlank()) { message("Enter your account email."); return@button }
             request("/students/password-reset/confirm", "POST", JSONObject().put("email", email.text.toString().trim()).put("code", code.text.toString().trim()).put("new_password", password.text.toString())) {
                 showLogin(); message("Password updated. Sign in with your new password.")
             }
-        } })
-        body.addView(Button(this).apply { text = "Back to sign in"; setOnClickListener { showLogin() } })
+        }
+        secondaryButton("Back to sign in") { showLogin() }
     }
 
     private fun showHome() {
         if (token.isEmpty()) { showLogin(); return }
-        heading("Your learning space")
+        heading("Dashboard")
         request("/student/me") { data ->
             getSharedPreferences("student", MODE_PRIVATE).edit()
                 .putString("student_number", data.optString("student_number"))
                 .putString("full_name", data.optString("full_name")).apply()
-            body.addView(TextView(this).apply { text = "Welcome, ${data.optString("full_name")}"; textSize = 20f })
-            body.addView(TextView(this).apply { text = data.optString("institution") })
-            button("Edit profile") { showProfile(data) }
-            button("My results") { showResults(data.optString("student_number")) }
-            button("Choose modules") { showModules() }
-            button("Take a quiz") { showQuizModules() }
-            button("Community posts") { showPosts() }
-            button("Request account deletion") { showDeletionRequest() }
-            body.addView(Button(this).apply { text = "Sign out"; setOnClickListener {
+            val hero = card().apply { background = gradient(); setPadding(dp(22), dp(25), dp(22), dp(25)) }
+            hero.addView(text("WELCOME BACK", 11f, cyan, true))
+            hero.addView(text(data.optString("full_name").ifBlank { "Student" }, 27f, ink, true), margin(6, 6))
+            hero.addView(text("Your next discovery is waiting.", 15f, ink))
+            val institution = data.optString("institution")
+            if (institution.isNotBlank()) hero.addView(text(institution, 13f, muted), margin(12, 0))
+            body.addView(text("EXPLORE YOUR SPACE", 12f, violet, true), margin(24, 2))
+            featureCard("▦", "My modules", "Your chosen subjects and courses") { showModules() }
+            featureCard("◇", "Quizzes", "New quizzes appear when tutors publish them") { showQuizModules() }
+            featureCard("▶", "Lessons", "Videos and learning materials") { showLessons() }
+            featureCard("✉", "Messages", "Connect with tutors and admin") { showMessages() }
+            featureCard("◎", "My results", "Track your progress") { showResults(data.optString("student_number")) }
+            body.addView(text("YOUR ACCOUNT", 12f, violet, true), margin(24, 2))
+            secondaryButton("Edit profile") { showProfile(data) }
+            secondaryButton("Community posts") { showPosts() }
+            secondaryButton("Request account deletion") { showDeletionRequest() }
+            secondaryButton("Sign out") {
                 token = ""; getSharedPreferences("student", MODE_PRIVATE).edit().clear().apply(); showLogin()
-            } })
+            }
         }
     }
 
@@ -182,7 +259,11 @@ class MainActivity : Activity() {
             for (i in 0 until available.length()) {
                 val item = available.optJSONObject(i) ?: continue
                 val code = item.optString("module_code")
-                val check = CheckBox(this).apply { text = item.optString("module_name", code); isChecked = code in current }
+                val check = CheckBox(this).apply {
+                    text = item.optString("module_name", code); isChecked = code in current
+                    setTextColor(ink); textSize = 15f; buttonTintList = android.content.res.ColorStateList.valueOf(cyan)
+                    setPadding(dp(6), dp(7), dp(6), dp(7))
+                }
                 body.addView(check); checks.add(code to check)
             }
             if (!data.optBoolean("completed")) button("Save module selection") {
@@ -201,11 +282,11 @@ class MainActivity : Activity() {
         heading("Quizzes")
         request("/student/quiz-modules") { data ->
             val items = data.optJSONArray("items") ?: JSONArray()
-            if (items.length() == 0) line("No quizzes available for your modules.")
+            if (items.length() == 0) line("No quizzes yet. Quizzes for your modules will appear here when a tutor uploads them.")
             for (i in 0 until items.length()) {
                 val item = items.optJSONObject(i) ?: continue
                 val code = item.optString("module_code")
-                button("${item.optString("module_name", code)} · ${item.optInt("quiz_count")} quizzes") { showQuizzes(code) }
+                featureCard("◇", item.optString("module_name", code), "${item.optInt("quiz_count")} quizzes available") { showQuizzes(code) }
             }
         }
     }
@@ -214,10 +295,10 @@ class MainActivity : Activity() {
         heading("Quizzes · $code")
         request("/student/quizzes/by-module/${Uri.encode(code)}") { data ->
             val items = data.optJSONArray("items") ?: JSONArray()
-            if (items.length() == 0) line("No quizzes here yet.")
+            if (items.length() == 0) line("No quizzes here yet. Check back when your tutor publishes one.")
             for (i in 0 until items.length()) {
                 val item = items.optJSONObject(i) ?: continue
-                button(item.optString("title", "Quiz")) { showQuiz(item.optInt("id")) }
+                featureCard("◇", item.optString("title", "Quiz"), "Tap to start") { showQuiz(item.optInt("id")) }
             }
         }
     }
@@ -243,7 +324,7 @@ class MainActivity : Activity() {
             if (items.length() == 0) line("No lessons available for your modules.")
             for (i in 0 until items.length()) {
                 val item = items.optJSONObject(i) ?: continue
-                button("${item.optString("title")} · ${item.optString("module_code")}") { showLesson(item.optInt("id")) }
+                featureCard("▶", item.optString("title"), item.optString("module_code")) { showLesson(item.optInt("id")) }
             }
         }
     }
@@ -281,7 +362,10 @@ class MainActivity : Activity() {
             if (question.optString("type") == "mcq") {
                 val group = RadioGroup(this)
                 val options = question.optJSONArray("options") ?: JSONArray()
-                for (j in 0 until options.length()) group.addView(RadioButton(this).apply { text = options.optString(j); id = View.generateViewId() })
+                for (j in 0 until options.length()) group.addView(RadioButton(this).apply {
+                    text = options.optString(j); id = View.generateViewId(); setTextColor(ink); textSize = 15f
+                    buttonTintList = android.content.res.ColorStateList.valueOf(cyan); setPadding(dp(4), dp(6), dp(4), dp(6))
+                })
                 body.addView(group)
                 answers.add(qid to { group.findViewById<RadioButton>(group.checkedRadioButtonId)?.text?.toString() ?: "" })
             } else {
