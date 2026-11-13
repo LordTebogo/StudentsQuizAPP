@@ -39,6 +39,8 @@ class MainActivity : Activity() {
     private lateinit var bottomBar: LinearLayout
     private lateinit var chatComposer: LinearLayout
     private lateinit var pageTitle: TextView
+    private lateinit var menuIcon: TextView
+    private lateinit var searchIcon: TextView
     private lateinit var drawerLayer: FrameLayout
     private lateinit var pageScroll: ScrollView
     private data class Route(val key: String, val render: () -> Unit)
@@ -129,12 +131,12 @@ class MainActivity : Activity() {
         val frame = FrameLayout(this).apply { setBackgroundColor(baseBlue) }
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         topBar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(12), dp(14), dp(12), dp(8)) }
-        val menu = text("☰", 26f, cyan).apply { gravity = Gravity.CENTER; contentDescription = "Open account menu"; setOnClickListener { openDrawer() } }
-        topBar.addView(menu, LinearLayout.LayoutParams(dp(48), dp(48)))
+        menuIcon = text("☰", 26f, cyan).apply { gravity = Gravity.CENTER; contentDescription = "Open account menu"; setOnClickListener { openDrawer() } }
+        topBar.addView(menuIcon, LinearLayout.LayoutParams(dp(48), dp(48)))
         pageTitle = text("", 24f, ink, true)
         topBar.addView(pageTitle, LinearLayout.LayoutParams(0, -2, 1f))
-        val search = text("⌕", 32f, cyan).apply { gravity = Gravity.CENTER; contentDescription = "Search modules and topics"; setOnClickListener { showSearch() } }
-        topBar.addView(search, LinearLayout.LayoutParams(dp(48), dp(48)))
+        searchIcon = text("⌕", 32f, cyan).apply { gravity = Gravity.CENTER; contentDescription = "Search modules and topics"; setOnClickListener { showSearch() } }
+        topBar.addView(searchIcon, LinearLayout.LayoutParams(dp(48), dp(48)))
         root.addView(topBar)
         pageScroll = ScrollView(this).apply { isFillViewport = true; isVerticalScrollBarEnabled = false }
         body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), dp(30)) }
@@ -200,6 +202,10 @@ class MainActivity : Activity() {
         chatComposer.removeAllViews()
         pageScroll.setBackgroundColor(baseBlue)
         pageTitle.text = value
+        menuIcon.text = "☰"
+        menuIcon.contentDescription = "Open account menu"
+        menuIcon.setOnClickListener { openDrawer() }
+        searchIcon.visibility = View.VISIBLE
         if (auth) {
             body.addView(text("A", 38f, baseBlue, true).apply { gravity = Gravity.CENTER; background = shape(cyan, 22); layoutParams = margin(36, 18).apply { width = dp(64); height = dp(64) } })
             body.addView(text("AROUNUS", 13f, cyan, true), margin(0, 4))
@@ -873,6 +879,10 @@ class MainActivity : Activity() {
     private fun showConversation(type: String, id: Int, name: String) {
         enterRoute("conversation:$type:$id") { showConversation(type, id, name) }
         heading(name)
+        menuIcon.text = "‹"
+        menuIcon.contentDescription = "Back to chats"
+        menuIcon.setOnClickListener { handleBack() }
+        searchIcon.visibility = View.INVISIBLE
         bottomBar.visibility = View.GONE
         pageScroll.setBackgroundColor(Color.rgb(10, 25, 34))
         chatComposer.visibility = View.VISIBLE
@@ -915,11 +925,12 @@ class MainActivity : Activity() {
                     orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(10), dp(14), dp(8))
                     background = shape(if (outgoing) Color.rgb(20, 87, 79) else panel, 16)
                 }
-                bubble.addView(text(item.optString("content"), 16f, ink))
+                bubble.addView(text(item.optString("content"), 16f, ink).apply {
+                    maxWidth = minOf(dp(450), (resources.displayMetrics.widthPixels * 0.7f).toInt())
+                })
                 val time = item.optString("created_at").drop(11).take(5)
                 bubble.addView(text(time + if (outgoing) (if (item.optString("read_at").isNotBlank()) "  ✓✓" else "  ✓") else "", 11f, muted).apply { gravity = Gravity.END }, margin(6, 0))
                 threadView.addView(bubble, LinearLayout.LayoutParams(-2, -2).apply {
-                    width = minOf(dp(480), (resources.displayMetrics.widthPixels * 0.76f).toInt())
                     gravity = if (outgoing) Gravity.END else Gravity.START; topMargin = dp(7)
                 })
             }
