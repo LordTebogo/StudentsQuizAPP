@@ -2,6 +2,8 @@ package com.arounus.student
 
 import android.app.Activity
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.content.Intent
 import android.net.Uri
 import android.graphics.Color
@@ -13,6 +15,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 import kotlin.concurrent.thread
+import java.util.concurrent.atomic.AtomicBoolean
 
 class MainActivity : Activity() {
     private val base = "https://arounus.com"
@@ -367,6 +370,11 @@ class MainActivity : Activity() {
     private fun request(path: String, method: String = "GET", payload: JSONObject? = null, form: Map<String, String>? = null, done: (JSONObject) -> Unit) {
         message("Loading…")
         val requestedOnScreen = screenVersion
+        val finished = AtomicBoolean(false)
+        Handler(Looper.getMainLooper()).postDelayed({
+            if (requestedOnScreen == screenVersion && finished.compareAndSet(false, true))
+                showError("Connection timed out. Check your internet connection and try again.")
+        }, 30000)
         thread {
             try {
                 val connection = (URL(base + path).openConnection() as HttpURLConnection).apply {
@@ -384,7 +392,7 @@ class MainActivity : Activity() {
                 val response = (if (code in 200..299) connection.inputStream else connection.errorStream).bufferedReader().use { it.readText() }
                 connection.disconnect()
                 runOnUiThread {
-                    if (requestedOnScreen != screenVersion) return@runOnUiThread
+                    if (requestedOnScreen != screenVersion || !finished.compareAndSet(false, true)) return@runOnUiThread
                     if (code !in 200..299) {
                         val detail = runCatching { JSONObject(response).optString("detail") }.getOrDefault(response)
                         if (code == 404 && path.startsWith("/results/")) {
@@ -398,7 +406,7 @@ class MainActivity : Activity() {
                     }
                     else { message(""); done(if (response.trimStart().startsWith("{")) JSONObject(response) else JSONObject().put("items", JSONArray(response))) }
                 }
-            } catch (e: Exception) { runOnUiThread { if (requestedOnScreen == screenVersion) showError(e.message ?: "Connection failed") } }
+            } catch (e: Exception) { runOnUiThread { if (requestedOnScreen == screenVersion && finished.compareAndSet(false, true)) showError(e.message ?: "Connection failed") } }
         }
     }
 }
