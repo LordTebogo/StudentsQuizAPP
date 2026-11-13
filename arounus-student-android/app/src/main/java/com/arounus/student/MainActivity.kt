@@ -58,6 +58,13 @@ class MainActivity : Activity() {
     private val refreshLock = Any()
     private val syncingPending = AtomicBoolean(false)
     private val syncingModule = AtomicBoolean(false)
+    private val sessionHandler = Handler(Looper.getMainLooper())
+    private val sessionHeartbeat = object : Runnable {
+        override fun run() {
+            if (token.isNotBlank() && !offlineSession) thread { refreshSessionIfNeeded() }
+            sessionHandler.postDelayed(this, 30 * 60 * 1000L)
+        }
+    }
     private var screenVersion = 0
     private var speech: TextToSpeech? = null
     private var funMuted = false
@@ -103,12 +110,24 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        sessionHandler.removeCallbacks(sessionHeartbeat)
         if (Build.VERSION.SDK_INT >= 33) backCallback?.let { onBackInvokedDispatcher.unregisterOnBackInvokedCallback(it) }
         speech?.stop(); speech?.shutdown(); draftExecutor.shutdown(); super.onDestroy()
     }
 
     @Deprecated("Handled for older Android versions")
     override fun onBackPressed() { handleBack() }
+
+    override fun onResume() {
+        super.onResume()
+        sessionHandler.removeCallbacks(sessionHeartbeat)
+        sessionHandler.post(sessionHeartbeat)
+    }
+
+    override fun onPause() {
+        sessionHandler.removeCallbacks(sessionHeartbeat)
+        super.onPause()
+    }
 
     private fun enterRoute(key: String, render: () -> Unit) {
         if (key == "home" || key == "login") routeHistory.clear()
@@ -200,6 +219,7 @@ class MainActivity : Activity() {
         entry("✦", "My results") { showResults(getSharedPreferences("student", MODE_PRIVATE).getString("student_number", "") ?: "") }
         entry("◉", "Community posts") { showPosts() }
         entry("✉", "Messages") { showMessages() }
+        if (offlineSession) entry("↻", "Sign in to sync") { showLogin() }
         entry("◇", "Request account deletion") { showDeletionRequest() }
         entry("↪", "Sign out") { token = ""; getSharedPreferences("student", MODE_PRIVATE).edit().clear().apply(); showLogin() }
         drawerLayer.visibility = View.VISIBLE
@@ -278,7 +298,7 @@ class MainActivity : Activity() {
         request("/student/quiz-modules") { moduleData ->
             val modules = moduleData.optJSONArray("items") ?: JSONArray()
             val assigned = (0 until modules.length()).map { modules.optJSONObject(it)?.optString("module_code") ?: "" }.toSet()
-            val quizPath = if (offlineSession) "/student/quizzes/by-module/${Uri.encode(activeModule)}" else "/quizzes"
+            val quizPath = "/student/quizzes/by-module/${Uri.encode(activeModule.ifBlank { assigned.firstOrNull().orEmpty() })}"
             request(quizPath) { quizData ->
                 val quizzes = quizData.optJSONArray("items") ?: JSONArray()
                 request("/student/lessons") { lessonData ->
@@ -339,7 +359,7 @@ class MainActivity : Activity() {
             request("/students/login", "POST", JSONObject().put("identifier", identifier.text.toString().trim()).put("password", String(enteredPassword))) { data ->
                 token = data.getString("token")
                 saveSession(data)
-                offlineLibrary.saveAccount(studentNumber(), getSharedPreferences("student", MODE_PRIVATE).getString("full_name", "Student") ?: "Student", enteredPassword)
+                offlineLibrary.saveAccount(studentNumber(), getSharedPreferences("student", MODE_PRIVATE).getString("full_name", "Student") ?: "Student", identifier.text.toString().trim(), enteredPassword)
                 enteredPassword.fill('\u0000')
                 showHome()
             }
@@ -1103,7 +1123,11 @@ class MainActivity : Activity() {
                     }
                 }
             } catch (_: Exception) { /* The online screens still work if background sync fails. */ }
-            finally { syncingModule.set(false) }
+            finally {
+                syncingModule.set(false)
+                val latest = activeModule
+                if (latest != module && latest.isNotBlank() && !offlineSession && token.isNotBlank()) syncActiveModule(latest, true)
+            }
         }
     }
 

@@ -13,32 +13,34 @@ import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.PBEKeySpec
 
 /** Private, per-student offline library. Only an online sign-in can create an offline account. */
-class OfflineLibrary(context: Context) : SQLiteOpenHelper(context, "student_offline.db", null, 1) {
+class OfflineLibrary(context: Context) : SQLiteOpenHelper(context, "student_offline.db", null, 2) {
     override fun onCreate(db: SQLiteDatabase) {
-        db.execSQL("CREATE TABLE accounts (student_number TEXT PRIMARY KEY, full_name TEXT NOT NULL, salt BLOB NOT NULL, verifier BLOB NOT NULL)")
+        db.execSQL("CREATE TABLE accounts (student_number TEXT PRIMARY KEY, full_name TEXT NOT NULL, login_identifier TEXT NOT NULL, salt BLOB NOT NULL, verifier BLOB NOT NULL)")
         db.execSQL("CREATE TABLE content (student_number TEXT NOT NULL, path TEXT NOT NULL, module_code TEXT NOT NULL, body BLOB NOT NULL, saved_at INTEGER NOT NULL, PRIMARY KEY(student_number, path))")
         db.execSQL("CREATE INDEX content_module ON content(student_number, module_code)")
         db.execSQL("CREATE TABLE pending (id INTEGER PRIMARY KEY AUTOINCREMENT, student_number TEXT NOT NULL, path TEXT NOT NULL, body BLOB NOT NULL)")
     }
 
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        if (oldVersion < 2) db.execSQL("ALTER TABLE accounts ADD COLUMN login_identifier TEXT NOT NULL DEFAULT ''")
+    }
 
     private fun verifier(password: CharArray, salt: ByteArray): ByteArray {
         val spec = PBEKeySpec(password, salt, 180_000, 256)
         return try { SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded } finally { spec.clearPassword() }
     }
 
-    fun saveAccount(number: String, name: String, password: CharArray) {
+    fun saveAccount(number: String, name: String, identifier: String, password: CharArray) {
         if (number.isBlank() || password.isEmpty()) return
         val salt = ByteArray(24).also { SecureRandom().nextBytes(it) }
         val values = ContentValues().apply {
-            put("student_number", number); put("full_name", name); put("salt", salt); put("verifier", verifier(password, salt))
+            put("student_number", number); put("full_name", name); put("login_identifier", identifier); put("salt", salt); put("verifier", verifier(password, salt))
         }
         writableDatabase.insertWithOnConflict("accounts", null, values, SQLiteDatabase.CONFLICT_REPLACE)
     }
 
     fun authenticate(identifier: String, password: CharArray): Pair<String, String>? {
-        readableDatabase.rawQuery("SELECT student_number,full_name,salt,verifier FROM accounts WHERE lower(student_number)=lower(?)", arrayOf(identifier.trim())).use { cursor ->
+        readableDatabase.rawQuery("SELECT student_number,full_name,salt,verifier FROM accounts WHERE lower(student_number)=lower(?) OR lower(login_identifier)=lower(?)", arrayOf(identifier.trim(), identifier.trim())).use { cursor ->
             if (!cursor.moveToFirst()) return null
             val expected = cursor.getBlob(3)
             val candidate = verifier(password, cursor.getBlob(2))
