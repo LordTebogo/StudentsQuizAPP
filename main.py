@@ -8962,6 +8962,16 @@ def service_worker():
     )
 
 
+@app.get("/students/android/download", include_in_schema=False)
+def download_student_android():
+    return FileResponse(
+        os.path.join("static", "downloads", "Arounus-Student-1.1.apk"),
+        media_type="application/vnd.android.package-archive",
+        filename="Arounus-Student-1.1.apk",
+        headers={"Cache-Control": "public, max-age=3600", "X-Content-Type-Options": "nosniff"},
+    )
+
+
 # Give each screen a readable public URL while preserving old bookmarks.
 # These routes must be registered before the catch-all /static file mount.
 for friendly_path, filename in FRONTEND_PAGES.items():

@@ -19,3 +19,11 @@
 #quizList .library-item[href] { text-decoration:none; }
 #quizListCard .admin-editor-heading { gap:12px; flex-wrap:wrap; }
 @media(max-width:620px){#appWrap header.top nav{width:100%;justify-content:flex-start}.student-icon-link{flex:0 0 auto}}
+#androidAppCard { position:relative; overflow:hidden; margin:22px 0 28px; padding:clamp(22px,4vw,38px); border:1px solid rgba(103,232,249,.32); background:radial-gradient(circle at 90% 10%,rgba(141,105,255,.24),transparent 38%),linear-gradient(120deg,#102f43,#142145 65%,#241f50); box-shadow:0 18px 42px rgba(4,12,32,.23); }
+#androidAppCard::after { content:"A"; position:absolute; right:30px; top:6px; color:rgba(103,232,249,.08); font-size:clamp(7rem,18vw,15rem); font-weight:900; line-height:1; pointer-events:none; }
+#androidAppCard > * { position:relative; z-index:1; }
+#androidAppCard h2 { max-width:680px; margin:8px 0 10px; color:#f4f8ff; font-size:clamp(1.6rem,3.5vw,2.4rem); }
+#androidAppCard p { max-width:680px; color:#d4e4f4; line-height:1.55; }
+#androidAppCard .android-download-actions { display:flex; align-items:center; flex-wrap:wrap; gap:12px 20px; margin-top:20px; }
+#androidAppCard .android-download-actions .btn { margin:0; }
+#androidAppCard .android-download-note { font-size:.86rem; color:#adbed4; }
