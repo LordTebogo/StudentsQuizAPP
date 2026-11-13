@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.util.Base64
 import android.content.Intent
 import android.net.Uri
 import android.graphics.Color
@@ -25,6 +26,7 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import java.io.File
 import java.util.Locale
 import java.util.ArrayDeque
 import java.util.concurrent.Executors
@@ -50,6 +52,12 @@ class MainActivity : Activity() {
     private var similarQuestionOpen = false
     private var backCallback: OnBackInvokedCallback? = null
     private var token: String = ""
+    private var offlineSession = false
+    private lateinit var offlineLibrary: OfflineLibrary
+    private var activeModule = ""
+    private val refreshLock = Any()
+    private val syncingPending = AtomicBoolean(false)
+    private val syncingModule = AtomicBoolean(false)
     private var screenVersion = 0
     private var speech: TextToSpeech? = null
     private var funMuted = false
@@ -83,6 +91,8 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         token = getSharedPreferences("student", MODE_PRIVATE).getString("token", "") ?: ""
+        activeModule = getSharedPreferences("student", MODE_PRIVATE).getString("active_module", "") ?: ""
+        offlineLibrary = OfflineLibrary(this)
         speech = TextToSpeech(this) { status -> if (status == TextToSpeech.SUCCESS) speech?.language = Locale.ENGLISH }
         showShell()
         if (Build.VERSION.SDK_INT >= 33) {
@@ -170,7 +180,7 @@ class MainActivity : Activity() {
 
     private fun closeDrawer() { drawerLayer.visibility = View.GONE; drawerLayer.removeAllViews() }
     private fun openDrawer() {
-        if (token.isEmpty()) return
+        if (!signedIn()) return
         drawerLayer.removeAllViews()
         drawerLayer.addView(View(this).apply { setBackgroundColor(Color.argb(180, 1, 5, 15)); setOnClickListener { closeDrawer() } }, FrameLayout.LayoutParams(-1, -1))
         val width = minOf(dp(350), (resources.displayMetrics.widthPixels * 0.82f).toInt())
@@ -197,7 +207,7 @@ class MainActivity : Activity() {
 
     private fun heading(value: String) {
         screenVersion++; body.removeAllViews(); message("")
-        val auth = token.isEmpty()
+        val auth = !signedIn()
         topBar.visibility = if (auth) View.GONE else View.VISIBLE
         bottomBar.visibility = if (auth) View.GONE else View.VISIBLE
         chatComposer.visibility = View.GONE
@@ -222,6 +232,8 @@ class MainActivity : Activity() {
         body.addView(it, margin(8, 3))
     }
     private fun message(value: String) { status.text = value }
+    private fun signedIn(): Boolean = token.isNotEmpty() || offlineSession
+    private fun studentNumber(): String = getSharedPreferences("student", MODE_PRIVATE).getString("student_number", "") ?: ""
     private fun showError(value: String) {
         message(value)
         Toast.makeText(this, value, Toast.LENGTH_LONG).show()
@@ -256,7 +268,7 @@ class MainActivity : Activity() {
         view.addView(row)
     }
     private fun showSearch() {
-        if (token.isEmpty()) return
+        if (!signedIn()) return
         enterRoute("search") { showSearch() }
         heading("Search learning")
         val input = field("Search module, topic, or title")
@@ -266,7 +278,8 @@ class MainActivity : Activity() {
         request("/student/quiz-modules") { moduleData ->
             val modules = moduleData.optJSONArray("items") ?: JSONArray()
             val assigned = (0 until modules.length()).map { modules.optJSONObject(it)?.optString("module_code") ?: "" }.toSet()
-            request("/quizzes") { quizData ->
+            val quizPath = if (offlineSession) "/student/quizzes/by-module/${Uri.encode(activeModule)}" else "/quizzes"
+            request(quizPath) { quizData ->
                 val quizzes = quizData.optJSONArray("items") ?: JSONArray()
                 request("/student/lessons") { lessonData ->
                     val lessons = lessonData.optJSONArray("items") ?: JSONArray()
@@ -294,6 +307,7 @@ class MainActivity : Activity() {
                             val code = item.optString("module_code")
                             if (code !in assigned) continue
                             val title = item.optString("title")
+                            if (title.isBlank()) continue
                             if ("$title ${item.optString("topic")} $code".contains(term, true)) hit(title, "Quiz · $code · ${item.optString("topic")}") { showQuiz(item.optInt("id")) }
                         }
                         for (i in 0 until lessons.length()) {
@@ -314,17 +328,28 @@ class MainActivity : Activity() {
         }
     }
     private fun showLogin() {
+        offlineSession = false
         enterRoute("login") { showLogin() }
         heading("Student sign in")
         val identifier = field("Student number or email")
         val password = field("Password", true)
         button("Sign in") {
             if (identifier.text.isBlank() || password.text.isBlank()) { message("Enter your username or email and password."); return@button }
-            request("/students/login", "POST", JSONObject().put("identifier", identifier.text.toString().trim()).put("password", password.text.toString())) { data ->
+            val enteredPassword = password.text.toString().toCharArray()
+            request("/students/login", "POST", JSONObject().put("identifier", identifier.text.toString().trim()).put("password", String(enteredPassword))) { data ->
                 token = data.getString("token")
                 saveSession(data)
+                offlineLibrary.saveAccount(studentNumber(), getSharedPreferences("student", MODE_PRIVATE).getString("full_name", "Student") ?: "Student", enteredPassword)
+                enteredPassword.fill('\u0000')
                 showHome()
             }
+        }
+        secondaryButton("Use saved learning offline") {
+            val result = offlineLibrary.authenticate(identifier.text.toString(), password.text.toString().toCharArray())
+            if (result == null) { showError("Sign in online once on this device before using offline learning."); return@secondaryButton }
+            token = ""; offlineSession = true
+            getSharedPreferences("student", MODE_PRIVATE).edit().putString("student_number", result.first).putString("full_name", result.second).remove("token").apply()
+            showHome()
         }
         secondaryButton("Create student account") { showRegister() }
         secondaryButton("Forgot password?") { showReset() }
@@ -385,13 +410,14 @@ class MainActivity : Activity() {
     }
 
     private fun showHome() {
-        if (token.isEmpty()) { showLogin(); return }
+        if (!signedIn()) { showLogin(); return }
         enterRoute("home") { showHome() }
         heading("Dashboard")
-        request("/student/me") { data ->
+        fun display(data: JSONObject) {
             getSharedPreferences("student", MODE_PRIVATE).edit()
                 .putString("student_number", data.optString("student_number"))
                 .putString("full_name", data.optString("full_name")).apply()
+            if (offlineSession) line("Offline library · Connect to sync new learning material")
             body.addView(text("Choose where to continue", 16f, muted), margin(4, 16))
             featureCard("▦", "My modules", "Browse tutors, quizzes, and lessons") { showQuizModules() }
             featureCard("◇", "Quizzes", "New quizzes appear when tutors publish them") { showQuizModules() }
@@ -399,6 +425,8 @@ class MainActivity : Activity() {
             featureCard("✉", "Messages", "Connect with tutors and admin") { showMessages() }
             featureCard("◎", "My results", "Track your progress") { showResults(data.optString("student_number")) }
         }
+        if (offlineSession) display(JSONObject().put("student_number", studentNumber()).put("full_name", getSharedPreferences("student", MODE_PRIVATE).getString("full_name", "Student")))
+        else request("/student/me") { data -> display(data) }
     }
 
     private fun showAccount() {
@@ -427,7 +455,7 @@ class MainActivity : Activity() {
     }
 
     private fun showModules() {
-        if (token.isEmpty()) { showLogin(); return }
+        if (!signedIn()) { showLogin(); return }
         enterRoute("modules") { showModules() }
         heading("My modules")
         request("/student/module-enrollment") { data ->
@@ -477,6 +505,7 @@ class MainActivity : Activity() {
     }
 
     private fun showModuleContent(code: String, tutorId: Int? = null, tutorName: String = "") {
+        activateModule(code)
         val key = if (tutorId == null) "module:$code" else "tutor:$code:$tutorId"
         enterRoute(key) { showModuleContent(code, tutorId, tutorName) }
         heading(if (tutorId == null) code else tutorName)
@@ -528,8 +557,10 @@ class MainActivity : Activity() {
         enterRoute("quiz:$id") { showQuiz(id) }
         heading("Quiz")
         request("/student/quiz/$id") { quiz ->
+            if (!offlineSession) activateModule(quiz.optString("module_code", activeModule))
             if (quiz.optBoolean("is_fun")) {
                 funQuiz = quiz; funAnswers.clear(); funWrongAttempts.clear()
+                if (offlineSession) { renderFunQuestion(0); line("Connect to check Fun Quiz answers and save your result."); return@request }
                 request("/student/quiz/$id/draft") { draft ->
                     val saved = draft.optJSONArray("answers") ?: JSONArray()
                     for (i in 0 until saved.length()) {
@@ -545,7 +576,8 @@ class MainActivity : Activity() {
             val answers = showQuestions(quiz.optJSONArray("questions") ?: JSONArray())
             button("Submit answers") {
                 request("/quiz/$id/submit", "POST", submission(answers)) { result ->
-                    heading("Submitted"); line("Score: ${result.optString("auto_marked_score")} / ${result.optString("max_score")}")
+                    heading(if (result.optBoolean("queued_offline")) "Saved for sync" else "Submitted")
+                    line(if (result.optBoolean("queued_offline")) "Your answers will submit when you sign in online again." else "Score: ${result.optString("auto_marked_score")} / ${result.optString("max_score")}")
                     button("Back to quizzes") { showQuizModules() }
                 }
             }
@@ -724,7 +756,8 @@ class MainActivity : Activity() {
     private fun showLessons() {
         enterRoute("lessons") { showLessons() }
         heading("Lessons")
-        request("/student/lessons") { data ->
+        val path = if (offlineSession && activeModule.isNotBlank()) "/student/lessons?module_code=${Uri.encode(activeModule)}" else "/student/lessons"
+        request(path) { data ->
             val items = data.optJSONArray("items") ?: JSONArray()
             if (items.length() == 0) emptyState("▶", "No lessons yet", "Lessons for your modules will appear here when they are available.")
             for (i in 0 until items.length()) {
@@ -738,19 +771,22 @@ class MainActivity : Activity() {
         enterRoute("lesson:$id") { showLesson(id) }
         heading("Lesson")
         request("/student/lesson/$id") { lesson ->
+            if (!offlineSession) activateModule(lesson.optString("module_code", activeModule))
             heading(lesson.optString("title", "Lesson"))
             line(lesson.optString("description"))
             val url = lesson.optString("video_url")
-            if (url.isNotBlank() && url != "null") {
-                val video = VideoView(this).apply { layoutParams = LinearLayout.LayoutParams(-1, 600); setVideoURI(Uri.parse(if (url.startsWith("/")) base + url else url)); setMediaController(MediaController(this@MainActivity)); setOnPreparedListener { start() } }
+            val savedVideo = File(filesDir, "offline_videos/${studentNumber()}/${lesson.optString("module_code").replace(Regex("[^A-Za-z0-9_-]"), "")}/$id.mp4")
+            if ((url.isNotBlank() && url != "null" && !offlineSession) || savedVideo.isFile) {
+                val video = VideoView(this).apply { layoutParams = LinearLayout.LayoutParams(-1, dp(280)); setVideoURI(if (savedVideo.isFile) Uri.fromFile(savedVideo) else Uri.parse(if (url.startsWith("/")) base + url else url)); setMediaController(MediaController(this@MainActivity)); setOnPreparedListener { start() } }
                 body.addView(video)
-            } else line("No video available for this lesson.")
+            } else line(if (offlineSession) "This lesson's video is not saved on this device." else "No video available for this lesson.")
             val questions = lesson.optJSONArray("questions") ?: JSONArray()
             if (questions.length() > 0) {
                 val answers = showQuestions(questions)
                 button("Submit lesson answers") {
                     request("/lesson/$id/submit", "POST", submission(answers)) { result ->
-                        heading("Lesson submitted"); line("Score: ${result.optString("auto_marked_score")} / ${result.optString("max_score")}")
+                        heading(if (result.optBoolean("queued_offline")) "Saved for sync" else "Lesson submitted")
+                        line(if (result.optBoolean("queued_offline")) "Your answers will submit when you sign in online again." else "Score: ${result.optString("auto_marked_score")} / ${result.optString("max_score")}")
                         button("Back to lessons") { showLessons() }
                     }
                 }
@@ -1003,6 +1039,137 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun cacheable(path: String): Boolean = path == "/student/me" || path == "/student/quiz-modules" ||
+        path == "/student/lessons" || path.startsWith("/student/lessons?module_code=") ||
+        path.startsWith("/student/module-tutors/") || path.startsWith("/student/quizzes/by-module/") ||
+        Regex("^/student/(quiz|lesson)/[0-9]+$").matches(path)
+
+    private fun activateModule(code: String) {
+        val clean = code.replace(Regex("[^A-Za-z0-9_-]"), "")
+        if (clean.isBlank()) return
+        val changed = activeModule != clean
+        activeModule = clean
+        getSharedPreferences("student", MODE_PRIVATE).edit().putString("active_module", clean).apply()
+        if (!offlineSession && token.isNotBlank()) syncActiveModule(clean, changed)
+    }
+
+    private fun rawFetch(path: String, method: String = "GET", json: String? = null): String? {
+        val connection = (URL(base + path).openConnection() as HttpURLConnection).apply {
+            requestMethod = method; connectTimeout = 12000; readTimeout = 15000
+            setRequestProperty("X-Student-Token", token)
+            if (json != null) {
+                doOutput = true; setRequestProperty("Content-Type", "application/json")
+                outputStream.use { it.write(json.toByteArray(Charsets.UTF_8)) }
+            }
+        }
+        return try { if (connection.responseCode in 200..299) connection.inputStream.bufferedReader().use { it.readText() } else null }
+        finally { connection.disconnect() }
+    }
+
+    private fun syncActiveModule(module: String, changed: Boolean) {
+        if (!syncingModule.compareAndSet(false, true)) return
+        thread {
+            try {
+                if (changed) {
+                    offlineLibrary.keepOnlyModule(studentNumber(), module)
+                    val mediaRoot = File(filesDir, "offline_videos/${studentNumber()}")
+                    mediaRoot.listFiles()?.filter { it.name != module }?.forEach { it.deleteRecursively() }
+                }
+                refreshSessionIfNeeded()
+                val number = studentNumber()
+                val quizPath = "/student/quizzes/by-module/${Uri.encode(module)}"
+                val lessonPath = "/student/lessons?module_code=${Uri.encode(module)}"
+                val quizList = rawFetch(quizPath)
+                if (quizList != null && activeModule == module) {
+                    offlineLibrary.put(number, quizPath, module, quizList)
+                    val quizzes = JSONArray(quizList)
+                    for (i in 0 until quizzes.length()) {
+                        if (activeModule != module) break
+                        val id = quizzes.optJSONObject(i)?.optInt("id") ?: continue
+                        val path = "/student/quiz/$id"
+                        if (offlineLibrary.get(number, path) == null) rawFetch(path)?.let { offlineLibrary.put(number, path, module, it) }
+                    }
+                }
+                val lessonList = rawFetch(lessonPath)
+                if (lessonList != null && activeModule == module) {
+                    offlineLibrary.put(number, lessonPath, module, lessonList)
+                    val lessons = JSONArray(lessonList)
+                    for (i in 0 until lessons.length()) {
+                        if (activeModule != module) break
+                        val id = lessons.optJSONObject(i)?.optInt("id") ?: continue
+                        val path = "/student/lesson/$id"
+                        val lessonJson = offlineLibrary.get(number, path) ?: rawFetch(path)?.also { offlineLibrary.put(number, path, module, it) }
+                        if (lessonJson != null) saveSmallVideo(module, id, JSONObject(lessonJson).optString("video_url"))
+                    }
+                }
+            } catch (_: Exception) { /* The online screens still work if background sync fails. */ }
+            finally { syncingModule.set(false) }
+        }
+    }
+
+    private fun saveSmallVideo(module: String, id: Int, url: String) {
+        val address = if (url.startsWith("/")) base + url else url
+        if (!address.startsWith("https://") || activeModule != module) return
+        val folder = File(filesDir, "offline_videos/${studentNumber()}/$module")
+        val target = File(folder, "$id.mp4")
+        if (target.isFile) return
+        if ((folder.listFiles()?.sumOf { it.length() } ?: 0L) > 100_000_000L) return
+        folder.mkdirs()
+        val temporary = File(folder, "$id.part")
+        runCatching {
+            val connection = (URL(address).openConnection() as HttpURLConnection).apply { connectTimeout = 10000; readTimeout = 15000 }
+            try {
+                if (connection.responseCode !in 200..299 || connection.contentLengthLong > 25_000_000L) return
+                connection.inputStream.use { input -> temporary.outputStream().use { output ->
+                    val buffer = ByteArray(8192); var total = 0L
+                    while (true) {
+                        val count = input.read(buffer); if (count < 0) break
+                        total += count; if (total > 25_000_000L || activeModule != module) return
+                        output.write(buffer, 0, count)
+                    }
+                } }
+                if (!temporary.renameTo(target)) temporary.delete()
+            } finally { connection.disconnect(); if (temporary.exists()) temporary.delete() }
+        }
+    }
+
+    private fun syncPendingSubmissions() {
+        if (token.isBlank() || !syncingPending.compareAndSet(false, true)) return
+        thread {
+            try {
+                for ((id, path, json) in offlineLibrary.pending(studentNumber())) {
+                    if (rawFetch(path, "POST", json) != null) offlineLibrary.removePending(id) else break
+                }
+            } catch (_: Exception) { }
+            finally { syncingPending.set(false) }
+        }
+    }
+
+    private fun refreshSessionIfNeeded() {
+        synchronized(refreshLock) {
+            val current = token
+            if (current.isBlank()) return
+            val expiry = runCatching {
+                String(Base64.decode(current.substringBefore('.'), Base64.URL_SAFE or Base64.NO_WRAP), Charsets.UTF_8).split(':').last().toLong()
+            }.getOrDefault(0L)
+            if (expiry - System.currentTimeMillis() / 1000 > 60 * 60) return
+            runCatching {
+                val connection = (URL("$base/students/session/refresh").openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"; connectTimeout = 10000; readTimeout = 10000
+                    setRequestProperty("X-Student-Token", current)
+                }
+                if (connection.responseCode == 200) {
+                    val updated = JSONObject(connection.inputStream.bufferedReader().use { it.readText() }).optString("token")
+                    if (updated.isNotBlank()) {
+                        token = updated
+                        getSharedPreferences("student", MODE_PRIVATE).edit().putString("token", updated).apply()
+                    }
+                }
+                connection.disconnect()
+            }
+        }
+    }
+
     private fun request(path: String, method: String = "GET", payload: JSONObject? = null, form: Map<String, String>? = null, done: (JSONObject) -> Unit) {
         message("Loading…")
         val requestedOnScreen = screenVersion
@@ -1012,7 +1179,24 @@ class MainActivity : Activity() {
                 showError("Connection timed out. Check your internet connection and try again.")
         }, 30000)
         thread {
+            val account = studentNumber()
+            val saved = if (method == "GET" && cacheable(path)) offlineLibrary.get(account, path) else null
+            fun deliver(response: String, fromCache: Boolean = false) = runOnUiThread {
+                if (requestedOnScreen != screenVersion || !finished.compareAndSet(false, true)) return@runOnUiThread
+                message(if (fromCache) "Saved offline copy" else "")
+                done(if (response.trimStart().startsWith("{")) JSONObject(response) else JSONObject().put("items", JSONArray(response)))
+            }
+            if (offlineSession || (token.isBlank() && path != "/students/login" && path != "/students/register")) {
+                if (method == "POST" && payload != null && Regex("^/(quiz|lesson)/[0-9]+/submit$").matches(path)) {
+                    offlineLibrary.queue(account, path, payload.toString())
+                    deliver("{\"queued_offline\":true}", true)
+                    return@thread
+                }
+                if (saved != null) deliver(saved, true) else runOnUiThread { if (requestedOnScreen == screenVersion && finished.compareAndSet(false, true)) showError("This page has not been saved for offline use yet.") }
+                return@thread
+            }
             try {
+                if (path != "/students/login" && path != "/students/register") refreshSessionIfNeeded()
                 val connection = (URL(base + path).openConnection() as HttpURLConnection).apply {
                     requestMethod = method; connectTimeout = 15000; readTimeout = 15000
                     if (token.isNotEmpty()) setRequestProperty("X-Student-Token", token)
@@ -1027,22 +1211,32 @@ class MainActivity : Activity() {
                 val code = connection.responseCode
                 val response = (if (code in 200..299) connection.inputStream else connection.errorStream).bufferedReader().use { it.readText() }
                 connection.disconnect()
+                if (code in 200..299 && method == "GET" && cacheable(path)) offlineLibrary.put(account, path, if (path.contains("/by-module/") || path.contains("module_code=") || Regex("^/student/(quiz|lesson)/[0-9]+$").matches(path)) activeModule else "", response)
+                if (code in 200..299) {
+                    deliver(response)
+                    if (path == "/student/me") syncPendingSubmissions()
+                    return@thread
+                }
+                if (code == 401 && saved != null) {
+                    token = ""; offlineSession = true
+                    getSharedPreferences("student", MODE_PRIVATE).edit().remove("token").apply()
+                    deliver(saved, true)
+                    return@thread
+                }
                 runOnUiThread {
                     if (requestedOnScreen != screenVersion || !finished.compareAndSet(false, true)) return@runOnUiThread
-                    if (code !in 200..299) {
-                        val detail = runCatching { JSONObject(response).optString("detail") }.getOrDefault(response)
-                        if (code == 404 && path.startsWith("/results/")) {
-                            message(""); line("No results yet.")
-                        } else if (code == 401 && path != "/students/login") {
-                            token = ""
-                            getSharedPreferences("student", MODE_PRIVATE).edit().clear().apply()
-                            showLogin()
-                            showError("Session expired. Sign in again.")
-                        } else showError(detail.ifBlank { "Request failed ($code)." })
-                    }
-                    else { message(""); done(if (response.trimStart().startsWith("{")) JSONObject(response) else JSONObject().put("items", JSONArray(response))) }
+                    val detail = runCatching { JSONObject(response).optString("detail") }.getOrDefault(response)
+                    if (code == 404 && path.startsWith("/results/")) { message(""); line("No results yet.") }
+                    else if (code == 401 && path != "/students/login") {
+                        token = ""; offlineSession = true
+                        getSharedPreferences("student", MODE_PRIVATE).edit().remove("token").apply()
+                        showError("Online session ended. Saved learning remains available; sign in again to sync.")
+                    } else showError(detail.ifBlank { "Request failed ($code)." })
                 }
-            } catch (e: Exception) { runOnUiThread { if (requestedOnScreen == screenVersion && finished.compareAndSet(false, true)) showError(e.message ?: "Connection failed") } }
+            } catch (e: Exception) {
+                if (saved != null) deliver(saved, true)
+                else runOnUiThread { if (requestedOnScreen == screenVersion && finished.compareAndSet(false, true)) showError("No connection. This page has not been saved offline yet.") }
+            }
         }
     }
 }

@@ -19,6 +19,13 @@ from models import Lecturer, LecturerModule, Lesson, LessonAnswer, LessonComment
 
 
 class LessonManagementTest(unittest.TestCase):
+    def test_student_session_can_refresh(self):
+        response = self.client.post("/students/session/refresh", headers=self.student_headers)
+        self.assertEqual(response.status_code, 200)
+        renewed = response.json()["token"]
+        self.assertEqual(main._student_id_from_token(renewed), self.student_id)
+        self.assertEqual(self.client.post("/students/session/refresh", headers={"X-Student-Token": "invalid"}).status_code, 401)
+
     @classmethod
     def setUpClass(cls):
         with main.SessionLocal() as db:
