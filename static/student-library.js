@@ -20,12 +20,13 @@
   const quizSection = q => q.assessment_type === 'exam' ? 'exams' : q.assessment_type === 'test' ? 'tests' : 'quizzes';
   const queryLessons = code => (state.lessons.get(code) || []).filter(item => !state.tutorId || Number(item.lecturer_id) === state.tutorId);
   const queryQuizzes = code => (state.quizzes.get(code) || []).filter(item => !state.tutorId || Number(item.lecturer_id) === state.tutorId);
-  const home = (push = true) => {byId('quizListCard').classList.add('hidden'); byId('moduleCard').classList.remove('hidden'); state.code = null; state.tutorId = null; state.section = null; state.sub = null; if(push)syncPath();};
+  const home = (push = true) => {byId('quizListCard').classList.add('hidden'); byId('moduleCard').classList.remove('hidden'); byId('learningSearchCard')?.classList.remove('hidden'); state.code = null; state.tutorId = null; state.section = null; state.sub = null; if(push)syncPath();};
   const show = (code, section = null, sub = null, push = true) => {
     if (state.code && state.code !== code) state.tutorId = null;
     state.code = code; state.section = section; state.sub = sub;
     if (push) syncPath();
     byId('moduleCard').classList.add('hidden');
+    byId('learningSearchCard')?.classList.add('hidden');
     byId('quizListCard').classList.remove('hidden');
     const tutors = state.tutors.get(code) || [];
     const tutor = tutors.find(item => item.id === state.tutorId);
@@ -123,14 +124,6 @@
         hits.push({title:item.topic, detail:`${name} · ${tutor?.full_name || 'Tutor'} · ${item.lessons} lesson(s), ${item.assessments} assessment(s)`,
           open:() => {state.tutorId = item.tutorId; show(code, item.lessons ? 'lessons' : 'quizzes', item.lessons ? item.topic : null);}});
       }
-      if (['all','lesson'].includes(kind)) for (const lesson of lessons) if (norm(`${lesson.title} ${lesson.topic} ${name}`).includes(term)) {
-        const tutor = (state.tutors.get(code) || []).find(person => person.id === Number(lesson.lecturer_id));
-        hits.push({title:lesson.title, detail:`${name} · ${tutor?.full_name || 'Tutor'} · Lesson`, href:`/students/lessons?lesson=${encodeURIComponent(lesson.id)}`});
-      }
-      if (['all','assessment'].includes(kind)) for (const quiz of quizzes) if (norm(`${quiz.title} ${quiz.topic} ${name}`).includes(term)) {
-        const tutor = (state.tutors.get(code) || []).find(person => person.id === Number(quiz.lecturer_id));
-        hits.push({title:quiz.title, detail:`${name} · ${tutor?.full_name || 'Tutor'} · ${quizSection(quiz)}`, open:() => loadQuiz(quiz.id)});
-      }
     }
     results.classList.remove('hidden');
     results.innerHTML = hits.map((hit,index) => `<${hit.href ? 'a' : 'button'} class="library-item" ${hit.href ? `href="${hit.href}"` : `type="button" data-hit="${index}"`}><span><strong>${escape(hit.title)}</strong><small>${escape(hit.detail)}</small></span><span>Open →</span></${hit.href ? 'a' : 'button'}>`).join('') || '<p class="muted">No match in your available modules. Try another topic or title.</p>';
@@ -186,11 +179,12 @@
     if (new URLSearchParams(location.search).get('profile') === '1') editProfile();
     const moduleCard = byId('moduleCard'); moduleCard.querySelector('h2').textContent = 'My modules';
     const trail = document.createElement('nav'); trail.id='libraryTrail'; trail.className='library-crumbs'; trail.setAttribute('aria-label','Learning path'); byId('quizList').before(trail);
-    const prompt = document.createElement('p'); prompt.className = 'muted'; prompt.textContent = 'Choose a module or search for a lesson, quiz, test, or exam.';
     const addLevel = document.createElement('button'); addLevel.type='button'; addLevel.className='btn secondary'; addLevel.textContent='Add a subject or next level';
     addLevel.onclick = async () => {const result = await window.addStudentModule?.(sessionStorage.getItem('studentToken')); if(result) loadModules();};
-    const searchBox = document.createElement('div'); searchBox.className = 'learning-search'; searchBox.innerHTML = '<label for="learningSearch">Find something quickly</label><input id="learningSearch" type="search" placeholder="Search modules, topics, lessons and quizzes" autocomplete="off"><label for="learningSearchType">Filter results</label><select id="learningSearchType"><option value="all">Everything</option><option value="module">Modules</option><option value="topic">Topics and tutors</option><option value="lesson">Lessons</option><option value="assessment">Quizzes, tests and exams</option></select><div id="learningSearchSuggestions" class="learning-suggestions hidden" aria-label="Search suggestions"></div><div id="learningSearchResults" class="library-items hidden" aria-live="polite"></div>';
-    moduleCard.querySelector('h2').after(prompt, searchBox, addLevel);
+    moduleCard.querySelector('h2').after(addLevel);
+    const searchCard = document.createElement('section'); searchCard.id = 'learningSearchCard'; searchCard.className = 'card';
+    searchCard.innerHTML = '<h2>Find a module or topic</h2><p class="muted">Search what is available in your modules, then choose a tutor for a topic.</p><div class="learning-search"><label for="learningSearch">Search modules and topics</label><input id="learningSearch" type="search" placeholder="Enter a module or topic" autocomplete="off"><label for="learningSearchType">Filter results</label><select id="learningSearchType"><option value="all">Modules and topics</option><option value="module">Modules</option><option value="topic">Topics and tutors</option></select><div id="learningSearchSuggestions" class="learning-suggestions hidden" aria-label="Search suggestions"></div><div id="learningSearchResults" class="library-items hidden" aria-live="polite"></div></div>';
+    app.append(searchCard);
     byId('learningSearch').addEventListener('input', search);
     byId('learningSearch').addEventListener('focus', search);
     byId('learningSearchType').addEventListener('change', search);
