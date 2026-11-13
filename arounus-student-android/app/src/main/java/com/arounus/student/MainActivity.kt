@@ -446,7 +446,7 @@ class MainActivity : Activity() {
 
     private fun showQuizModules() {
         enterRoute("quiz-modules") { showQuizModules() }
-        heading("Quizzes")
+        heading("My modules")
         request("/student/quiz-modules") { data ->
             val items = data.optJSONArray("items") ?: JSONArray()
             if (items.length() == 0) emptyState("◇", "No quizzes yet", "Quizzes for your modules will appear here when a tutor publishes them.")
@@ -813,7 +813,8 @@ class MainActivity : Activity() {
                 val tutor = tutors.optJSONObject(i) ?: continue
                 val name = tutor.optString("full_name", "Tutor")
                 val modules = tutor.optJSONArray("module_codes") ?: JSONArray()
-                val subjects = (0 until modules.length()).joinToString(" · ") { modules.optString(it) }
+                val subjects = (0 until minOf(modules.length(), 3)).joinToString(" · ") { modules.optString(it) } +
+                    if (modules.length() > 3) " · +${modules.length() - 3} more" else ""
                 featureCard("◉", name, subjects) { showConversation("lecturer", tutor.optInt("id"), name) }
             }
         }
