@@ -37,6 +37,7 @@ class MainActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var topBar: LinearLayout
     private lateinit var bottomBar: LinearLayout
+    private lateinit var chatComposer: LinearLayout
     private lateinit var pageTitle: TextView
     private lateinit var drawerLayer: FrameLayout
     private lateinit var pageScroll: ScrollView
@@ -141,7 +142,9 @@ class MainActivity : Activity() {
         status = text("", 13f, cyan).apply { setPadding(dp(22), 0, dp(22), dp(4)) }
         root.addView(status)
         bottomBar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(dp(8), dp(8), dp(8), dp(10)); background = shape(panel, 20, stroke) }
-        val destinations = listOf("Home" to "⌂", "Modules" to "▦", "Lessons" to "▶", "Messages" to "✉", "Market" to "↗")
+        chatComposer = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; visibility = View.GONE; setPadding(dp(12), dp(8), dp(12), dp(10)); background = shape(panel, 18, stroke) }
+        root.addView(chatComposer)
+        val destinations = listOf("Home" to "⌂", "Lessons" to "▶", "Chats" to "✉", "Market" to "↗")
         destinations.forEach { (label, symbol) ->
             val tab = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; setPadding(0, dp(4), 0, dp(4)) }
             tab.addView(text(symbol, 22f, cyan, true).apply { gravity = Gravity.CENTER })
@@ -149,9 +152,8 @@ class MainActivity : Activity() {
             tab.setOnClickListener {
                 when (label) {
                     "Home" -> showHome()
-                    "Modules" -> showQuizModules()
                     "Lessons" -> showLessons()
-                    "Messages" -> showMessages()
+                    "Chats" -> showMessages()
                     "Market" -> startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(base)))
                 }
             }
@@ -179,6 +181,7 @@ class MainActivity : Activity() {
             drawer.addView(text("$symbol    $label", 17f, ink).apply { setPadding(dp(10), dp(17), dp(10), dp(17)); setOnClickListener { closeDrawer(); action() } }, margin(4, 0))
         }
         entry("◎", "My profile") { showAccount() }
+        entry("▦", "Browse modules") { showQuizModules() }
         entry("▦", "Manage modules") { showModules() }
         entry("✦", "My results") { showResults(getSharedPreferences("student", MODE_PRIVATE).getString("student_number", "") ?: "") }
         entry("◉", "Community posts") { showPosts() }
@@ -193,6 +196,9 @@ class MainActivity : Activity() {
         val auth = token.isEmpty()
         topBar.visibility = if (auth) View.GONE else View.VISIBLE
         bottomBar.visibility = if (auth) View.GONE else View.VISIBLE
+        chatComposer.visibility = View.GONE
+        chatComposer.removeAllViews()
+        pageScroll.setBackgroundColor(baseBlue)
         pageTitle.text = value
         if (auth) {
             body.addView(text("A", 38f, baseBlue, true).apply { gravity = Gravity.CENTER; background = shape(cyan, 22); layoutParams = margin(36, 18).apply { width = dp(64); height = dp(64) } })
@@ -778,33 +784,66 @@ class MainActivity : Activity() {
 
     private fun showMessages() {
         enterRoute("messages") { showMessages() }
-        heading("Inbox")
-        secondaryButton("＋  New message") { showContacts() }
+        heading("Chats")
+        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        actions.addView(text("Your conversations", 15f, muted), LinearLayout.LayoutParams(0, -2, 1f))
+        actions.addView(text("✎", 26f, baseBlue, true).apply {
+            gravity = Gravity.CENTER; contentDescription = "Start a new chat"; background = shape(cyan, 22)
+            setOnClickListener { showContacts() }
+        }, LinearLayout.LayoutParams(dp(48), dp(48)))
+        body.addView(actions, margin(4, 14))
+        val filter = field("Search chats")
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        body.addView(list, margin(10, 0))
         request("/student/messages?summary=true") { data ->
             val items = data.optJSONArray("items") ?: JSONArray()
-            if (items.length() == 0) emptyState("✉", "No conversations yet", "Start a conversation with a tutor or administrator.")
-            for (i in 0 until items.length()) {
-                val item = items.optJSONObject(i) ?: continue
-                val name = item.optString("peer_name", "Conversation")
-                val type = item.optString("peer_type")
-                val id = item.optInt("peer_id")
-                val unread = item.optInt("unread_count")
-                val preview = (if (item.optBoolean("is_outgoing")) "You: " else "") + item.optString("content")
-                val row = card().apply { setOnClickListener { showConversation(type, id, name) } }
-                val head = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-                head.addView(text(name, 17f, ink, true), LinearLayout.LayoutParams(0, -2, 1f))
-                if (unread > 0) head.addView(text("$unread new", 12f, baseBlue, true).apply { setPadding(dp(8), dp(4), dp(8), dp(4)); background = shape(cyan, 12) })
-                row.addView(head)
-                row.addView(text(preview, 14f, muted).apply { maxLines = 2 }, margin(8, 4))
-                row.addView(text(item.optString("created_at").take(16).replace('T', ' '), 11f, muted), margin(4, 0))
+            fun render(query: String) {
+                list.removeAllViews()
+                var shown = 0
+                for (i in 0 until items.length()) {
+                    val item = items.optJSONObject(i) ?: continue
+                    val name = item.optString("peer_name", "Conversation")
+                    if (!name.contains(query, true) && !item.optString("content").contains(query, true)) continue
+                    val type = item.optString("peer_type")
+                    val id = item.optInt("peer_id")
+                    val unread = item.optInt("unread_count")
+                    val row = LinearLayout(this).apply {
+                        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                        setPadding(dp(4), dp(13), dp(4), dp(13)); setOnClickListener { showConversation(type, id, name) }
+                    }
+                    row.addView(chatAvatar(name), LinearLayout.LayoutParams(dp(52), dp(52)))
+                    val copy = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(13), 0, dp(8), 0) }
+                    copy.addView(text(name, 17f, ink, unread > 0))
+                    copy.addView(text((if (item.optBoolean("is_outgoing")) "You: " else "") + item.optString("content"), 14f, muted).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END }, margin(5, 0))
+                    row.addView(copy, LinearLayout.LayoutParams(0, -2, 1f))
+                    val meta = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.END }
+                    meta.addView(text(item.optString("created_at").take(10), 11f, if (unread > 0) cyan else muted))
+                    if (unread > 0) meta.addView(text("$unread", 12f, baseBlue, true).apply { gravity = Gravity.CENTER; background = shape(cyan, 16) }, LinearLayout.LayoutParams(dp(28), dp(28)).apply { topMargin = dp(7) })
+                    row.addView(meta)
+                    list.addView(row)
+                    list.addView(View(this).apply { setBackgroundColor(stroke) }, LinearLayout.LayoutParams(-1, dp(1)))
+                    shown++
+                }
+                if (shown == 0) list.addView(text(if (query.isBlank()) "No chats yet. Tap the pencil to start one." else "No chats match your search.", 15f, muted).apply { gravity = Gravity.CENTER; setPadding(dp(18), dp(60), dp(18), dp(24)) })
             }
+            filter.addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { render(s?.toString() ?: "") }
+                override fun afterTextChanged(s: Editable?) {}
+            })
+            render("")
         }
+    }
+
+    private fun chatAvatar(name: String): TextView = text(name.trim().firstOrNull()?.uppercase() ?: "?", 21f, cyan, true).apply {
+        gravity = Gravity.CENTER; background = shape(Color.rgb(26, 75, 83), 28)
     }
 
     private fun showContacts() {
         enterRoute("contacts") { showContacts() }
-        heading("New message")
-        featureCard("✦", "Administrator", "Arounus support") { showConversation("admin", 0, "Administrator") }
+        heading("New chat")
+        body.addView(text("SELECT A CONTACT", 12f, cyan, true), margin(8, 10))
+        chatContact("Administrator", "Arounus support") { showConversation("admin", 0, "Administrator") }
         request("/student/message-lecturers") { data ->
             val tutors = data.optJSONArray("items") ?: JSONArray()
             body.addView(text("YOUR TUTORS", 12f, violet, true), margin(20, 4))
@@ -815,49 +854,82 @@ class MainActivity : Activity() {
                 val modules = tutor.optJSONArray("module_codes") ?: JSONArray()
                 val subjects = (0 until minOf(modules.length(), 3)).joinToString(" · ") { modules.optString(it) } +
                     if (modules.length() > 3) " · +${modules.length() - 3} more" else ""
-                featureCard("◉", name, subjects) { showConversation("lecturer", tutor.optInt("id"), name) }
+                chatContact(name, subjects) { showConversation("lecturer", tutor.optInt("id"), name) }
             }
         }
+    }
+
+    private fun chatContact(name: String, detail: String, action: () -> Unit) {
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(4), dp(13), dp(4), dp(13)); setOnClickListener { action() } }
+        row.addView(chatAvatar(name), LinearLayout.LayoutParams(dp(52), dp(52)))
+        val copy = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(13), 0, 0, 0) }
+        copy.addView(text(name, 17f, ink, true))
+        copy.addView(text(detail, 13f, muted).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END }, margin(4, 0))
+        row.addView(copy, LinearLayout.LayoutParams(0, -2, 1f))
+        body.addView(row)
+        body.addView(View(this).apply { setBackgroundColor(stroke) }, LinearLayout.LayoutParams(-1, dp(1)))
     }
 
     private fun showConversation(type: String, id: Int, name: String) {
         enterRoute("conversation:$type:$id") { showConversation(type, id, name) }
         heading(name)
+        bottomBar.visibility = View.GONE
+        pageScroll.setBackgroundColor(Color.rgb(10, 25, 34))
+        chatComposer.visibility = View.VISIBLE
+        val content = EditText(this).apply {
+            hint = "Message"; setHintTextColor(muted); setTextColor(ink); textSize = 16f
+            minLines = 1; maxLines = 4; inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            setPadding(dp(16), dp(12), dp(16), dp(12)); background = shape(baseBlue, 24)
+        }
+        chatComposer.addView(content, LinearLayout.LayoutParams(0, -2, 1f))
+        chatComposer.addView(text("➤", 22f, baseBlue, true).apply {
+            gravity = Gravity.CENTER; contentDescription = "Send message"; background = shape(cyan, 24)
+            setOnClickListener {
+                val value = content.text.toString().trim()
+                if (value.isEmpty()) return@setOnClickListener
+                request("/student/messages", "POST", JSONObject().put("recipient_type", type).put("recipient_id", id).put("content", value)) {
+                    showConversation(type, id, name)
+                }
+            }
+        }, LinearLayout.LayoutParams(dp(48), dp(48)).apply { leftMargin = dp(8) })
         val threadView = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         body.addView(threadView)
         request("/student/messages") { data ->
             val all = data.optJSONArray("items") ?: JSONArray()
             val messages = (0 until all.length()).mapNotNull { all.optJSONObject(it) }
                 .filter { it.optString("peer_type") == type && it.optInt("peer_id") == id }.reversed()
-            if (messages.isEmpty()) emptyState("✉", "Start the conversation", "Your messages with $name will appear here.")
+            if (messages.isEmpty()) threadView.addView(text("Start your chat with $name", 14f, muted).apply {
+                gravity = Gravity.CENTER; setPadding(dp(16), dp(65), dp(16), dp(16))
+            })
             val readIds = JSONArray()
+            var lastDay = ""
             for (item in messages) {
                 val outgoing = item.optBoolean("is_outgoing")
                 if (item.optBoolean("unread")) readIds.put(item.optInt("id"))
+                val day = item.optString("created_at").take(10)
+                if (day != lastDay) {
+                    threadView.addView(text(day, 12f, muted).apply { gravity = Gravity.CENTER; setPadding(0, dp(18), 0, dp(10)) })
+                    lastDay = day
+                }
                 val bubble = LinearLayout(this).apply {
-                    orientation = LinearLayout.VERTICAL; setPadding(dp(15), dp(12), dp(15), dp(10))
-                    background = shape(if (outgoing) Color.rgb(30, 81, 94) else panel, 16, if (outgoing) null else stroke)
+                    orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(10), dp(14), dp(8))
+                    background = shape(if (outgoing) Color.rgb(20, 87, 79) else panel, 16)
                 }
                 bubble.addView(text(item.optString("content"), 16f, ink))
-                val time = item.optString("created_at").take(16).replace('T', ' ')
-                bubble.addView(text(time + if (outgoing && item.optString("read_at").isNotBlank()) "  ·  Read" else "", 11f, muted), margin(8, 0))
-                threadView.addView(bubble, LinearLayout.LayoutParams(minOf(dp(520), (resources.displayMetrics.widthPixels * 0.82f).toInt()), -2).apply {
-                    gravity = if (outgoing) Gravity.END else Gravity.START; topMargin = dp(10)
+                val time = item.optString("created_at").drop(11).take(5)
+                bubble.addView(text(time + if (outgoing) (if (item.optString("read_at").isNotBlank()) "  ✓✓" else "  ✓") else "", 11f, muted).apply { gravity = Gravity.END }, margin(6, 0))
+                threadView.addView(bubble, LinearLayout.LayoutParams(-2, -2).apply {
+                    width = minOf(dp(480), (resources.displayMetrics.widthPixels * 0.76f).toInt())
+                    gravity = if (outgoing) Gravity.END else Gravity.START; topMargin = dp(7)
                 })
             }
+            pageScroll.post { pageScroll.fullScroll(View.FOCUS_DOWN) }
             if (readIds.length() > 0) thread { runCatching {
                 (URL("$base/student/messages/read").openConnection() as HttpURLConnection).apply {
                     requestMethod = "POST"; doOutput = true; setRequestProperty("X-Student-Token", token); setRequestProperty("Content-Type", "application/json")
                     outputStream.use { it.write(JSONObject().put("message_ids", readIds).toString().toByteArray(Charsets.UTF_8)) }
                 }.inputStream.close()
             } }
-            val content = field("Write a message to $name").apply { setSingleLine(false); minLines = 2; maxLines = 5 }
-            button("Send message") {
-                if (content.text.isBlank()) { message("Write a message first."); return@button }
-                request("/student/messages", "POST", JSONObject().put("recipient_type", type).put("recipient_id", id).put("content", content.text.toString().trim())) {
-                    showConversation(type, id, name)
-                }
-            }
         }
     }
 
