@@ -726,11 +726,13 @@ async function openGrading(submissionId) {
 }
 
 $('suggestMarksBtn').addEventListener('click', async () => {
+  if (!currentSubmissionId) { $('gradingMsg').textContent = 'Choose a learner submission first.'; return; }
   const button = $('suggestMarksBtn');
   button.disabled = true;
   $('gradingMsg').textContent = 'Checking answers and suggesting marks…';
   try {
     const result = await api(`/lecturer/submission/${currentSubmissionId}/suggest-marks`, {method: 'POST'}, true);
+    if (!result.suggestions.length) { $('gradingMsg').textContent = 'This submission has no written answers for AI to mark.'; return; }
     for (const suggestion of result.suggestions) {
       const input = $(`mark_${suggestion.question_id}`);
       if (!input) continue;
