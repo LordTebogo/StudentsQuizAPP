@@ -6,6 +6,11 @@
 .student-icon-link:hover,.student-icon-link:focus-visible { background:#e9f5ee; outline:2px solid #087f70; }
 .student-unread { display:inline-grid; place-items:center; min-width:21px; height:21px; padding:0 4px; border-radius:20px; background:#b32934; color:#fff; font-size:.76rem; }
 .learning-search { margin:18px 0 24px; }
+.module-heading { display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px; }
+.module-heading h2 { margin:0; }
+.module-search { position:relative;display:block;flex:1 1 280px;max-width:420px;margin:0; }
+.module-search input { width:100%;min-height:48px;padding-left:44px; }
+.module-search-icon { position:absolute;left:15px;top:50%;transform:translateY(-50%);color:#087f70;font-size:1.55rem;pointer-events:none; }
 .learning-search label { display:block; margin-bottom:6px; font-weight:700; }
 .learning-search input { width:100%; max-width:620px; min-height:48px; }
 .learning-search select { display:block; width:100%; max-width:300px; min-height:44px; margin:8px 0 12px; }
