@@ -10,7 +10,7 @@
   const lessonRows = () => state.lessons.filter(row => row.module_code === state.module);
   const sectionFor = row => row.assessment_type === 'exam' ? 'exams' : row.assessment_type === 'test' ? 'tests' : 'quizzes';
   const folder = (title, detail, action, icon='▤') => `<button class="library-folder" type="button" data-tutor-step="${esc(action)}"><span class="folder-mark" aria-hidden="true">${icon}</span><span><strong>${esc(title)}</strong><small>${esc(detail)}</small></span></button>`;
-  const moduleCard = code => `<div class="tutor-module-card"><a class="library-folder" href="/lecturers?module=${encodeURIComponent(code)}#library" data-tutor-step="module:${esc(code)}"><span class="folder-mark" aria-hidden="true">▤</span><span><strong>${esc(name(code))}</strong><small>${tutorQuizRows.filter(row=>row.module_code===code).length} assessment(s) · ${state.lessons.filter(row=>row.module_code===code).length} lesson(s) · Open module →</small></span></a><div class="tutor-module-card-actions"><button type="button" class="btn secondary" data-add-quiz="${esc(code)}">Add quiz</button><a class="btn secondary" href="/lecturers/lessons?module=${encodeURIComponent(code)}">Add lesson</a></div></div>`;
+  const moduleCard = code => `<div class="tutor-module-card">${folder(name(code),`${tutorQuizRows.filter(row=>row.module_code===code).length} assessment(s) · ${state.lessons.filter(row=>row.module_code===code).length} lesson(s) · Open module →`,`module:${code}`)}<div class="tutor-module-card-actions"><button type="button" class="btn secondary" data-add-quiz="${esc(code)}">Add quiz</button><a class="btn secondary" href="/lecturers/lessons?module=${encodeURIComponent(code)}">Add lesson</a></div></div>`;
   const pdfCard = () => '<a class="library-folder" href="/tools/pdf"><span class="folder-mark" aria-hidden="true">▤</span><span><strong>PDF tools</strong><small>Open PDF tools</small></span></a>';
   const quizItem = row => `<article class="tutor-quiz-card"><div class="tutor-quiz-card-top"><span class="folder-mark" aria-hidden="true">✦</span><span class="tutor-quiz-type">${row.is_fun ? 'Fun quiz' : row.assessment_type === 'exam' ? 'Examination' : row.assessment_type === 'test' ? 'Test' : 'Quiz'}</span></div><h3>${esc(row.title)}</h3><p>${esc(row.topic || name(row.module_code))}</p><strong class="tutor-quiz-count">${Number(row.attempt_count || 0)} learner${Number(row.attempt_count)===1?'':'s'} attempted</strong><div class="tutor-quiz-card-actions"><button class="btn secondary" type="button" data-library-quiz="${row.id}">Edit</button><button class="btn secondary" type="button" data-quiz-attempts="${row.id}">View attempts</button><button class="btn secondary danger-action" type="button" data-quiz-delete="${row.id}">Delete</button></div></article>`;
   const lessonItem = row => `<a class="library-item" href="/lecturers/lessons?lesson=${encodeURIComponent(row.id)}"><span><strong>${esc(row.title)}</strong><small>${esc(row.topic || 'Other topics')} · Lesson</small></span><span>Open →</span></a>`;
@@ -35,7 +35,7 @@
     if (!folders || !items) return;
     $('tutorQuizLibrary').querySelector('.library-heading h2').textContent = state.module ? name(state.module) : 'My modules';
     $('tutorQuizLibrary').querySelector('.library-heading p').textContent = state.module
-      ? state.section ? `Browse ${({quizzes:'quizzes',tests:'tests',exams:'examinations',lessons:'lessons'})[state.section]} in this module.` : 'Choose quizzes, tests, examinations, or lessons in this module.'
+      ? state.section ? `Browse ${({quizzes:'quizzes',tests:'tests',exams:'examinations',lessons:'lessons'})[state.section]} in this module.` : 'Manage quizzes and lessons in this module.'
       : 'Choose a module or search for a quiz, exam, topic, or lesson.';
     folders.replaceChildren(); items.replaceChildren(); renderCrumbs();
     if (query) {
@@ -47,8 +47,10 @@
       folders.innerHTML = modules.map(moduleCard).join('') + pdfCard();
     } else if (!state.section) {
       const rows=moduleRows(), lessons=lessonRows();
-      folders.innerHTML = folder('Quizzes',`${rows.filter(row=>sectionFor(row)==='quizzes').length} available · by topic`,'section:quizzes','✦') + folder('Tests',`${rows.filter(row=>sectionFor(row)==='tests').length} available`,'section:tests','✓') + folder('Examinations',`${rows.filter(row=>sectionFor(row)==='exams').length} available`,'section:exams','▣') + folder('Lessons',`${lessons.length} available · by topic`,'section:lessons','▶');
-      if (!rows.length && !lessons.length) items.innerHTML='<p class="tutor-module-empty">Nothing has been added to this module yet. Use the buttons above to add a quiz or lesson.</p>';
+      folders.innerHTML = lessons.length ? folder('Lessons',`${lessons.length} available · by topic`,'section:lessons','▶') : '';
+      const groups = new Map();
+      rows.forEach(row => {const title=sectionFor(row)==='quizzes' ? clean(row.topic)||'Other topics' : sectionFor(row)==='tests' ? 'Tests' : 'Examinations';if(!groups.has(title))groups.set(title,[]);groups.get(title).push(row);});
+      items.innerHTML = [...groups].sort(([a],[b])=>a.localeCompare(b)).map(([topic,quizzes])=>`<h3 class="tutor-topic-heading">${esc(topic)}</h3>${quizzes.map(quizItem).join('')}`).join('') || '<p class="tutor-module-empty">No quizzes in this module yet. Use the buttons above to add a quiz or lesson.</p>';
       const actions=$('tutorModuleActions');if(actions){actions.classList.remove('hidden');actions.querySelector('[data-create-quiz]').onclick=()=>createQuizInModule(state.module);actions.querySelector('[data-create-lesson]').href=`/lecturers/lessons?module=${encodeURIComponent(state.module)}`;}
     } else if (state.section === 'quizzes' && !state.sub) {
       const rows=moduleRows().filter(row=>sectionFor(row)==='quizzes');
@@ -74,6 +76,17 @@
     const app=$('appWrap'), library=$('tutorQuizLibrary'); if (!app || !library) return;
     if (app.dataset.tutorLibraryReady) return;
     app.dataset.tutorLibraryReady='true';
+    const actions=document.createElement('div');actions.id='tutorModuleActions';actions.className='tutor-module-actions hidden';actions.innerHTML='<button class="btn" type="button" data-create-quiz>Create quiz in this module</button><a class="btn secondary" data-create-lesson href="/lecturers/lessons">Add lesson</a>'; $('tutorQuizFolders').before(actions);
+    $('tutorQuizFolders').addEventListener('click',event=>{const quizModule=event.target.closest('[data-add-quiz]')?.dataset.addQuiz;if(quizModule){createQuizInModule(quizModule);return;}const action=event.target.closest('[data-tutor-step]')?.dataset.tutorStep;if(!action)return;const [kind,...rest]=action.split(':');const value=rest.join(':');if(kind==='module')go(value);else if(kind==='section')go(state.module,value);else if(kind==='sub'||kind==='topic')go(state.module,state.section,value);});
+    $('tutorLibrarySearch').addEventListener('input',renderTutorQuizLibrary);
+    window.addEventListener('popstate',restorePath);
+    restorePath();
+    $('tutorQuizItems').addEventListener('click', event => {
+      const attempts = event.target.closest('[data-quiz-attempts]')?.dataset.quizAttempts;
+      if (attempts) { $('quizSelect').value=attempts; $('loadStudentsBtn').click(); document.querySelector('[data-tutor-view="submissions"]')?.click(); return; }
+      const deleteId = event.target.closest('[data-quiz-delete]')?.dataset.quizDelete;
+      if (deleteId) { $('quizSelect').value=deleteId; $('deleteTutorQuizBtn').click(); }
+    });
     app.querySelector('.tutor-command-center')?.remove();
     app.querySelector('[data-tutor-view-panel="messages"]')?.remove();
     window.addEventListener('hashchange',()=>{if(['#messages','#lecturerMessagesCard'].includes(location.hash))location.replace('/lecturers/messages')});
@@ -82,7 +95,6 @@
     library.querySelector('h2').textContent='My modules';
     library.querySelector('.library-heading p').textContent='Choose a module or search for a quiz, exam, topic, or lesson.';
     $('tutorLibrarySearch').placeholder='Search modules, topics, quizzes and lessons';
-    const actions=document.createElement('div');actions.id='tutorModuleActions';actions.className='tutor-module-actions hidden';actions.innerHTML='<button class="btn" type="button" data-create-quiz>Create quiz in this module</button><a class="btn secondary" data-create-lesson href="/lecturers/lessons">Add lesson</a>'; $('tutorQuizFolders').before(actions);
     const tabs=app.querySelector('.tutor-task-nav'); if (tabs) {tabs.querySelector('[data-tutor-view="library"]').textContent='Modules';tabs.querySelector('[data-tutor-view="create"]').textContent='Create quiz';tabs.querySelector('[data-tutor-view="submissions"]').textContent='Mark work';tabs.querySelector('[data-tutor-view="students"]').textContent='Learners';tabs.querySelector('[data-tutor-view="messages"]').remove();const lesson=document.createElement('a');lesson.href='/lecturers/lessons';lesson.textContent='Add lesson';tabs.append(lesson);const live=document.createElement('a');live.href='/live';live.textContent='Live classroom';tabs.append(live);}
     const nav=app.querySelector('header.top nav'), lock=$('lockBtn');nav.replaceChildren();
     const market=document.createElement('a');market.href='/';market.className='tutor-icon-link';market.textContent='⌂';market.title='Market';market.setAttribute('aria-label','Market');nav.append(market);
@@ -91,16 +103,6 @@
     window.ArounusProfileMenu?.mount({role:'lecturer',nav,onEdit:editProfile,onSignOut:()=>window.ArounusProfileMenu.signOut('lecturer')});lock.remove();
     if(new URLSearchParams(location.search).get('profile')==='1')editProfile();
     const refreshBadge=async()=>{try{const value=await api('/lecturer/messages/unread',{},true);const badge=$('tutorUnreadBadge');badge.textContent=value.count||0;badge.classList.toggle('hidden',!value.count);}catch(_){}};refreshBadge();setInterval(refreshBadge,60000);
-    $('tutorQuizFolders').addEventListener('click',event=>{const quizModule=event.target.closest('[data-add-quiz]')?.dataset.addQuiz;if(quizModule){createQuizInModule(quizModule);return;}const action=event.target.closest('[data-tutor-step]')?.dataset.tutorStep;if(!action)return;event.preventDefault();const [kind,...rest]=action.split(':');const value=rest.join(':');if(kind==='module')go(value);else if(kind==='section')go(state.module,value);else if(kind==='sub'||kind==='topic')go(state.module,state.section,value);});
-    $('tutorLibrarySearch').addEventListener('input',renderTutorQuizLibrary);
-    $('tutorQuizItems').addEventListener('click', async event => {
-      const attempts = event.target.closest('[data-quiz-attempts]')?.dataset.quizAttempts;
-      if (attempts) { $('quizSelect').value=attempts; $('loadStudentsBtn').click(); document.querySelector('[data-tutor-view="submissions"]')?.click(); return; }
-      const deleteId = event.target.closest('[data-quiz-delete]')?.dataset.quizDelete;
-      if (deleteId) { $('quizSelect').value=deleteId; $('deleteTutorQuizBtn').click(); }
-    });
-    window.addEventListener('popstate',restorePath);
-    restorePath();
     api('/lecturer/lessons',{},true).then(rows=>{state.lessons=rows;renderTutorQuizLibrary();}).catch(()=>{});
     renderTutorQuizLibrary();
   };
