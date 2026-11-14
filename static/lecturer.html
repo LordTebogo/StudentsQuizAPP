@@ -15,7 +15,7 @@
 <link rel="stylesheet" href="/static/quiz-builder.css">
 <link rel="stylesheet" href="/static/quiz-math-tools.css"><link rel="stylesheet" href="/static/ui.css?v=2">
 <link rel="stylesheet" href="/static/learning-library.css?v=1">
-<link rel="stylesheet" href="/static/tutor-library.css?v=1">
+<link rel="stylesheet" href="/static/tutor-library.css?v=3">
 <link rel="stylesheet" href="/static/profile-menu.css?v=1"><script src="/static/profile-menu.js?v=2"></script>
 <link rel="stylesheet" href="/static/module-picker.css?v=1">
 <script type="module">import{MathfieldElement}from"https://cdn.jsdelivr.net/npm/mathlive@0.110.0/+esm";MathfieldElement.fontsDirectory="https://cdn.jsdelivr.net/npm/mathlive@0.110.0/fonts";</script>
@@ -146,8 +146,8 @@
     <div id="tutorQuizItems" class="library-items"></div>
     <div class="library-detail hidden" id="tutorQuizDetail">
       <h3 id="tutorQuizDetailTitle">Selected quiz</h3><p class="detail-subtitle" id="tutorQuizDetailMeta"></p>
-      <div class="detail-grid"><div><label for="quizTopicCorrection">Topic</label><input id="quizTopicCorrection" type="text" maxlength="160" placeholder="e.g. DNA replication"></div><div><label for="quizAssessmentCorrection">Assessment</label><select id="quizAssessmentCorrection"><option value="quiz">Topic quiz</option><option value="test">Module test</option><option value="exam">Examination</option></select></div></div>
-      <div class="detail-actions"><button class="btn secondary" id="saveQuizOrganizationBtn" type="button">Save topic and type</button><button class="btn" id="loadStudentsBtn" disabled>View submissions</button><button class="btn secondary" id="duplicateQuizBtn" type="button">Duplicate in builder</button></div>
+      <div class="detail-grid"><div><label for="quizTitleCorrection">Quiz title</label><input id="quizTitleCorrection" type="text" maxlength="200"></div><div><label for="quizTopicCorrection">Topic</label><input id="quizTopicCorrection" type="text" maxlength="160" placeholder="e.g. DNA replication"></div><div><label for="quizAssessmentCorrection">Assessment</label><select id="quizAssessmentCorrection"><option value="quiz">Topic quiz</option><option value="test">Module test</option><option value="exam">Examination</option></select></div></div>
+      <div class="detail-actions"><button class="btn secondary" id="saveQuizOrganizationBtn" type="button">Save quiz details</button><button class="btn" id="loadStudentsBtn" disabled>View submissions</button><button class="btn secondary" id="duplicateQuizBtn" type="button">Edit questions as new quiz</button><button class="btn secondary danger-action" id="deleteTutorQuizBtn" type="button">Delete quiz</button></div>
       <details class="library-advanced"><summary>Move to another module</summary><label for="quizModuleCorrection">Assigned module</label><select id="quizModuleCorrection"></select><p class="muted" id="quizModuleHelp">A module can only change before a learner starts this quiz.</p><button class="btn secondary" id="correctQuizModuleBtn" type="button">Save module</button></details>
       <p class="muted" id="quizReviewStatus" aria-live="polite">Choose a quiz to see its options.</p>
     </div>
@@ -473,7 +473,7 @@ function renderTutorQuizLibrary() {
 $('tutorLibrarySearch').addEventListener('input', renderTutorQuizLibrary);
 $('tutorQuizCrumbs').addEventListener('click', event => { const step = event.target.closest('[data-library-back]')?.dataset.libraryBack; if (!step) return; if (step === 'modules') { tutorLibraryModule = ''; tutorLibraryTopic = ''; } else tutorLibraryTopic = ''; $('tutorQuizDetail').classList.add('hidden'); $('tutorLibrarySearch').value = ''; renderTutorQuizLibrary(); });
 $('tutorQuizFolders').addEventListener('click', event => { const module = event.target.closest('[data-library-module]')?.dataset.libraryModule, topic = event.target.closest('[data-library-topic]')?.dataset.libraryTopic; if (module) tutorLibraryModule = module; if (topic) tutorLibraryTopic = topic; if (!module && !topic) return; $('tutorQuizDetail').classList.add('hidden'); $('tutorLibrarySearch').value = ''; renderTutorQuizLibrary(); });
-$('tutorQuizItems').addEventListener('click', event => { const quizId = event.target.closest('[data-library-quiz]')?.dataset.libraryQuiz; if (!quizId) return; $('quizSelect').value = quizId; $('quizSelect').dispatchEvent(new Event('change')); const quiz = tutorQuizRows.find(q => String(q.id) === quizId); $('tutorQuizDetailTitle').textContent = moduleDisplayTitle(quiz.title, quiz.module_code); $('tutorQuizDetailMeta').textContent = `${moduleLabel(quiz.module_code)} · ${quiz.assessment_type === 'test' ? 'Test' : quiz.topic || 'Other topics'}`; $('tutorQuizDetail').classList.remove('hidden'); renderTutorQuizLibrary(); $('tutorQuizDetail').scrollIntoView({behavior:'smooth', block:'nearest'}); });
+$('tutorQuizItems').addEventListener('click', event => { const quizId = event.target.closest('[data-library-quiz]')?.dataset.libraryQuiz; if (!quizId) return; $('quizSelect').value = quizId; $('quizSelect').dispatchEvent(new Event('change')); const quiz = tutorQuizRows.find(q => String(q.id) === quizId); $('quizTitleCorrection').value = quiz.title; $('tutorQuizDetailTitle').textContent = moduleDisplayTitle(quiz.title, quiz.module_code); $('tutorQuizDetailMeta').textContent = `${moduleLabel(quiz.module_code)} · ${quiz.attempt_count} learner${quiz.attempt_count===1?'':'s'} attempted`; $('tutorQuizDetail').classList.remove('hidden'); renderTutorQuizLibrary(); $('tutorQuizDetail').scrollIntoView({behavior:'smooth', block:'nearest'}); });
 async function loadQuizzes() {
   const select = $('quizSelect');
   const selectedId = select.value || String(currentQuizId || '');
@@ -507,14 +507,22 @@ async function loadQuizzes() {
 }
 $('refreshQuizzesBtn').addEventListener('click', loadQuizzes);
 $('saveQuizOrganizationBtn').addEventListener('click', async () => {
-  const quizId = $('quizSelect').value, topic = $('quizTopicCorrection').value.trim();
-  if (!quizId || !topic) { $('quizReviewStatus').textContent = 'Choose a quiz and enter its topic.'; return; }
+  const quizId = $('quizSelect').value, topic = $('quizTopicCorrection').value.trim(), title = $('quizTitleCorrection').value.trim();
+  if (!quizId || !topic || !title) { $('quizReviewStatus').textContent = 'Enter a quiz title and topic.'; return; }
   const button = $('saveQuizOrganizationBtn'); button.disabled = true;
   try {
-    await api(`/lecturer/quizzes/${encodeURIComponent(quizId)}/organization`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({topic, assessment_type:$('quizAssessmentCorrection').value})}, true);
+    await api(`/lecturer/quizzes/${encodeURIComponent(quizId)}/organization`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({title, topic, assessment_type:$('quizAssessmentCorrection').value})}, true);
     tutorLibraryTopic = $('quizAssessmentCorrection').value === 'test' ? 'Tests' : topic;
     await loadQuizzes(); $('quizReviewStatus').textContent = 'Quiz organization saved. Students will see it under the selected topic or Tests.';
   } catch (err) { $('quizReviewStatus').textContent = err.message; }
+  finally { button.disabled = false; }
+});
+$('deleteTutorQuizBtn').addEventListener('click', async () => {
+  const quizId = $('quizSelect').value, quiz = tutorQuizRows.find(row => String(row.id) === quizId);
+  if (!quiz || !confirm(`Delete “${quiz.title}” and its ${quiz.attempt_count} learner attempt${quiz.attempt_count===1?'':'s'} permanently?`)) return;
+  const button = $('deleteTutorQuizBtn'); button.disabled = true;
+  try { await api(`/lecturer/quizzes/${encodeURIComponent(quizId)}`, {method:'DELETE'}, true); if (String(currentQuizId) === quizId) currentQuizId = null; $('tutorQuizDetail').classList.add('hidden'); await loadQuizzes(); }
+  catch (err) { $('quizReviewStatus').textContent = `Could not delete quiz: ${err.message}`; }
   finally { button.disabled = false; }
 });
 $('correctQuizModuleBtn').addEventListener('click', async () => {
@@ -788,8 +796,8 @@ $('downloadOnePdfBtn').addEventListener('click', () => {
 });
 </script>
 <script src="/static/experience.js?v=18"></script>
-<script src="/static/quiz-builder.js?v=17"></script>
-<script src="/static/tutor-library.js?v=3"></script>
+<script src="/static/quiz-builder.js?v=18"></script>
+<script src="/static/tutor-library.js?v=6"></script>
 <script src="/static/module-picker.js?v=1"></script>
 <script src="/static/loading.js"></script>
 <script src="/static/pwa.js?v=18"></script>

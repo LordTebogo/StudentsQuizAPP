@@ -973,6 +973,7 @@ class LearningTopicChange(BaseModel):
 
 class QuizOrganizationChange(LearningTopicChange):
     assessment_type: str = "quiz"
+    title: Optional[str] = Field(default=None, min_length=1, max_length=200)
 
 
 class QuizGenerationInput(BaseModel):
@@ -2684,7 +2685,16 @@ async def upload_quiz(
 @app.get("/quizzes")
 def list_quizzes(lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db)):
     rows = db.query(Quiz).filter(Quiz.lecturer_id == lecturer.id).order_by(Quiz.id.desc()).all()
-    return [{"id": r.id, "title": r.title, "module_code": r.module_code, "topic": r.topic or "", "assessment_type": r.assessment_type or "quiz", "is_fun": bool(r.is_fun), "fun_level": r.fun_level or "starter", "created_at": r.created_at} for r in rows]
+    counts = dict(db.query(Submission.quiz_id, func.count(func.distinct(Submission.student_id))).join(Quiz, Quiz.id == Submission.quiz_id).filter(Quiz.lecturer_id == lecturer.id).group_by(Submission.quiz_id).all())
+    return [{"id": r.id, "title": r.title, "module_code": r.module_code, "topic": r.topic or "", "assessment_type": r.assessment_type or "quiz", "is_fun": bool(r.is_fun), "fun_level": r.fun_level or "starter", "created_at": r.created_at, "attempt_count": counts.get(r.id, 0)} for r in rows]
+
+
+@app.delete("/lecturer/quizzes/{quiz_id}")
+def lecturer_delete_quiz(quiz_id: int, lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db)):
+    quiz = _require_owned_quiz(db, quiz_id, lecturer)
+    db.delete(quiz)
+    db.commit()
+    return {"ok": True}
 
 
 @app.patch("/lecturer/quizzes/{quiz_id}/module")
@@ -2708,6 +2718,10 @@ def lecturer_change_quiz_organization(
     lecturer: Lecturer = Depends(require_lecturer_account), db: Session = Depends(get_db),
 ):
     quiz = _require_owned_quiz(db, quiz_id, lecturer)
+    if payload.title is not None:
+        quiz.title = " ".join(payload.title.split())
+        if not quiz.title:
+            raise HTTPException(status_code=400, detail="Enter a quiz title")
     quiz.topic = _learning_topic(payload.topic, True)
     quiz.assessment_type = _assessment_type(payload.assessment_type)
     db.commit()

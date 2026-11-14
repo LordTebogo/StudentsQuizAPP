@@ -328,7 +328,7 @@
   }
 
   function newQuiz(ask = true) {
-    if (ask && state.dirty && !confirm('Discard your unsaved builder changes and start a new quiz?')) return;
+    if (ask && state.dirty && !confirm('Discard your unsaved builder changes and start a new quiz?')) return false;
     state.draftId = null;
     state.dirty = false;
     byId('builderQuizTitle').value = '';
@@ -343,7 +343,15 @@
     byId('quizDraftStatus').textContent = 'New unsaved quiz';
     replaceQuestions([blankQuestion()]);
     byId('builderMsg').replaceChildren();
+    return true;
   }
+
+  window.startQuizInModule = moduleCode => {
+    if (!state.modules.includes(moduleCode) || !newQuiz(true)) return false;
+    byId('builderModuleCode').value = moduleCode;
+    byId('moduleCode').value = moduleCode;
+    return true;
+  };
 
   async function duplicateQuiz() {
     const quizId = byId('quizSelect').value;
