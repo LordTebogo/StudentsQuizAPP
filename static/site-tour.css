@@ -1,0 +1,16 @@
+.arounus-tour-scrim { position:fixed;inset:0;z-index:12000;background:transparent; }
+.arounus-tour-spotlight { position:fixed;z-index:12001;border:3px solid #23c6a4;border-radius:15px;box-shadow:0 0 0 9999px rgba(5,30,25,.7),0 0 0 6px rgba(35,198,164,.3);pointer-events:none;transition:top .25s,left .25s,width .25s,height .25s; }
+.arounus-tour-card { position:fixed;z-index:12002;box-sizing:border-box;width:min(380px,calc(100vw - 32px));max-height:calc(100vh - 32px);overflow:auto;padding:22px;border:1px solid #a9d8c7;border-radius:20px;background:#fff;color:#173d35;box-shadow:0 20px 60px rgba(0,0,0,.28);font:inherit; }
+.arounus-tour-card::before { content:"";position:absolute;left:var(--tour-arrow-left,50%);width:17px;height:17px;background:#fff;border-left:1px solid #a9d8c7;border-top:1px solid #a9d8c7;transform:translateX(-50%) rotate(45deg); }
+.arounus-tour-card[data-placement="below"]::before { top:-9px; }
+.arounus-tour-card[data-placement="above"]::before { bottom:-9px;transform:translateX(-50%) rotate(225deg); }
+.arounus-tour-top { display:flex;align-items:center;justify-content:space-between;gap:12px; }
+.arounus-tour-step { color:#087f70;font-size:.82rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase; }
+.arounus-tour-close { border:0;background:transparent;color:#365e52;font-size:1.7rem;line-height:1;cursor:pointer; }
+.arounus-tour-card h2 { margin:12px 0 8px;font-size:1.5rem;line-height:1.2; }
+.arounus-tour-card p { margin:0;color:#365e52;line-height:1.55; }
+.arounus-tour-actions { display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:22px; }
+.arounus-tour-actions button { min-height:42px;padding:8px 14px;border-radius:10px;border:1px solid #83bdab;background:#f0f8f3;color:#086d5a;font:inherit;font-weight:700;cursor:pointer; }
+.arounus-tour-actions .arounus-tour-next { background:#087f70;border-color:#087f70;color:#fff; }
+.arounus-tour-actions button:hover,.arounus-tour-actions button:focus-visible,.arounus-tour-close:focus-visible { outline:3px solid #55d9bb;outline-offset:2px; }
+@media (prefers-reduced-motion:reduce) { .arounus-tour-spotlight { transition:none; } }
