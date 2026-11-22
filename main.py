@@ -9101,6 +9101,16 @@ def _frontend_page(filename: str):
     return serve_page
 
 
+@app.get("/students/android/download", include_in_schema=False)
+def download_student_android_app():
+    return FileResponse(
+        os.path.join("static", "downloads", "Arounus-Student-1.2.apk"),
+        media_type="application/vnd.android.package-archive",
+        filename="Arounus-Student-1.2.apk",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
 def _legacy_frontend_redirect(friendly_path: str):
     def redirect(request: Request):
         destination = friendly_path
