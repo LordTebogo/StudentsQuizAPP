@@ -5,22 +5,11 @@
 .student-icon-link { display:inline-flex; align-items:center; justify-content:center; gap:4px; min-width:44px; min-height:44px; padding:8px 12px; border:1px solid #b7d6c8; border-radius:12px; background:#fff; color:#164e42; font:inherit; font-weight:700; text-decoration:none; cursor:pointer; }
 .student-icon-link:hover,.student-icon-link:focus-visible { background:#e9f5ee; outline:2px solid #087f70; }
 .student-unread { display:inline-grid; place-items:center; min-width:21px; height:21px; padding:0 4px; border-radius:20px; background:#b32934; color:#fff; font-size:.76rem; }
-.learning-search { margin:18px 0 24px; }
 .module-heading { display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px; }
 .module-heading h2 { margin:0; }
 .module-search { position:relative;display:block;flex:1 1 280px;max-width:420px;margin:0; }
 .module-search input { width:100%;min-height:48px;padding-left:44px; }
 .module-search-icon { position:absolute;left:15px;top:50%;transform:translateY(-50%);color:#087f70;font-size:1.55rem;pointer-events:none; }
-.learning-search label { display:block; margin-bottom:6px; font-weight:700; }
-.learning-search input { width:100%; max-width:620px; min-height:48px; }
-.learning-search select { display:block; width:100%; max-width:300px; min-height:44px; margin:8px 0 12px; }
-.learning-search label[for="learningSearchType"] { margin-top:12px; }
-.learning-suggestions { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0; }
-.learning-suggestions.hidden { display:none; }
-.learning-suggestions button { border:1px solid #b7d6c8; border-radius:20px; background:#eef7f1; color:#164e42; padding:7px 12px; font:inherit; cursor:pointer; }
-.learning-suggestions button:hover,.learning-suggestions button:focus-visible { outline:2px solid #087f70; }
-#learningSearchResults { margin-top:12px; max-height:420px; overflow:auto; }
-#learningSearchResults .library-item { text-decoration:none; }
 #quizList .library-item[href] { text-decoration:none; }
 #quizListCard .admin-editor-heading { gap:12px; flex-wrap:wrap; }
 @media(max-width:620px){#appWrap header.top nav{width:100%;justify-content:flex-start}.student-icon-link{flex:0 0 auto}}

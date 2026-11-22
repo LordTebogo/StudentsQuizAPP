@@ -87,49 +87,21 @@
   };
   const renderHome = () => {
     const list = byId('moduleList');
+    const term = norm(byId('learningSearch')?.value);
+    const modules = state.modules.filter(module => {
+      if (!term) return true;
+      const code = module.module_code;
+      const searchable = [module.module_name, label(code), code,
+        ...(state.lessons.get(code) || []).flatMap(row => [row.topic, row.title]),
+        ...(state.quizzes.get(code) || []).flatMap(row => [row.topic, row.title])];
+      return searchable.some(value => norm(value).includes(term));
+    });
     list.classList.add('library-folder-grid');
-    list.innerHTML = state.modules.map(module => folder(module.module_name || label(module.module_code), `${module.quiz_count || 0} assessment(s) · ${queryLessons(module.module_code).length} lesson(s)`, module.module_code)).join('') + pdfCard();
+    list.innerHTML = modules.map(module => folder(module.module_name || label(module.module_code), `${module.quiz_count || 0} assessment(s) · ${queryLessons(module.module_code).length} lesson(s)`, module.module_code)).join('') + (!term ? pdfCard() : '');
     list.querySelectorAll('[data-action]').forEach(button => button.onclick = () => show(button.dataset.action));
-    byId('moduleMsg').textContent = state.modules.length ? '' : 'Choose your subjects in your profile to see them here.';
+    byId('moduleMsg').textContent = !state.modules.length ? 'Choose your subjects in your profile to see them here.' : !modules.length ? 'No modules match your search.' : '';
   };
-  const search = () => {
-    const input = byId('learningSearch'), results = byId('learningSearchResults');
-    if (!input || !results) return;
-    const term = norm(input.value);
-    const kind = byId('learningSearchType')?.value || 'all';
-    const suggestions = byId('learningSearchSuggestions');
-    const available = [...new Set(state.modules.flatMap(module => [module.module_name || label(module.module_code), module.module_code,
-      ...(state.lessons.get(module.module_code) || []).map(row => clean(row.topic)).filter(Boolean),
-      ...(state.quizzes.get(module.module_code) || []).map(row => clean(row.topic)).filter(Boolean)]))];
-    const choices = available.filter(value => !term || norm(value).includes(term)).slice(0, 8);
-    suggestions.innerHTML = choices.map((value, index) => `<button type="button" data-suggestion="${index}">${escape(value)}</button>`).join('');
-    suggestions.classList.toggle('hidden', !choices.length);
-    suggestions.querySelectorAll('[data-suggestion]').forEach(button => button.onclick = () => {input.value = choices[Number(button.dataset.suggestion)]; search(); input.focus();});
-    if (!term) {results.classList.add('hidden'); results.innerHTML = ''; return;}
-    const hits = [];
-    for (const module of state.modules) {
-      const code = module.module_code, name = module.module_name || label(code);
-      const moduleMatch = norm(name + ' ' + code).includes(term);
-      if (moduleMatch && ['all','module'].includes(kind)) hits.push({title:name, detail:'Module', open:() => show(code)});
-      const lessons = state.lessons.get(code) || [], quizzes = state.quizzes.get(code) || [];
-      const topics = new Map();
-      for (const row of [...lessons, ...quizzes]) {
-        const topic = clean(row.topic);
-        if (!topic || !(moduleMatch || norm(topic).includes(term))) continue;
-        const key = `${norm(topic)}\u0000${row.lecturer_id}`;
-        if (!topics.has(key)) topics.set(key, {topic, tutorId:Number(row.lecturer_id), lessons:0, assessments:0});
-        topics.get(key)[lessons.includes(row) ? 'lessons' : 'assessments']++;
-      }
-      if (['all','topic'].includes(kind)) for (const item of topics.values()) {
-        const tutor = (state.tutors.get(code) || []).find(person => person.id === item.tutorId);
-        hits.push({title:item.topic, detail:`${name} · ${tutor?.full_name || 'Tutor'} · ${item.lessons} lesson(s), ${item.assessments} assessment(s)`,
-          open:() => {state.tutorId = item.tutorId; show(code, item.lessons ? 'lessons' : 'quizzes', item.lessons ? item.topic : null);}});
-      }
-    }
-    results.classList.remove('hidden');
-    results.innerHTML = hits.map((hit,index) => `<${hit.href ? 'a' : 'button'} class="library-item" ${hit.href ? `href="${hit.href}"` : `type="button" data-hit="${index}"`}><span><strong>${escape(hit.title)}</strong><small>${escape(hit.detail)}</small></span><span>Open →</span></${hit.href ? 'a' : 'button'}>`).join('') || '<p class="muted">No match in your available modules. Try another topic or title.</p>';
-    results.querySelectorAll('[data-hit]').forEach(button => button.onclick = () => hits[Number(button.dataset.hit)].open());
-  };
+  const search = () => renderHome();
   loadModules = async function () {
     byId('moduleList').innerHTML = '<p class="muted">Loading your modules…</p>';
     try {
@@ -186,8 +158,6 @@
     const androidCard = byId('androidAppCard');
     if (androidCard) app.append(androidCard);
     byId('learningSearch').addEventListener('input', search);
-    byId('learningSearch').addEventListener('focus', search);
-    byId('learningSearchType').addEventListener('change', search);
     window.addEventListener('popstate', restorePath);
     byId('backBtn').onclick = home;
     const refreshBadge = async () => {try {const result = await api('/student/messages/unread', {}, true); const badge = byId('studentUnreadBadge'); badge.textContent = result.count || 0; badge.classList.toggle('hidden', !result.count);} catch (_) {}};
