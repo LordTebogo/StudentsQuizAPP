@@ -189,6 +189,16 @@ class PushSubscription(Base):
     created_at = Column(String, nullable=False)
 
 
+class AndroidPushToken(Base):
+    """Firebase registration token for a signed-in Android student device."""
+    __tablename__ = "android_push_tokens"
+
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer, ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True)
+    token = Column(Text, nullable=False, unique=True)
+    created_at = Column(String, nullable=False)
+
+
 # ---------------------------------------------------------------------------
 # Campus marketing: landlord-owned student accommodation listings
 # ---------------------------------------------------------------------------

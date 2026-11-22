@@ -88,6 +88,13 @@ try:
 except ImportError:  # The app stays usable while push dependencies are being installed.
     WebPushException = Exception
     webpush = None
+try:
+    import firebase_admin
+    from firebase_admin import credentials as firebase_credentials, messaging as firebase_messaging
+except ImportError:
+    firebase_admin = None
+    firebase_credentials = None
+    firebase_messaging = None
 
 from database import Base, SessionLocal, engine, get_db
 from app_traffic import create_traffic_router
@@ -115,7 +122,7 @@ from models import (
     Student,
     PremiumPayment,
     SupportPayment,
-    PushSubscription, MarketPushSubscription,
+    PushSubscription, MarketPushSubscription, AndroidPushToken,
     StudentModule,
     Landlord, Accommodation, AccommodationComment, RoomListingEmail, MarketAdvert, MarketListingView, MarketListingRating, MediaFinanceEntry, MediaUploadEvent, Vacancy,
     PasswordResetCode,
@@ -154,6 +161,8 @@ LANDLORD_SESSION_SECRET = _session_secrets["landlord"]
 VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "").strip()
 VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "").strip()
 VAPID_SUBJECT = os.getenv("VAPID_SUBJECT", "mailto:admin@example.com").strip()
+FIREBASE_SERVICE_ACCOUNT_JSON = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON", "").strip()
+FIREBASE_SERVICE_ACCOUNT_FILE = os.getenv("FIREBASE_SERVICE_ACCOUNT_FILE", "").strip()
 GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY", "").strip()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 GEMINI_QUIZ_MODEL = os.getenv("GEMINI_QUIZ_MODEL", "gemini-3.1-flash-lite").strip() or "gemini-3.1-flash-lite"
@@ -840,6 +849,10 @@ class PushSubscriptionCreate(BaseModel):
 
 class PushSubscriptionDelete(BaseModel):
     endpoint: str
+
+
+class AndroidPushTokenRequest(BaseModel):
+    token: str
 
 
 class AdminBroadcastMessage(BaseModel):
@@ -5219,6 +5232,45 @@ def _push_enabled() -> bool:
     return bool(webpush and VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY and VAPID_SUBJECT)
 
 
+def _firebase_app():
+    if not firebase_admin or not (FIREBASE_SERVICE_ACCOUNT_JSON or FIREBASE_SERVICE_ACCOUNT_FILE):
+        return None
+    try:
+        return firebase_admin.get_app()
+    except ValueError:
+        try:
+            if FIREBASE_SERVICE_ACCOUNT_FILE:
+                with open(FIREBASE_SERVICE_ACCOUNT_FILE, encoding="utf-8") as source:
+                    info = json.load(source)
+            else:
+                info = json.loads(FIREBASE_SERVICE_ACCOUNT_JSON)
+            return firebase_admin.initialize_app(firebase_credentials.Certificate(info))
+        except Exception:
+            return None
+
+
+def _deliver_android_push(db: Session, student_ids: List[int], title: str, body: str, url: str, tag: str):
+    app_instance = _firebase_app()
+    if not app_instance or not student_ids:
+        return
+    registrations = db.query(AndroidPushToken).filter(AndroidPushToken.student_id.in_(set(student_ids))).all()
+    removed = False
+    for registration in registrations:
+        try:
+            firebase_messaging.send(firebase_messaging.Message(
+                token=registration.token,
+                notification=firebase_messaging.Notification(title=title[:90], body=body[:180]),
+                data={"url": url, "tag": tag[:80]},
+            ), app=app_instance)
+        except firebase_messaging.UnregisteredError:
+            db.delete(registration)
+            removed = True
+        except Exception:
+            pass
+    if removed:
+        db.commit()
+
+
 def _deliver_push(db: Session, subscriptions, title: str, body: str, url: str, tag: str):
     """Push failures never discard an already saved message; expired devices are removed."""
     if not _push_enabled():
@@ -5246,22 +5298,25 @@ def _deliver_push(db: Session, subscriptions, title: str, body: str, url: str, t
 
 
 def _notify_students_by_push(db: Session, student_ids: List[int], title: str, body: str, url: str, tag: str):
-    if not _push_enabled() or not student_ids:
+    if not student_ids:
         return
-    subscriptions = db.query(PushSubscription).filter(PushSubscription.student_id.in_(set(student_ids))).all()
-    _deliver_push(db, subscriptions, title, body, url, tag)
+    if _push_enabled():
+        subscriptions = db.query(PushSubscription).filter(PushSubscription.student_id.in_(set(student_ids))).all()
+        _deliver_push(db, subscriptions, title, body, url, tag)
+    _deliver_android_push(db, student_ids, title, body, url, tag)
 
 
 def _notify_market_message_by_push(db: Session, recipient_type: str, recipient_id: int, message_id: int):
-    if not _push_enabled():
-        return
     aliases = _market_message_aliases(db, recipient_type, recipient_id)
     provider_ids = [person_id for kind, person_id in aliases if kind == "landlord"]
     student_ids = [person_id for kind, person_id in aliases if kind == "student"]
-    subscriptions = db.query(MarketPushSubscription).join(Landlord).filter(MarketPushSubscription.landlord_id.in_(provider_ids), Landlord.active.is_(True)).all() if provider_ids else []
-    if student_ids:
-        subscriptions += db.query(PushSubscription).filter(PushSubscription.student_id.in_(student_ids)).all()
-    _deliver_push(db, subscriptions, "New Arounus message", "You have a new marketplace message. Open Arounus to read it.", "/?messages=1", f"message-{message_id}")
+    title, body, url, tag = "New Arounus message", "You have a new marketplace message. Open Arounus to read it.", "/?messages=1", f"message-{message_id}"
+    if _push_enabled():
+        subscriptions = db.query(MarketPushSubscription).join(Landlord).filter(MarketPushSubscription.landlord_id.in_(provider_ids), Landlord.active.is_(True)).all() if provider_ids else []
+        if student_ids:
+            subscriptions += db.query(PushSubscription).filter(PushSubscription.student_id.in_(student_ids)).all()
+        _deliver_push(db, subscriptions, title, body, url, tag)
+    _deliver_android_push(db, student_ids, title, body, url, tag)
 
 
 def _push_subscription_data(payload: PushSubscriptionCreate):
@@ -5357,6 +5412,42 @@ def _conversation_summaries(messages: List[dict]) -> List[dict]:
 def notification_config():
     """Public VAPID key for browsers; the private key never leaves the server."""
     return {"enabled": _push_enabled(), "public_key": VAPID_PUBLIC_KEY if _push_enabled() else ""}
+
+
+@app.post("/student/notifications/android")
+def register_android_notifications(
+    payload: AndroidPushTokenRequest,
+    student: Student = Depends(require_student_account),
+    db: Session = Depends(get_db),
+):
+    device_token = payload.token.strip()
+    if not 20 <= len(device_token) <= 4096 or any(character.isspace() for character in device_token):
+        raise HTTPException(status_code=422, detail="Invalid device notification token")
+    registration = db.query(AndroidPushToken).filter(AndroidPushToken.token == device_token).first()
+    if registration:
+        registration.student_id = student.id
+        registration.created_at = datetime.now(timezone.utc).isoformat()
+    else:
+        db.add(AndroidPushToken(student_id=student.id, token=device_token,
+                                created_at=datetime.now(timezone.utc).isoformat()))
+    db.commit()
+    return {"ok": True}
+
+
+@app.delete("/student/notifications/android")
+def unregister_android_notifications(
+    payload: AndroidPushTokenRequest,
+    student: Student = Depends(require_student_account),
+    db: Session = Depends(get_db),
+):
+    registration = db.query(AndroidPushToken).filter(
+        AndroidPushToken.student_id == student.id,
+        AndroidPushToken.token == payload.token.strip(),
+    ).first()
+    if registration:
+        db.delete(registration)
+        db.commit()
+    return {"ok": True}
 
 
 @app.post("/student/notifications/subscribe")

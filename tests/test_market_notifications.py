@@ -4,7 +4,7 @@ import os
 import tempfile
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 _database = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
 _database.close()
@@ -12,7 +12,7 @@ os.environ["DATABASE_URL"] = "sqlite:///" + _database.name.replace("\\", "/")
 os.environ["SMTP_HOST"] = ""
 from fastapi.testclient import TestClient
 import main
-from models import DirectMessage, DirectMessageBlock, Landlord, Lecturer, MarketPushSubscription, PushSubscription, Student
+from models import AndroidPushToken, DirectMessage, DirectMessageBlock, Landlord, Lecturer, MarketPushSubscription, PushSubscription, Student
 
 
 class PushError(Exception):
@@ -42,6 +42,40 @@ class MarketNotificationsTest(unittest.TestCase):
 
     def subscribe(self,headers=None,payload=None):
         return self.client.post('/marketing/notifications/subscribe',headers=headers or self.owner_headers,json=payload or self.payload)
+
+    def test_android_device_token_requires_student_and_can_be_removed(self):
+        token = "test-firebase-device-token-1234567890"
+        path = '/student/notifications/android'
+        self.assertEqual(self.client.post(path,json={"token":token}).status_code,401)
+        headers = {"X-Student-Token":main._issue_student_token(self.student)}
+        self.assertEqual(self.client.post(path,headers=headers,json={"token":"bad token"}).status_code,422)
+        self.assertEqual(self.client.post(path,headers=headers,json={"token":token}).status_code,200)
+        with main.SessionLocal() as db:
+            self.assertEqual(db.query(AndroidPushToken).filter_by(token=token).one().student_id,self.student)
+        self.assertEqual(self.client.request('DELETE',path,headers=headers,json={"token":token}).status_code,200)
+        with main.SessionLocal() as db:
+            self.assertIsNone(db.query(AndroidPushToken).filter_by(token=token).first())
+
+    def test_android_notification_uses_registered_student_device(self):
+        device_token = "test-firebase-device-token-9876543210"
+        with main.SessionLocal() as db:
+            db.add(AndroidPushToken(student_id=self.student, token=device_token, created_at="2026-11-22"))
+            db.commit()
+        sender = Mock()
+        messaging = SimpleNamespace(
+            Message=lambda **values: values,
+            Notification=lambda **values: values,
+            send=sender,
+            UnregisteredError=type("UnregisteredError", (Exception,), {}),
+        )
+        with patch.object(main, "_firebase_app", return_value=object()), patch.object(main, "firebase_messaging", messaging):
+            with main.SessionLocal() as db:
+                main._notify_students_by_push(db, [self.student], "New module message", "A new message is ready.", "/students", "module-1")
+        sender.assert_called_once()
+        sent = sender.call_args.args[0]
+        self.assertEqual(sent["token"], device_token)
+        self.assertEqual(sent["notification"]["body"], "A new message is ready.")
+        self.assertEqual(sent["data"]["url"], "/students")
 
     def send(self,headers=None,target=None,recipient_type='landlord'):
         return self.client.post('/marketing/provider/messages',headers=headers or self.other_headers,json={"recipient_type":recipient_type,"recipient_id":target or self.owner,"content":"Private message text must not appear on the lock screen"})
