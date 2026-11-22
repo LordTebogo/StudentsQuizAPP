@@ -32,6 +32,7 @@ import calendar
 import html
 import asyncio
 import json
+import logging
 import os
 import re
 import base64
@@ -5245,7 +5246,8 @@ def _firebase_app():
             else:
                 info = json.loads(FIREBASE_SERVICE_ACCOUNT_JSON)
             return firebase_admin.initialize_app(firebase_credentials.Certificate(info))
-        except Exception:
+        except Exception as error:
+            logging.getLogger("uvicorn.error").warning("Firebase initialization failed: %s", type(error).__name__)
             return None
 
 
@@ -5254,6 +5256,8 @@ def _deliver_android_push(db: Session, student_ids: List[int], title: str, body:
     if not app_instance or not student_ids:
         return
     registrations = db.query(AndroidPushToken).filter(AndroidPushToken.student_id.in_(set(student_ids))).all()
+    logger = logging.getLogger("uvicorn.error")
+    logger.info("Android push target devices: %d", len(registrations))
     removed = False
     for registration in registrations:
         try:
@@ -5262,11 +5266,13 @@ def _deliver_android_push(db: Session, student_ids: List[int], title: str, body:
                 notification=firebase_messaging.Notification(title=title[:90], body=body[:180]),
                 data={"url": url, "tag": tag[:80]},
             ), app=app_instance)
+            logger.info("Android push accepted by Firebase")
         except firebase_messaging.UnregisteredError:
+            logger.warning("Android push device token expired")
             db.delete(registration)
             removed = True
-        except Exception:
-            pass
+        except Exception as error:
+            logger.warning("Android push failed: %s", type(error).__name__)
     if removed:
         db.commit()
 
