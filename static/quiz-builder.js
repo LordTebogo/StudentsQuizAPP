@@ -138,7 +138,7 @@
       return `<div class="question-type-fields"><label>Answer options <span class="muted">— select the correct one</span></label><div class="question-options">${question.options.map((option, index) => `<div class="question-option"><input type="radio" name="correct-${attr(question.key)}" data-correct-index="${index}" aria-label="Mark option ${index + 1} as correct" ${question.correctIndex === index ? 'checked' : ''}><input type="text" data-option-index="${index}" value="${attr(option)}" placeholder="Option ${String.fromCharCode(65 + index)}"><button class="option-remove" type="button" data-action="remove-option" data-index="${index}" aria-label="Remove option ${index + 1}">Remove</button></div>`).join('')}</div><button class="btn secondary" type="button" data-action="add-option">+ Add option</button></div>`;
     }
     if (question.type === 'short') {
-      return `<div class="question-type-fields"><label for="short-${attr(question.key)}">Correct short answer</label><input id="short-${attr(question.key)}" type="text" data-field="correct_answer" value="${attr(question.correct_answer)}" placeholder="One or two words"><small class="muted">The marking key can contain a maximum of two words.</small></div>`;
+      return `<div class="question-type-fields"><label for="short-${attr(question.key)}">Correct short answer</label><input id="short-${attr(question.key)}" type="text" data-field="correct_answer" value="${attr(question.correct_answer)}" placeholder="${byId('builderIsFun').checked ? 'Up to three words' : 'One or two words'}"><small class="muted">The marking key can contain a maximum of ${byId('builderIsFun').checked ? 'three' : 'two'} words.</small></div>`;
     }
     return '<div class="question-type-fields"><p class="muted">Students write a longer response. This question will wait for manual tutor marking.</p></div>';
   }
@@ -147,7 +147,7 @@
     if (!byId('builderIsFun').checked) return '';
     const similarAnswer = question.type === 'mcq'
       ? `<label>Similar answer options — select the correct one</label><div class="question-options">${question.similar_options.map((option, index) => `<div class="question-option"><input type="radio" name="similar-correct-${attr(question.key)}" data-similar-correct-index="${index}" aria-label="Mark similar option ${index + 1} as correct" ${question.similarCorrectIndex === index ? 'checked' : ''}><input type="text" data-similar-option-index="${index}" value="${attr(option)}" placeholder="Similar option ${String.fromCharCode(65 + index)}"><button class="option-remove" type="button" data-action="remove-similar-option" data-index="${index}">Remove</button></div>`).join('')}</div><button class="btn secondary" type="button" data-action="add-similar-option">+ Add similar option</button>`
-      : `<label>Correct answer for the similar question</label><input type="text" data-field="similar_correct_answer" value="${attr(question.similar_correct_answer)}" placeholder="One or two words">`;
+      : `<label>Correct answer for the similar question</label><input type="text" data-field="similar_correct_answer" value="${attr(question.similar_correct_answer)}" placeholder="Up to three words">`;
     return `<section class="fun-question-fields"><h4>Fun Quiz feedback</h4><label>Explanation shown after viewing the answer</label><textarea data-field="explanation" placeholder="Explain why the answer is correct in a friendly, helpful way">${html(question.explanation)}</textarea><label>Try another similar question</label><textarea data-field="similar_question" placeholder="Write a different question that tests the same idea">${html(question.similar_question)}</textarea>${similarAnswer}</section>`;
   }
 
@@ -455,7 +455,7 @@
       }
       if (question.type === 'short') {
         if (!payload.correct_answer) errors.push(`${label}: enter the correct short answer`);
-        else if (payload.correct_answer.split(/\s+/).filter(Boolean).length > 2) errors.push(`${label}: the short-answer key can contain at most two words`);
+        else if (payload.correct_answer.split(/\s+/).filter(Boolean).length > (isFun ? 3 : 2)) errors.push(`${label}: the short-answer key can contain at most ${isFun ? 'three' : 'two'} words`);
       }
       if (isFun) {
         if (question.type === 'long') errors.push(`${label}: fun quizzes cannot use long answers`);
@@ -463,7 +463,7 @@
         if (!payload.similar_question) errors.push(`${label}: add a similar question`);
         if (!payload.similar_correct_answer) errors.push(`${label}: select or enter the similar question's correct answer`);
         if (question.type === 'mcq' && payload.similar_options.length < 2) errors.push(`${label}: add at least two similar-question options`);
-        if (question.type === 'short' && payload.similar_correct_answer.split(/\s+/).filter(Boolean).length > 2) errors.push(`${label}: the similar short-answer key can contain at most two words`);
+        if (question.type === 'short' && payload.similar_correct_answer.split(/\s+/).filter(Boolean).length > 3) errors.push(`${label}: the similar short-answer key can contain at most three words`);
       }
     });
     return errors;

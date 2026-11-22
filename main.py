@@ -1660,12 +1660,12 @@ def _small_spelling_variation(expected: str, actual: str) -> bool:
     return SequenceMatcher(None, expected, actual).ratio() >= 0.80
 
 
-def short_answer_matches(expected_answer: Optional[str], student_answer: Optional[str]) -> bool:
+def short_answer_matches(expected_answer: Optional[str], student_answer: Optional[str], max_words: int = 2) -> bool:
     """Case-insensitive, order-independent matching for one- or two-word
     short answers, with support for small spelling variations."""
     expected_words = short_answer_words(expected_answer)
     student_words = short_answer_words(student_answer)
-    if not expected_words or len(expected_words) > 2 or len(student_words) > 2:
+    if not expected_words or len(expected_words) > max_words or len(student_words) > max_words:
         return False
     if len(expected_words) != len(student_words):
         return False
@@ -1675,9 +1675,9 @@ def short_answer_matches(expected_answer: Optional[str], student_answer: Optiona
     )
 
 
-def validate_short_answer_length(answer: Optional[str], question_label: str):
-    if len(short_answer_words(answer)) > 2:
-        raise HTTPException(status_code=422, detail=f"{question_label} accepts a maximum of two words")
+def validate_short_answer_length(answer: Optional[str], question_label: str, max_words: int = 2):
+    if len(short_answer_words(answer)) > max_words:
+        raise HTTPException(status_code=422, detail=f"{question_label} accepts a maximum of {max_words} words")
 
 
 def _pdf_escape(text: Optional[str]) -> str:
@@ -2613,8 +2613,8 @@ async def upload_quiz(
             raise HTTPException(status_code=400, detail="MCQ questions must include 'options'")
         if q_type in ("mcq", "short") and answer is None:
             raise HTTPException(status_code=400, detail=f"{q_type} questions must include an 'answer'")
-        if q_type == "short" and len(short_answer_words(answer)) > 2:
-            raise HTTPException(status_code=400, detail=f"Question {order + 1}: short-answer keys can contain a maximum of two words")
+        if q_type == "short" and len(short_answer_words(answer)) > (3 if is_fun else 2):
+            raise HTTPException(status_code=400, detail=f"Question {order + 1}: short-answer keys can contain a maximum of {3 if is_fun else 2} words")
         explanation = str(q.get("explanation") or "").strip()
         similar_question = str(q.get("similar_question") or "").strip()
         similar_answer = str(q.get("similar_correct_answer") or "").strip()
@@ -2629,8 +2629,8 @@ async def upload_quiz(
             raise HTTPException(status_code=400, detail=f"Question {order + 1}: add an explanation, a similar question, and its correct answer")
         if is_fun and q_type == "mcq" and (not similar_options or len(similar_options) < 2 or similar_answer not in similar_options):
             raise HTTPException(status_code=400, detail=f"Question {order + 1}: the similar multiple-choice question needs options and a selected correct answer")
-        if is_fun and q_type == "short" and len(short_answer_words(similar_answer)) > 2:
-            raise HTTPException(status_code=400, detail=f"Question {order + 1}: the similar short-answer key can contain a maximum of two words")
+        if is_fun and q_type == "short" and len(short_answer_words(similar_answer)) > 3:
+            raise HTTPException(status_code=400, detail=f"Question {order + 1}: the similar short-answer key can contain a maximum of three words")
 
         image_url = resolve_question_image(
             q.get("image"), uploaded_bytes_by_name, resolved_cache,
@@ -2953,7 +2953,8 @@ def check_fun_quiz_answer(
     _require_student_module(student, quiz.module_code)
     expected = question.similar_correct_answer if payload.similar else question.correct_answer
     if question.type == "short":
-        correct = short_answer_matches(expected, payload.answer)
+        validate_short_answer_length(payload.answer, "This short answer", 3)
+        correct = short_answer_matches(expected, payload.answer, 3)
     else:
         correct = normalize(expected) == normalize(payload.answer)
     return {"correct": correct}
@@ -3103,8 +3104,8 @@ def submit_quiz(quiz_id: int, submission: QuizSubmission, student: Student = Dep
         student_answer = next((a.answer for a in submission.answers if a.question_id == q.id), "")
 
         if q.type == "short":
-            validate_short_answer_length(student_answer, f"Question {q.q_order + 1}")
-            correct = short_answer_matches(q.correct_answer, student_answer)
+            validate_short_answer_length(student_answer, f"Question {q.q_order + 1}", 3 if quiz.is_fun else 2)
+            correct = short_answer_matches(q.correct_answer, student_answer, 3 if quiz.is_fun else 2)
             awarded = q.marks if correct else 0.0
             auto_score += awarded
             db.add(Answer(
@@ -4625,8 +4626,8 @@ def _validate_admin_questions(questions: List[AdminQuestionInput], is_fun: bool 
             raise HTTPException(status_code=400, detail=f"Question {index}: an MCQ needs at least two options")
         if question.type in ("mcq", "short") and not (question.correct_answer or "").strip():
             raise HTTPException(status_code=400, detail=f"Question {index}: a correct answer is required")
-        if question.type == "short" and len(short_answer_words(question.correct_answer)) > 2:
-            raise HTTPException(status_code=400, detail=f"Question {index}: a short-answer key can contain a maximum of two words")
+        if question.type == "short" and len(short_answer_words(question.correct_answer)) > (3 if is_fun else 2):
+            raise HTTPException(status_code=400, detail=f"Question {index}: a short-answer key can contain a maximum of {3 if is_fun else 2} words")
         if is_fun:
             if question.type == "long":
                 raise HTTPException(status_code=400, detail=f"Question {index}: fun quizzes support multiple-choice and short answers only")
@@ -4636,8 +4637,8 @@ def _validate_admin_questions(questions: List[AdminQuestionInput], is_fun: bool 
                 raise HTTPException(status_code=400, detail=f"Question {index}: add a similar question and its correct answer")
             if question.type == "mcq" and (not question.similar_options or question.similar_correct_answer not in question.similar_options):
                 raise HTTPException(status_code=400, detail=f"Question {index}: add similar-question options and select the correct one")
-            if question.type == "short" and len(short_answer_words(question.similar_correct_answer)) > 2:
-                raise HTTPException(status_code=400, detail=f"Question {index}: the similar short-answer key can contain a maximum of two words")
+            if question.type == "short" and len(short_answer_words(question.similar_correct_answer)) > 3:
+                raise HTTPException(status_code=400, detail=f"Question {index}: the similar short-answer key can contain a maximum of three words")
 
 
 def _admin_question_dict(question):
