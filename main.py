@@ -9110,9 +9110,9 @@ def _frontend_page(filename: str):
 @app.get("/students/android/download", include_in_schema=False)
 def download_student_android_app():
     return FileResponse(
-        os.path.join("static", "downloads", "Arounus-Student-1.2.apk"),
+        os.path.join("static", "downloads", "Arounus-Student-1.3.apk"),
         media_type="application/vnd.android.package-archive",
-        filename="Arounus-Student-1.2.apk",
+        filename="Arounus-Student-1.3.apk",
         headers={"Cache-Control": "no-store"},
     )
 
