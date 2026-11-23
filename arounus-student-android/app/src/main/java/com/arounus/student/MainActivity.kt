@@ -147,6 +147,7 @@ class MainActivity : Activity() {
         sessionHandler.post(sessionHeartbeat)
         syncOnOpen()
         if (token.isNotBlank()) ensureNotifications()
+        if (currentRoute?.key == "premium" && !offlineSession) showPremium()
     }
 
     override fun onPause() {
@@ -223,6 +224,10 @@ class MainActivity : Activity() {
     }
 
     private fun closeDrawer() { drawerLayer.visibility = View.GONE; drawerLayer.removeAllViews() }
+    private fun openClassroom() {
+        if (offlineSession) { message("Connect to the internet to join a live classroom."); return }
+        startActivity(Intent(this, ClassroomActivity::class.java))
+    }
     private fun openDrawer() {
         if (!signedIn()) return
         drawerLayer.removeAllViews()
@@ -244,7 +249,9 @@ class MainActivity : Activity() {
         entry("✦", "My results") { showResults(getSharedPreferences("student", MODE_PRIVATE).getString("student_number", "") ?: "") }
         entry("◉", "Community posts") { showPosts() }
         entry("✉", "Messages") { showMessages() }
+        entry("◉", "Live classrooms") { openClassroom() }
         entry("★", "Premium video") { showPremium() }
+        entry("▧", "Compress media") { startActivity(Intent(this, MediaToolActivity::class.java)) }
         if (offlineSession) entry("↻", "Sign in to sync") { showLogin() }
         entry("◇", "Request account deletion") { showDeletionRequest() }
         entry("↪", "Sign out") { unregisterNotifications(); token = ""; getSharedPreferences("student", MODE_PRIVATE).edit().clear().apply(); showLogin() }
@@ -524,7 +531,9 @@ class MainActivity : Activity() {
             featureCard("◇", "Quizzes", "New quizzes appear when tutors publish them") { showQuizModules() }
             featureCard("▶", "Lessons", "Videos and learning materials") { showLessons() }
             featureCard("✉", "Messages", "Connect with tutors and admin") { showMessages() }
+            featureCard("◉", "Live classrooms", "Join a tutor's room with a code") { openClassroom() }
             featureCard("★", "Premium video", "Check your video access and plans") { showPremium() }
+            featureCard("▧", "Compress media", "Make pictures and videos smaller on this device") { startActivity(Intent(this, MediaToolActivity::class.java)) }
             featureCard("◎", "My results", "Track your progress") { showResults(data.optString("student_number")) }
         }
         if (offlineSession) display(JSONObject().put("student_number", studentNumber()).put("full_name", getSharedPreferences("student", MODE_PRIVATE).getString("full_name", "Student")))
@@ -552,12 +561,26 @@ class MainActivity : Activity() {
             val until = account.optString("until")
             if (until.isNotBlank() && until != "null") line("Access until: $until")
             request("/billing/premium/plans") { plans ->
+                val providers = buildList {
+                    if (plans.optBoolean("checkout_available")) add("PayU" to "payu")
+                    if (plans.optBoolean("paystack_available")) add("Paystack" to "paystack")
+                }
                 val items = plans.optJSONArray("plans") ?: JSONArray()
                 for (i in 0 until items.length()) {
                     val plan = items.optJSONObject(i) ?: continue
                     val price = plan.optInt("amount_cents") / 100.0
                     featureCard("★", plan.optString("label"), "R${String.format(Locale.US, "%.2f", price)}") {
-                        message("Premium checkout is available on the Arounus website.")
+                        if (account.optBoolean("lifetime")) { message("Lifetime access is already active."); return@featureCard }
+                        if (providers.isEmpty()) { message("Checkout is temporarily unavailable."); return@featureCard }
+                        val planId = plan.optString("id")
+                        AlertDialog.Builder(this).setTitle("Choose a payment provider")
+                            .setItems(providers.map { it.first }.toTypedArray()) { _, selected ->
+                                request("/billing/premium/checkout", "POST", JSONObject().put("plan", planId).put("provider", providers[selected].second)) { checkout ->
+                                    val checkoutUrl = checkout.optString("checkout_url")
+                                    if (checkoutUrl.startsWith("https://")) startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(checkoutUrl)))
+                                    else message("The payment page could not be opened.")
+                                }
+                            }.show()
                     }
                 }
             }
@@ -903,6 +926,23 @@ class MainActivity : Activity() {
                 val video = VideoView(this).apply { layoutParams = LinearLayout.LayoutParams(-1, dp(280)); setVideoURI(if (savedVideo.isFile) Uri.fromFile(savedVideo) else Uri.parse(if (url.startsWith("/")) base + url else url)); setMediaController(MediaController(this@MainActivity)); setOnPreparedListener { start() } }
                 body.addView(video)
             } else line(if (offlineSession) "This lesson's video is not saved on this device." else "No video available for this lesson.")
+            if (lesson.optBoolean("premium_available") && !offlineSession) {
+                button("Watch premium video") {
+                    request("/media/premium/lesson/$id") { premium ->
+                        val premiumUrl = premium.optString("url")
+                        if (premiumUrl.startsWith("https://")) {
+                            val player = VideoView(this).apply {
+                                layoutParams = LinearLayout.LayoutParams(-1, dp(280))
+                                setVideoURI(Uri.parse(premiumUrl))
+                                setMediaController(MediaController(this@MainActivity))
+                                setOnPreparedListener { start() }
+                                setOnErrorListener { _, _, _ -> message("This video could not play. Please try again."); true }
+                            }
+                            body.addView(player)
+                        } else message("Premium video is unavailable right now.")
+                    }
+                }
+            }
             val questions = lesson.optJSONArray("questions") ?: JSONArray()
             if (questions.length() > 0) {
                 val answers = showQuestions(questions)
