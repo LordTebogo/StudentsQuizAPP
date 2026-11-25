@@ -409,6 +409,9 @@ def ensure_market_listing_fields_schema():
         with engine.begin() as conn:
             if "is_approved" not in columns:
                 conn.execute(text("ALTER TABLE accommodations ADD COLUMN is_approved BOOLEAN DEFAULT TRUE NOT NULL"))
+            for name in ("show_coordinates", "show_contact"):
+                if name not in columns:
+                    conn.execute(text(f"ALTER TABLE accommodations ADD COLUMN {name} BOOLEAN DEFAULT TRUE NOT NULL"))
             if "booked_until" not in columns:
                 conn.execute(text("ALTER TABLE accommodations ADD COLUMN booked_until VARCHAR(10)"))
     if "market_adverts" in tables:
@@ -417,6 +420,9 @@ def ensure_market_listing_fields_schema():
             for name, definition in (("service_detail", "VARCHAR(160)"), ("service_availability", "TEXT"), ("stock_quantity", "INTEGER"), ("area", "VARCHAR(160)"), ("latitude", "FLOAT"), ("longitude", "FLOAT")):
                 if name not in columns:
                     conn.execute(text(f"ALTER TABLE market_adverts ADD COLUMN {name} {definition}"))
+            for name in ("show_coordinates", "show_contact"):
+                if name not in columns:
+                    conn.execute(text(f"ALTER TABLE market_adverts ADD COLUMN {name} BOOLEAN DEFAULT TRUE NOT NULL"))
             if "service_detail" not in columns:
                 conn.execute(text("UPDATE market_adverts SET status = 'approved' WHERE status = 'pending'"))
 
@@ -925,6 +931,8 @@ class AdminSrcPresidentUpdate(BaseModel):
 class AdminMarketAdvertUpdate(BaseModel):
     status: Optional[str] = None
     is_featured: Optional[bool] = None
+    show_coordinates: Optional[bool] = None
+    show_contact: Optional[bool] = None
     starts_at: Optional[str] = None
     expires_at: Optional[str] = None
 
@@ -6213,8 +6221,8 @@ def _accommodation_payload(item: Accommodation, landlord: Landlord, private: boo
     if item.latitude is not None and item.longitude is not None:
         directions_url = f"https://www.google.com/maps/dir/?api=1&destination={item.latitude},{item.longitude}"
     image_urls = _market_image_urls(item)
-    payload = {"id": item.id, "title": item.title, "campus": item.campus, "area": item.area, "monthly_rent": item.monthly_rent, "bedrooms": item.bedrooms or "", "description": item.description, "contact": item.contact or "", "image_url": image_urls[0] if image_urls else None, "image_urls": image_urls, "is_available": item.is_available, "booked_until": item.booked_until, "is_approved": item.is_approved, "created_at": item.created_at, "views": item.view_count or 0, "rating": round((item.rating_total or 0) / item.rating_count, 1) if item.rating_count else None, "rating_count": item.rating_count or 0, "landlord": {"id": landlord.id, "name": landlord.full_name, "business_name": landlord.business_name or "", "provider_type": landlord.provider_type or "residence", "profile_image_url": landlord.profile_image_url}}
-    if private or landlord.provider_type != "agent":
+    payload = {"id": item.id, "title": item.title, "campus": item.campus, "area": item.area, "monthly_rent": item.monthly_rent, "bedrooms": item.bedrooms or "", "description": item.description, "contact": (item.contact or "") if private or item.show_contact else "", "show_contact": item.show_contact, "show_coordinates": item.show_coordinates, "image_url": image_urls[0] if image_urls else None, "image_urls": image_urls, "is_available": item.is_available, "booked_until": item.booked_until, "is_approved": item.is_approved, "created_at": item.created_at, "views": item.view_count or 0, "rating": round((item.rating_total or 0) / item.rating_count, 1) if item.rating_count else None, "rating_count": item.rating_count or 0, "landlord": {"id": landlord.id, "name": landlord.full_name, "business_name": landlord.business_name or "", "provider_type": landlord.provider_type or "residence", "profile_image_url": landlord.profile_image_url}}
+    if private or (item.show_coordinates and landlord.provider_type != "agent"):
         payload.update(latitude=item.latitude, longitude=item.longitude, directions_url=directions_url,
                        **({"pending_latitude": item.pending_latitude, "pending_longitude": item.pending_longitude} if private else {}))
     return payload
@@ -6464,7 +6472,7 @@ def room_distances(payload: RoomDistanceRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Invalid visitor location")
     rows = db.query(Accommodation).join(Landlord, Landlord.id == Accommodation.landlord_id).filter(
         Accommodation.id.in_(payload.room_ids), Accommodation.is_approved.is_(True), Landlord.active.is_(True),
-        Accommodation.latitude.isnot(None), Accommodation.longitude.isnot(None)).all()
+        Accommodation.latitude.isnot(None), Accommodation.longitude.isnot(None), Accommodation.show_coordinates.is_(True)).all()
     distances = {}
     for room in rows:
         a, b = math.radians(payload.latitude), math.radians(room.latitude)
@@ -6486,6 +6494,24 @@ def landlord_listings(landlord: Landlord = Depends(require_landlord_account), db
 def admin_market_rooms(_pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
     rows = db.query(Accommodation, Landlord).join(Landlord, Landlord.id == Accommodation.landlord_id).order_by(Accommodation.created_at.desc()).all()
     return [{**_accommodation_payload(item, landlord), "registration_contact": landlord.phone, "owner_name": landlord.full_name} for item, landlord in rows]
+
+
+class MarketVisibilityUpdate(BaseModel):
+    show_coordinates: Optional[bool] = None
+    show_contact: Optional[bool] = None
+
+
+@app.patch("/admin/market-rooms/{listing_id}/visibility")
+def admin_room_visibility(listing_id: int, payload: MarketVisibilityUpdate, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    item = db.query(Accommodation).filter(Accommodation.id == listing_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Room listing not found")
+    if payload.show_coordinates is not None:
+        item.show_coordinates = payload.show_coordinates
+    if payload.show_contact is not None:
+        item.show_contact = payload.show_contact
+    db.commit()
+    return {"ok": True, "show_coordinates": item.show_coordinates, "show_contact": item.show_contact}
 
 
 @app.put("/admin/market-rooms/{listing_id}/approval")
@@ -6661,13 +6687,14 @@ def create_accommodation_comment(listing_id: int, payload: AccommodationCommentC
     return {"ok": True, "id": comment.id}
 
 
-def _advert_payload(item: MarketAdvert, owner_name: str = "", registration_contact: str = "") -> dict:
+def _advert_payload(item: MarketAdvert, owner_name: str = "", registration_contact: str = "", private: bool = False) -> dict:
     image_urls = _market_image_urls(item)
-    directions_url = f"https://www.google.com/maps/dir/?api=1&destination={item.latitude},{item.longitude}" if item.latitude is not None and item.longitude is not None else None
+    coordinates_visible = private or item.show_coordinates
+    directions_url = f"https://www.google.com/maps/dir/?api=1&destination={item.latitude},{item.longitude}" if coordinates_visible and item.latitude is not None and item.longitude is not None else None
     return {
         "id": item.id, "business_name": item.business_name, "headline": item.headline,
-        "description": item.description, "category": item.category, "service_detail": item.service_detail or "", "service_availability": json.loads(item.service_availability) if item.service_availability else {}, "price": item.price, "stock_quantity": item.stock_quantity, "campus": item.campus or "", "area": item.area or "", "latitude": item.latitude, "longitude": item.longitude, "directions_url": directions_url,
-        "contact": item.contact or "", "website_url": item.website_url or "",
+        "description": item.description, "category": item.category, "service_detail": item.service_detail or "", "service_availability": json.loads(item.service_availability) if item.service_availability else {}, "price": item.price, "stock_quantity": item.stock_quantity, "campus": item.campus or "", "area": item.area or "", "latitude": item.latitude if coordinates_visible else None, "longitude": item.longitude if coordinates_visible else None, "directions_url": directions_url,
+        "contact": (item.contact or "") if private or item.show_contact else "", "show_coordinates": item.show_coordinates, "show_contact": item.show_contact, "website_url": item.website_url or "",
         "placement": item.placement, "image_url": image_urls[0] if image_urls else None, "image_urls": image_urls,
         "video_url": _free_video_url(item.video_url), "premium_available": bool(item.premium_video_asset), "starts_at": item.starts_at,
         "expires_at": item.expires_at, "status": item.status, "is_featured": item.is_featured,
@@ -6784,7 +6811,7 @@ async def create_market_advert(
     if video_url:
         db.add(MediaUploadEvent(kind="advert", owner_type="student" if student else "provider", owner_id=student.id if student else landlord.id, source_bytes=len(video_bytes), premium_created=bool(premium_asset), created_at=now))
     db.commit(); db.refresh(item)
-    return {"ok": True, "message": "Listing published", "advert": _advert_payload(item)}
+    return {"ok": True, "message": "Listing published", "advert": _advert_payload(item, private=True)}
 
 
 @app.get("/marketing/my-adverts")
@@ -6796,7 +6823,7 @@ def my_market_adverts(
     query = db.query(MarketAdvert).filter(
         MarketAdvert.owner_student_id == student.id if student else _provider_advert_ownership(landlord)
     )
-    return [_advert_payload(item) for item in query.order_by(MarketAdvert.created_at.desc()).all()]
+    return [_advert_payload(item, private=True) for item in query.order_by(MarketAdvert.created_at.desc()).all()]
 
 
 @app.put("/marketing/adverts/{advert_id}")
@@ -6850,7 +6877,7 @@ async def update_market_advert(
     if retained_image_urls or new_images or image_order:
         item.image_url, item.image_urls = urls[0] if urls else None, json.dumps(urls)
     db.commit(); db.refresh(item)
-    return {"ok": True, "advert": _advert_payload(item)}
+    return {"ok": True, "advert": _advert_payload(item, private=True)}
 
 
 @app.delete("/marketing/adverts/{advert_id}")
@@ -6988,7 +7015,7 @@ def admin_market_adverts(_pin_ok: bool = Depends(require_lecturer_pin), db: Sess
     landlord_ids = {item.owner_landlord_id for item in rows if item.owner_landlord_id}
     students = {item.id: item for item in db.query(Student).filter(Student.id.in_(student_ids)).all()} if student_ids else {}
     landlords = {item.id: item for item in db.query(Landlord).filter(Landlord.id.in_(landlord_ids)).all()} if landlord_ids else {}
-    return [_advert_payload(item, getattr(students.get(item.owner_student_id), "full_name", "") or getattr(landlords.get(item.owner_landlord_id), "full_name", ""), getattr(students.get(item.owner_student_id), "phone", "") or getattr(landlords.get(item.owner_landlord_id), "phone", "")) for item in rows]
+    return [_advert_payload(item, getattr(students.get(item.owner_student_id), "full_name", "") or getattr(landlords.get(item.owner_landlord_id), "full_name", ""), getattr(students.get(item.owner_student_id), "phone", "") or getattr(landlords.get(item.owner_landlord_id), "phone", ""), private=True) for item in rows]
 
 
 @app.put("/admin/market-adverts/{advert_id}")
@@ -7002,6 +7029,10 @@ def admin_update_market_advert(advert_id: int, payload: AdminMarketAdvertUpdate,
         item.status = payload.status
     if payload.is_featured is not None:
         item.is_featured = payload.is_featured
+    if payload.show_coordinates is not None:
+        item.show_coordinates = payload.show_coordinates
+    if payload.show_contact is not None:
+        item.show_contact = payload.show_contact
     if payload.starts_at is not None or payload.expires_at is not None:
         item.starts_at, item.expires_at = _clean_advert_dates(payload.starts_at or "", payload.expires_at or "")
     item.updated_at = datetime.now(timezone.utc).isoformat(); db.commit()
