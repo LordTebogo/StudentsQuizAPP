@@ -19,13 +19,14 @@
         ${room.image_url ? `<img class="advert-review-image" src="${esc(room.image_url)}" alt="Room preview for ${esc(room.title)}">` : '<div class="advert-review-image advert-placeholder">No media</div>'}
         <div class="advert-review-copy"><div class="advert-review-head"><div><span class="kicker">Room · ${esc(room.campus)}</span><h3>${esc(room.title)}</h3></div><span class="status-chip advert-status ${room.is_approved ? 'approved' : 'pending'}">${room.is_approved ? 'Approved' : 'Awaiting approval'}</span></div>
         <p>${esc(room.description)}</p><dl class="review-meta"><div><dt>Area</dt><dd>${esc(room.area)}</dd></div><div><dt>Submitted by</dt><dd>${esc(room.owner_name)}</dd></div><div><dt>Listing contact</dt><dd>${esc(room.contact || 'Missing')}</dd></div><div><dt>Registration contact</dt><dd>${esc(room.registration_contact || 'Missing')}</dd></div></dl>
+        <div class="actions review-actions"><button class="btn secondary visibility-toggle" type="button" data-field="show_coordinates" data-value="${room.show_coordinates}">Coordinates: ${room.show_coordinates ? 'Visible' : 'Hidden'}</button><button class="btn secondary visibility-toggle" type="button" data-field="show_contact" data-value="${room.show_contact}">Contact: ${room.show_contact ? 'Visible' : 'Hidden'}</button></div>
         ${room.pending_latitude != null ? `<div class="coordinate-review"><strong>Location change awaiting approval</strong><p>Current: ${room.latitude == null ? 'No coordinates' : `${esc(room.latitude)}, ${esc(room.longitude)}`}<br>Proposed: ${esc(room.pending_latitude)}, ${esc(room.pending_longitude)}</p><button class="btn approve-coordinates" type="button">Approve coordinates</button><button class="btn secondary reject-coordinates" type="button">Reject coordinates</button></div>` : ''}<div class="actions review-actions"><button class="btn approve-room" type="button" ${room.is_approved ? 'disabled' : ''}>Approve room</button><button class="btn secondary unapprove-room" type="button" ${room.is_approved ? '' : 'disabled'}>Remove approval</button><button class="btn danger delete-room" type="button">Delete</button></div></div>
       </article>`).join('') : '<div class="empty-state"><strong>No room submissions yet</strong></div>';
       list.innerHTML = ads.length ? ads.map(ad => `<article class="moderation-item advert-review-card" data-admin-ad="${ad.id}">
         ${ad.video_url?`<video class="advert-review-image" src="${esc(ad.video_url)}" controls muted playsinline aria-label="Advert video for ${esc(ad.business_name)}"></video>`:ad.image_url?`<img class="advert-review-image" src="${esc(ad.image_url)}" alt="Advert preview for ${esc(ad.business_name)}">`:'<div class="advert-review-image advert-placeholder">No media</div>'}
         <div class="advert-review-copy"><div class="advert-review-head"><div><span class="kicker">${esc(ad.category)} · ${esc(ad.placement)}</span><h3>${esc(ad.headline)}</h3></div><span class="status-chip advert-status ${esc(ad.status)}">${esc(ad.status)}</span></div>
         <p>${esc(ad.description)}</p><dl class="review-meta"><div><dt>Business</dt><dd>${esc(ad.business_name)}</dd></div><div><dt>Submitted by</dt><dd>${esc(ad.owner_name||'Unknown account')}</dd></div><div><dt>Registration contact</dt><dd>${esc(ad.registration_contact||'See account')}</dd></div><div><dt>Submitted</dt><dd>${esc(ad.created_at.slice(0,10))}</dd></div><div><dt>Engagement</dt><dd>${ad.impressions} views · ${ad.clicks} clicks</dd></div></dl>
-        <p class="muted"><strong>Destination:</strong> ${esc(ad.website_url||ad.contact||'Missing')}</p>
+        <p class="muted"><strong>Destination:</strong> ${esc(ad.website_url||ad.contact||'Missing')}</p><div class="actions review-actions"><button class="btn secondary visibility-toggle" type="button" data-field="show_coordinates" data-value="${ad.show_coordinates}">Coordinates: ${ad.show_coordinates ? 'Visible' : 'Hidden'}</button><button class="btn secondary visibility-toggle" type="button" data-field="show_contact" data-value="${ad.show_contact}">Contact: ${ad.show_contact ? 'Visible' : 'Hidden'}</button></div>
         <div class="actions review-actions">${ad.status !== 'approved' ? '<button class="btn approve-ad" type="button">Publish</button>' : '<button class="btn secondary pause-ad" type="button">Pause listing</button>'}<button class="btn secondary feature-ad${ad.is_featured?' is-featured':''}" type="button" data-featured="${ad.is_featured?'true':'false'}" aria-describedby="feature-help-${ad.id}" title="${ad.is_featured?'Return this advert to normal ordering':'Show this approved advert before regular adverts'}">${ad.is_featured?'★ Featured':'☆ Feature advert'}</button><button class="btn danger delete-ad" type="button">Delete</button></div>
         <p class="feature-help" id="feature-help-${ad.id}"><span aria-hidden="true">★</span><span><strong>${ad.is_featured?'This advert is featured.':'What does Feature do?'}</strong> ${ad.is_featured?'It is shown before regular approved adverts in its selected Local Market placement.':'It moves an approved advert ahead of regular adverts in its selected Local Market placement. It does not approve the advert or change its dates.'}</span></p></div>
       </article>`).join('') : '<div class="empty-state"><strong>No other listings</strong></div>';
@@ -54,6 +55,18 @@
           await api(`/admin/market-reports/${review.closest('[data-admin-report]').dataset.adminReport}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({status:review.dataset.reviewStatus})});
           await loadReports();
         } catch (error) { review.disabled = false; alert(`Report could not be updated: ${error.message}`); }
+        return;
+      }
+      const toggle = event.target.closest('.visibility-toggle');
+      if (toggle) {
+        const roomCard = toggle.closest('[data-admin-room]');
+        const adCard = toggle.closest('[data-admin-ad]');
+        const url = roomCard ? `/admin/market-rooms/${roomCard.dataset.adminRoom}/visibility` : `/admin/market-adverts/${adCard.dataset.adminAd}`;
+        toggle.disabled = true;
+        try {
+          await api(url, {method: roomCard ? 'PATCH' : 'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({[toggle.dataset.field]: toggle.dataset.value !== 'true'})});
+          await load();
+        } catch (error) { toggle.disabled = false; alert(`Visibility could not be updated: ${error.message}`); }
         return;
       }
       const room = event.target.closest('[data-admin-room]');
