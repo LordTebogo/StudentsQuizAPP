@@ -20,6 +20,7 @@
         <div class="advert-review-copy"><div class="advert-review-head"><div><span class="kicker">Room · ${esc(room.campus)}</span><h3>${esc(room.title)}</h3></div><span class="status-chip advert-status ${room.is_approved ? 'approved' : 'pending'}">${room.is_approved ? 'Approved' : 'Awaiting approval'}</span></div>
         <p>${esc(room.description)}</p><dl class="review-meta"><div><dt>Area</dt><dd>${esc(room.area)}</dd></div><div><dt>Submitted by</dt><dd>${esc(room.owner_name)}</dd></div><div><dt>Listing contact</dt><dd>${esc(room.contact || 'Missing')}</dd></div><div><dt>Registration contact</dt><dd>${esc(room.registration_contact || 'Missing')}</dd></div></dl>
         <div class="actions review-actions"><button class="btn secondary visibility-toggle" type="button" data-field="show_coordinates" data-value="${room.show_coordinates}">Coordinates: ${room.show_coordinates ? 'Visible' : 'Hidden'}</button><button class="btn secondary visibility-toggle" type="button" data-field="show_contact" data-value="${room.show_contact}">Contact: ${room.show_contact ? 'Visible' : 'Hidden'}</button></div>
+        <form class="room-coordinate-form" data-room-coordinates><p class="muted">Current coordinates: ${room.latitude == null || room.longitude == null ? 'Not set' : `${esc(room.latitude)}, ${esc(room.longitude)}`}</p><label>Latitude <input name="latitude" type="number" min="-90" max="90" step="any" required value="${esc(room.latitude ?? '')}"></label><label>Longitude <input name="longitude" type="number" min="-180" max="180" step="any" required value="${esc(room.longitude ?? '')}"></label><button class="btn secondary" type="submit">Save coordinates</button></form>
         ${room.pending_latitude != null ? `<div class="coordinate-review"><strong>Location change awaiting approval</strong><p>Current: ${room.latitude == null ? 'No coordinates' : `${esc(room.latitude)}, ${esc(room.longitude)}`}<br>Proposed: ${esc(room.pending_latitude)}, ${esc(room.pending_longitude)}</p><button class="btn approve-coordinates" type="button">Approve coordinates</button><button class="btn secondary reject-coordinates" type="button">Reject coordinates</button></div>` : ''}<div class="actions review-actions"><button class="btn approve-room" type="button" ${room.is_approved ? 'disabled' : ''}>Approve room</button><button class="btn secondary unapprove-room" type="button" ${room.is_approved ? '' : 'disabled'}>Remove approval</button><button class="btn danger delete-room" type="button">Delete</button></div></div>
       </article>`).join('') : '<div class="empty-state"><strong>No room submissions yet</strong></div>';
       list.innerHTML = ads.length ? ads.map(ad => `<article class="moderation-item advert-review-card" data-admin-ad="${ad.id}">
@@ -47,6 +48,21 @@
     card.prepend(reports);
     reports.querySelector('select').addEventListener('change', loadReports);
     card.querySelector('#refreshMarketAds').addEventListener('click', () => { load(); loadReports(); });
+    card.addEventListener('submit', async event => {
+      const form = event.target.closest('[data-room-coordinates]');
+      if (!form) return;
+      event.preventDefault();
+      const latitude = Number(form.elements.latitude.value);
+      const longitude = Number(form.elements.longitude.value);
+      if (!form.elements.latitude.value.trim() || !form.elements.longitude.value.trim() || !Number.isFinite(latitude) || !Number.isFinite(longitude) || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) {
+        alert('Enter valid latitude (-90 to 90) and longitude (-180 to 180).'); return;
+      }
+      const button = form.querySelector('button[type="submit"]'); button.disabled = true;
+      try {
+        await api(`/admin/market-rooms/${form.closest('[data-admin-room]').dataset.adminRoom}/coordinates`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({latitude, longitude})});
+        await load();
+      } catch (error) { button.disabled = false; alert(`Coordinates could not be saved: ${error.message}`); }
+    });
     card.addEventListener('click', async event => {
       const review = event.target.closest('[data-review-status]');
       if (review) {

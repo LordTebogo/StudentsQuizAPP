@@ -6501,6 +6501,24 @@ class MarketVisibilityUpdate(BaseModel):
     show_contact: Optional[bool] = None
 
 
+class AdminRoomCoordinatesUpdate(BaseModel):
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+
+
+@app.patch("/admin/market-rooms/{listing_id}/coordinates")
+def admin_update_room_coordinates(listing_id: int, payload: AdminRoomCoordinatesUpdate, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    item = db.query(Accommodation).filter(Accommodation.id == listing_id).with_for_update().first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Room listing not found")
+    if not math.isfinite(payload.latitude) or not math.isfinite(payload.longitude):
+        raise HTTPException(status_code=422, detail="Coordinates must be finite numbers")
+    item.latitude, item.longitude = payload.latitude, payload.longitude
+    item.pending_latitude = item.pending_longitude = None
+    db.commit()
+    return {"ok": True, "latitude": item.latitude, "longitude": item.longitude}
+
+
 @app.patch("/admin/market-rooms/{listing_id}/visibility")
 def admin_room_visibility(listing_id: int, payload: MarketVisibilityUpdate, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
     item = db.query(Accommodation).filter(Accommodation.id == listing_id).first()
