@@ -256,6 +256,7 @@ class Accommodation(Base):
     bedrooms = Column(String)
     description = Column(Text, nullable=False)
     contact = Column(String)
+    private_landlord_contact = Column(String(160))
     show_contact = Column(Boolean, nullable=False, default=True)
     image_url = Column(Text)
     image_urls = Column(Text)

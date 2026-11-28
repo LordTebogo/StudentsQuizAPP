@@ -136,6 +136,38 @@ class MarketFeaturesTest(unittest.TestCase):
         self.assertEqual(public_room["contact"], form["contact"])
         self.assertNotIn("registration_contact", public_room)
 
+    def test_agent_landlord_contact_is_owner_only_and_survives_availability_changes(self):
+        with main.SessionLocal() as db:
+            agent = Landlord(full_name="Listing Agent", provider_type="agent", phone="0712345678", email="agent@example.test", password_hash="unused", active=True, created_at="2026-10-01T00:00:00Z")
+            db.add(agent)
+            db.commit()
+            agent_headers = {"X-Landlord-Token": main._issue_landlord_token(agent.id)}
+            other_headers = {"X-Landlord-Token": main._issue_landlord_token(db.query(Landlord).first().id)}
+        landlord_contact = "landlord@example.test"
+        form = {"title":"Agent room", "campus":"Test campus", "area":"Center", "description":"Room",
+                "contact":"0799999999", "private_landlord_contact":landlord_contact, "latitude":"0", "longitude":"29.4"}
+        created = self.client.post("/marketing/listings", data=form, headers=agent_headers)
+        self.assertEqual(created.status_code, 200)
+        room_id = created.json()["listing"]["id"]
+        path = f"/marketing/listings/{room_id}"
+        admin_headers = {"X-Lecturer-Pin":main.LECTURER_PIN}
+        self.assertEqual(self.client.put(f"/admin/market-rooms/{room_id}/approval?approved=true", headers=admin_headers).status_code, 200)
+        public = next(row for row in self.client.get("/marketing/listings").json() if row["id"] == room_id)
+        self.assertEqual(public["contact"], "0712345678")
+        for key in ("private_landlord_contact", "latitude", "longitude", "directions_url"):
+            self.assertNotIn(key, public)
+        owner_room = next(row for row in self.client.get("/marketing/landlord/listings", headers=agent_headers).json() if row["id"] == room_id)
+        self.assertEqual(owner_room["private_landlord_contact"], landlord_contact)
+        self.assertEqual((owner_room["latitude"], owner_room["longitude"]), (0, 29.4))
+        self.assertNotIn(room_id, [row["id"] for row in self.client.get("/marketing/landlord/listings", headers=other_headers).json()])
+        self.assertEqual(self.client.put(path, data=form, headers=other_headers).status_code, 404)
+        form.pop("private_landlord_contact")
+        form["is_available"] = "false"
+        response = self.client.put(path, data=form, headers=agent_headers)
+        self.assertEqual(response.json()["listing"]["private_landlord_contact"], landlord_contact)
+        for value in ("0723456789", ""):
+            response = self.client.put(path, data={**form, "private_landlord_contact":value}, headers=agent_headers)
+            self.assertEqual(response.json()["listing"]["private_landlord_contact"], value)
     def test_room_coordinate_change_needs_admin_review_and_stays_private(self):
         with main.SessionLocal() as db:
             owner = db.query(Landlord).first()
@@ -162,7 +194,7 @@ class MarketFeaturesTest(unittest.TestCase):
             self.assertEqual((room.latitude, room.longitude), (-23.91, 29.41))
             self.assertIsNone(room.pending_latitude)
         distance = self.client.post("/marketing/room-distances", json={"latitude":-23.91, "longitude":29.41, "room_ids":[room_id]}).json()
-        self.assertEqual(distance["distances_km"][str(room_id)], 0.0)
+        self.assertNotIn(str(room_id), distance["distances_km"])
         self.assertNotIn("latitude", str(distance))
 
     def test_admin_can_delete_any_room_and_its_activity(self):

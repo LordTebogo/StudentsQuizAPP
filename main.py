@@ -412,6 +412,8 @@ def ensure_market_listing_fields_schema():
             for name in ("show_coordinates", "show_contact"):
                 if name not in columns:
                     conn.execute(text(f"ALTER TABLE accommodations ADD COLUMN {name} BOOLEAN DEFAULT TRUE NOT NULL"))
+            if "private_landlord_contact" not in columns:
+                conn.execute(text("ALTER TABLE accommodations ADD COLUMN private_landlord_contact VARCHAR(160)"))
             if "booked_until" not in columns:
                 conn.execute(text("ALTER TABLE accommodations ADD COLUMN booked_until VARCHAR(10)"))
     if "market_adverts" in tables:
@@ -6216,13 +6218,17 @@ def _provider_advert_ownership(provider: Landlord):
     return or_(*conditions)
 
 
-def _accommodation_payload(item: Accommodation, landlord: Landlord, private: bool = True) -> dict:
+def _accommodation_payload(item: Accommodation, landlord: Landlord, private: bool = True, *, owner: bool = False) -> dict:
+    agent = landlord.provider_type == "agent"
+    contact = landlord.phone if agent else item.contact
     directions_url = None
     if item.latitude is not None and item.longitude is not None:
         directions_url = f"https://www.google.com/maps/dir/?api=1&destination={item.latitude},{item.longitude}"
     image_urls = _market_image_urls(item)
-    payload = {"id": item.id, "title": item.title, "campus": item.campus, "area": item.area, "monthly_rent": item.monthly_rent, "bedrooms": item.bedrooms or "", "description": item.description, "contact": (item.contact or "") if private or item.show_contact else "", "show_contact": item.show_contact, "show_coordinates": item.show_coordinates, "image_url": image_urls[0] if image_urls else None, "image_urls": image_urls, "is_available": item.is_available, "booked_until": item.booked_until, "is_approved": item.is_approved, "created_at": item.created_at, "views": item.view_count or 0, "rating": round((item.rating_total or 0) / item.rating_count, 1) if item.rating_count else None, "rating_count": item.rating_count or 0, "landlord": {"id": landlord.id, "name": landlord.full_name, "business_name": landlord.business_name or "", "provider_type": landlord.provider_type or "residence", "profile_image_url": landlord.profile_image_url}}
-    if private or (item.show_coordinates and landlord.provider_type != "agent"):
+    payload = {"id": item.id, "title": item.title, "campus": item.campus, "area": item.area, "monthly_rent": item.monthly_rent, "bedrooms": item.bedrooms or "", "description": item.description, "contact": (contact or "") if private or item.show_contact else "", "show_contact": item.show_contact, "show_coordinates": item.show_coordinates, "image_url": image_urls[0] if image_urls else None, "image_urls": image_urls, "is_available": item.is_available, "booked_until": item.booked_until, "is_approved": item.is_approved, "created_at": item.created_at, "views": item.view_count or 0, "rating": round((item.rating_total or 0) / item.rating_count, 1) if item.rating_count else None, "rating_count": item.rating_count or 0, "landlord": {"id": landlord.id, "name": landlord.full_name, "business_name": landlord.business_name or "", "provider_type": landlord.provider_type or "residence", "profile_image_url": landlord.profile_image_url}}
+    if owner and agent:
+        payload["private_landlord_contact"] = item.private_landlord_contact or ""
+    if private or (item.show_coordinates and not agent):
         payload.update(latitude=item.latitude, longitude=item.longitude, directions_url=directions_url,
                        **({"pending_latitude": item.pending_latitude, "pending_longitude": item.pending_longitude} if private else {}))
     return payload
@@ -6472,6 +6478,7 @@ def room_distances(payload: RoomDistanceRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Invalid visitor location")
     rows = db.query(Accommodation).join(Landlord, Landlord.id == Accommodation.landlord_id).filter(
         Accommodation.id.in_(payload.room_ids), Accommodation.is_approved.is_(True), Landlord.active.is_(True),
+        Landlord.provider_type.is_distinct_from("agent"),
         Accommodation.latitude.isnot(None), Accommodation.longitude.isnot(None), Accommodation.show_coordinates.is_(True)).all()
     distances = {}
     for room in rows:
@@ -6485,9 +6492,10 @@ def room_distances(payload: RoomDistanceRequest, db: Session = Depends(get_db)):
 
 
 @app.get("/marketing/landlord/listings")
-def landlord_listings(landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
+def landlord_listings(response: Response, landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = "no-store"
     rows = db.query(Accommodation).filter(Accommodation.landlord_id == landlord.id).order_by(Accommodation.created_at.desc()).all()
-    return [_accommodation_payload(item, landlord) for item in rows]
+    return [_accommodation_payload(item, landlord, owner=True) for item in rows]
 
 
 @app.get("/admin/market-rooms")
@@ -6571,9 +6579,11 @@ def admin_delete_market_room(listing_id: int, _pin_ok: bool = Depends(require_le
 
 
 @app.post("/marketing/listings")
-async def create_accommodation(background_tasks: BackgroundTasks, title: str = Form(...), campus: str = Form(...), area: str = Form(...), monthly_rent: str = Form(""), bedrooms: str = Form(""), description: str = Form(...), contact: str = Form(...), latitude: str = Form(""), longitude: str = Form(""), image_order: str = Form(""), images: Optional[List[UploadFile]] = File(None), image: Optional[UploadFile] = File(None), landlord: Landlord = Depends(_require_market_seller), db: Session = Depends(get_db)):
+async def create_accommodation(background_tasks: BackgroundTasks, title: str = Form(...), campus: str = Form(...), area: str = Form(...), monthly_rent: str = Form(""), bedrooms: str = Form(""), description: str = Form(...), contact: str = Form(...), private_landlord_contact: str = Form(""), latitude: str = Form(""), longitude: str = Form(""), image_order: str = Form(""), images: Optional[List[UploadFile]] = File(None), image: Optional[UploadFile] = File(None), landlord: Landlord = Depends(_require_market_seller), db: Session = Depends(get_db)):
     if not title.strip() or not campus.strip() or not area.strip() or not description.strip():
         raise HTTPException(status_code=400, detail="Add a title, location, area, and description")
+    if landlord.provider_type == "agent":
+        contact = landlord.phone or ""
     if len(re.sub(r"\D", "", contact)) < 8:
         raise HTTPException(status_code=400, detail="Add a valid contact number for this room")
     if len(description.strip()) > 2500:
@@ -6589,19 +6599,21 @@ async def create_accommodation(background_tasks: BackgroundTasks, title: str = F
     photo_order = _market_photo_order(image_order, len([file for file in files if file and file.filename]))
     image_urls = await _upload_market_images(files, 3, "accommodation_listings", 10 * 1024 * 1024)
     image_urls = [image_urls[index] for index in photo_order]
-    item = Accommodation(landlord_id=landlord.id, title=title.strip()[:180], campus=campus.strip()[:120], area=area.strip()[:160], monthly_rent=rent, bedrooms=bedrooms.strip()[:80], description=description.strip(), contact=contact.strip()[:160], image_url=image_urls[0] if image_urls else None, image_urls=json.dumps(image_urls), latitude=lat, longitude=lng, is_available=True, is_approved=False, created_at=datetime.now(timezone.utc).isoformat())
+    item = Accommodation(landlord_id=landlord.id, title=title.strip()[:180], campus=campus.strip()[:120], area=area.strip()[:160], monthly_rent=rent, bedrooms=bedrooms.strip()[:80], description=description.strip(), contact=contact.strip()[:160], private_landlord_contact=(private_landlord_contact.strip()[:160] or None) if landlord.provider_type == "agent" else None, image_url=image_urls[0] if image_urls else None, image_urls=json.dumps(image_urls), latitude=lat, longitude=lng, is_available=True, is_approved=False, created_at=datetime.now(timezone.utc).isoformat())
     db.add(item); db.flush()
     queue_room_email(db, item, "submitted")
     db.commit()
     background_tasks.add_task(deliver_room_emails, SessionLocal)
-    return {"ok": True, "message": "Room submitted for verification. We will email you when it is approved and live.", "listing": _accommodation_payload(item, landlord)}
+    return {"ok": True, "message": "Room submitted for verification. We will email you when it is approved and live.", "listing": _accommodation_payload(item, landlord, owner=True)}
 
 
 @app.put("/marketing/listings/{listing_id}")
-async def update_accommodation(listing_id: int, title: str = Form(...), campus: str = Form(...), area: str = Form(""), monthly_rent: str = Form(""), bedrooms: str = Form(""), description: str = Form(...), contact: str = Form(""), latitude: str = Form(""), longitude: str = Form(""), is_available: bool = Form(True), booked_until: str = Form(""), retained_image_urls: str = Form(""), image_order: str = Form(""), images: Optional[List[UploadFile]] = File(None), image: Optional[UploadFile] = File(None), landlord: Landlord = Depends(_require_market_seller), db: Session = Depends(get_db)):
+async def update_accommodation(listing_id: int, request: Request, title: str = Form(...), campus: str = Form(...), area: str = Form(""), monthly_rent: str = Form(""), bedrooms: str = Form(""), description: str = Form(...), contact: str = Form(""), private_landlord_contact: str = Form(""), latitude: str = Form(""), longitude: str = Form(""), is_available: bool = Form(True), booked_until: str = Form(""), retained_image_urls: str = Form(""), image_order: str = Form(""), images: Optional[List[UploadFile]] = File(None), image: Optional[UploadFile] = File(None), landlord: Landlord = Depends(_require_market_seller), db: Session = Depends(get_db)):
     item = db.query(Accommodation).filter(Accommodation.id == listing_id, Accommodation.landlord_id == landlord.id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Accommodation listing not found")
+    if landlord.provider_type == "agent":
+        contact = landlord.phone or ""
     if not contact.strip() or len(re.sub(r"\D", "", contact)) < 8:
         raise HTTPException(status_code=400, detail="Add a valid contact number for this room")
     if not title.strip() or not campus.strip() or not area.strip() or not description.strip():
@@ -6635,6 +6647,8 @@ async def update_accommodation(listing_id: int, title: str = Form(...), campus: 
     item.title, item.campus, item.area = title.strip()[:180], campus.strip()[:120], area.strip()[:160]
     item.monthly_rent, item.bedrooms, item.description = rent, bedrooms.strip()[:80], description.strip()[:2500]
     item.contact, item.is_available, item.booked_until = contact.strip()[:160], is_available, booked_until.strip() or None
+    if landlord.provider_type == "agent" and "private_landlord_contact" in await request.form():
+        item.private_landlord_contact = private_landlord_contact.strip()[:160] or None
     if (lat, lng) != (item.latitude, item.longitude):
         item.pending_latitude, item.pending_longitude = lat, lng
     else:
@@ -6642,7 +6656,7 @@ async def update_accommodation(listing_id: int, title: str = Form(...), campus: 
     if retained_image_urls or new_images or image_order:
         item.image_url, item.image_urls = image_urls[0] if image_urls else None, json.dumps(image_urls)
     db.commit()
-    return {"ok": True, "listing": _accommodation_payload(item, landlord)}
+    return {"ok": True, "listing": _accommodation_payload(item, landlord, owner=True)}
 
 
 @app.delete("/marketing/listings/{listing_id}")

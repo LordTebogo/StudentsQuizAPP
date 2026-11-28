@@ -96,6 +96,12 @@
     const seller = room ? profile.full_name : get('business_name');
     const meta = [get('campus') || 'Location not specified', get('area'), form.id === 'sellListingForm' ? 'Posted today' : ''].filter(Boolean).join(' · ');
     const details = [['Location',get('campus')],['Area',get('area')],['Room type',get('bedrooms')],['Contact number',get('contact')],['Activity or service',get('service_detail')],['Stock available',get('stock_quantity')],['Website or social link',get('website_url')],['Latitude',get('latitude')],['Longitude',get('longitude')],['Fully booked until',get('booked_until')],['Opening hours',get('opening_hours')],['Available dates',get('available_dates')],['Available times',get('available_times')],['Closed dates',get('closed_dates')],['Consultation format',get('consultation_mode')]];
+    if (room && profile.provider_type === 'agent') {
+      for (const detail of details) {
+        if (detail[0] === 'Latitude' || detail[0] === 'Longitude') detail[0] += ' (private)';
+      }
+      details.push(['Landlord contact (private)', get('private_landlord_contact')]);
+    }
     if (form.elements.consultations?.checked) details.push(['Consultations',get('consultation_minutes') ? `${get('consultation_minutes')} minutes` : 'Available']);
     if (form.elements.status) details.push(['Visibility',get('status') === 'paused' ? 'Paused — hidden from the public' : 'Published']);
     const panel = document.createElement('section');
@@ -195,7 +201,7 @@
         <div class="sell-location"><label>Latitude <span>(optional)</span><input name="latitude" type="number" step="any" min="-90" max="90"></label><label>Longitude <span>(optional)</span><input name="longitude" type="number" step="any" min="-180" max="180"></label><button type="button" data-use-location>Use my current location</button><small class="sell-location-status" role="status" aria-live="polite" hidden></small></div>
         <label>Monthly rent (R)<input name="monthly_rent" type="number" min="0" inputmode="numeric" required></label>
         <label>Room type <span>(optional)</span><input name="bedrooms" maxlength="80" placeholder="Single, shared, bachelor…"></label>
-        <label>Contact number for this listing<input name="contact" type="tel" autocomplete="tel" value="${escapeHtml(profile.phone || '')}" required></label>
+        ${roomContactFields(profile.phone)}
         <label>Description<textarea name="description" maxlength="2500" placeholder="Utilities, rules, availability, and what is included" required></textarea></label>
         <label>Photos <span>(up to 3, optional)</span><input name="images" type="file" accept="image/*" multiple data-max-files="3"></label>` : `
         <label>Business or seller name<input name="business_name" maxlength="160" value="${escapeHtml(profile.business_name || profile.full_name)}" required></label>
@@ -217,6 +223,34 @@
   }
   const isService = item => !/transport|ride|shuttle|courier|delivery|sales|retail|technology|second.?hand|textbook/i.test(item.category);
   const listingPhotos = item => (item.image_urls || (item.image_url ? [item.image_url] : []));
+  function roomContactFields(contact, privateContact = '') {
+    const agent = profile.provider_type === 'agent';
+    return `<label>${agent ? 'Agent contact number (public)' : 'Contact number for this listing'}<input name="contact" type="tel" autocomplete="tel" value="${escapeHtml(agent ? profile.phone : contact)}" ${agent ? 'readonly' : 'required'}></label>
+      ${agent ? `<label>Landlord contact <span>(optional, private)</span><input name="private_landlord_contact" maxlength="160" placeholder="Phone number or email" value="${escapeHtml(privateContact)}"></label>` : ''}`;
+  }
+  function roomLocationLink(item) {
+    if (!Number.isFinite(item.latitude) || !Number.isFinite(item.longitude)) return '';
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${item.latitude},${item.longitude}`)}`;
+  }
+  async function shareRoomLocation(item) {
+    const url = roomLocationLink(item);
+    if (!url) return;
+    status('');
+    if (navigator.share) {
+      try {
+        await navigator.share({title: item.title, url});
+        return;
+      } catch (error) {
+        if (error.name === 'AbortError') return;
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      status('Location link copied. Paste it into a message to your customer.');
+    } catch {
+      window.prompt('Copy this location link to share with your customer', url);
+    }
+  }
   function renderEditListing(type, item) {
     clearPreview();
     const room = type === 'room', availability = item.service_availability || {};
@@ -226,7 +260,7 @@
     document.getElementById('sellIntro').textContent = room ? 'Update your room. Coordinate changes appear after admin approval; your current approved location stays active until then.' : 'Update the details customers see. Save when finished.';
     content.innerHTML = `<button class="sell-back" type="button" data-my-listings>← My listings</button><form id="editListingForm" class="sell-form" data-type="${type}" data-id="${item.id}" enctype="multipart/form-data">
       ${room ? `<label>Listing title<input name="title" maxlength="180" value="${value('title')}" required></label><label>Nearby organisation or landmark<input name="campus" placeholder="Company, school, college, university, mine or area" maxlength="120" value="${value('campus')}" required></label><label>Area or suburb<input name="area" maxlength="160" value="${value('area')}" required></label><label>Monthly rent (R)<input name="monthly_rent" type="number" min="0" value="${value('monthly_rent')}"></label><label>Room type<input name="bedrooms" maxlength="80" value="${value('bedrooms')}"></label>` : `<label>Business or seller name<input name="business_name" maxlength="160" value="${value('business_name')}" required></label><label>Listing title<input name="headline" maxlength="180" value="${value('headline')}" required></label><label>Category<select name="category" required>${['Sales & retail','Technology','Ride & transport','Delivery & courier','Campus shuttle','Student service','Food & delivery','Tutoring','Event','Beauty & lifestyle','Churches','Other'].map(category => `<option value="${escapeHtml(category)}" ${item.category === category ? 'selected' : ''}>${category === 'Campus shuttle' ? 'Shuttle service' : category === 'Student service' ? 'Local service' : escapeHtml(category)}</option>`).join('')}</select></label><label>Activity or service<input name="service_detail" maxlength="160" value="${value('service_detail')}"></label><label>Price (R)<input name="price" type="number" min="0" max="100000000" value="${value('price')}"></label><label>Stock quantity (optional, for products)<input name="stock_quantity" type="number" min="0" max="1000000" value="${value('stock_quantity')}"></label><label>Nearby organisation or landmark<input name="campus" placeholder="Company, school, college, university, mine or area" maxlength="120" value="${value('campus')}"></label><label>Area or suburb<input name="area" maxlength="160" value="${value('area')}"></label>`}
-      <label>Description<textarea name="description" maxlength="${room ? 2500 : 1200}" required>${value('description')}</textarea></label><label>Contact number<input name="contact" type="tel" value="${value('contact')}" required></label>${room ? `<div class="sell-location"><label>Latitude <span>(private; admin approval required for changes)</span><input name="latitude" type="number" step="any" min="-90" max="90" value="${escapeHtml(item.pending_latitude ?? item.latitude ?? '')}"></label><label>Longitude <span>(private)</span><input name="longitude" type="number" step="any" min="-180" max="180" value="${escapeHtml(item.pending_longitude ?? item.longitude ?? '')}"></label><button type="button" data-use-location>Use my current location</button><small class="sell-location-status" role="status" aria-live="polite" hidden></small></div><label><input name="is_available" type="checkbox" ${item.is_available ? 'checked' : ''}> Available now</label><label>Fully booked until (optional)<input name="booked_until" type="date" value="${value('booked_until')}"></label>` : `<label>Website or social link<input name="website_url" type="url" value="${value('website_url')}"></label><label>Listing visibility<select name="status"><option value="approved" ${item.status === 'approved' ? 'selected' : ''}>Published</option><option value="paused" ${item.status === 'paused' ? 'selected' : ''}>Paused</option></select></label>`}
+      <label>Description<textarea name="description" maxlength="${room ? 2500 : 1200}" required>${value('description')}</textarea></label>${room ? roomContactFields(item.contact, item.private_landlord_contact) : `<label>Contact number<input name="contact" type="tel" value="${value('contact')}" required></label>`}${room ? `<div class="sell-location"><label>Latitude <span>(private; admin approval required for changes)</span><input name="latitude" type="number" step="any" min="-90" max="90" value="${escapeHtml(item.pending_latitude ?? item.latitude ?? '')}"></label><label>Longitude <span>(private)</span><input name="longitude" type="number" step="any" min="-180" max="180" value="${escapeHtml(item.pending_longitude ?? item.longitude ?? '')}"></label><button type="button" data-use-location>Use my current location</button><small class="sell-location-status" role="status" aria-live="polite" hidden></small></div><label><input name="is_available" type="checkbox" ${item.is_available ? 'checked' : ''}> Available now</label><label>Fully booked until (optional)<input name="booked_until" type="date" value="${value('booked_until')}"></label>` : `<label>Website or social link<input name="website_url" type="url" value="${value('website_url')}"></label><label>Listing visibility<select name="status"><option value="approved" ${item.status === 'approved' ? 'selected' : ''}>Published</option><option value="paused" ${item.status === 'paused' ? 'selected' : ''}>Paused</option></select></label>`}
       <div class="sell-photo-editor"><strong>Photos (up to 3)</strong>${photos.map((url, index) => `<label><input type="checkbox" data-keep-photo="${index}" checked><img src="${escapeHtml(url)}" alt="Listing photo ${index + 1}"> Keep photo ${index + 1}</label>`).join('') || '<p>No photos yet.</p>'}</div><label>Add photos<input name="images" type="file" accept="image/*" multiple></label>
       ${!room && isService(item) ? `<fieldset class="sell-availability-fields"><legend>Service and consultation availability</legend><label>Opening hours and days<textarea name="opening_hours" maxlength="500">${escapeHtml(availability.opening_hours || '')}</textarea></label><label>Available dates (YYYY-MM-DD, comma separated)<textarea name="available_dates">${escapeHtml((availability.available_dates || []).join(', '))}</textarea></label><label>Available times (HH:MM, comma separated)<textarea name="available_times">${escapeHtml((availability.available_times || []).join(', '))}</textarea></label><label>Closed dates (YYYY-MM-DD, comma separated)<textarea name="closed_dates">${escapeHtml((availability.closed_dates || []).join(', '))}</textarea></label><label>Fully booked until<input name="booked_until" type="date" value="${escapeHtml(availability.booked_until || '')}"></label><label><input name="consultations" type="checkbox" ${availability.consultations ? 'checked' : ''}> Offer consultations</label><label>Consultation length (minutes)<input name="consultation_minutes" type="number" min="5" max="480" value="${escapeHtml(availability.consultation_minutes || '')}"></label><label>Consultation format<input name="consultation_mode" maxlength="80" value="${escapeHtml(availability.consultation_mode || '')}"></label></fieldset>` : ''}
       <button type="submit">Preview changes</button></form><button class="sell-delete" type="button" data-delete-listing="${type}" data-listing-id="${item.id}">Delete listing</button>`;
@@ -239,7 +273,11 @@
     content.innerHTML = '<button class="sell-back" type="button" data-sell-back>← Add another listing</button><p>Loading your listings…</p>';
     try {
       const [rooms, adverts] = await Promise.all([request('/marketing/landlord/listings'), request('/marketing/my-adverts')]);
-      content.innerHTML = `<button class="sell-back" type="button" data-sell-back>← Add another listing</button><div class="sell-manage">${rooms.map(item => `<article><div><strong>${escapeHtml(item.title)}</strong><span>Room · ${item.pending_latitude != null ? 'Location awaiting approval' : item.is_approved ? (item.is_available ? 'Published' : item.booked_until ? `Fully booked until ${escapeHtml(item.booked_until)}` : 'Filled') : 'Awaiting approval'}</span></div><div class="sell-manage-actions"><button type="button" data-edit-room="${item.id}">Edit</button><button type="button" data-toggle-room="${item.id}">${item.is_available ? 'Mark filled' : 'Mark available'}</button></div></article>`).join('')}${adverts.map(item => `<article><div><strong>${escapeHtml(item.headline)}</strong><span>${escapeHtml(item.category)} · ${escapeHtml(item.status)}${item.service_availability?.booked_until ? ` · Fully booked until ${escapeHtml(item.service_availability.booked_until)}` : ''}</span></div><div class="sell-manage-actions"><button type="button" data-edit-advert="${item.id}">Edit</button>${item.status === 'approved' ? `<button type="button" data-pause-ad="${item.id}">Pause listing</button>` : `<button type="button" data-publish-ad="${item.id}">Publish listing</button>`}</div></article>`).join('') || (!rooms.length ? '<p>You have no listings yet.</p>' : '')}</div>`;
+      if (!dialog.open) return;
+      content.innerHTML = `<button class="sell-back" type="button" data-sell-back>← Add another listing</button><div class="sell-manage">${rooms.map(item => `<article><div><strong>${escapeHtml(item.title)}</strong><span>Room · ${item.pending_latitude != null ? 'Location awaiting approval' : item.is_approved ? (item.is_available ? 'Published' : item.booked_until ? `Fully booked until ${escapeHtml(item.booked_until)}` : 'Filled') : 'Awaiting approval'}</span>${profile.provider_type === 'agent' ? `
+        <span>Landlord contact (private): ${escapeHtml(item.private_landlord_contact || 'Not added')}</span>
+        ${roomLocationLink(item) ? `<span>Coordinates: ${escapeHtml(item.latitude)}, ${escapeHtml(item.longitude)}</span>` : ''}
+        ${item.pending_latitude != null ? `<span>Pending coordinates: ${escapeHtml(item.pending_latitude)}, ${escapeHtml(item.pending_longitude)}</span>` : ''}` : ''}</div><div class="sell-manage-actions">${profile.provider_type === 'agent' && roomLocationLink(item) ? `<button type="button" data-share-room-location="${item.id}">Share location</button>` : ''}<button type="button" data-edit-room="${item.id}">Edit</button><button type="button" data-toggle-room="${item.id}">${item.is_available ? 'Mark filled' : 'Mark available'}</button></div></article>`).join('')}${adverts.map(item => `<article><div><strong>${escapeHtml(item.headline)}</strong><span>${escapeHtml(item.category)} · ${escapeHtml(item.status)}${item.service_availability?.booked_until ? ` · Fully booked until ${escapeHtml(item.service_availability.booked_until)}` : ''}</span></div><div class="sell-manage-actions"><button type="button" data-edit-advert="${item.id}">Edit</button>${item.status === 'approved' ? `<button type="button" data-pause-ad="${item.id}">Pause listing</button>` : `<button type="button" data-publish-ad="${item.id}">Publish listing</button>`}</div></article>`).join('') || (!rooms.length ? '<p>You have no listings yet.</p>' : '')}</div>`;
       content.dataset.rooms = JSON.stringify(rooms);
       content.dataset.adverts = JSON.stringify(adverts);
     } catch (error) { status(error.message, true); renderChoice(); }
@@ -287,7 +325,12 @@
   });
   document.getElementById('closeSell').addEventListener('click', () => { if (!saving) dialog.close(); });
   dialog.addEventListener('cancel', event => { if (saving) event.preventDefault(); });
-  dialog.addEventListener('close', () => { if (!saving) clearPreview(); });
+  dialog.addEventListener('close', () => {
+    if (dialog.open) return;
+    if (!saving) clearPreview();
+    delete content.dataset.rooms;
+    content.replaceChildren();
+  });
   dialog.addEventListener('click', async event => {
     if (saving) return;
     if (event.target.closest('[data-edit-preview]')) { const form = preview?.form; clearPreview(); status(''); form?.querySelector('input:not([type=hidden]),select,textarea')?.focus(); return; }
@@ -357,6 +400,12 @@
     }
     if (event.target.closest('[data-sell-back]')) { status(''); renderChoice(); return; }
     if (event.target.closest('[data-my-listings]')) { status(''); await renderMyListings(); return; }
+    const shareLocation = event.target.closest('[data-share-room-location]');
+    if (shareLocation) {
+      const item = JSON.parse(content.dataset.rooms || '[]').find(row => String(row.id) === shareLocation.dataset.shareRoomLocation);
+      if (item && profile?.provider_type === 'agent') await shareRoomLocation(item);
+      return;
+    }
     const editRoom = event.target.closest('[data-edit-room]');
     if (editRoom) { const item = JSON.parse(content.dataset.rooms || '[]').find(row => String(row.id) === editRoom.dataset.editRoom); if (item) renderEditListing('room', item); return; }
     const editAdvert = event.target.closest('[data-edit-advert]');
