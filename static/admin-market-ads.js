@@ -10,6 +10,23 @@
       list.innerHTML = reports.length ? reports.map(report => `<article class="moderation-item" data-admin-report="${report.id}"><h3>#${report.id} · ${esc(report.listing_title)}</h3><p><strong>${esc(reportReasons[report.reason] || report.reason)}</strong> · ${esc(report.status)} · ${esc(report.created_at.slice(0, 10))}</p><p style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(report.details || 'No extra details supplied.')}</p><p><a href="/listing/${report.kind === 'room' ? 'room' : 'offer'}/${Number(report.listing_id)}" target="_blank" rel="noopener noreferrer">Open reported listing ↗</a> · Listing ID ${Number(report.listing_id)} (${esc(report.kind)})</p><button class="btn secondary" type="button" data-review-status="${report.status === 'open' ? 'resolved' : 'open'}">${report.status === 'open' ? 'Mark reviewed' : 'Reopen report'}</button></article>`).join('') : '<p>No reports in this view.</p>';
     } catch (error) { list.textContent = `Reports could not be loaded: ${error.message}`; }
   }
+  async function loadAgentContacts(offset = 0) {
+    const panel = document.getElementById('marketAgentContacts');
+    const results = panel.querySelector('[data-agent-contact-results]');
+    try {
+      const data = await api(`/admin/market-agent-contact-clicks?offset=${offset}`);
+      const time = new Intl.DateTimeFormat('en-ZA', {dateStyle: 'medium', timeStyle: 'medium', timeZone: 'Africa/Johannesburg'});
+      const counts = data.agents.map(agent => `<tr><th scope="row">${esc(agent.agent_name)} (#${Number(agent.agent_id)})</th><td>${agent.day}</td><td>${agent.week}</td><td>${agent.month}</td><td>${agent.year}</td></tr>`).join('');
+      const clicks = data.clicks.map(click => `<tr><td>${esc(time.format(new Date(click.clicked_at)))}</td><td>${esc(click.agent_name)}</td><td>${esc(click.listing_title)}</td><td>${esc(click.viewer)}</td></tr>`).join('');
+      results.innerHTML = counts ? `
+        <div style="overflow-x:auto"><table><caption>Unique viewers by agent</caption><thead><tr><th>Agent</th><th>Today</th><th>This week</th><th>This month</th><th>This year</th></tr></thead><tbody>${counts}</tbody></table></div>
+        <div style="overflow-x:auto"><table><caption>WhatsApp link clicks</caption><thead><tr><th>Time (SAST)</th><th>Agent</th><th>Room listing</th><th>Viewer</th></tr></thead><tbody>${clicks}</tbody></table></div>
+        <div class="actions">${offset ? `<button type="button" class="btn secondary" data-contact-offset="${Math.max(0, offset - 100)}">Newer clicks</button>` : ''}${data.has_more ? `<button type="button" class="btn secondary" data-contact-offset="${offset + 100}">Older clicks</button>` : ''}</div>`
+        : '<p>No agent contact clicks have been recorded yet.</p>';
+    } catch (error) {
+      results.textContent = `Agent contact activity could not be loaded: ${error.message}`;
+    }
+  }
   async function load() {
     const list = document.getElementById('marketAdvertAdminList'); if (!list) return;
     try {
@@ -46,6 +63,15 @@
     const reports = document.createElement('section');
     reports.innerHTML = '<h2>Listing reports</h2><p class="muted">Review stale or suspicious listings here. Reports do not automatically remove a listing. Use Remove approval for rooms or Pause listing for other listings when appropriate; marking a report reviewed only updates this queue. Up to 100 most recent reports are shown.</p><label for="marketReportFilter">Show reports</label><select id="marketReportFilter"><option value="open">Needs review</option><option value="resolved">Reviewed</option></select><div id="marketReportAdminList" class="stack-list" aria-live="polite"></div>';
     card.prepend(reports);
+    const contacts = document.createElement('section');
+    contacts.id = 'marketAgentContacts';
+    contacts.innerHTML = '<h2>Agent WhatsApp contact activity</h2><p class="muted">Unique counts use signed-in profiles or anonymous network identifiers. Periods use South African time, with weeks starting on Monday.</p><button type="button" class="btn secondary" data-contact-offset="0">Refresh activity</button><div data-agent-contact-results aria-live="polite"></div>';
+    reports.after(contacts);
+    contacts.addEventListener('click', event => {
+      const button = event.target.closest('[data-contact-offset]');
+      if (button) loadAgentContacts(Number(button.dataset.contactOffset));
+    });
+    loadAgentContacts();
     reports.querySelector('select').addEventListener('change', loadReports);
     card.querySelector('#refreshMarketAds').addEventListener('click', () => { load(); loadReports(); });
     card.addEventListener('submit', async event => {

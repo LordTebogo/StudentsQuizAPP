@@ -136,6 +136,39 @@ class MarketFeaturesTest(unittest.TestCase):
         self.assertEqual(public_room["contact"], form["contact"])
         self.assertNotIn("registration_contact", public_room)
 
+    def test_agent_whatsapp_clicks_count_unique_viewers_across_rooms(self):
+        with main.SessionLocal() as db:
+            agent = Landlord(full_name="Contact Test Agent", provider_type="agent", phone="0617048855",
+                             email="click-agent@example.test", password_hash="unused", active=True,
+                             created_at="2026-10-01T00:00:00Z")
+            db.add(agent)
+            db.flush()
+            rooms = [
+                Accommodation(landlord_id=agent.id, title=title, campus="Test campus", area="Center",
+                              description="Room", is_available=True, is_approved=True, show_contact=visible,
+                              created_at="2026-10-01T00:00:00Z")
+                for title, visible in (("Click room 1", True), ("Click room 2", True), ("Hidden contact", False))
+            ]
+            db.add_all(rooms)
+            db.commit()
+            agent_id = agent.id
+            paths = [f"/marketing/rooms/{room.id}/agent-contact-click" for room in rooms]
+            listing_path = f"/listing/room/{rooms[0].id}"
+        self.assertIn('href="https://wa.me/27617048855"', self.client.get(listing_path).text)
+        for path in paths[:2]:
+            self.assertEqual(self.client.post(path).status_code, 204)
+            self.assertEqual(self.client.post(path, headers={"X-Student-Token": self.token}).status_code, 204)
+        self.assertEqual(self.client.post(paths[2]).status_code, 404)
+        report_path = "/admin/market-agent-contact-clicks"
+        self.assertNotEqual(self.client.get(report_path).status_code, 200)
+        result = self.client.get(report_path, headers={"X-Lecturer-Pin": main.LECTURER_PIN}).json()
+        counts = next(agent for agent in result["agents"] if agent["agent_id"] == agent_id)
+        self.assertEqual([counts[period] for period in ("day", "week", "month", "year")], [2, 2, 2, 2])
+        clicks = [click for click in result["clicks"] if click["agent_name"] == "Contact Test Agent"]
+        self.assertEqual(len(clicks), 4)
+        self.assertEqual({click["viewer"] for click in clicks}, {"Test Learner", "Unknown 1"})
+        self.assertTrue(all(click["clicked_at"].endswith("+00:00") for click in clicks))
+
     def test_agent_landlord_contact_is_owner_only_and_survives_availability_changes(self):
         with main.SessionLocal() as db:
             agent = Landlord(full_name="Listing Agent", provider_type="agent", phone="+2771 234 5678", email="agent@example.test", password_hash="unused", active=True, created_at="2026-10-01T00:00:00Z")

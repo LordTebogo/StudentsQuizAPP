@@ -21,6 +21,7 @@ from sqlalchemy import (
     Column,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -272,6 +273,20 @@ class Accommodation(Base):
     rating_total = Column(Integer, nullable=False, default=0)
     rating_count = Column(Integer, nullable=False, default=0)
     created_at = Column(String, nullable=False)
+
+
+class MarketAgentContactClick(Base):
+    __tablename__ = "market_agent_contact_clicks"
+    __table_args__ = (Index("ix_market_agent_contact_clicks_agent_time", "agent_id", "clicked_at"),)
+
+    id = Column(Integer, primary_key=True)
+    agent_id = Column(Integer, nullable=False)
+    agent_name = Column(String(160), nullable=False)
+    listing_id = Column(Integer, nullable=False)
+    listing_title = Column(String(180), nullable=False)
+    viewer_key = Column(String(64), nullable=False, index=True)
+    viewer_name = Column(String(160))
+    clicked_at = Column(String(32), nullable=False, index=True)
 
 
 class RoomListingEmail(Base):

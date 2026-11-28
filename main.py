@@ -56,14 +56,14 @@ from itertools import permutations
 from typing import List, Optional
 from urllib.parse import urlsplit, urlunsplit
 
-from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse, JSONResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.exception_handlers import http_exception_handler
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import func, inspect, text, and_, or_
+from sqlalchemy import case, func, inspect, text, and_, or_
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
@@ -125,7 +125,7 @@ from models import (
     SupportPayment,
     PushSubscription, MarketPushSubscription, AndroidPushToken,
     StudentModule,
-    Landlord, Accommodation, AccommodationComment, RoomListingEmail, MarketAdvert, MarketListingView, MarketListingRating, MediaFinanceEntry, MediaUploadEvent, Vacancy,
+    Landlord, Accommodation, AccommodationComment, RoomListingEmail, MarketAgentContactClick, MarketAdvert, MarketListingView, MarketListingRating, MediaFinanceEntry, MediaUploadEvent, Vacancy,
     PasswordResetCode,
     MarketAccountRating,
     SrcPresident,
@@ -6413,6 +6413,90 @@ def _market_item(kind: str, listing_id: int, db: Session):
     return item
 
 
+def _market_contact_viewer(request: Request, db: Session) -> tuple[str, Optional[str]]:
+    checks = (
+        ("X-Student-Token", require_student_account, "student"),
+        ("X-Lecturer-Token", require_lecturer_account, "lecturer"),
+        ("X-Landlord-Token", require_landlord_account, "landlord"),
+    )
+    for header, check, kind in checks:
+        token = request.headers.get(header)
+        if not token:
+            continue
+        try:
+            account = check(token, db)
+        except HTTPException:
+            continue
+        identity = f"{kind}:{account.id}"
+        if kind == "landlord" and account.linked_student_id:
+            identity = f"student:{account.linked_student_id}"
+        elif kind == "landlord" and account.linked_lecturer_id:
+            identity = f"lecturer:{account.linked_lecturer_id}"
+        return identity, account.full_name
+    return f"ip:{request.client.host if request.client else 'unknown'}", None
+
+
+@app.post("/marketing/rooms/{listing_id}/agent-contact-click", status_code=204)
+def record_market_agent_contact_click(listing_id: int, request: Request, db: Session = Depends(get_db)):
+    room = _market_item("rooms", listing_id, db)
+    agent = db.get(Landlord, room.landlord_id)
+    if agent.provider_type != "agent" or not room.show_contact or not agent.phone:
+        raise HTTPException(status_code=404, detail="Agent contact not available")
+    viewer, name = _market_contact_viewer(request, db)
+    key = hmac.new(STUDENT_SESSION_SECRET.encode(), f"market-agent-contact:{viewer}".encode(), hashlib.sha256).hexdigest()
+    db.add(MarketAgentContactClick(
+        agent_id=agent.id, agent_name=agent.full_name, listing_id=room.id, listing_title=room.title,
+        viewer_key=key, viewer_name=name, clicked_at=datetime.now(timezone.utc).isoformat(timespec="microseconds"),
+    ))
+    db.commit()
+    return Response(status_code=204)
+
+
+@app.get("/admin/market-agent-contact-clicks")
+def admin_market_agent_contact_clicks(response: Response, offset: int = Query(0, ge=0),
+                                     _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = "no-store"
+    click = MarketAgentContactClick
+    local = datetime.now(timezone(timedelta(hours=2)))
+    day = local.replace(hour=0, minute=0, second=0, microsecond=0)
+    starts = {
+        "day": day,
+        "week": day - timedelta(days=day.weekday()),
+        "month": day.replace(day=1),
+        "year": day.replace(month=1, day=1),
+    }
+    counts = [
+        func.count(func.distinct(case(
+            (click.clicked_at >= start.astimezone(timezone.utc).isoformat(timespec="microseconds"), click.viewer_key)
+        ))).label(period)
+        for period, start in starts.items()
+    ]
+    agents = db.query(click.agent_id, func.max(click.agent_name).label("saved_name"), *counts).group_by(click.agent_id).all()
+    current_names = dict(db.query(Landlord.id, Landlord.full_name).filter(
+        Landlord.id.in_([agent.agent_id for agent in agents])
+    ).all())
+    # Anonymous networks are numbered by first click. IP addresses and hashes stay server-side.
+    first_click = db.query(click.viewer_key, func.row_number().over(order_by=func.min(click.id)).label("number")).filter(
+        click.viewer_name.is_(None)
+    ).group_by(click.viewer_key).subquery()
+    rows = db.query(click, first_click.c.number).outerjoin(
+        first_click, first_click.c.viewer_key == click.viewer_key
+    ).order_by(click.clicked_at.desc(), click.id.desc()).offset(offset).limit(101).all()
+    return {
+        "agents": [
+            {"agent_id": agent.agent_id, "agent_name": current_names.get(agent.agent_id, agent.saved_name),
+             **{period: getattr(agent, period) for period in starts}}
+            for agent in agents
+        ],
+        "clicks": [
+            {"agent_name": event.agent_name, "listing_title": event.listing_title,
+             "viewer": event.viewer_name or f"Unknown {number}", "clicked_at": event.clicked_at}
+            for event, number in rows[:100]
+        ],
+        "has_more": len(rows) > 100,
+    }
+
+
 @app.post("/marketing/{kind}/{listing_id}/view")
 def record_market_view(kind: str, listing_id: int, request: Request, db: Session = Depends(get_db)):
     """One view per listing and browser, including after reloads or repeat visits."""
@@ -9365,6 +9449,19 @@ def public_market_listing(kind: str, listing_id: str, db: Session = Depends(get_
     image_meta = f'<meta property="og:image" content="{escape(photo)}">' if photo else ""
     image_html = f'<img class="photo" src="{escape(photo)}" alt="{escape(title)}">' if photo else ""
     contact = data.get("contact") or "Ask the provider for contact details."
+    contact_html = escape(contact)
+    contact_notice = ""
+    if kind == "room" and not is_demo and data.get("landlord", {}).get("provider_type") == "agent":
+        number = re.sub(r"\D", "", contact)
+        if number.startswith("0"):
+            number = "27" + number[1:]
+        if re.fullmatch(r"27[0-9]{9}", number) and re.fullmatch(r"(?:\+?27|0)[\d\s().-]+", contact):
+            contact_html = (
+                f'<a href="https://wa.me/{number}" target="_blank" rel="noopener noreferrer" '
+                f'data-agent-contact-listing="{listing_id}">{escape(contact)}</a>'
+            )
+            contact_notice = ('<p>Arounus logs WhatsApp link clicks with your profile name if signed in, '
+                              'or a pseudonymous network identifier otherwise.</p>')
     room_available = kind == "room" and data.get("is_available") is True
     room_badge_html = f'<span class="room-availability room-availability--{"available" if room_available else "filled"}"><span aria-hidden="true">●</span> {"Available" if room_available else "Filled"}</span>' if kind == "room" else ''
     if photo and room_badge_html:
@@ -9398,7 +9495,7 @@ def public_market_listing(kind: str, listing_id: str, db: Session = Depends(get_
 <title>{escape(title)} | Arounus</title><meta name="description" content="{escape(description)}"><meta name="robots" content="{'noindex,follow' if is_demo else 'index,follow'}"><link rel="canonical" href="{path}">
 <meta property="og:type" content="product"><meta property="og:title" content="{escape(title)}"><meta property="og:description" content="{escape(description)}"><meta property="og:url" content="{path}">{image_meta}
 <meta name="twitter:card" content="summary_large_image">{structured_html}<link rel="stylesheet" href="/static/room-availability.css?v=2"><link rel="stylesheet" href="/static/market-safety.css?v=1"><script src="/static/market-safety.js?v=1" defer></script><link rel="stylesheet" href="/static/style.css"><link rel="stylesheet" href="/static/site-footer.css?v=1"><style>body{{background:#f5f8f6;color:#18312d}}.listing-page{{max-width:820px;margin:30px auto;padding:28px;background:white;border:1px solid #d5e4db;border-radius:20px}}.photo{{width:100%;max-height:460px;object-fit:cover;border-radius:14px}}.listing-page p{{line-height:1.6}}.listing-page a{{color:#087c6f}}@media(max-width:650px){{.listing-page{{margin:12px;padding:18px}}}}</style></head>
-<body><script src="/static/app-traffic.js?v=1" defer></script><main class="listing-page"><p><a href="/">← Browse local market</a></p>{'<p><strong>Example only — this is not a real offer.</strong></p>' if is_demo else ''}<h1>{escape(title)}</h1>{room_status_html}{image_html}<p>{escape(data.get('campus') or 'Location not specified')}{' · ' + escape(data.get('area')) if data.get('area') else ''}</p><p><strong>{escape(price)}</strong></p>{'<p>Listed by ' + escape(seller) + '</p>' if seller and not is_demo else ''}<p>{escape(full_description)}</p>{('<p><strong>Provider contact:</strong> ' + escape(contact) + '</p><p class="market-contact-note">Contact the provider directly using these details, or <a href="/?listing=' + kind + '-' + str(listing_id) + '">open this listing on the market</a> and sign in to message them. In-app messages are linked to your account. Phone, WhatsApp and website contact happens outside Arounus. <a href="/trust#contact">How contact works</a>.</p><p class="market-verification-note">Provider identity, ownership and availability are not independently verified. ' + ('Rooms are reviewed for publication; approval is not a property inspection.' if kind == 'room' else 'Other listings can publish automatically.') + ' <a href="/trust#verification">What we check</a>.</p><p><a href="/trust?listing=' + kind + '-' + str(listing_id) + '#report" data-report-listing="' + kind + '-' + str(listing_id) + '" data-report-title="' + escape(title) + '">Report stale or suspicious listing</a></p>') if not is_demo else ''}<p>Check the listing and provider independently before paying. <a href="/trust#safety">Read market safety guidance</a>.</p><p><a href="/">Find more listings</a></p></main>{footer_html}</body></html>"""
+<body><script src="/static/app-traffic.js?v=1" defer></script><script src="/static/market-agent-contact.js?v=1" defer></script><main class="listing-page"><p><a href="/">← Browse local market</a></p>{'<p><strong>Example only — this is not a real offer.</strong></p>' if is_demo else ''}<h1>{escape(title)}</h1>{room_status_html}{image_html}<p>{escape(data.get('campus') or 'Location not specified')}{' · ' + escape(data.get('area')) if data.get('area') else ''}</p><p><strong>{escape(price)}</strong></p>{'<p>Listed by ' + escape(seller) + '</p>' if seller and not is_demo else ''}<p>{escape(full_description)}</p>{('<p><strong>Provider contact:</strong> ' + contact_html + '</p>' + contact_notice + '<p class="market-contact-note">Contact the provider directly using these details, or <a href="/?listing=' + kind + '-' + str(listing_id) + '">open this listing on the market</a> and sign in to message them. In-app messages are linked to your account. Phone, WhatsApp and website contact happens outside Arounus. <a href="/trust#contact">How contact works</a>.</p><p class="market-verification-note">Provider identity, ownership and availability are not independently verified. ' + ('Rooms are reviewed for publication; approval is not a property inspection.' if kind == 'room' else 'Other listings can publish automatically.') + ' <a href="/trust#verification">What we check</a>.</p><p><a href="/trust?listing=' + kind + '-' + str(listing_id) + '#report" data-report-listing="' + kind + '-' + str(listing_id) + '" data-report-title="' + escape(title) + '">Report stale or suspicious listing</a></p>') if not is_demo else ''}<p>Check the listing and provider independently before paying. <a href="/trust#safety">Read market safety guidance</a>.</p><p><a href="/">Find more listings</a></p></main>{footer_html}</body></html>"""
     return HTMLResponse(body, headers={"Cache-Control": "public, max-age=60"})
 
 
