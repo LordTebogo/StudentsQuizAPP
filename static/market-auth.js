@@ -40,8 +40,8 @@
       const register=mode==='register';
       title.textContent=register?'Create a market account':'Sign in to Arounus';
       content.innerHTML=`<button class="sell-back" type="button" data-account-back>← Back</button><p>${register?'Choose Customer to browse and message providers, or choose a provider type to publish listings.':'Use your existing Arounus account, including a customer account.'}</p><form id="marketAuthForm" class="sell-form">
-        ${register?`<label>Account type<select name="provider_type"><option value="customer" ${intent==='browse'?'selected':''}>Customer — browse and contact providers</option><option value="residence" ${intent==='sell'?'selected':''}>Landlord</option><option value="agent">Room agent</option><option value="other">Other provider</option></select></label><label>Full name<input name="full_name" autocomplete="name" required></label><label data-provider-only>Business or service name <span>(optional)</span><input name="business_name" autocomplete="organization"></label><label>Contact number <span>(optional for customers)</span><input name="phone" type="tel" autocomplete="tel"></label><label>Profile picture <span>(optional)</span><input name="profile_image" type="file" accept="image/*"></label>`:''}
-        <label>${register?'Email':'Email or learner username'}<input name="${register?'email':'identifier'}" type="${register?'email':'text'}" autocomplete="${register?'email':'username'}" required></label>
+        ${register?`<label>Account type<select name="provider_type"><option value="customer" ${intent==='browse'?'selected':''}>Customer — browse and contact providers</option><option value="residence" ${intent==='sell'?'selected':''}>Landlord</option><option value="agent">Room agent</option><option value="other">Other provider</option></select></label><label>Full name<input name="full_name" autocomplete="name" required></label><label data-provider-only>Business or service name <span>(optional)</span><input name="business_name" autocomplete="organization"></label><label>Contact number <span>(optional for customers)</span><input name="phone" type="tel" inputmode="numeric" pattern="\\s*(?:\\+\\s*2\\s*7(?:\\s*[0-9]){9}|[0-9](?:\\s*[0-9]){9})\\s*" title="Enter exactly 10 digits" autocomplete="tel"></label><label>Profile picture <span>(optional)</span><input name="profile_image" type="file" accept="image/*"></label>`:''}
+        <label>${register?'Email':'Email or learner username'}<input name="${register?'email':'identifier'}" type="${register?'email':'text'}" autocomplete="${register?'email':'username'}" ${register ? 'pattern="[^\\s@]+@[a-zA-Z0-9\\-]+(?:\\.[a-zA-Z0-9\\-]+)+" title="Enter a valid email address"' : ''} required></label>
         <label>Password<input name="password" type="password" autocomplete="${register?'new-password':'current-password'}" ${register?'minlength="8"':''} required></label>
         ${register?'<label>Confirm password<input name="confirm_password" type="password" autocomplete="new-password" minlength="8" required></label>':''}
         <button type="submit">${register?'Create account':'Sign in'}</button></form>${register ? '' : '<p><a href="/reset-password?role=landlord">Forgot password?</a></p>'}`;
@@ -92,6 +92,7 @@
   dialog.addEventListener('submit',async event=>{
     if(event.target.id!=='marketAuthForm')return;
     event.preventDefault();
+    if (!event.target.reportValidity()) return;
     const form=event.target,button=form.querySelector('[type=submit]');
     button.disabled=true;status.textContent=mode==='register'?'Creating your account…':'Signing in…';status.classList.remove('error');
     try {

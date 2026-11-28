@@ -23,7 +23,7 @@ class MarketFeaturesTest(unittest.TestCase):
     def setUpClass(cls):
         with main.SessionLocal() as db:
             student = Student(student_number="TEST001", full_name="Test Learner", email="learner@example.test", password_hash="unused", approved=True, active=True, created_at="2026-10-01T00:00:00Z")
-            landlord = Landlord(full_name="Test Provider", email="provider@example.test", phone="12345678", password_hash="unused", active=True, created_at="2026-10-01T00:00:00Z")
+            landlord = Landlord(full_name="Test Provider", email="provider@example.test", phone="0712345678", password_hash="unused", active=True, created_at="2026-10-01T00:00:00Z")
             db.add_all([student, landlord]); db.flush()
             cls.student_id = student.id
             cls.room_id = None
@@ -138,7 +138,7 @@ class MarketFeaturesTest(unittest.TestCase):
 
     def test_agent_landlord_contact_is_owner_only_and_survives_availability_changes(self):
         with main.SessionLocal() as db:
-            agent = Landlord(full_name="Listing Agent", provider_type="agent", phone="0712345678", email="agent@example.test", password_hash="unused", active=True, created_at="2026-10-01T00:00:00Z")
+            agent = Landlord(full_name="Listing Agent", provider_type="agent", phone="+2771 234 5678", email="agent@example.test", password_hash="unused", active=True, created_at="2026-10-01T00:00:00Z")
             db.add(agent)
             db.commit()
             agent_headers = {"X-Landlord-Token": main._issue_landlord_token(agent.id)}
@@ -146,6 +146,9 @@ class MarketFeaturesTest(unittest.TestCase):
         landlord_contact = "landlord@example.test"
         form = {"title":"Agent room", "campus":"Test campus", "area":"Center", "description":"Room",
                 "contact":"0799999999", "private_landlord_contact":landlord_contact, "latitude":"0", "longitude":"29.4"}
+        for invalid_contact in ("06", "07123456789", "landlord@", "landlord@example"):
+            rejected = self.client.post("/marketing/listings", data={**form, "private_landlord_contact": invalid_contact}, headers=agent_headers)
+            self.assertEqual(rejected.status_code, 400)
         created = self.client.post("/marketing/listings", data=form, headers=agent_headers)
         self.assertEqual(created.status_code, 200)
         room_id = created.json()["listing"]["id"]
@@ -165,9 +168,10 @@ class MarketFeaturesTest(unittest.TestCase):
         form["is_available"] = "false"
         response = self.client.put(path, data=form, headers=agent_headers)
         self.assertEqual(response.json()["listing"]["private_landlord_contact"], landlord_contact)
-        for value in ("0723456789", ""):
+        for value, expected in (("072 345 6789", "0723456789"), ("+2772 345 6789", "0723456789"), ("", "")):
             response = self.client.put(path, data={**form, "private_landlord_contact":value}, headers=agent_headers)
-            self.assertEqual(response.json()["listing"]["private_landlord_contact"], value)
+            self.assertEqual(response.json()["listing"]["private_landlord_contact"], expected)
+
     def test_room_coordinate_change_needs_admin_review_and_stays_private(self):
         with main.SessionLocal() as db:
             owner = db.query(Landlord).first()

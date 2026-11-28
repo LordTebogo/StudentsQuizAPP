@@ -4898,13 +4898,13 @@ def admin_list_all_accounts(_pin_ok: bool = Depends(require_lecturer_pin), db: S
 @app.post("/admin/advertisers")
 def admin_create_advertiser(payload: AdminAdvertiserCreate, _pin_ok: bool = Depends(require_lecturer_pin), db: Session = Depends(get_db)):
     email = payload.email.strip().lower()
-    if not payload.full_name.strip() or not payload.phone.strip() or "@" not in email or len(payload.password) < 8:
+    if not payload.full_name.strip() or not _valid_market_phone(payload.phone) or not _valid_market_email(email) or len(payload.password) < 8:
         raise HTTPException(status_code=400, detail="Provide a name, contact number, valid email, and password of at least 8 characters")
     if payload.provider_type not in {"residence", "agent", "customer", "transport", "sales", "other"}:
         raise HTTPException(status_code=400, detail="Choose accommodation, transport, sales, or other")
     if db.query(Landlord).filter(Landlord.email == email).first():
         raise HTTPException(status_code=409, detail="An advertiser already uses this email")
-    advertiser = Landlord(full_name=payload.full_name.strip()[:160], business_name=payload.business_name.strip()[:160], provider_type=payload.provider_type, email=email, phone=payload.phone.strip()[:60], password_hash=_password_hash(payload.password), active=payload.active, created_at=datetime.now(timezone.utc).isoformat())
+    advertiser = Landlord(full_name=payload.full_name.strip()[:160], business_name=payload.business_name.strip()[:160], provider_type=payload.provider_type, email=email, phone=_normalize_market_phone(payload.phone), password_hash=_password_hash(payload.password), active=payload.active, created_at=datetime.now(timezone.utc).isoformat())
     db.add(advertiser); db.commit(); db.refresh(advertiser)
     return _admin_account_record("provider", advertiser)
 
@@ -4923,13 +4923,15 @@ def admin_update_any_account(account_type: str, account_id: int, payload: AdminU
         account.full_name = payload.full_name.strip()[:160]
     if payload.email is not None:
         email = payload.email.strip().lower()
-        if "@" not in email:
+        if not (_valid_market_email(email) if account_type == "provider" else "@" in email):
             raise HTTPException(status_code=400, detail="Enter a valid email address")
         if db.query(model).filter(model.email == email, model.id != account.id).first():
             raise HTTPException(status_code=409, detail="Another account of this type already uses that email")
         account.email = email
     if payload.phone is not None:
-        account.phone = payload.phone.strip()[:60]
+        if account_type == "provider" and (account.provider_type != "customer" or payload.phone.strip()) and not _valid_market_phone(payload.phone):
+            raise HTTPException(status_code=400, detail="Enter a 10-digit contact number")
+        account.phone = _normalize_market_phone(payload.phone) if account_type == "provider" else payload.phone.strip()[:60]
     if payload.active is not None:
         account.active = payload.active
     if payload.approved is not None and hasattr(account, "approved"):
@@ -6220,7 +6222,7 @@ def _provider_advert_ownership(provider: Landlord):
 
 def _accommodation_payload(item: Accommodation, landlord: Landlord, private: bool = True, *, owner: bool = False) -> dict:
     agent = landlord.provider_type == "agent"
-    contact = landlord.phone if agent else item.contact
+    contact = (_normalize_market_phone(landlord.phone or "") or landlord.phone) if agent else item.contact
     directions_url = None
     if item.latitude is not None and item.longitude is not None:
         directions_url = f"https://www.google.com/maps/dir/?api=1&destination={item.latitude},{item.longitude}"
@@ -6310,11 +6312,36 @@ def _accommodation_coordinates(latitude: str, longitude: str) -> tuple[Optional[
     return lat, lng
 
 
+def _normalize_market_phone(value: str) -> str:
+    digits = re.sub(r"\s+", "", value)
+    if digits.startswith("+27"):
+        digits = "0" + digits[3:]
+    return digits if re.fullmatch(r"[0-9]{10}", digits) else ""
+
+
+def _valid_market_phone(value: str) -> bool:
+    return bool(_normalize_market_phone(value))
+
+
+def _valid_market_email(value: str) -> bool:
+    return re.fullmatch(r"[^\s@]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+", value.strip()) is not None
+
+
+def _market_landlord_contact(value: str) -> Optional[str]:
+    if value.strip() and not (_valid_market_phone(value) or _valid_market_email(value)):
+        raise HTTPException(status_code=400, detail="Enter a 10-digit landlord phone number or a valid email address")
+    return _normalize_market_phone(value) or value.strip()[:160] or None
+
+
 @app.post("/marketing/landlords/register")
 async def register_landlord(full_name: str = Form(...), business_name: str = Form(""), provider_type: str = Form("other"), email: str = Form(...), phone: str = Form(""), password: str = Form(...), confirm_password: str = Form(...), profile_image: Optional[UploadFile] = File(None), db: Session = Depends(get_db)):
     email = email.strip().lower()
-    if not full_name.strip() or (provider_type != "customer" and not phone.strip()) or "@" not in email or len(password) < 8:
-        raise HTTPException(status_code=400, detail="Provide your name, contact number, valid email, and a password of at least 8 characters")
+    if not _valid_market_email(email):
+        raise HTTPException(status_code=400, detail="Enter a valid email address")
+    if (provider_type != "customer" or phone.strip()) and not _valid_market_phone(phone):
+        raise HTTPException(status_code=400, detail="Enter a 10-digit contact number")
+    if not full_name.strip() or len(password) < 8:
+        raise HTTPException(status_code=400, detail="Provide your name and a password of at least 8 characters")
     if password != confirm_password:
         raise HTTPException(status_code=400, detail="The password confirmation does not match")
     if provider_type not in {"residence", "agent", "customer", "transport", "sales", "other"}:
@@ -6331,7 +6358,7 @@ async def register_landlord(full_name: str = Form(...), business_name: str = For
         if len(image_bytes) > 10 * 1024 * 1024:
             raise HTTPException(status_code=400, detail="Profile images must be 10 MB or smaller")
         image_url = upload_image_bytes(image_bytes, folder="landlord_profiles")
-    landlord = Landlord(full_name=full_name.strip()[:160], business_name=business_name.strip()[:160], provider_type=provider_type, email=email, phone=phone.strip()[:60], profile_image_url=image_url, password_hash=_password_hash(password), active=True, created_at=datetime.now(timezone.utc).isoformat())
+    landlord = Landlord(full_name=full_name.strip()[:160], business_name=business_name.strip()[:160], provider_type=provider_type, email=email, phone=_normalize_market_phone(phone), profile_image_url=image_url, password_hash=_password_hash(password), active=True, created_at=datetime.now(timezone.utc).isoformat())
     db.add(landlord); db.commit()
     return {"ok": True, "token": _issue_landlord_token(landlord.id), "profile": _landlord_profile(landlord)}
 
@@ -6356,11 +6383,13 @@ def landlord_me(landlord: Landlord = Depends(require_landlord_account)):
 
 @app.put("/marketing/landlords/me")
 async def update_market_profile(full_name: str = Form(...), business_name: str = Form(""), phone: str = Form(""), profile_image: Optional[UploadFile] = File(None), landlord: Landlord = Depends(require_landlord_account), db: Session = Depends(get_db)):
-    if not full_name.strip() or (landlord.provider_type != "customer" and not phone.strip()):
-        raise HTTPException(status_code=400, detail="Add your name and contact number")
+    if not full_name.strip():
+        raise HTTPException(status_code=400, detail="Add your name")
+    if (landlord.provider_type != "customer" or phone.strip()) and not _valid_market_phone(phone):
+        raise HTTPException(status_code=400, detail="Enter a 10-digit contact number")
     landlord.full_name = full_name.strip()[:160]
     landlord.business_name = business_name.strip()[:160] if landlord.provider_type != "customer" else ""
-    landlord.phone = phone.strip()[:60]
+    landlord.phone = _normalize_market_phone(phone)
     if profile_image and profile_image.filename:
         if not (profile_image.content_type or "").startswith("image/"):
             raise HTTPException(status_code=400, detail="Please choose an image file")
@@ -6582,10 +6611,12 @@ def admin_delete_market_room(listing_id: int, _pin_ok: bool = Depends(require_le
 async def create_accommodation(background_tasks: BackgroundTasks, title: str = Form(...), campus: str = Form(...), area: str = Form(...), monthly_rent: str = Form(""), bedrooms: str = Form(""), description: str = Form(...), contact: str = Form(...), private_landlord_contact: str = Form(""), latitude: str = Form(""), longitude: str = Form(""), image_order: str = Form(""), images: Optional[List[UploadFile]] = File(None), image: Optional[UploadFile] = File(None), landlord: Landlord = Depends(_require_market_seller), db: Session = Depends(get_db)):
     if not title.strip() or not campus.strip() or not area.strip() or not description.strip():
         raise HTTPException(status_code=400, detail="Add a title, location, area, and description")
+    landlord_contact = None
     if landlord.provider_type == "agent":
+        landlord_contact = _market_landlord_contact(private_landlord_contact)
         contact = landlord.phone or ""
-    if len(re.sub(r"\D", "", contact)) < 8:
-        raise HTTPException(status_code=400, detail="Add a valid contact number for this room")
+    if not _valid_market_phone(contact):
+        raise HTTPException(status_code=400, detail="Enter a 10-digit contact number for this room")
     if len(description.strip()) > 2500:
         raise HTTPException(status_code=400, detail="Accommodation descriptions can be up to 2,500 characters")
     try:
@@ -6599,7 +6630,7 @@ async def create_accommodation(background_tasks: BackgroundTasks, title: str = F
     photo_order = _market_photo_order(image_order, len([file for file in files if file and file.filename]))
     image_urls = await _upload_market_images(files, 3, "accommodation_listings", 10 * 1024 * 1024)
     image_urls = [image_urls[index] for index in photo_order]
-    item = Accommodation(landlord_id=landlord.id, title=title.strip()[:180], campus=campus.strip()[:120], area=area.strip()[:160], monthly_rent=rent, bedrooms=bedrooms.strip()[:80], description=description.strip(), contact=contact.strip()[:160], private_landlord_contact=(private_landlord_contact.strip()[:160] or None) if landlord.provider_type == "agent" else None, image_url=image_urls[0] if image_urls else None, image_urls=json.dumps(image_urls), latitude=lat, longitude=lng, is_available=True, is_approved=False, created_at=datetime.now(timezone.utc).isoformat())
+    item = Accommodation(landlord_id=landlord.id, title=title.strip()[:180], campus=campus.strip()[:120], area=area.strip()[:160], monthly_rent=rent, bedrooms=bedrooms.strip()[:80], description=description.strip(), contact=_normalize_market_phone(contact), private_landlord_contact=landlord_contact, image_url=image_urls[0] if image_urls else None, image_urls=json.dumps(image_urls), latitude=lat, longitude=lng, is_available=True, is_approved=False, created_at=datetime.now(timezone.utc).isoformat())
     db.add(item); db.flush()
     queue_room_email(db, item, "submitted")
     db.commit()
@@ -6612,10 +6643,12 @@ async def update_accommodation(listing_id: int, request: Request, title: str = F
     item = db.query(Accommodation).filter(Accommodation.id == listing_id, Accommodation.landlord_id == landlord.id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Accommodation listing not found")
+    landlord_contact = None
     if landlord.provider_type == "agent":
+        landlord_contact = _market_landlord_contact(private_landlord_contact)
         contact = landlord.phone or ""
-    if not contact.strip() or len(re.sub(r"\D", "", contact)) < 8:
-        raise HTTPException(status_code=400, detail="Add a valid contact number for this room")
+    if not _valid_market_phone(contact):
+        raise HTTPException(status_code=400, detail="Enter a 10-digit contact number for this room")
     if not title.strip() or not campus.strip() or not area.strip() or not description.strip():
         raise HTTPException(status_code=400, detail="Add a title, location, area, and description")
     try:
@@ -6646,9 +6679,9 @@ async def update_accommodation(listing_id: int, request: Request, title: str = F
     image_urls = [image_urls[index] for index in photo_order]
     item.title, item.campus, item.area = title.strip()[:180], campus.strip()[:120], area.strip()[:160]
     item.monthly_rent, item.bedrooms, item.description = rent, bedrooms.strip()[:80], description.strip()[:2500]
-    item.contact, item.is_available, item.booked_until = contact.strip()[:160], is_available, booked_until.strip() or None
+    item.contact, item.is_available, item.booked_until = _normalize_market_phone(contact), is_available, booked_until.strip() or None
     if landlord.provider_type == "agent" and "private_landlord_contact" in await request.form():
-        item.private_landlord_contact = private_landlord_contact.strip()[:160] or None
+        item.private_landlord_contact = landlord_contact
     if (lat, lng) != (item.latitude, item.longitude):
         item.pending_latitude, item.pending_longitude = lat, lng
     else:
@@ -6799,9 +6832,8 @@ async def create_market_advert(
     if stock_quantity is not None and not 0 <= stock_quantity <= 1000000:
         raise HTTPException(status_code=400, detail="Enter a stock quantity between 0 and 1,000,000")
     website = website_url.strip()
-    contact_digits = re.sub(r"\D", "", contact)
-    if len(contact_digits) < 8:
-        raise HTTPException(status_code=400, detail="Add a valid contact number for this listing")
+    if not _valid_market_phone(contact):
+        raise HTTPException(status_code=400, detail="Enter a 10-digit contact number for this listing")
     if category.strip().lower() == "other" and not service_detail.strip():
         raise HTTPException(status_code=400, detail="Describe the activity or service for Other")
     if category.strip().lower() == "churches" and not area.strip():
@@ -6833,7 +6865,7 @@ async def create_market_advert(
     item = MarketAdvert(
         owner_student_id=student.id if student else None, owner_landlord_id=landlord.id if landlord else None,
         business_name=business_name.strip()[:160], headline=headline.strip()[:180], description=description.strip(),
-        category=category.strip()[:80], service_detail=service_detail.strip()[:160], price=price, stock_quantity=stock_quantity, campus=campus.strip()[:120], area=area.strip()[:160], latitude=lat, longitude=lng, contact=contact.strip()[:160],
+        category=category.strip()[:80], service_detail=service_detail.strip()[:160], price=price, stock_quantity=stock_quantity, campus=campus.strip()[:120], area=area.strip()[:160], latitude=lat, longitude=lng, contact=_normalize_market_phone(contact),
         website_url=website[:500], placement=placement, image_url=image_urls[0] if image_urls else None,
         image_urls=json.dumps(image_urls), video_url=video_url, premium_video_asset=premium_asset,
         starts_at=start, expires_at=end, status="approved", is_featured=False, impressions=0, clicks=0,
@@ -6872,7 +6904,7 @@ async def update_market_advert(
         raise HTTPException(status_code=404, detail="Listing not found")
     if not all(value.strip() for value in (business_name, headline, category, description)) or len(description.strip()) > 1200:
         raise HTTPException(status_code=400, detail="Add a business name, title, category and description of up to 1,200 characters")
-    if len(re.sub(r"\D", "", contact)) < 8:
+    if not _valid_market_phone(contact):
         raise HTTPException(status_code=400, detail="Add a valid contact number")
     if category.strip().lower() == "other" and not service_detail.strip():
         raise HTTPException(status_code=400, detail="Describe the activity or service for Other")
@@ -6904,7 +6936,7 @@ async def update_market_advert(
     item.business_name, item.headline, item.category = business_name.strip()[:160], headline.strip()[:180], category.strip()[:80]
     item.service_detail, item.description = service_detail.strip()[:160], description.strip()
     item.price, item.stock_quantity, item.campus, item.area = parsed_price, parsed_stock, campus.strip()[:120], area.strip()[:160]
-    item.latitude, item.longitude, item.contact, item.website_url = lat, lng, contact.strip()[:160], website[:500]
+    item.latitude, item.longitude, item.contact, item.website_url = lat, lng, _normalize_market_phone(contact), website[:500]
     item.status, item.updated_at = status, datetime.now(timezone.utc).isoformat()
     if retained_image_urls or new_images or image_order:
         item.image_url, item.image_urls = urls[0] if urls else None, json.dumps(urls)

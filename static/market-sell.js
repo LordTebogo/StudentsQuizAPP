@@ -33,6 +33,9 @@
     try { const url = new URL(value, location.origin); return ['http:', 'https:'].includes(url.protocol) ? url.href : ''; }
     catch { return ''; }
   };
+  function normalizePhone(value) {
+    return value.replace(/\s/g, '').replace(/^\+27/, '0');
+  }
   function listingData(form) {
     if (!form.reportValidity()) return null;
     const data = new FormData(form);
@@ -40,7 +43,18 @@
     const retained = form.id === 'editListingForm' ? JSON.parse(content.dataset.editPhotos || '[]').filter((_, index) => form.querySelector(`[data-keep-photo="${index}"]`)?.checked) : [];
     if (retained.length + added.length > 3) throw new Error('Choose or keep no more than 3 photos in total.');
     if (added.some(file => file.type && !file.type.startsWith('image/'))) throw new Error('Choose image files for your listing photos.');
-    if (String(data.get('contact') || '').replace(/\D/g, '').length < 8) throw new Error('Add a valid contact number for this listing.');
+    const contact = normalizePhone(String(data.get('contact') || ''));
+    if (!/^[0-9]{10}$/.test(contact)) {
+      throw new Error('Enter a 10-digit contact number. Room agents can update this number in My profile.');
+    }
+    data.set('contact', contact);
+    const landlordContact = String(data.get('private_landlord_contact') || '').trim();
+    const landlordPhone = normalizePhone(landlordContact);
+    if (/^[0-9]{10}$/.test(landlordPhone)) {
+      data.set('private_landlord_contact', landlordPhone);
+    } else if (landlordContact && !/^[^\s@]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+$/.test(landlordContact)) {
+      throw new Error('Enter a 10-digit landlord phone number or a valid email address.');
+    }
     if (form.id === 'editListingForm') data.set('retained_image_urls', JSON.stringify(retained));
     return {data, added, retained};
   }
@@ -186,7 +200,7 @@
     clearPreview();
     document.getElementById('sellTitle').textContent='My profile';
     document.getElementById('sellIntro').textContent='Your name and photo appear in marketplace conversations and listings.';
-    content.innerHTML=`<button class="sell-back" type="button" data-sell-back>← Back</button><form id="marketProfileForm" class="sell-form" enctype="multipart/form-data">${profile.profile_image_url ? `<img src="${escapeHtml(profile.profile_image_url)}" alt="Current profile picture" style="width:72px;height:72px;object-fit:cover;border-radius:50%">` : ''}<label>Full name<input name="full_name" value="${escapeHtml(profile.full_name)}" required></label>${profile.provider_type==='customer' ? '' : `<label>Business or service name<input name="business_name" value="${escapeHtml(profile.business_name || '')}"></label>`}<label>Contact number<input name="phone" type="tel" value="${escapeHtml(profile.phone || '')}" ${profile.provider_type==='customer' ? '' : 'required'}></label><label>Profile picture<input name="profile_image" type="file" accept="image/*"></label><button type="submit">Save profile</button></form>`;
+    content.innerHTML=`<button class="sell-back" type="button" data-sell-back>← Back</button><form id="marketProfileForm" class="sell-form" enctype="multipart/form-data">${profile.profile_image_url ? `<img src="${escapeHtml(profile.profile_image_url)}" alt="Current profile picture" style="width:72px;height:72px;object-fit:cover;border-radius:50%">` : ''}<label>Full name<input name="full_name" value="${escapeHtml(profile.full_name)}" required></label>${profile.provider_type==='customer' ? '' : `<label>Business or service name<input name="business_name" value="${escapeHtml(profile.business_name || '')}"></label>`}<label>Contact number<input name="phone" type="tel" inputmode="numeric" pattern="\\s*(?:\\+\\s*2\\s*7(?:\\s*[0-9]){9}|[0-9](?:\\s*[0-9]){9})\\s*" title="Enter exactly 10 digits" value="${escapeHtml(profile.phone || '')}" ${profile.provider_type==='customer' ? '' : 'required'}></label><label>Profile picture<input name="profile_image" type="file" accept="image/*"></label><button type="submit">Save profile</button></form>`;
   }
   function renderForm(selected) {
     clearPreview();
@@ -214,7 +228,7 @@
         <label id="churchLocationField" hidden>Church location or area<input name="area" maxlength="160" disabled></label>
         <div class="sell-location" id="churchCoordinatesField" hidden><label>Latitude <span>(optional)</span><input name="latitude" type="number" step="any" min="-90" max="90" disabled></label><label>Longitude <span>(optional)</span><input name="longitude" type="number" step="any" min="-180" max="180" disabled></label><button type="button" data-use-location>Use my current location</button><small class="sell-location-status" role="status" aria-live="polite" hidden></small></div>
         <label>Description<textarea name="description" maxlength="1200" required></textarea></label>
-        <label>Contact number for this listing<input name="contact" type="tel" autocomplete="tel" value="${escapeHtml(profile.phone || '')}" required></label>
+        <label>Contact number for this listing<input name="contact" type="tel" inputmode="numeric" pattern="\\s*(?:\\+\\s*2\\s*7(?:\\s*[0-9]){9}|[0-9](?:\\s*[0-9]){9})\\s*" title="Enter exactly 10 digits" autocomplete="tel" value="${escapeHtml(profile.phone || '')}" required></label>
         <label>Website or social link <span>(optional)</span><input name="website_url" type="url" placeholder="https://…"></label>
         <label>Photos <span>(up to 3, optional)</span><input name="images" type="file" accept="image/*" multiple data-max-files="3"></label>
         <input type="hidden" name="placement" value="feed">`}
@@ -225,8 +239,8 @@
   const listingPhotos = item => (item.image_urls || (item.image_url ? [item.image_url] : []));
   function roomContactFields(contact, privateContact = '') {
     const agent = profile.provider_type === 'agent';
-    return `<label>${agent ? 'Agent contact number (public)' : 'Contact number for this listing'}<input name="contact" type="tel" autocomplete="tel" value="${escapeHtml(agent ? profile.phone : contact)}" ${agent ? 'readonly' : 'required'}></label>
-      ${agent ? `<label>Landlord contact <span>(optional, private)</span><input name="private_landlord_contact" maxlength="160" placeholder="Phone number or email" value="${escapeHtml(privateContact)}"></label>` : ''}`;
+    return `<label>${agent ? 'Agent contact number (public)' : 'Contact number for this listing'}<input name="contact" type="tel" inputmode="numeric" pattern="\\s*(?:\\+\\s*2\\s*7(?:\\s*[0-9]){9}|[0-9](?:\\s*[0-9]){9})\\s*" title="Enter exactly 10 digits" autocomplete="tel" value="${escapeHtml(agent ? profile.phone : contact)}" ${agent ? 'readonly' : 'required'}></label>
+      ${agent ? `<label>Landlord contact <span>(optional, private)</span><input name="private_landlord_contact" pattern="(?:\\s*(?:\\+\\s*2\\s*7(?:\\s*[0-9]){9}|[0-9](?:\\s*[0-9]){9})\\s*|[^\\s@]+@[a-zA-Z0-9\\-]+(?:\\.[a-zA-Z0-9\\-]+)+)" title="Enter exactly 10 digits or a valid email address" maxlength="160" placeholder="10-digit phone number or email" value="${escapeHtml(privateContact)}"></label>` : ''}`;
   }
   function roomLocationLink(item) {
     if (!Number.isFinite(item.latitude) || !Number.isFinite(item.longitude)) return '';
@@ -260,7 +274,7 @@
     document.getElementById('sellIntro').textContent = room ? 'Update your room. Coordinate changes appear after admin approval; your current approved location stays active until then.' : 'Update the details customers see. Save when finished.';
     content.innerHTML = `<button class="sell-back" type="button" data-my-listings>← My listings</button><form id="editListingForm" class="sell-form" data-type="${type}" data-id="${item.id}" enctype="multipart/form-data">
       ${room ? `<label>Listing title<input name="title" maxlength="180" value="${value('title')}" required></label><label>Nearby organisation or landmark<input name="campus" placeholder="Company, school, college, university, mine or area" maxlength="120" value="${value('campus')}" required></label><label>Area or suburb<input name="area" maxlength="160" value="${value('area')}" required></label><label>Monthly rent (R)<input name="monthly_rent" type="number" min="0" value="${value('monthly_rent')}"></label><label>Room type<input name="bedrooms" maxlength="80" value="${value('bedrooms')}"></label>` : `<label>Business or seller name<input name="business_name" maxlength="160" value="${value('business_name')}" required></label><label>Listing title<input name="headline" maxlength="180" value="${value('headline')}" required></label><label>Category<select name="category" required>${['Sales & retail','Technology','Ride & transport','Delivery & courier','Campus shuttle','Student service','Food & delivery','Tutoring','Event','Beauty & lifestyle','Churches','Other'].map(category => `<option value="${escapeHtml(category)}" ${item.category === category ? 'selected' : ''}>${category === 'Campus shuttle' ? 'Shuttle service' : category === 'Student service' ? 'Local service' : escapeHtml(category)}</option>`).join('')}</select></label><label>Activity or service<input name="service_detail" maxlength="160" value="${value('service_detail')}"></label><label>Price (R)<input name="price" type="number" min="0" max="100000000" value="${value('price')}"></label><label>Stock quantity (optional, for products)<input name="stock_quantity" type="number" min="0" max="1000000" value="${value('stock_quantity')}"></label><label>Nearby organisation or landmark<input name="campus" placeholder="Company, school, college, university, mine or area" maxlength="120" value="${value('campus')}"></label><label>Area or suburb<input name="area" maxlength="160" value="${value('area')}"></label>`}
-      <label>Description<textarea name="description" maxlength="${room ? 2500 : 1200}" required>${value('description')}</textarea></label>${room ? roomContactFields(item.contact, item.private_landlord_contact) : `<label>Contact number<input name="contact" type="tel" value="${value('contact')}" required></label>`}${room ? `<div class="sell-location"><label>Latitude <span>(private; admin approval required for changes)</span><input name="latitude" type="number" step="any" min="-90" max="90" value="${escapeHtml(item.pending_latitude ?? item.latitude ?? '')}"></label><label>Longitude <span>(private)</span><input name="longitude" type="number" step="any" min="-180" max="180" value="${escapeHtml(item.pending_longitude ?? item.longitude ?? '')}"></label><button type="button" data-use-location>Use my current location</button><small class="sell-location-status" role="status" aria-live="polite" hidden></small></div><label><input name="is_available" type="checkbox" ${item.is_available ? 'checked' : ''}> Available now</label><label>Fully booked until (optional)<input name="booked_until" type="date" value="${value('booked_until')}"></label>` : `<label>Website or social link<input name="website_url" type="url" value="${value('website_url')}"></label><label>Listing visibility<select name="status"><option value="approved" ${item.status === 'approved' ? 'selected' : ''}>Published</option><option value="paused" ${item.status === 'paused' ? 'selected' : ''}>Paused</option></select></label>`}
+      <label>Description<textarea name="description" maxlength="${room ? 2500 : 1200}" required>${value('description')}</textarea></label>${room ? roomContactFields(item.contact, item.private_landlord_contact) : `<label>Contact number<input name="contact" type="tel" inputmode="numeric" pattern="\\s*(?:\\+\\s*2\\s*7(?:\\s*[0-9]){9}|[0-9](?:\\s*[0-9]){9})\\s*" title="Enter exactly 10 digits" value="${value('contact')}" required></label>`}${room ? `<div class="sell-location"><label>Latitude <span>(private; admin approval required for changes)</span><input name="latitude" type="number" step="any" min="-90" max="90" value="${escapeHtml(item.pending_latitude ?? item.latitude ?? '')}"></label><label>Longitude <span>(private)</span><input name="longitude" type="number" step="any" min="-180" max="180" value="${escapeHtml(item.pending_longitude ?? item.longitude ?? '')}"></label><button type="button" data-use-location>Use my current location</button><small class="sell-location-status" role="status" aria-live="polite" hidden></small></div><label><input name="is_available" type="checkbox" ${item.is_available ? 'checked' : ''}> Available now</label><label>Fully booked until (optional)<input name="booked_until" type="date" value="${value('booked_until')}"></label>` : `<label>Website or social link<input name="website_url" type="url" value="${value('website_url')}"></label><label>Listing visibility<select name="status"><option value="approved" ${item.status === 'approved' ? 'selected' : ''}>Published</option><option value="paused" ${item.status === 'paused' ? 'selected' : ''}>Paused</option></select></label>`}
       <div class="sell-photo-editor"><strong>Photos (up to 3)</strong>${photos.map((url, index) => `<label><input type="checkbox" data-keep-photo="${index}" checked><img src="${escapeHtml(url)}" alt="Listing photo ${index + 1}"> Keep photo ${index + 1}</label>`).join('') || '<p>No photos yet.</p>'}</div><label>Add photos<input name="images" type="file" accept="image/*" multiple></label>
       ${!room && isService(item) ? `<fieldset class="sell-availability-fields"><legend>Service and consultation availability</legend><label>Opening hours and days<textarea name="opening_hours" maxlength="500">${escapeHtml(availability.opening_hours || '')}</textarea></label><label>Available dates (YYYY-MM-DD, comma separated)<textarea name="available_dates">${escapeHtml((availability.available_dates || []).join(', '))}</textarea></label><label>Available times (HH:MM, comma separated)<textarea name="available_times">${escapeHtml((availability.available_times || []).join(', '))}</textarea></label><label>Closed dates (YYYY-MM-DD, comma separated)<textarea name="closed_dates">${escapeHtml((availability.closed_dates || []).join(', '))}</textarea></label><label>Fully booked until<input name="booked_until" type="date" value="${escapeHtml(availability.booked_until || '')}"></label><label><input name="consultations" type="checkbox" ${availability.consultations ? 'checked' : ''}> Offer consultations</label><label>Consultation length (minutes)<input name="consultation_minutes" type="number" min="5" max="480" value="${escapeHtml(availability.consultation_minutes || '')}"></label><label>Consultation format<input name="consultation_mode" maxlength="80" value="${escapeHtml(availability.consultation_mode || '')}"></label></fieldset>` : ''}
       <button type="submit">Preview changes</button></form><button class="sell-delete" type="button" data-delete-listing="${type}" data-listing-id="${item.id}">Delete listing</button>`;
@@ -510,6 +524,7 @@
     if (saving || event.target.closest('.arounus-chat')) return;
     const form = event.target;
     if (form.id === 'marketProfileForm') {
+      if (!form.reportValidity()) return;
       const button=form.querySelector('[type=submit]');button.disabled=true;
       try {
         const result=await request('/marketing/landlords/me',{method:'PUT',body:new FormData(form)});
